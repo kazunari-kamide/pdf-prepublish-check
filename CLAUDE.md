@@ -114,9 +114,9 @@ src/         ブラウザで動く検査器
 skill/       Claude Code のスキル／MCP 版
 extension/   ブラウザの通信を目に見える形にする拡張機能（送信 0B を見せるため）
 design/      デザインシステム
-docs/        evolution.md（改善の記録）、glossary.md（用語集）
+docs/        evolution.md（改善の記録）、glossary.md（用語集）、write-guard.md（書き込みの見張り）
 baseline/    比べるための別の版（one_prompt/ など。本人が別のセッションで頼む。ループの Claude は作らない・触らない）
-.claude/     settings.json（権限・hooks）、workflows/（ループの段取り）
+.claude/     settings.json（権限・hooks）、hooks/（書き込みの見張り）、workflows/（ループの段取り）
 ```
 
 ## 10. Git
