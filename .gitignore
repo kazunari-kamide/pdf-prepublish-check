@@ -23,3 +23,6 @@ desktop.ini
 # Claude Code の作業用
 .claude/worktrees/
 .claude/settings.local.json
+
+# 手元の試し（コミットしない）
+.tmp/
