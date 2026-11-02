@@ -1,0 +1,25 @@
+# 秘密情報（最初のコミットから入れる）
+.env
+.env.*
+
+# 依存とビルドの成果物
+node_modules/
+dist/
+build/
+coverage/
+
+# 手元だけで使うもの（公開 PDF の原文・採点用の実データ・ログは、リポジトリの外に置く）
+_private/
+local/
+*.log
+
+# OS・エディタ
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Claude Code の作業用
+.claude/worktrees/
+.claude/settings.local.json
