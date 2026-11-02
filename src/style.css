@@ -1,0 +1,97 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * 土台の仮の見た目。色・書体・余白の決まりは design/ で決めてから置き換える（CLAUDE.md §6）。
+ * 書体は外から読み込まない。いまは端末に入っている書体を使う。
+ */
+
+:root {
+  --base: #1f2a37;
+  --accent: #2f6f5e;
+  --problem: #9a3412;
+  --paper: #fbfaf7;
+  --line: #d6d3cc;
+  font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  font-size: 18px;
+  line-height: 1.7;
+  color: var(--base);
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+  max-width: 56rem;
+  padding: 2rem 1.5rem 4rem;
+}
+
+h1 {
+  font-size: 1.8rem;
+  margin: 0 0 0.25rem;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin: 2rem 0 0.75rem;
+  border-left: 0.3rem solid var(--accent);
+  padding-left: 0.6rem;
+}
+
+.lead {
+  margin: 0;
+}
+
+.promise {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}
+
+.drop {
+  display: block;
+  border: 2px dashed var(--line);
+  padding: 2rem 1.5rem;
+  cursor: pointer;
+  background: #fff;
+}
+
+.drop[data-over="true"] {
+  border-color: var(--accent);
+}
+
+.drop input {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: 1rem;
+}
+
+#status[data-tone="ok"]::before {
+  content: "◯ ";
+  color: var(--accent);
+}
+
+#status[data-tone="problem"]::before {
+  content: "！ ";
+  color: var(--problem);
+  font-weight: 700;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1.5rem;
+  margin: 0;
+}
+
+.facts dt {
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.site-footer {
+  margin-top: 3rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  font-size: 0.9rem;
+}
