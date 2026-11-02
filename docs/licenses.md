@@ -10,7 +10,7 @@
 | typescript | 7.0.2 | Apache-2.0 | 型の確かめ | 2026-11-03 | https://github.com/microsoft/TypeScript |
 | vitest | 5.0.5 | MIT | テスト | 2026-11-03 | https://github.com/vitest-dev/vitest |
 | @types/node | 24.19.2 | MIT | テストと設定ファイルの型の確かめ（Node の型）。ブラウザで動くコードの型の確かめには使わない | 2026-11-03 | https://github.com/DefinitelyTyped/DefinitelyTyped |
-| pdf-lib | 1.17.1 | MIT | 合成 PDF（テスト用 PDF）を作る | 2026-11-03 | https://github.com/Hopding/pdf-lib |
+| pdf-lib | 1.17.1 | MIT | 合成 PDF（テスト用 PDF）を作る。検出ルール rules/p6-text で PDF の中の部品を読む（2026-11-03 から。画面に組み込むと dist/ に入る） | 2026-11-03 | https://github.com/Hopding/pdf-lib |
 | @pdf-lib/fontkit | 1.1.1 | MIT | 合成 PDF に日本語のフォントを埋め込む | 2026-11-03 | https://github.com/Hopding/fontkit |
 | pdfjs-dist | 6.4.299 | Apache-2.0 | 検証器で PDF を読む（検出ルールとは別の読み方）。最新の 6.5.438 は 2026-11-01 に出たばかりなので、1つ前の版にした | 2026-11-03 | https://github.com/mozilla/pdf.js |
 

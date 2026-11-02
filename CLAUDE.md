@@ -110,6 +110,7 @@ rubric/      合格基準（私が管理。Claude は変更しない）
 verifier/    検証器（検出ルールから独立。Claude は変更しない）
 fixtures/    合成したテスト用 PDF と正解データ（実在の個人名・団体名は入れない）
 rules/       検出ルール（Claude が書く・直す）
+eval/        採点（npm run eval）。検出ルールの報告を検証器の形にそろえる変換もここに置く
 src/         ブラウザで動く検査器
 skill/       Claude Code のスキル／MCP 版
 extension/   ブラウザの通信を目に見える形にする拡張機能（送信 0B を見せるため）
