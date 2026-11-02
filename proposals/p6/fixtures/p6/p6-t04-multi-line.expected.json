@@ -1,0 +1,24 @@
+{
+  "file": "p6-t04-multi-line.pdf",
+  "description": "3行をまとめて1つの黒い四角で覆っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t04-multi-line#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        70,
+        656.56,
+        266,
+        712.55
+      ],
+      "remaining": {
+        "chars": 44
+      }
+    }
+  ],
+  "negatives": []
+}

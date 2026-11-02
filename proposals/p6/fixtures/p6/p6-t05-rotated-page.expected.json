@@ -1,0 +1,24 @@
+{
+  "file": "p6-t05-rotated-page.pdf",
+  "description": "90度回転したページの上で、黒い四角で覆っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t05-rotated-page#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        134.5,
+        497.06,
+        185.5,
+        512.05
+      ],
+      "remaining": {
+        "chars": 4
+      }
+    }
+  ],
+  "negatives": []
+}

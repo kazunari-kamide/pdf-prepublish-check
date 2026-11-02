@@ -1,0 +1,32 @@
+{
+  "file": "p6-d01-header-bands.pdf",
+  "description": "黒い帯の見出し・濃い色の表の見出し（字は帯のあとに白で書いてある）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-d01-header-bands#N1",
+      "kind": "design_band",
+      "page": 1,
+      "rect": [
+        0,
+        770,
+        595,
+        820
+      ],
+      "note": "字は帯の上に描かれている"
+    },
+    {
+      "id": "p6-d01-header-bands#N2",
+      "kind": "table_header",
+      "page": 1,
+      "rect": [
+        60,
+        680,
+        535,
+        700
+      ],
+      "note": "表の見出しの塗り。字は塗りのあと"
+    }
+  ]
+}

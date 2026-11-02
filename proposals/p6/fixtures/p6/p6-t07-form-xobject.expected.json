@@ -1,0 +1,40 @@
+{
+  "file": "p6-t07-form-xobject.pdf",
+  "description": "Form XObject（入れ子の部品）の中の字を覆う／部品の中の黒い四角でページの字を覆う",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t07-form-xobject#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        116.5,
+        687.06,
+        167.5,
+        702.05
+      ],
+      "remaining": {
+        "chars": 4
+      }
+    },
+    {
+      "id": "p6-t07-form-xobject#L2",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        118.5,
+        597.06,
+        199.5,
+        612.05
+      ],
+      "remaining": {
+        "chars": 13
+      }
+    }
+  ],
+  "negatives": []
+}

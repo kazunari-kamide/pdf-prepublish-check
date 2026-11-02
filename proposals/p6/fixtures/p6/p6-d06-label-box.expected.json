@@ -1,0 +1,20 @@
+{
+  "file": "p6-d06-label-box.pdf",
+  "description": "黒い四角の上に、白い字で「非公開」と書いた（下には何もない）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-d06-label-box#N1",
+      "kind": "label_box",
+      "page": 1,
+      "rect": [
+        106.5,
+        697.06,
+        181.5,
+        712.05
+      ],
+      "note": "下には字がなく、上に白い字"
+    }
+  ]
+}

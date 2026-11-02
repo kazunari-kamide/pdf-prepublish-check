@@ -1,0 +1,20 @@
+{
+  "file": "p6-d04-dark-photo.pdf",
+  "description": "暗い写真の上に、白い字の説明を載せている（字は写真のあと）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-d04-dark-photo#N1",
+      "kind": "dark_photo",
+      "page": 1,
+      "rect": [
+        100,
+        450,
+        500,
+        717
+      ],
+      "note": "暗い写真。白い字は写真の上"
+    }
+  ]
+}

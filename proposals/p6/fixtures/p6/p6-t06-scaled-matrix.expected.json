@@ -1,0 +1,24 @@
+{
+  "file": "p6-t06-scaled-matrix.pdf",
+  "description": "縮小と移動の行列（cm）の中で、字と黒い四角を描いている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t06-scaled-matrix#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        158.5,
+        397.06,
+        203.5,
+        412.05
+      ],
+      "remaining": {
+        "chars": 7
+      }
+    }
+  ],
+  "negatives": []
+}

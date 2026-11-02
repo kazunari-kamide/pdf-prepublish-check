@@ -1,0 +1,22 @@
+{
+  "file": "p6-i01-scan-rect.pdf",
+  "description": "スキャン画像の上に、黒い四角を重ねただけ（下の画像はそのまま）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-i01-scan-rect#L1",
+      "pattern": "P6",
+      "layer": "image",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        130,
+        729,
+        300,
+        749
+      ],
+      "remaining": {}
+    }
+  ],
+  "negatives": []
+}

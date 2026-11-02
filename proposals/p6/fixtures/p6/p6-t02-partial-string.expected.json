@@ -1,0 +1,24 @@
+{
+  "file": "p6-t02-partial-string.pdf",
+  "description": "1つの字の並びの一部（住所）だけを覆っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t02-partial-string#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        157.5,
+        697.18,
+        287,
+        711.17
+      ],
+      "remaining": {
+        "chars": 13
+      }
+    }
+  ],
+  "negatives": []
+}

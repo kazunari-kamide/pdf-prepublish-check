@@ -1,0 +1,44 @@
+{
+  "file": "p6-d02-bars-and-underline.pdf",
+  "description": "字のない飾りの帯、字のすぐ横の黒い四角、字の下の黒い下線",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-d02-bars-and-underline#N1",
+      "kind": "decorative_bar",
+      "page": 1,
+      "rect": [
+        40,
+        740,
+        555,
+        748
+      ],
+      "note": "下に字がない飾り"
+    },
+    {
+      "id": "p6-d02-bars-and-underline#N2",
+      "kind": "adjacent_box",
+      "page": 1,
+      "rect": [
+        70,
+        699,
+        82,
+        711
+      ],
+      "note": "字のすぐ横の目印。字には重なっていない"
+    },
+    {
+      "id": "p6-d02-bars-and-underline#N3",
+      "kind": "underline",
+      "page": 1,
+      "rect": [
+        72,
+        657.5,
+        216,
+        659.5
+      ],
+      "note": "字の下端に少しかかる下線"
+    }
+  ]
+}

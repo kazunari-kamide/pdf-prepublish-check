@@ -1,0 +1,63 @@
+{
+  "file": "p6-i05-scan-several.pdf",
+  "description": "スキャン画像の上に黒い四角を3つ（漏れ）と、余白の上に1つ（下に何もない）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-i05-scan-several#L1",
+      "pattern": "P6",
+      "layer": "image",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        60,
+        757,
+        200,
+        777
+      ],
+      "remaining": {}
+    },
+    {
+      "id": "p6-i05-scan-several#L2",
+      "pattern": "P6",
+      "layer": "image",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        250,
+        673,
+        520,
+        693
+      ],
+      "remaining": {}
+    },
+    {
+      "id": "p6-i05-scan-several#L3",
+      "pattern": "P6",
+      "layer": "image",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        100,
+        121,
+        400,
+        169
+      ],
+      "remaining": {}
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p6-i05-scan-several#N1",
+      "kind": "blank_area",
+      "page": 1,
+      "rect": [
+        150,
+        230,
+        450,
+        300
+      ],
+      "note": "スキャンの余白（何も書かれていない所）の上の黒い四角"
+    }
+  ]
+}

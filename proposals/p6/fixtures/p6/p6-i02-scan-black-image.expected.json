@@ -1,0 +1,22 @@
+{
+  "file": "p6-i02-scan-black-image.pdf",
+  "description": "スキャン画像の上に、黒い画像を貼っただけ",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-i02-scan-black-image#L1",
+      "pattern": "P6",
+      "layer": "image",
+      "cover": "image",
+      "page": 1,
+      "rect": [
+        200,
+        589,
+        480,
+        637
+      ],
+      "remaining": {}
+    }
+  ],
+  "negatives": []
+}

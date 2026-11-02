@@ -1,0 +1,24 @@
+{
+  "file": "p6-t08-thick-stroke.pdf",
+  "description": "太い黒い線（マーカーで塗ったような線）で覆っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t08-thick-stroke#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        130,
+        696.55,
+        206,
+        712.55
+      ],
+      "remaining": {
+        "chars": 9
+      }
+    }
+  ],
+  "negatives": []
+}

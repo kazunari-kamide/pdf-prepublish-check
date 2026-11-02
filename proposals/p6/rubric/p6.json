@@ -1,0 +1,40 @@
+{
+  "pattern": "P6",
+  "name": "見せかけの黒塗り",
+  "decided": "2026-11-02",
+  "updated": "2026-11-03",
+  "pass": {
+    "recall_min": 0.95,
+    "false_positive_rate_max": 0.05,
+    "residual_after_sanitize_max": 0
+  },
+  "judge_on": "total",
+  "breakdown": [
+    "text/fill",
+    "text/image",
+    "text/annotation",
+    "image/fill",
+    "image/image",
+    "image/annotation"
+  ],
+  "match": {
+    "same_page": true,
+    "same_layer": true,
+    "overlap": "intersection_over_smaller",
+    "min_overlap": 0.5,
+    "one_to_one": true
+  },
+  "false_positive": {
+    "numerator": "漏れでないもの（negatives）に重なった報告の数 ＋ 正解のどれにも重ならなかった報告の数",
+    "denominator": "正解データの negatives の件数"
+  },
+  "residual": {
+    "how": "片付けたあとの PDF を、合成 PDF ごとに検証器にかけ、items の件数を合計する",
+    "fail_if": [
+      "検証器の status が ok でない（読めない PDF を 0 件とは数えない）",
+      "skipped_pages が1つでもある（確かめていないページを 0 件とは数えない）"
+    ]
+  },
+  "fixtures": "fixtures/p6/*.expected.json",
+  "verifier": "verifier/cli.mjs"
+}
