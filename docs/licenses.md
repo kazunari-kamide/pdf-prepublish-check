@@ -2,7 +2,7 @@
 
 このリポジトリのコードは AGPL-3.0-only です。外部のライブラリ・データ・フォント・素材を足すたびに、この一覧を更新します（CLAUDE.md §10）。
 
-## 直接の依存（すべて開発用。配るもの＝ビルドした dist/ には入らない）
+## 直接の依存（すべて開発用。配るもの＝ビルドした dist/ には入らない。2026-11-03 時点）
 
 | 名前 | 版 | ライセンス | 何に使うか | 足した日 | 出典 |
 |---|---|---|---|---|---|
@@ -10,18 +10,29 @@
 | typescript | 7.0.2 | Apache-2.0 | 型の確かめ | 2026-11-03 | https://github.com/microsoft/TypeScript |
 | vitest | 5.0.5 | MIT | テスト | 2026-11-03 | https://github.com/vitest-dev/vitest |
 | @types/node | 24.19.2 | MIT | テストと設定ファイルの型の確かめ（Node の型）。ブラウザで動くコードの型の確かめには使わない | 2026-11-03 | https://github.com/DefinitelyTyped/DefinitelyTyped |
+| pdf-lib | 1.17.1 | MIT | 合成 PDF（テスト用 PDF）を作る | 2026-11-03 | https://github.com/Hopding/pdf-lib |
+| @pdf-lib/fontkit | 1.1.1 | MIT | 合成 PDF に日本語のフォントを埋め込む | 2026-11-03 | https://github.com/Hopding/fontkit |
+| pdfjs-dist | 6.4.299 | Apache-2.0 | 検証器で PDF を読む（検出ルールとは別の読み方）。最新の 6.5.438 は 2026-11-01 に出たばかりなので、1つ前の版にした | 2026-11-03 | https://github.com/mozilla/pdf.js |
 
-## 間接の依存（package-lock.json から数えた。2026-11-03）
+## 間接の依存（package-lock.json から数えた。2026-11-03、pdf-lib などを足したあと）
 
-合わせて 83 件（OS ごとの部品のうち、この PC に入らない分も含む）。
+合わせて 102 件（OS ごとの部品のうち、この PC に入らない分も含む）。
 
 | ライセンス | 件数 | 主なもの |
 |---|---|---|
-| MIT | 46 | rolldown、postcss、chai、magic-string、undici-types など |
-| Apache-2.0 | 23 | typescript と、その OS ごとの部品、detect-libc、expect-type |
+| MIT | 62 | rolldown、postcss、chai、@napi-rs/canvas（pdfjs-dist が Node で使う任意の依存）、@pdf-lib/standard-fonts、@pdf-lib/upng など |
+| Apache-2.0 | 24 | typescript と、その OS ごとの部品、pdfjs-dist、detect-libc、expect-type |
 | MPL-2.0 | 12 | lightningcss と、その OS ごとの部品（Vite が CSS の処理に使う） |
+| MIT AND Zlib | 1 | pako（pdf-lib が圧縮に使う） |
 | ISC | 1 | picocolors |
 | BSD-3-Clause | 1 | source-map-js |
+| 0BSD | 1 | tslib（pdf-lib が使う） |
+
+## フォント・素材
+
+| 名前 | ライセンス | 何に使うか | 置き場所 | 出典 | 足した日 |
+|---|---|---|---|---|---|
+| BIZ UDゴシック Regular（BIZUDGothic-Regular.ttf、SHA-256 `709fcd41e3209fb765da750472f55ccdf925653e9fa7e1eb007cb65c8f749c75`） | SIL Open Font License 1.1（予約フォント名の指定なし）。全文は同じフォルダの `OFL.txt` | 合成 PDF の字。PDF には使う字だけを埋め込む。埋め込む前に、字のデータを 4 バイトの区切りにそろえる（@pdf-lib/fontkit の不具合を避けるため。字の形は変えない） | `fixtures/p6/fonts/`（案の段階では `proposals/p6/fixtures/p6/fonts/`） | https://github.com/google/fonts/tree/main/ofl/bizudgothic （Google Fonts のリポジトリ。Windows に入っているフォントは使っていない） | 2026-11-03 |
 
 数え直すときは、package-lock.json の各項目の `license` を読む。
 
