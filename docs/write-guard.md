@@ -45,6 +45,20 @@
 - 直したあと、本物のフックで、例 36 件中 36 件が期待どおりでした。例には、止まった2つのコミット、`bash -c "rm -rf fixtures"`、`bash <<EOF` の中の `rm`、`node -e` での `writeFileSync`、`git commit … && rm -rf verifier` などのすり抜けを狙った書き込みを入れています。
 - 実際のセッションでも、Bash（`rubric/`）・PowerShell（`fixtures/`）・Write（`verifier/`）の書き込みが、引き続き止まることを確かめました。
 
+## 誤検知（2026-11-03、P6 の採点する側の案を書いたとき）
+
+`proposals/p6/verifier/…`・`proposals/p6/fixtures/…` のように、**`proposals/` の下の**同じ名前のフォルダへのシェルでの書き込みも止めました。
+
+| 止まったコマンド | 何をしようとしたか |
+|---|---|
+| `mkdir -p proposals/p6/fixtures/p6/fonts …` と `cp … proposals/p6/fixtures/p6/fonts/` | フォントのファイルを写す |
+| `sed -i … proposals/p6/fixtures/p6/build.mjs` | スクリプトの1行を直す |
+| `cat > .tmp/dump.mjs <<EOF …` のあとに `node .tmp/dump.mjs proposals/p6/fixtures/…` | 手元の試しのスクリプトを書いて、合成 PDF に当てる |
+
+- **原因**：シェルのコマンドの判定では、`/` のあとに続く `verifier/` なども、守る場所の名前とみなしている（`guard-writes.mjs` の `checkShell`）。道具（Write・Edit）の判定はパスを解決して比べるので、`proposals/` の下は止めない。
+- **このときの対応**：決まりどおり、回り道は探しませんでした。案のファイルは Write・Edit で書き、フォントのファイルは人が写しました。合成 PDF は、`node fixtures/p6/build.mjs`（スクリプトの中でファイルを書く。上の「止められないこと」の1つめ）で作りました。書き先は `proposals/` の中だけです。
+- **直し方の案**（人が判断して直す）：シェルの判定で、守る場所の名前の前が `proposals/` のときは数えない。または、コマンドの中のパスを作業フォルダからのパスに直してから、先頭が `rubric/`・`verifier/`・`fixtures/` かを見る。
+
 ## まだ確かめていないこと
 
 - 予定タスク（scheduled tasks）・クラウドのルーティンの中で、同じ設定が効くか。試し方の案は、PRD の作業計画に入れます。

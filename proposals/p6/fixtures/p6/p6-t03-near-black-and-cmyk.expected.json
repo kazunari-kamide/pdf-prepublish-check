@@ -1,0 +1,40 @@
+{
+  "file": "p6-t03-near-black-and-cmyk.pdf",
+  "description": "真っ黒でない濃い色（#1a1a1a）と、CMYK の黒で覆っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t03-near-black-and-cmyk#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        106.5,
+        697.06,
+        187.5,
+        712.05
+      ],
+      "remaining": {
+        "chars": 13
+      }
+    },
+    {
+      "id": "p6-t03-near-black-and-cmyk#L2",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        118.5,
+        657.06,
+        217.5,
+        672.05
+      ],
+      "remaining": {
+        "chars": 8
+      }
+    }
+  ],
+  "negatives": []
+}

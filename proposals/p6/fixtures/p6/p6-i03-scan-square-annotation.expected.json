@@ -1,0 +1,22 @@
+{
+  "file": "p6-i03-scan-square-annotation.pdf",
+  "description": "スキャン画像の上に、黒く塗った四角の注釈を置いている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-i03-scan-square-annotation#L1",
+      "pattern": "P6",
+      "layer": "image",
+      "cover": "annotation",
+      "page": 1,
+      "rect": [
+        90,
+        561,
+        260,
+        581
+      ],
+      "remaining": {}
+    }
+  ],
+  "negatives": []
+}

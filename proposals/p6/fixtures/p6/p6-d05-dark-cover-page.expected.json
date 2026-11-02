@@ -1,0 +1,20 @@
+{
+  "file": "p6-d05-dark-cover-page.pdf",
+  "description": "黒い背景の表紙（字はすべて背景のあとに白で書いてある）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-d05-dark-cover-page#N1",
+      "kind": "dark_background",
+      "page": 1,
+      "rect": [
+        0,
+        0,
+        595,
+        842
+      ],
+      "note": "黒い背景の表紙"
+    }
+  ]
+}

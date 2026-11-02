@@ -1,0 +1,24 @@
+{
+  "file": "p6-t01-rect-over-name.pdf",
+  "description": "黒い四角を、氏名の上に重ねただけ（下の字が残っている）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t01-rect-over-name#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        106.5,
+        697.06,
+        157.5,
+        712.05
+      ],
+      "remaining": {
+        "chars": 4
+      }
+    }
+  ],
+  "negatives": []
+}

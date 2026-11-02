@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omamori-verifier-p6/0.1.0",
+  "title": "検証器 P6（見せかけの黒塗り）の出力",
+  "type": "object",
+  "required": ["verifier", "checked", "input", "status", "items", "skipped_pages"],
+  "additionalProperties": false,
+  "properties": {
+    "verifier": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "omamori-verifier-p6" }, "version": { "type": "string" } }
+    },
+    "checked": { "description": "調べた漏洩パターン。ここにない型は調べていない", "type": "array", "items": { "const": "P6" } },
+    "input": {
+      "type": "object",
+      "required": ["bytes", "sha256", "pages"],
+      "properties": {
+        "bytes": { "type": "integer" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "pages": { "type": ["integer", "null"] }
+      }
+    },
+    "status": { "enum": ["ok", "error"] },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "enum": ["empty", "too_large", "unreadable", "encrypted", "too_many_pages"] },
+        "message": { "type": "string" }
+      }
+    },
+    "items": {
+      "description": "残っている所の一覧。status が error のときは空",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "layer", "cover", "page", "rect", "remaining"],
+        "additionalProperties": false,
+        "properties": {
+          "pattern": { "const": "P6" },
+          "layer": { "description": "何が残っているか。text＝取り出せる字、image＝画像の画素", "enum": ["text", "image"] },
+          "cover": { "description": "覆っているもの", "enum": ["fill", "image", "annotation"] },
+          "page": { "type": "integer", "minimum": 1 },
+          "rect": {
+            "description": "覆っているものの箱 [x0, y0, x1, y1]。ページの既定の座標（ポイント、左下が原点、/Rotate はかけない）",
+            "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4
+          },
+          "remaining": {
+            "type": "object",
+            "properties": {
+              "chars": { "description": "layer が text のとき：覆われた字の数", "type": "integer" },
+              "pixels": { "description": "layer が image のとき：覆われた範囲の画素の数", "type": "integer" },
+              "ink_pixels": { "description": "layer が image のとき：そのうちインク（濃い画素）の数", "type": "integer" }
+            }
+          },
+          "text": { "description": "--include-text を付けたときだけ。覆われた字そのもの", "type": "string" }
+        }
+      }
+    },
+    "skipped_pages": {
+      "description": "調べられなかったページ。ここにあるページは「問題なし」ではない",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["page", "reason"],
+        "properties": {
+          "page": { "type": "integer" },
+          "reason": { "enum": ["too_many_operations", "unreadable_page"] }
+        }
+      }
+    }
+  }
+}

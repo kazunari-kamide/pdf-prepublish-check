@@ -1,0 +1,24 @@
+{
+  "file": "p6-t12-black-image-over-text.pdf",
+  "description": "黒い画像を、字の上に貼っただけ",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t12-black-image-over-text#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "image",
+      "page": 1,
+      "rect": [
+        154.5,
+        697.06,
+        241.5,
+        712.05
+      ],
+      "remaining": {
+        "chars": 12
+      }
+    }
+  ],
+  "negatives": []
+}

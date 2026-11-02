@@ -1,0 +1,22 @@
+{
+  "file": "p6-i04-scan-redact-annotation.pdf",
+  "description": "スキャン画像の上に、適用していない墨消しの注釈を置いている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-i04-scan-redact-annotation#L1",
+      "pattern": "P6",
+      "layer": "image",
+      "cover": "annotation",
+      "page": 1,
+      "rect": [
+        300,
+        477,
+        520,
+        497
+      ],
+      "remaining": {}
+    }
+  ],
+  "negatives": []
+}

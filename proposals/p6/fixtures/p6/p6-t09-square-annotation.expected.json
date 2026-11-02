@@ -1,0 +1,24 @@
+{
+  "file": "p6-t09-square-annotation.pdf",
+  "description": "黒く塗った四角の注釈を、字の上に置いている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t09-square-annotation#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "annotation",
+      "page": 1,
+      "rect": [
+        106.5,
+        697.06,
+        157.5,
+        712.05
+      ],
+      "remaining": {
+        "chars": 4
+      }
+    }
+  ],
+  "negatives": []
+}

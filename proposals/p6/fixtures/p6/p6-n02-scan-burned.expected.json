@@ -1,0 +1,32 @@
+{
+  "file": "p6-n02-scan-burned.pdf",
+  "description": "スキャン画像の画素そのものを黒くしてから、黒い四角を置いた（正しい墨消し）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-n02-scan-burned#N1",
+      "kind": "redacted_correctly",
+      "page": 1,
+      "rect": [
+        130,
+        729,
+        300,
+        749
+      ],
+      "note": "下の画素は黒くしてある"
+    },
+    {
+      "id": "p6-n02-scan-burned#N2",
+      "kind": "redacted_correctly",
+      "page": 1,
+      "rect": [
+        60,
+        505,
+        400,
+        553
+      ],
+      "note": "下の画素は黒くしてある"
+    }
+  ]
+}

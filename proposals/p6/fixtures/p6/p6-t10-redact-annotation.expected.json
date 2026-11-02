@@ -1,0 +1,24 @@
+{
+  "file": "p6-t10-redact-annotation.pdf",
+  "description": "墨消しの注釈を置いたが、まだ適用していない（下の字はそのまま）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t10-redact-annotation#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "annotation",
+      "page": 1,
+      "rect": [
+        106.5,
+        697.06,
+        217.5,
+        712.05
+      ],
+      "remaining": {
+        "chars": 10
+      }
+    }
+  ],
+  "negatives": []
+}

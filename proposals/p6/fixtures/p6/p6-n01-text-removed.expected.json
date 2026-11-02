@@ -1,0 +1,32 @@
+{
+  "file": "p6-n01-text-removed.pdf",
+  "description": "字を消してから黒い四角を置いた（正しい墨消し）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-n01-text-removed#N1",
+      "kind": "redacted_correctly",
+      "page": 1,
+      "rect": [
+        106.5,
+        697.06,
+        157.5,
+        712.05
+      ],
+      "note": "下の字は消してある"
+    },
+    {
+      "id": "p6-n01-text-removed#N2",
+      "kind": "redacted_correctly",
+      "page": 1,
+      "rect": [
+        106.5,
+        673.06,
+        217.5,
+        688.05
+      ],
+      "note": "下の字は消してある"
+    }
+  ]
+}

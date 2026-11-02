@@ -1,0 +1,4 @@
+# PDF とフォントは、改行の変換をかけずにそのまま入れる（変換されると PDF の位置の表がずれて壊れ、SHA-256 も変わる）
+*.pdf binary
+*.ttf binary
+*.otf binary

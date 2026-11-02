@@ -1,0 +1,38 @@
+{
+  "file": "p6-t11-scan-with-hidden-text.pdf",
+  "description": "スキャン画像と、その上の見えない字（文字認識の層）を、黒い四角でまとめて覆っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t11-scan-with-hidden-text#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        56,
+        701,
+        239,
+        721
+      ],
+      "remaining": {
+        "chars": 12
+      }
+    },
+    {
+      "id": "p6-t11-scan-with-hidden-text#L2",
+      "pattern": "P6",
+      "layer": "image",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        56,
+        701,
+        239,
+        721
+      ],
+      "remaining": {}
+    }
+  ],
+  "negatives": []
+}
