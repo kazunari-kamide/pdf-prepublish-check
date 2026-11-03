@@ -18,7 +18,8 @@
     "eval:p6": "node eval/p6.ts",
     "eval:p1": "node eval/p1.ts",
     "eval:p9": "node eval/p9.ts",
-    "eval:p5": "node eval/p5.ts"
+    "eval:p5": "node eval/p5.ts",
+    "eval:p7": "node eval/p7.ts"
   },
   "devDependencies": {
     "@pdf-lib/fontkit": "1.1.1",
