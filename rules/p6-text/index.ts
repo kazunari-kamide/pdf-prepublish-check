@@ -12,7 +12,7 @@ import { IDENTITY, area, intersectionArea, type Rect } from "./geometry.ts";
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.3.0";
+export const RULE_VERSION = "1.3.1";
 
 export type P6TextFinding = {
   pattern: "P6";

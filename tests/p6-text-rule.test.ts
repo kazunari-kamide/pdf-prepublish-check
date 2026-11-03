@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument, StandardFonts, rgb, grayscale } from "pdf-lib";
 import { detectP6Text } from "../rules/p6-text/index.ts";
-import { operations } from "../rules/p6-text/lexer.ts";
+import { bytesArg, operations } from "../rules/shared/content-lexer.ts";
 import { luminanceOf } from "../rules/p6-text/page.ts";
 
 const enc = (s: string) => new TextEncoder().encode(s);
@@ -23,10 +23,10 @@ describe("命令の読み取り", () => {
   it("文字列のエスケープ・16進の文字列・配列・名前を読む", () => {
     const ops = [...operations(enc("/F1 12 Tf (a\\(b\\)\\101) Tj <4142> Tj [(x) -250 (y)] TJ"))];
     expect(ops.map((o) => o.op)).toEqual(["Tf", "Tj", "Tj", "TJ"]);
-    const s = ops[1]!.args[0] as { value: Uint8Array };
-    expect(new TextDecoder().decode(s.value)).toBe("a(b)A");
-    const h = ops[2]!.args[0] as { value: Uint8Array };
-    expect(new TextDecoder().decode(h.value)).toBe("AB");
+    const s = bytesArg(ops[1]!.args[0])!;
+    expect(new TextDecoder().decode(s)).toBe("a(b)A");
+    const h = bytesArg(ops[2]!.args[0])!;
+    expect(new TextDecoder().decode(h)).toBe("AB");
   });
 
   it("埋め込みの画像（BI … ID … EI）の中身を命令として読まない", () => {

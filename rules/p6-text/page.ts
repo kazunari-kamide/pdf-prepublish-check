@@ -32,8 +32,8 @@ import {
   type Point,
   type Rect,
 } from "./geometry.ts";
-import { readFont, type FontInfo } from "./fonts.ts";
-import { operations, type Operand } from "./lexer.ts";
+import { readFont, type FontInfo } from "../shared/fonts.ts";
+import { arrArg, bytesArg, nameArg, numArg, operations, type Tok } from "../shared/content-lexer.ts";
 import type { P6TextSettings } from "./settings.ts";
 import { measureImageDarkness } from "./images.ts";
 
@@ -169,16 +169,8 @@ export function luminanceOf(components: number[], space: number): number | null 
   return null;
 }
 
-function nums(args: Operand[]): number[] {
-  return args.filter((a): a is number => typeof a === "number");
-}
-
-function nameArg(a: Operand | undefined): string | undefined {
-  return a && typeof a === "object" && !Array.isArray(a) && "kind" in a && a.kind === "name" ? a.value : undefined;
-}
-
-function bytesArg(a: Operand | undefined): Uint8Array | undefined {
-  return a && typeof a === "object" && !Array.isArray(a) && "kind" in a && a.kind === "bytes" ? a.value : undefined;
+function nums(args: Tok[]): number[] {
+  return args.flatMap((a) => (a.t === "num" ? [a.v] : []));
 }
 
 export function contentBytes(ctx: PDFContext, obj: PDFObject | undefined): Uint8Array {
@@ -568,7 +560,7 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           break;
         case "Tf": {
           const name = nameArg(args[0]);
-          const size = typeof args[1] === "number" ? args[1] : undefined;
+          const size = numArg(args[1]);
           if (size !== undefined) gs.fontSize = size;
           const fonts = res?.lookupMaybe(PDFName.of("Font"), PDFDict);
           const ref = name && fonts ? fonts.get(PDFName.of(name)) : undefined;
@@ -633,8 +625,10 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           break;
         }
         case '"': {
-          if (typeof args[0] === "number") gs.wordSpacing = args[0];
-          if (typeof args[1] === "number") gs.charSpacing = args[1];
+          const aw = numArg(args[0]);
+          const ac = numArg(args[1]);
+          if (aw !== undefined) gs.wordSpacing = aw;
+          if (ac !== undefined) gs.charSpacing = ac;
           tlm = multiply([1, 0, 0, 1, 0, -gs.leading], tlm);
           tm = tlm;
           const b = bytesArg(args[2]);
@@ -642,10 +636,10 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           break;
         }
         case "TJ": {
-          const arr = Array.isArray(args[0]) ? args[0] : [];
+          const arr = arrArg(args[0]) ?? [];
           for (const item of arr) {
-            if (typeof item === "number") {
-              const tx = (-item / 1000) * gs.fontSize * gs.hScale;
+            if (item.t === "num") {
+              const tx = (-item.v / 1000) * gs.fontSize * gs.hScale;
               tm = multiply([1, 0, 0, 1, tx, 0], tm);
             } else {
               const b = bytesArg(item);

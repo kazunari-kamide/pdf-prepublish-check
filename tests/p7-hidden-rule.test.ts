@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument, PDFName, PDFRef } from "pdf-lib";
 import { detectP7Hidden } from "../rules/p7-hidden/index.ts";
-import { operations } from "../rules/p7-hidden/lexer.ts";
+import { operations } from "../rules/shared/content-lexer.ts";
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
