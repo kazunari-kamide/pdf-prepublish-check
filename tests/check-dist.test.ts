@@ -21,7 +21,22 @@ afterEach(() => {
   dirs = [];
 });
 
-function fakeDist(csp: string, files: Record<string, string | { copy: string } | { copyAndAppend: string }>): string {
+const decode = (s: string) => s.replace(/&#39;/g, "'");
+/** <meta> の CSP に合わせた .htaccess（htaccess.ts と同じ形）。headerCsp で、わざと食い違わせられる */
+function fakeHtaccess(csp: string, headerCsp = `${decode(csp)}; frame-ancestors 'none'`): string {
+  return `AddType text/javascript .mjs
+AddType application/wasm .wasm
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "${headerCsp}"
+</IfModule>
+`;
+}
+
+function fakeDist(
+  csp: string,
+  files: Record<string, string | { copy: string } | { copyAndAppend: string }>,
+  htaccess: string | null = fakeHtaccess(csp),
+): string {
   const dir = mkdtempSync(path.join(tmpdir(), "omamori-dist-"));
   dirs.push(dir);
   mkdirSync(path.join(dir, "assets"));
@@ -30,6 +45,7 @@ function fakeDist(csp: string, files: Record<string, string | { copy: string } |
     `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><script type="module" src="/assets/index.js"></script></head><body></body></html>`,
   );
   writeFileSync(path.join(dir, "assets", "index.js"), "console.log(1);\n");
+  if (htaccess !== null) writeFileSync(path.join(dir, ".htaccess"), htaccess);
   for (const [name, v] of Object.entries(files)) {
     const to = path.join(dir, "assets", name);
     if (typeof v === "string") writeFileSync(to, v);
@@ -69,5 +85,25 @@ describe("check-dist の PDF.js の例外", () => {
     expect(r.code).toBe(1);
     expect(r.out).toContain("own.js に fetch( が入っています");
     expect(r.out).toContain("own.mjs に WebSocket が入っています");
+  });
+});
+
+describe("check-dist の .htaccess（docs/deploy.md）", () => {
+  it(".htaccess がなければ止める", () => {
+    const r = run(fakeDist(CSP_OK, {}, null));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("dist/ に .htaccess がありません");
+  });
+
+  it("ヘッダーの CSP が <meta> と食い違えば止める", () => {
+    const r = run(fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK, "default-src 'self'; connect-src 'self'; script-src 'self'; frame-ancestors 'none'")));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(".htaccess の CSP が、<meta> の CSP（＋ frame-ancestors 'none'）と食い違っています");
+  });
+
+  it(".mjs の種類の指定がなければ止める", () => {
+    const r = run(fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace("AddType text/javascript .mjs\n", "")));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("AddType text/javascript .mjs がありません");
   });
 });

@@ -2,6 +2,7 @@
 //
 // ビルドしたもの（dist/）を確かめる。
 // - HTML に CSP の <meta> が入っていて、connect-src 'none' を含むか
+// - .htaccess（配信先で CSP をヘッダーで返す）があり、その CSP が <meta> と食い違っていないか
 // - HTML の中に、直接書いたスクリプトや style がないか（CSP で止まるため。入っていたら作りの誤り）
 // - 外のサイトから読み込んでいないか
 // - JavaScript（.js・.mjs）に、外と通信する仕組みが入っていないか（ライブラリが持ち込むこともあるため、ビルドのあとでも見る）
@@ -48,7 +49,28 @@ const cspHasNoConnect = !!meta && decode(meta[1]).split(";").some((d) => d.trim(
 if (!meta) problems.push("index.html に CSP の <meta> がありません");
 else if (!cspHasNoConnect) problems.push("CSP に connect-src 'none' がありません");
 
-const inlineScript = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter(
+// ---- 配信先（Xserver）で CSP などをヘッダーで返す .htaccess（docs/deploy.md）
+// ヘッダーの CSP は、<meta> の CSP に frame-ancestors 'none' を足しただけのものであること（食い違うと厳しい方が効くため）
+let htaccess = null;
+try {
+  htaccess = readFileSync(path.join(DIST, ".htaccess"), "utf8");
+} catch {
+  problems.push("dist/ に .htaccess がありません（配信先で CSP をヘッダーで返せません）");
+}
+if (htaccess !== null) {
+  const header = htaccess.match(/^\s*Header always set Content-Security-Policy "([^"]+)"\s*$/m);
+  const split = (s) => s.split(";").map((d) => d.trim()).filter(Boolean);
+  if (!header) problems.push(".htaccess に CSP のヘッダーがありません");
+  else if (meta) {
+    const fromHeader = split(header[1]);
+    const expected = [...split(decode(meta[1])), "frame-ancestors 'none'"];
+    if (fromHeader.join("; ") !== expected.join("; ")) problems.push(".htaccess の CSP が、<meta> の CSP（＋ frame-ancestors 'none'）と食い違っています");
+  }
+  if (!/^\s*AddType text\/javascript \.mjs\s*$/m.test(htaccess)) problems.push(".htaccess に AddType text/javascript .mjs がありません");
+  if (!/^\s*AddType application\/wasm \.wasm\s*$/m.test(htaccess)) problems.push(".htaccess に AddType application/wasm .wasm がありません");
+}
+
+const inlineScript =[...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter(
   (m) => !/\bsrc=/.test(m[1]) || m[2].trim() !== "",
 );
 if (inlineScript.length) problems.push(`index.html に直接書いたスクリプトが ${inlineScript.length} か所あります`);
@@ -106,4 +128,4 @@ if (problems.length) {
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }
-console.log("\n問題は見つかりませんでした（CSP の <meta>、直接書いたスクリプト・style、外からの読み込み、通信の仕組み）。");
+console.log("\n問題は見つかりませんでした（CSP の <meta>、.htaccess、直接書いたスクリプト・style、外からの読み込み、通信の仕組み）。");
