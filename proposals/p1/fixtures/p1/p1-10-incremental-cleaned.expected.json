@@ -1,0 +1,25 @@
+{
+  "file": "p1-10-incremental-cleaned.pdf",
+  "description": "増分更新で、文書情報を新しい番号の Producer だけのものに差し替えた（前の版に作成者が残る）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p1-10-incremental-cleaned#N1",
+      "kind": "producer",
+      "key": "Producer"
+    }
+  ],
+  "out_of_scope": [
+    {
+      "key": "Author",
+      "where": "previous",
+      "note": "前の版（P5 の範囲）"
+    },
+    {
+      "key": "Title",
+      "where": "previous",
+      "note": "前の版（P5 の範囲）"
+    }
+  ],
+  "previous_info": true
+}

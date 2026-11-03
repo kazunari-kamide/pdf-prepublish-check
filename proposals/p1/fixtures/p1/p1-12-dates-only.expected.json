@@ -1,0 +1,19 @@
+{
+  "file": "p1-12-dates-only.pdf",
+  "description": "日付だけが残っている",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p1-12-dates-only#N1",
+      "kind": "date",
+      "key": "CreationDate"
+    },
+    {
+      "id": "p1-12-dates-only#N2",
+      "kind": "date",
+      "key": "ModDate"
+    }
+  ],
+  "out_of_scope": [],
+  "previous_info": false
+}

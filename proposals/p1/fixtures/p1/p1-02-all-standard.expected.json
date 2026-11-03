@@ -1,0 +1,55 @@
+{
+  "file": "p1-02-all-standard.pdf",
+  "description": "決まった欄（タイトル・作成者・題・キーワード・作成アプリ）がすべて埋まっている",
+  "leaks": [
+    {
+      "id": "p1-02-all-standard#L1",
+      "pattern": "P1",
+      "key": "Title",
+      "where": "current"
+    },
+    {
+      "id": "p1-02-all-standard#L2",
+      "pattern": "P1",
+      "key": "Author",
+      "where": "current"
+    },
+    {
+      "id": "p1-02-all-standard#L3",
+      "pattern": "P1",
+      "key": "Subject",
+      "where": "current"
+    },
+    {
+      "id": "p1-02-all-standard#L4",
+      "pattern": "P1",
+      "key": "Keywords",
+      "where": "current"
+    },
+    {
+      "id": "p1-02-all-standard#L5",
+      "pattern": "P1",
+      "key": "Creator",
+      "where": "current"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p1-02-all-standard#N1",
+      "kind": "producer",
+      "key": "Producer"
+    },
+    {
+      "id": "p1-02-all-standard#N2",
+      "kind": "date",
+      "key": "CreationDate"
+    },
+    {
+      "id": "p1-02-all-standard#N3",
+      "kind": "date",
+      "key": "ModDate"
+    }
+  ],
+  "out_of_scope": [],
+  "previous_info": false
+}

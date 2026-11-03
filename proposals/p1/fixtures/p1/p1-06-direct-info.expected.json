@@ -1,0 +1,15 @@
+{
+  "file": "p1-06-direct-info.pdf",
+  "description": "trailer の中に文書情報を直接書いている（参照でない）",
+  "leaks": [
+    {
+      "id": "p1-06-direct-info#L1",
+      "pattern": "P1",
+      "key": "Author",
+      "where": "current"
+    }
+  ],
+  "negatives": [],
+  "out_of_scope": [],
+  "previous_info": false
+}

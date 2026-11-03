@@ -1,0 +1,31 @@
+{
+  "file": "p1-01-author-name.pdf",
+  "description": "作成者（Author）に個人名が残っている。作成ソフト名（Producer）と日付もある",
+  "leaks": [
+    {
+      "id": "p1-01-author-name#L1",
+      "pattern": "P1",
+      "key": "Author",
+      "where": "current"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p1-01-author-name#N1",
+      "kind": "producer",
+      "key": "Producer"
+    },
+    {
+      "id": "p1-01-author-name#N2",
+      "kind": "date",
+      "key": "CreationDate"
+    },
+    {
+      "id": "p1-01-author-name#N3",
+      "kind": "date",
+      "key": "ModDate"
+    }
+  ],
+  "out_of_scope": [],
+  "previous_info": false
+}

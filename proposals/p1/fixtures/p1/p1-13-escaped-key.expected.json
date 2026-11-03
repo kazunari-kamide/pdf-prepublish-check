@@ -1,0 +1,15 @@
+{
+  "file": "p1-13-escaped-key.pdf",
+  "description": "名前に #20（空白）を含む独自の欄",
+  "leaks": [
+    {
+      "id": "p1-13-escaped-key#L1",
+      "pattern": "P1",
+      "key": "Doc Owner",
+      "where": "current"
+    }
+  ],
+  "negatives": [],
+  "out_of_scope": [],
+  "previous_info": false
+}

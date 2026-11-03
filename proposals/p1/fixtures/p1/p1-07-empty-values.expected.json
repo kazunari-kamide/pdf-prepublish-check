@@ -1,0 +1,24 @@
+{
+  "file": "p1-07-empty-values.pdf",
+  "description": "欄はあるが、値が空・空白だけ（片付けで空にした形）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p1-07-empty-values#N1",
+      "kind": "empty",
+      "key": "Author"
+    },
+    {
+      "id": "p1-07-empty-values#N2",
+      "kind": "empty",
+      "key": "Title"
+    },
+    {
+      "id": "p1-07-empty-values#N3",
+      "kind": "empty",
+      "key": "Keywords"
+    }
+  ],
+  "out_of_scope": [],
+  "previous_info": false
+}

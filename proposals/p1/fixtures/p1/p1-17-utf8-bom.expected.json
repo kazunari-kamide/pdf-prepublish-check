@@ -1,0 +1,15 @@
+{
+  "file": "p1-17-utf8-bom.pdf",
+  "description": "UTF-8 の BOM つきの作成者（PDF 2.0 の書き方）",
+  "leaks": [
+    {
+      "id": "p1-17-utf8-bom#L1",
+      "pattern": "P1",
+      "key": "Author",
+      "where": "current"
+    }
+  ],
+  "negatives": [],
+  "out_of_scope": [],
+  "previous_info": false
+}

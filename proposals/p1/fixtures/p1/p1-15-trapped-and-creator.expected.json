@@ -1,0 +1,26 @@
+{
+  "file": "p1-15-trapped-and-creator.pdf",
+  "description": "作成アプリ（Creator）と、Trapped（印刷の設定）・Producer",
+  "leaks": [
+    {
+      "id": "p1-15-trapped-and-creator#L1",
+      "pattern": "P1",
+      "key": "Creator",
+      "where": "current"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p1-15-trapped-and-creator#N1",
+      "kind": "producer",
+      "key": "Producer"
+    },
+    {
+      "id": "p1-15-trapped-and-creator#N2",
+      "kind": "trapped",
+      "key": "Trapped"
+    }
+  ],
+  "out_of_scope": [],
+  "previous_info": false
+}

@@ -1,0 +1,37 @@
+{
+  "file": "p1-16-subject-keywords.pdf",
+  "description": "題とキーワードに、担当と内部の番号が残っている。日付もある",
+  "leaks": [
+    {
+      "id": "p1-16-subject-keywords#L1",
+      "pattern": "P1",
+      "key": "Subject",
+      "where": "current"
+    },
+    {
+      "id": "p1-16-subject-keywords#L2",
+      "pattern": "P1",
+      "key": "Keywords",
+      "where": "current"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p1-16-subject-keywords#N1",
+      "kind": "producer",
+      "key": "Producer"
+    },
+    {
+      "id": "p1-16-subject-keywords#N2",
+      "kind": "date",
+      "key": "CreationDate"
+    },
+    {
+      "id": "p1-16-subject-keywords#N3",
+      "kind": "date",
+      "key": "ModDate"
+    }
+  ],
+  "out_of_scope": [],
+  "previous_info": false
+}

@@ -1,0 +1,40 @@
+{
+  "pattern": "P1",
+  "name": "文書情報",
+  "status": "案",
+  "proposed": "2026-11-03",
+  "pass": {
+    "recall_min": 0.95,
+    "false_positive_rate_max": 0.05,
+    "residual_after_sanitize_max": 0
+  },
+  "judge_on": "total",
+  "breakdown": {
+    "standard": ["Title", "Author", "Subject", "Keywords", "Creator"],
+    "custom": "それ以外の鍵"
+  },
+  "unit": "いまの版の Info 辞書の1つの鍵",
+  "not_counted": {
+    "Producer": "producer",
+    "CreationDate": "date",
+    "ModDate": "date",
+    "Trapped": "trapped",
+    "空・空白だけの値": "empty"
+  },
+  "match": {
+    "same_file": true,
+    "same_key": true,
+    "one_to_one": true
+  },
+  "previous_versions": "分母に入れない（P5 の範囲）。検証器は previous_info に数だけを出す",
+  "false_positive": {
+    "numerator": "漏れでない欄（negatives）への報告の数 ＋ 正解のどれにも当たらない欄への報告の数",
+    "denominator": "正解データの negatives の件数"
+  },
+  "residual": {
+    "how": "片付けたあとの PDF を、合成 PDF ごとに検証器にかけ、items の件数を合計する",
+    "fail_if": ["検証器の status が ok でない（読めない PDF を 0 件とは数えない）"]
+  },
+  "fixtures": "fixtures/p1/*.expected.json",
+  "verifier": "verifier/p1-cli.mjs"
+}

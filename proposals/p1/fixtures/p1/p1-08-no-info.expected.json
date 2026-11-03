@@ -1,0 +1,8 @@
+{
+  "file": "p1-08-no-info.pdf",
+  "description": "文書情報がない（trailer に /Info がない）",
+  "leaks": [],
+  "negatives": [],
+  "out_of_scope": [],
+  "previous_info": false
+}
