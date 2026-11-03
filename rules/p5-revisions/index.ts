@@ -27,9 +27,11 @@ import {
   PDFXRefStreamParser,
   decodePDFRawStream,
 } from "pdf-lib";
+import type { EncryptionSummary } from "../shared/decrypt.ts";
+import { decryptDefinitions, expandObjectStream, hasEncryptMarker, isMaskedObjStm, maskObjectStreams, unmaskObjectStream } from "./decrypt.ts";
 
 export const RULE_ID = "p5-revisions";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 export type P5Where = "superseded" | "free" | "unreferenced" | "orphan";
 export type P5Kind = "info" | "content" | "annotation" | "form_value" | "metadata" | "image" | "embedded_file";
@@ -69,6 +71,8 @@ export type P5Report = {
   summary: { previousInfo: number; removedAttachment: number };
   /** /Prev の鎖をたどれず、ファイルの中の順で版を決めたとき true（線形化した PDF・壊れた xref など） */
   chainFallback: boolean;
+  /** パスワードなしで開ける暗号化 PDF を、前の版も含めて復号して調べたときだけ（1.1.0 から） */
+  decrypted?: EncryptionSummary & { failedObjects: number };
 };
 
 // ---------------------------------------------------------------- 読み取り（pdf-lib の読み手に差し込みを入れる）
@@ -341,6 +345,46 @@ function classify(def: Def, infoNums: Set<number>, resolve: (o: PDFObject | unde
   return { counted: false, kind: "structure", reason: "structure" };
 }
 
+// ---------------------------------------------------------------- 暗号化（1.1.0）
+
+/**
+ * 暗号化された版の定義を解き、オブジェクトストリームを開いて中の定義を defs に足す。
+ * 版ごとに、その版を閉じる xref の trailer に /Encrypt があるかを見る。ない版（暗号化する前の版）の定義は解かない。
+ * どの xref よりあとにある定義（orphan になりうるもの）は、いまの版に合わせる。
+ * 暗号化の辞書と /ID は、/Encrypt を持ついちばん新しい trailer のものを使う。
+ * 暗号化の印はあったが、どの trailer にも /Encrypt がなければ null（解かない）。
+ */
+async function decryptRevisions(defs: Def[], sections: Section[], newest: PDFDict | null) {
+  const byAt = [...sections].sort((a, b) => a.at - b.at);
+  const closing = (d: Def): PDFDict | null => byAt.find((s) => s.at > d.start)?.trailer ?? newest;
+  const withEncrypt = [newest, ...[...byAt].reverse().map((s) => s.trailer)].find((t) => t?.get(K.Encrypt) !== undefined) ?? null;
+  let result: Awaited<ReturnType<typeof decryptDefinitions>> | null = null;
+
+  if (withEncrypt) {
+    const entry = withEncrypt.get(K.Encrypt)!;
+    let dict: PDFDict | null = entry instanceof PDFDict ? entry : null;
+    if (entry instanceof PDFRef) {
+      for (const d of defs) if (d.num === entry.objectNumber && d.obj instanceof PDFDict) dict = d.obj; // いちばんあとの定義
+    }
+    if (!dict) return { ok: false as const, reason: "broken" as const };
+    const targets = defs.filter((d) => d.objstm === null && closing(d)?.get(K.Encrypt) !== undefined);
+    result = await decryptDefinitions(targets, { entry, dict }, withEncrypt.get(N("ID")));
+    if (!result.ok) return result;
+  }
+
+  // オブジェクトストリームを開く（解いた版のものは decryptContext が /Type を戻している。解かなかった版のものはここで戻す）
+  const containers = defs.filter((d) => d.objstm === null && d.obj instanceof PDFRawStream);
+  for (const c of containers) {
+    if (isMaskedObjStm(c.obj)) unmaskObjectStream(c.obj);
+    if ((c.obj as PDFRawStream).dict.get(K.Type) !== K.ObjStm) continue;
+    for (const inner of expandObjectStream(c.obj as PDFRawStream, LIMITS.definitions)) {
+      if (defs.length >= LIMITS.definitions) break;
+      defs.push({ num: inner.num, gen: inner.gen, start: c.start, objstm: c.num, obj: inner.obj });
+    }
+  }
+  return result;
+}
+
 // ---------------------------------------------------------------- 本体
 
 function revisionEnds(bytes: Uint8Array): number[] {
@@ -362,10 +406,12 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
   };
   if (bytes.length === 0) return { ...base, status: "error", error: { code: "empty", message: "ファイルが空です。" } };
 
+  // 暗号化の印があれば、オブジェクトストリームの名前を置き換えた写しを読む（解いてから開くため。decrypt.ts）
+  const encryptedFile = hasEncryptMarker(bytes);
   let defs: Def[];
   let sections: Section[];
   try {
-    ({ defs, sections } = await collect(bytes));
+    ({ defs, sections } = await collect(encryptedFile ? maskObjectStreams(bytes) : bytes));
   } catch (e) {
     const message = e instanceof TooMany ? "オブジェクトか版が多すぎるため、調べるのをやめました。" : "PDF として読めませんでした。";
     return { ...base, status: "error", error: { code: "unreadable", message } };
@@ -376,9 +422,15 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
 
   const { ordered, fallback } = chain(bytes, sections);
   const newest = ordered[0]?.[0]?.trailer ?? null;
-  if (newest?.get(K.Encrypt) !== undefined) {
-    // 前の版の中身も暗号化されている。いまは調べない（決めてほしいこと）
-    return { ...base, status: "error", error: { code: "encrypted", message: "暗号化された PDF の前の版は、いまは調べられません。" } };
+  let decrypted: P5Report["decrypted"];
+  if (encryptedFile) {
+    const r = await decryptRevisions(defs, sections, newest);
+    if (r && !r.ok) {
+      const message =
+        r.reason === "password_required" ? "パスワードが要る PDF は、調べられません。" : "この形の暗号化は、いまは調べられません。";
+      return { ...base, status: "error", error: { code: "encrypted", message } };
+    }
+    if (r) decrypted = { ...r.summary, failedObjects: r.failedObjects };
   }
 
   // いまの版の表：新しい区切りから見て、最初に出てくる項目
@@ -442,6 +494,7 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
   };
 
   const report: P5Report = { ...base, revisions: ordered.length, chainFallback: fallback, findings: [], notCounted: [], summary: { previousInfo: 0, removedAttachment: 0 } };
+  if (decrypted) report.decrypted = decrypted;
   for (const d of defs) {
     if (d.num === 0) continue;
     let where: P5Where;
