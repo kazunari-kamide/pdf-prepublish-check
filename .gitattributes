@@ -2,3 +2,7 @@
 *.pdf binary
 *.ttf binary
 *.otf binary
+
+# JSON と Markdown は、改行を LF に固める（作り直しのたびに CRLF と LF の差が出ないように）
+*.json text eol=lf
+*.md text eol=lf

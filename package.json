@@ -13,7 +13,8 @@
     "build": "npm run typecheck && vite build && node scripts/check-dist.mjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "eval": "node eval/p6.ts"
   },
   "devDependencies": {
     "@pdf-lib/fontkit": "1.1.1",
