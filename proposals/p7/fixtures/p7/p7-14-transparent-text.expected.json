@@ -1,0 +1,21 @@
+{
+  "file": "p7-14-transparent-text.pdf",
+  "description": "不透明さ 0 の字",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-14-transparent-text#L1",
+      "pattern": "P7",
+      "reason": "invisible",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        140.48,
+        208.62
+      ],
+      "chars": 15
+    }
+  ],
+  "negatives": []
+}

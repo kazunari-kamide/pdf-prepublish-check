@@ -1,0 +1,34 @@
+{
+  "file": "p7-04-off-page-right.pdf",
+  "description": "ページの右の外に置いた字と、右端の内側ぎりぎりの字（見える）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-04-off-page-right#L1",
+      "pattern": "P7",
+      "reason": "off_page",
+      "page": 1,
+      "rect": [
+        450,
+        197.52,
+        525.98,
+        208.62
+      ],
+      "chars": 13
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p7-04-off-page-right#N1",
+      "kind": "near_edge",
+      "page": 1,
+      "rect": [
+        350,
+        17.52,
+        387.55,
+        28.62
+      ],
+      "note": "ページの中"
+    }
+  ]
+}

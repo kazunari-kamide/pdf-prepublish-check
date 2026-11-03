@@ -1,0 +1,34 @@
+{
+  "file": "p7-03-black-on-black.pdf",
+  "description": "黒い帯の上に、黒い字（見えない）と白い字（見える）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-03-black-on-black#L1",
+      "pattern": "P7",
+      "reason": "same_color",
+      "page": 1,
+      "rect": [
+        40,
+        212.52,
+        108.69,
+        223.62
+      ],
+      "chars": 12
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p7-03-black-on-black#N1",
+      "kind": "visible_on_dark",
+      "page": 1,
+      "rect": [
+        40,
+        187.52,
+        90.03,
+        198.62
+      ],
+      "note": "黒い帯の上の白い字"
+    }
+  ]
+}

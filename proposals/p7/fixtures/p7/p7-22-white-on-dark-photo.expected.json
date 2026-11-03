@@ -1,0 +1,20 @@
+{
+  "file": "p7-22-white-on-dark-photo.pdf",
+  "description": "暗い写真の上の白い字（見える）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p7-22-white-on-dark-photo#N1",
+      "kind": "visible_on_dark_image",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        113.38,
+        208.62
+      ],
+      "note": "暗い写真の上の白い字"
+    }
+  ]
+}

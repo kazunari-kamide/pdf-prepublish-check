@@ -1,0 +1,21 @@
+{
+  "file": "p7-20-outside-cropbox.pdf",
+  "description": "見える範囲（CropBox）を下半分にした。上半分（MediaBox の中、CropBox の外）に字が残っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-20-outside-cropbox#L1",
+      "pattern": "P7",
+      "reason": "off_page",
+      "page": 1,
+      "rect": [
+        40,
+        247.52,
+        135.75,
+        258.62
+      ],
+      "chars": 14
+    }
+  ],
+  "negatives": []
+}

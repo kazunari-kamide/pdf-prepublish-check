@@ -1,0 +1,20 @@
+{
+  "file": "p7-08-ocr-layer.pdf",
+  "description": "スキャン画像の上に、描き方 3 の字（文字認識の層。漏れでない）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p7-08-ocr-layer#N1",
+      "kind": "ocr_layer",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        139.71,
+        208.62
+      ],
+      "note": "画像の上の見えない字（文字認識の層）"
+    }
+  ]
+}

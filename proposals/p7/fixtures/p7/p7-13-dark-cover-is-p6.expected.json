@@ -1,0 +1,20 @@
+{
+  "file": "p7-13-dark-cover-is-p6.pdf",
+  "description": "字のあとに黒い四角を重ねた（見せかけの黒塗り。P6 で数えるので、P7 では出さない）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p7-13-dark-cover-is-p6#N1",
+      "kind": "p6_dark_cover",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        108.5,
+        208.62
+      ],
+      "note": "P6 で数える"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omamori-verifier-p7/0.1.0",
+  "title": "検証器 P7（隠れたテキスト）の出力",
+  "type": "object",
+  "required": ["verifier", "checked", "input", "status", "items", "skipped_pages", "excluded"],
+  "properties": {
+    "verifier": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "omamori-verifier-p7" }, "version": { "type": "string" } }
+    },
+    "checked": { "description": "調べた漏洩パターン。ここにない型は調べていない", "type": "array", "items": { "const": "P7" } },
+    "input": {
+      "type": "object",
+      "required": ["bytes", "sha256", "pages"],
+      "properties": {
+        "bytes": { "type": "integer" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "pages": { "type": ["integer", "null"] }
+      }
+    },
+    "status": { "enum": ["ok", "error"] },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "enum": ["empty", "too_large", "unreadable", "encrypted", "too_many_pages"] },
+        "message": { "type": "string" }
+      }
+    },
+    "items": {
+      "description": "取り出せるのに見えない字。1件 ＝ 1回の字を描く命令の中で、同じ理由で続く字のまとまり",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "page", "reason", "rect", "chars"],
+        "additionalProperties": false,
+        "properties": {
+          "pattern": { "const": "P7" },
+          "page": { "type": "integer", "minimum": 1 },
+          "reason": { "enum": ["hidden_layer", "off_page", "clipped", "invisible", "tiny", "same_color", "covered_light"] },
+          "rect": {
+            "description": "見えない字の箱 [x0, y0, x1, y1]。ページの既定の座標（ポイント、左下が原点、/Rotate はかけない）",
+            "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4
+          },
+          "chars": { "description": "見えない字の数（空白を除く）", "type": "integer" },
+          "text": { "description": "--include-text を付けたときだけ。字そのもの", "type": "string" }
+        }
+      }
+    },
+    "skipped_pages": {
+      "description": "調べられなかったページ。ここにあるページは「問題なし」ではない",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["page", "reason"],
+        "properties": { "page": { "type": "integer" }, "reason": { "enum": ["too_many_operations", "unreadable_page"] } }
+      }
+    },
+    "excluded": {
+      "description": "見えないが、P7 では数えなかった字の数。p6＝濃い覆いの下（P6 で数える）、ocr_layer＝画像の上の見えない字（文字認識の層）",
+      "type": "object",
+      "properties": { "p6": { "type": "integer" }, "ocr_layer": { "type": "integer" } }
+    }
+  }
+}

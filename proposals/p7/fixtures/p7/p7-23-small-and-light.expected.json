@@ -1,0 +1,32 @@
+{
+  "file": "p7-23-small-and-light.pdf",
+  "description": "大きさ 3 の字と、明るさ 0.85 の字（どちらも見える）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p7-23-small-and-light#N1",
+      "kind": "small_legible",
+      "page": 1,
+      "rect": [
+        40,
+        199.38,
+        52.55,
+        202.15
+      ],
+      "note": "大きさ 3"
+    },
+    {
+      "id": "p7-23-small-and-light#N2",
+      "kind": "light_gray_text",
+      "page": 1,
+      "rect": [
+        40,
+        147.52,
+        142.74,
+        158.62
+      ],
+      "note": "明るさの差 0.15"
+    }
+  ]
+}
