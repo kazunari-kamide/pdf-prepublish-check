@@ -5,7 +5,8 @@
 
 import { describe, expect, it } from "vitest";
 import { PDFDocument, PDFName, PDFRef } from "pdf-lib";
-import { detectP7Hidden } from "../rules/p7-hidden/index.ts";
+import { DEFAULT_SETTINGS, detectP7Hidden } from "../rules/p7-hidden/index.ts";
+import { DEFAULT_SETTINGS as P6_SETTINGS } from "../rules/p6-text/settings.ts";
 import { operations } from "../rules/shared/content-lexer.ts";
 
 const enc = (s: string) => new TextEncoder().encode(s);
@@ -144,6 +145,10 @@ describe("壊れた・重い入力で止まらない", () => {
     const r = await detectP7Hidden(bytes, { settings: { maxOperations: 50 } });
     expect(r.skippedPages).toEqual([{ page: 1, reason: "too_many_operations" }]);
     expect(r.findings).toEqual([]);
+  });
+
+  it("命令の数の上限の既定は、P6 と同じ（画面と npm run eval で同じ上限にするため。#32）", () => {
+    expect(DEFAULT_SETTINGS.maxOperations).toBe(P6_SETTINGS.maxOperationsPerPage);
   });
 
   it("空のファイル・PDF でないもの", async () => {

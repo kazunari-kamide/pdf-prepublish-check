@@ -27,7 +27,7 @@ import { readFont, type FontInfo } from "../shared/fonts.ts";
 import { loadPdf } from "../shared/load.ts";
 
 export const RULE_ID = "p7-hidden";
-export const RULE_VERSION = "1.0.1";
+export const RULE_VERSION = "1.0.2";
 
 export type P7Reason = "hidden_layer" | "off_page" | "clipped" | "invisible" | "tiny" | "same_color" | "covered_light";
 
@@ -43,8 +43,8 @@ export const DEFAULT_SETTINGS = {
   rectangularFillMin: 0.9,
   /** 覆いが字の箱を隠す割合の下限 */
   coveredFractionMin: 0.5,
-  /** 1ページの命令の数の上限。超えたページは省く */
-  maxOperations: 300_000,
+  /** 1ページの命令の数の上限。超えたページは省く（1.0.2 から P6 と同じ 300 万。画面の上限と同じ） */
+  maxOperations: 3_000_000,
   /** 部品（Form XObject）の入れ子の上限 */
   maxFormDepth: 12,
 };
