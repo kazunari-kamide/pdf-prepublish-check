@@ -10,6 +10,7 @@
 import { detectP1Info, type P1InfoReport } from "../../rules/p1-info/index.ts";
 import { detectP5Revisions, type P5Kind, type P5Report } from "../../rules/p5-revisions/index.ts";
 import { detectP6Text, type P6TextReport } from "../../rules/p6-text/index.ts";
+import { DEFAULT_SETTINGS as P6_SETTINGS } from "../../rules/p6-text/settings.ts";
 import { detectP7Hidden, type P7Reason, type P7Report } from "../../rules/p7-hidden/index.ts";
 import { detectP9Attach, type P9AttachReport, type P9Where } from "../../rules/p9-attach/index.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report";
@@ -68,8 +69,8 @@ function skippedNotices(skipped: Array<{ page: number; reason: string }>): Notic
   const heavy = skipped.filter((s) => s.reason !== "unreadable_page").map((s) => s.page);
   const broken = skipped.filter((s) => s.reason === "unreadable_page").map((s) => s.page);
   const out: Notice[] = [];
-  if (heavy.length) out.push({ kind: "skipped_pages", message: SKIPPED_HEAVY, pages: heavy });
-  if (broken.length) out.push({ kind: "skipped_pages", message: SKIPPED_UNREADABLE, pages: broken });
+  if (heavy.length) out.push({ kind: "skipped_pages", message: SKIPPED_HEAVY, pages: heavy, reason: "heavy" });
+  if (broken.length) out.push({ kind: "skipped_pages", message: SKIPPED_UNREADABLE, pages: broken, reason: "unreadable" });
   return out;
 }
 
@@ -122,7 +123,9 @@ const p7 = defineRule<P7Report>({
   id: "p7-hidden",
   label: "隠れたテキスト",
   pattern: "P7",
-  detect: (b) => detectP7Hidden(b),
+  // 1ページの命令の数の上限は、P6 とそろえる（2026-11-03 本人が決定。PR #31 の返事 5）。
+  // P7 の既定の値（rules/p7-hidden）は検出ルールの担当の範囲なので変えず、画面から呼ぶときだけ上書きする。
+  detect: (b) => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P7",

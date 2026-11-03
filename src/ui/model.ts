@@ -18,16 +18,29 @@ export type Row = {
   detail: string;
 };
 
+/** 型（ルール）ごとのまとまり。見つからなかった型も並べる */
+export type Group = {
+  label: string;
+  pattern: string;
+  status: "ok" | "error";
+  /** status が error のときの文 */
+  message: string | null;
+  rows: Row[];
+};
+
 export type PageMarks = { box: PageBox; marks: Array<{ no: number; severity: Severity; title: string; rect: Rect }> };
 
 export type ViewModel = {
   headline: string;
   tone: "neutral" | "ok" | "problem";
   rows: Row[];
+  groups: Group[];
   notices: string[];
   unchecked: string[];
   coverage: string[];
   pages: PageMarks[];
+  /** 図形が多すぎるとして、どれかのルールが省いたページ（ページの絵も描かない） */
+  heavyPages: number[];
   /** 見つかった所が0件で、調べられなかった項目も省いたページもないとき true（「全部緑」の状態） */
   clean: boolean;
 };
@@ -42,8 +55,10 @@ function pagesText(pages: number[]): string {
 }
 
 export function buildView(summary: InspectSummary): ViewModel {
-  const all: Array<Item & { label: string }> = [];
-  for (const r of summary.rules) for (const it of r.items) all.push({ ...it, label: r.label });
+  const all: Array<Item & { label: string; ruleIndex: number }> = [];
+  summary.rules.forEach((r, ruleIndex) => {
+    for (const it of r.items) all.push({ ...it, label: r.label, ruleIndex });
+  });
   all.sort(
     (a, b) =>
       SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
@@ -62,6 +77,14 @@ export function buildView(summary: InspectSummary): ViewModel {
     title: it.title,
     why: it.why,
     detail: it.detail,
+  }));
+
+  const groups: Group[] = summary.rules.map((r, i) => ({
+    label: r.label,
+    pattern: r.pattern,
+    status: r.status,
+    message: r.status === "error" ? (r.message ?? "調べられませんでした。") : null,
+    rows: rows.filter((_, j) => all[j]!.ruleIndex === i),
   }));
 
   // お知らせ：同じ文はまとめ、ページ番号を合わせる
@@ -110,5 +133,8 @@ export function buildView(summary: InspectSummary): ViewModel {
     headline = "見つかった所はありませんが、調べられなかった所があります。「問題なし」ではありません。";
     tone = "neutral";
   }
-  return { headline, tone, rows, notices, unchecked, coverage, pages, clean };
+  const heavyPages = [
+    ...new Set(summary.rules.flatMap((r) => r.notices.filter((n) => n.reason === "heavy").flatMap((n) => n.pages))),
+  ].sort((a, b) => a - b);
+  return { headline, tone, rows, groups, heavyPages, notices, unchecked, coverage, pages, clean };
 }

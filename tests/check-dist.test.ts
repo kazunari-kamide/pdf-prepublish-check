@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// scripts/check-dist.mjs の例外（PDF.js の写し）が、決めた条件のときだけ効くことを確かめる（docs/no-network.md）。
+// 作りものの dist/ を一時フォルダに置き、check-dist を動かして、通るか止まるかを見る。
+
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const SCRIPT = path.join(ROOT, "scripts", "check-dist.mjs");
+const PDFJS = path.join(ROOT, "node_modules", "pdfjs-dist", "build");
+const CSP_OK = "default-src &#39;self&#39;; connect-src &#39;none&#39;; script-src &#39;self&#39;";
+const CSP_OPEN = "default-src &#39;self&#39;; script-src &#39;self&#39;";
+
+let dirs: string[] = [];
+afterEach(() => {
+  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  dirs = [];
+});
+
+function fakeDist(csp: string, files: Record<string, string | { copy: string } | { copyAndAppend: string }>): string {
+  const dir = mkdtempSync(path.join(tmpdir(), "omamori-dist-"));
+  dirs.push(dir);
+  mkdirSync(path.join(dir, "assets"));
+  writeFileSync(
+    path.join(dir, "index.html"),
+    `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><script type="module" src="/assets/index.js"></script></head><body></body></html>`,
+  );
+  writeFileSync(path.join(dir, "assets", "index.js"), "console.log(1);\n");
+  for (const [name, v] of Object.entries(files)) {
+    const to = path.join(dir, "assets", name);
+    if (typeof v === "string") writeFileSync(to, v);
+    else if ("copy" in v) copyFileSync(path.join(PDFJS, v.copy), to);
+    else writeFileSync(to, Buffer.concat([readFileSync(path.join(PDFJS, v.copyAndAppend)), Buffer.from("\nfetch('x');\n")]));
+  }
+  return dir;
+}
+
+function run(dir: string) {
+  const r = spawnSync(process.execPath, [SCRIPT], { env: { ...process.env, DIST_DIR: dir }, encoding: "utf8" });
+  return { code: r.status, out: `${r.stdout}${r.stderr}` };
+}
+
+describe("check-dist の PDF.js の例外", () => {
+  it("pdfjs-dist と同じ写しで、CSP に connect-src 'none' があれば通す", () => {
+    const r = run(fakeDist(CSP_OK, { "pdf.min-a.mjs": { copy: "pdf.min.mjs" }, "pdf.worker.min-b.mjs": { copy: "pdf.worker.min.mjs" } }));
+    expect(r.out).toContain("例外として許したファイル");
+    expect(r.code).toBe(0);
+  });
+
+  it("1バイトでも変えた PDF.js は止める", () => {
+    const r = run(fakeDist(CSP_OK, { "pdf.min-a.mjs": { copyAndAppend: "pdf.min.mjs" } }));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("pdf.min-a.mjs に fetch( が入っています");
+  });
+
+  it("CSP に connect-src 'none' がなければ、写しでも止める", () => {
+    const r = run(fakeDist(CSP_OPEN, { "pdf.min-a.mjs": { copy: "pdf.min.mjs" } }));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("CSP に connect-src 'none' がありません");
+    expect(r.out).toContain("pdf.min-a.mjs に fetch( が入っています");
+  });
+
+  it("自分たちのファイルの fetch は止める（.js も .mjs も）", () => {
+    const r = run(fakeDist(CSP_OK, { "own.js": "fetch('/x');\n", "own.mjs": "new WebSocket('ws://x');\n" }));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("own.js に fetch( が入っています");
+    expect(r.out).toContain("own.mjs に WebSocket が入っています");
+  });
+});

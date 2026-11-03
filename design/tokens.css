@@ -1,0 +1,51 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * お守りPDF のデザインの決まり（色・文字・余白・部品）。説明は design/README.md。
+ * 画面（src/style.css）は、ここにある変数だけを使う。決まりにない値を足すときは、先にここへ足す（CLAUDE.md §6）。
+ * 2026-11-03：画面の案 A・B・C（src/design-proposals/）から、本人の返事（PR #31）で組み合わせを決めた。
+ */
+
+:root {
+  /* ---- 色：2色（ベースとアクセント） */
+  --color-base: #2b2a28; /* 墨。文字・線・帯 */
+  --color-accent: #a3201b; /* 紅。危ない所・お守りの色 */
+
+  /* ---- 色：状態の色（2色の決まりの外。2026-11-03 本人が承認） */
+  --color-ok: #2f6f5e; /* 緑。片付いた所・見つからなかった型 */
+
+  /* ---- 色：下地（ベース色を薄めたもの） */
+  --color-paper: #fbfaf7; /* 画面の下地 */
+  --color-surface: #ffffff; /* 紙・欄の下地 */
+  --color-sunken: #efece6; /* ページの並び・中央の台 */
+  --color-line: #d9d4ca; /* 区切りの線 */
+  --color-muted: #57534e; /* 補足の文字（白の上で 7:1 以上） */
+  --color-accent-tint: #f7e9e8; /* 危ない所の枠の中の薄い色 */
+  --color-on-dark: #ffffff; /* 墨・紅の上の文字 */
+  --color-accent-wash: rgb(163 32 27 / 10%); /* ページの上の枠の中（下の絵が透けて見える） */
+
+  /* ---- 文字：見出し用と本文用の2つ。いまは端末の書体（同梱する書体は決めてほしいこと） */
+  --font-head: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Noto Serif JP", serif;
+  --font-body: "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Meiryo", "Noto Sans JP", sans-serif;
+  --text-base: 18px; /* 本文。役所の職員が読むので大きめ */
+  --text-small: 0.9rem;
+  --text-h1: 1.6rem;
+  --text-h2: 1.15rem;
+  --leading: 1.7;
+
+  /* ---- 余白 */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* ---- 部品 */
+  --border-mark: 3px; /* ページの上の枠の太さ */
+  --border-strong: 2px;
+  --shadow-sheet: 0 1px 4px rgb(0 0 0 / 15%); /* 大きなページの影 */
+  --radius: 0; /* 角は丸めない（落ち着いた見た目） */
+  --focus-ring: 3px solid var(--color-base);
+  --width-thumbs: 7.5rem;
+  --width-results: 25rem;
+}

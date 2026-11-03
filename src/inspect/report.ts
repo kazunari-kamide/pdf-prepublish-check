@@ -29,7 +29,8 @@ export type Item = {
 
 /** 知らせること（漏れではないが、利用者に伝えること） */
 export type NoticeKind = "decrypted" | "unchecked_images" | "skipped_pages" | "partial";
-export type Notice = { kind: NoticeKind; message: string; pages: number[] };
+/** reason は省いたページのときだけ。heavy＝図形が多すぎる（ページの絵も描かない）、unreadable＝読めなかった */
+export type Notice = { kind: NoticeKind; message: string; pages: number[]; reason?: "heavy" | "unreadable" };
 
 /** 検出ルール1つの結果 */
 export type RuleResult = {
