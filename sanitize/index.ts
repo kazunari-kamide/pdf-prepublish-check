@@ -16,12 +16,12 @@
 import type { PDFObject } from "pdf-lib";
 import { loadPdf } from "../rules/shared/load.ts";
 import { SETTINGS, TooManyOperations, makeVisibility, sanitizePageContent } from "./content.ts";
-import { cleanAnnotations, countRevisions, dropUnreachable, removeAttachments, removeDocInfo, removeJavaScript, removeXmp } from "./structure.ts";
+import { cleanAnnotations, countRevisions, dropUnreachable, removeAttachments, removeDocInfo, removeStructureExtras, removeJavaScript, removeXmp } from "./structure.ts";
 import type { NotDoneItem, RemovedItem, SanitizeOptions, SanitizeResult } from "./types.ts";
 
 export type * from "./types.ts";
 
-export const SANITIZER_VERSION = "0.2.0";
+export const SANITIZER_VERSION = "0.3.0";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 const MAX_INPUT_BYTES = 512 * 1024 * 1024;
@@ -86,6 +86,7 @@ export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = 
   removed.push(...removeJavaScript(ctx));
   removed.push(...removeXmp(ctx));
   removed.push(...removeDocInfo(doc));
+  removed.push(...removeStructureExtras(doc));
 
   // 4. 1つの版にまとめる
   ctx.trailerInfo.Encrypt = undefined;

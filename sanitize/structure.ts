@@ -7,6 +7,7 @@
 //   リンクなどほかの注釈は、コメント（/Contents・/RC）・作者名（/T）・件名・日時を消し、見た目は残す
 // - P9 添付ファイル：名前の木の /EmbeddedFiles、添付ファイルの注釈、関連ファイル（/AF）、ポートフォリオ（/Collection）を外す
 // - P12 JavaScript：名前の木の /JavaScript、JavaScript の動作（/OpenAction・/A・/AA の中）を外す
+// - 字の読み替え（/ActualText）・ページの縮小画像（/Thumb）・アプリの独自データ（/PieceInfo）を外す（removeStructureExtras）
 // - P5 前の版：最後に、文書の根（/Root）からたどれないオブジェクトをすべて捨て、1つの版として書き出す（index.ts）
 //
 // 取り出した中身（名前・ファイル名・コメントの字）は、結果に入れない。数だけを返す。
@@ -300,4 +301,59 @@ export function countRevisions(bytes: Uint8Array): number {
     if (bytes[i] === 0x25 && bytes[i + 1] === 0x25 && bytes[i + 2] === 0x45 && bytes[i + 3] === 0x4f && bytes[i + 4] === 0x46) n++;
   }
   return n;
+}
+
+/**
+ * 構造ツリーの字の読み替え（/ActualText）、ページの縮小画像（/Thumb）、アプリの独自データ（/PieceInfo）を外す。
+ * - /ActualText：コピー・検索で、見た目の字の代わりに取れる字。黒い四角の下の字や、消した字がここに残っていることがある。
+ *   すべてのオブジェクト（構造ツリーの要素・マーク付きの中身の属性の辞書）から外す。ページの中に直接書いたものは content.ts で外す。
+ * - /Thumb：ページの縮小画像。黒塗りの前の見た目が残っていることがある。ページから外す（画像は、最後の掃除でファイルから消える）。
+ * - /PieceInfo：作ったアプリが書き込んだ独自データ（編集前の中身などが入っていることがある）。対になる /LastModified も外す。
+ * 取り出した中身は、結果に入れない。数だけを返す。
+ */
+export function removeStructureExtras(doc: PDFDocument): RemovedItem[] {
+  const ctx = doc.context;
+  let actualText = 0;
+  let pieceInfo = 0;
+  let thumbs = 0;
+
+  doc.getPages().forEach((page) => {
+    if (page.node.has(N("Thumb"))) {
+      page.node.delete(N("Thumb"));
+      thumbs++;
+    }
+  });
+
+  const strip = (d: PDFDict) => {
+    if (d.has(N("ActualText"))) {
+      d.delete(N("ActualText"));
+      actualText++;
+    }
+    if (d.has(N("PieceInfo"))) {
+      d.delete(N("PieceInfo"));
+      d.delete(N("LastModified"));
+      pieceInfo++;
+    }
+  };
+  // 間接オブジェクトはすべて順に見るので、ここでは直接の入れ子（辞書・配列）だけをたどる
+  const visit = (o: PDFObject | undefined, depth: number) => {
+    if (!o || depth > 64) return;
+    if (o instanceof PDFDict) {
+      strip(o);
+      for (const [, v] of o.entries()) if (!(v instanceof PDFRef)) visit(v, depth + 1);
+    } else if (o instanceof PDFStream) {
+      visit(o.dict, depth + 1);
+    } else if (o instanceof PDFArray) {
+      for (const v of o.asArray()) if (!(v instanceof PDFRef)) visit(v, depth + 1);
+    }
+  };
+  for (const [, o] of ctx.enumerateIndirectObjects()) visit(o, 0);
+  // 文書の根（/Root）が直接の辞書のときのため
+  visit(doc.catalog, 0);
+
+  const out: RemovedItem[] = [];
+  if (actualText) out.push({ pattern: "P7", kind: "actual_text", count: actualText, label: `構造ツリーなどの字の読み替え（/ActualText）を ${actualText} か所消しました（コピー・検索で、見た目と違う字が取れないように）` });
+  if (thumbs) out.push({ pattern: "P5", kind: "thumbnail", count: thumbs, label: `ページの縮小画像（${thumbs} ページ分）を消しました（黒塗りの前の見た目が残っていることがあるため）` });
+  if (pieceInfo) out.push({ pattern: "P2", kind: "piece_info", count: pieceInfo, label: `作ったアプリの独自データ（/PieceInfo。${pieceInfo} か所）を消しました` });
+  return out;
 }

@@ -103,6 +103,8 @@ type CNode = {
   textOps: Map<number, TextOp>;
   /** 画像を描く命令（Do） */
   images: Map<number, ImageUse>;
+  /** /ActualText を直接書いたマーク付きの中身（BDC）の命令の番号 */
+  actualText: Set<number>;
 };
 
 type GlyphSlot = { g: Glyph; bytes: Uint8Array | null; adj: number | null };
@@ -703,7 +705,7 @@ class Walker {
             }
             const child: CNode = {
               data, res: dictOf(ctx, xo.dict.get(PDFName.of("Resources"))) ?? res, hasInline: false,
-              forms: new Map(), textOps: new Map(), images: new Map(),
+              forms: new Map(), textOps: new Map(), images: new Map(), actualText: new Set(),
             };
             if (!annotation) node.forms.set(opIndex, { node: child, stream: xo });
             const nextSeen = new Set(seen);
@@ -719,6 +721,7 @@ class Walker {
         case "BDC": {
           let hide = false;
           if (args[0]?.t === "name" && args[0].v === "OC" && args[1]?.t === "name") hide = !this.visible(resOf("Properties", args[1].v));
+          if (args[1]?.t === "dict" && args[1].v.has("ActualText")) node.actualText.add(opIndex);
           marks.push(hide);
           break;
         }
@@ -809,7 +812,7 @@ function scanAnnotations(ctx: PDFContext, page: PDFPage, w: Walker, visible: Vis
       } catch {
         continue;
       }
-      const node: CNode = { data, res: dictOf(ctx, ap.dict.get(PDFName.of("Resources"))), hasInline: false, forms: new Map(), textOps: new Map(), images: new Map() };
+      const node: CNode = { data, res: dictOf(ctx, ap.dict.get(PDFName.of("Resources"))), hasInline: false, forms: new Map(), textOps: new Map(), images: new Map(), actualText: new Set() };
       try {
         w.run(node, w.initial(m), false, 0, new Set(), true);
       } catch (e) {
@@ -938,12 +941,13 @@ function needsRewrite(node: CNode, burned: Map<ImageUse, PDFRef>, memo: Map<CNod
   let v = false;
   for (const t of node.textOps.values()) for (const slots of t.elems.values()) if (slots.some((sl) => sl.g.remove)) v = true;
   for (const u of node.images.values()) if (burned.has(u)) v = true;
+  if (node.actualText.size) v = true;
   for (const f of node.forms.values()) if (needsRewrite(f.node, burned, memo)) v = true;
   memo.set(node, v);
   return v;
 }
 
-function rewriteNode(ctx: PDFContext, node: CNode, burned: Map<ImageUse, PDFRef>, memo: Map<CNode, boolean>, blocked: CNode[]): Rewritten {
+function rewriteNode(ctx: PDFContext, node: CNode, burned: Map<ImageUse, PDFRef>, memo: Map<CNode, boolean>, blocked: CNode[], actual: { count: number }): Rewritten {
   if (!needsRewrite(node, burned, memo)) return null;
   if (node.hasInline) {
     blocked.push(node);
@@ -951,7 +955,7 @@ function rewriteNode(ctx: PDFContext, node: CNode, burned: Map<ImageUse, PDFRef>
   }
   const renames = new Map<number, PDFRef>();
   for (const [opNo, f] of node.forms) {
-    const r = rewriteNode(ctx, f.node, burned, memo, blocked);
+    const r = rewriteNode(ctx, f.node, burned, memo, blocked, actual);
     if (!r) continue;
     const ns = ctx.flateStream(r.data, {});
     for (const [k, v] of f.stream.dict.entries()) {
@@ -988,6 +992,13 @@ function rewriteNode(ctx: PDFContext, node: CNode, burned: Map<ImageUse, PDFRef>
       ops.push({ op: "Do", args: [{ t: "name", v: name.decodeText() }] });
       continue;
     }
+    if (node.actualText.has(i) && o.args[1]?.t === "dict") {
+      const m = new Map(o.args[1].v);
+      m.delete("ActualText");
+      actual.count++;
+      ops.push({ op: o.op, args: [o.args[0]!, { t: "dict", v: m }] });
+      continue;
+    }
     const t = node.textOps.get(i);
     if (t && [...t.elems.values()].some((sl) => sl.some((x) => x.g.remove))) {
       ops.push(...rewriteTextOp(o, t));
@@ -1021,7 +1032,7 @@ export function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: numb
   const root: CNode = {
     data: contentData(ctx, page.node.get(PDFName.of("Contents"))),
     res: dictOf(ctx, page.node.get(PDFName.of("Resources"))) ?? page.node.Resources(),
-    hasInline: false, forms: new Map(), textOps: new Map(), images: new Map(),
+    hasInline: false, forms: new Map(), textOps: new Map(), images: new Map(), actualText: new Set(),
   };
   const w = new Walker(ctx, visible, s, pageNo);
   w.run(root, w.initial(IDENTITY), false, 0, new Set(), false);
@@ -1079,7 +1090,8 @@ export function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: numb
   // 書き直す
   const memo = new Map<CNode, boolean>();
   const blocked: CNode[] = [];
-  const r = rewriteNode(ctx, root, burned, memo, blocked);
+  const actual = { count: 0 };
+  const r = rewriteNode(ctx, root, burned, memo, blocked, actual);
   const blockedSet = new Set(blocked);
   const isBlocked = (node: CNode) => blockedSet.has(node);
   if (r) {
@@ -1129,6 +1141,12 @@ export function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: numb
   }
   for (const rr of redactRects) {
     removed.push({ pattern: "P6", kind: "redaction_applied", page: pageNo, rect: RECT_ROUND(rr), count: 1, label: "まだ適用されていなかった墨消しを適用し、黒い四角を描き込みました" });
+  }
+  if (actual.count) {
+    removed.push({ pattern: "P7", kind: "actual_text", page: pageNo, count: actual.count, label: `字の読み替え（/ActualText）を ${actual.count} か所消しました（コピー・検索で、見た目と違う字が取れないように）` });
+  }
+  if (blocked.some((n) => n.actualText.size)) {
+    notDone.push({ pattern: "P7", reason: "inline_image", page: pageNo, label: "ページに直接埋め込んだ画像があるため、ページの中に書かれた字の読み替え（/ActualText）を消せませんでした" });
   }
   if (redactRects.length) applyRedactionBoxes(ctx, page, redactRects);
   return { removed, notDone, redactAnnots };
