@@ -9,6 +9,7 @@ import type { VerifierShapedReport } from "../match.ts";
 export function adaptP6Text(report: P6TextReport): VerifierShapedReport {
   return {
     status: report.status,
+    ...(report.error ? { error: { code: report.error.code } } : {}),
     items: report.findings.map((f) => ({
       pattern: f.pattern,
       layer: f.layer,
