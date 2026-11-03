@@ -1,0 +1,14 @@
+{
+  "file": "p5-01-info-overwritten.pdf",
+  "description": "増分更新で、文書情報（同じ番号）の作成者を個人名から課の名前に書き直した",
+  "leaks": [
+    {
+      "id": "p5-01-info-overwritten#L1",
+      "pattern": "P5",
+      "object": 6,
+      "kind": "info",
+      "where": "superseded"
+    }
+  ],
+  "negatives": []
+}

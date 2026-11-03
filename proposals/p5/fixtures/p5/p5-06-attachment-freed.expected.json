@@ -1,0 +1,27 @@
+{
+  "file": "p5-06-attachment-freed.pdf",
+  "description": "増分更新で、添付を名前の木から外し、xref で「使っていない」と印をつけた（中身のバイト列は残る）",
+  "leaks": [
+    {
+      "id": "p5-06-attachment-freed#L1",
+      "pattern": "P5",
+      "object": 9,
+      "kind": "embedded_file",
+      "where": "free"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-06-attachment-freed#N1",
+      "object": 8,
+      "kind": "filespec",
+      "where": "free"
+    },
+    {
+      "id": "p5-06-attachment-freed#N2",
+      "object": 1,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

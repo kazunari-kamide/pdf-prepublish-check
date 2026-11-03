@@ -1,0 +1,14 @@
+{
+  "file": "p5-09-xref-stream-info.pdf",
+  "description": "xref ストリームとオブジェクトストリームで保存した PDF を、xref ストリームで増分更新し、文書情報を書き直した",
+  "leaks": [
+    {
+      "id": "p5-09-xref-stream-info#L1",
+      "pattern": "P5",
+      "object": 6,
+      "kind": "info",
+      "where": "superseded"
+    }
+  ],
+  "negatives": []
+}

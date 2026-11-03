@@ -1,0 +1,34 @@
+{
+  "file": "p5-17-two-pages-replaced.pdf",
+  "description": "2ページとも、中身を新しい番号のものに差し替えた",
+  "leaks": [
+    {
+      "id": "p5-17-two-pages-replaced#L1",
+      "pattern": "P5",
+      "object": 4,
+      "kind": "content",
+      "where": "unreferenced"
+    },
+    {
+      "id": "p5-17-two-pages-replaced#L2",
+      "pattern": "P5",
+      "object": 7,
+      "kind": "content",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-17-two-pages-replaced#N1",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    },
+    {
+      "id": "p5-17-two-pages-replaced#N2",
+      "object": 6,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

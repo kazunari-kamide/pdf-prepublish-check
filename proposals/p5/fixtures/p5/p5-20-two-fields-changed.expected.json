@@ -1,0 +1,21 @@
+{
+  "file": "p5-20-two-fields-changed.pdf",
+  "description": "増分更新で、フォームの欄2つの値を書き直した",
+  "leaks": [
+    {
+      "id": "p5-20-two-fields-changed#L1",
+      "pattern": "P5",
+      "object": 7,
+      "kind": "form_value",
+      "where": "superseded"
+    },
+    {
+      "id": "p5-20-two-fields-changed#L2",
+      "pattern": "P5",
+      "object": 8,
+      "kind": "form_value",
+      "where": "superseded"
+    }
+  ],
+  "negatives": []
+}

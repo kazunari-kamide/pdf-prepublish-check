@@ -1,0 +1,21 @@
+{
+  "file": "p5-12-image-replaced.pdf",
+  "description": "増分更新で、ページの画像を差し替えた（前の画像が残る）",
+  "leaks": [
+    {
+      "id": "p5-12-image-replaced#L1",
+      "pattern": "P5",
+      "object": 7,
+      "kind": "image",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-12-image-replaced#N1",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

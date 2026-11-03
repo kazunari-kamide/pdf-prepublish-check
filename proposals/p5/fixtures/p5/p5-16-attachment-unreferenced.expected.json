@@ -1,0 +1,25 @@
+{
+  "file": "p5-16-attachment-unreferenced.pdf",
+  "description": "増分更新で添付を名前の木から外しただけ（xref にはまだ載っている。P9 で数えるので P5 では数えない）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p5-16-attachment-unreferenced#N1",
+      "object": 9,
+      "kind": "embedded_file",
+      "where": "unreferenced"
+    },
+    {
+      "id": "p5-16-attachment-unreferenced#N2",
+      "object": 8,
+      "kind": "filespec",
+      "where": "unreferenced"
+    },
+    {
+      "id": "p5-16-attachment-unreferenced#N3",
+      "object": 1,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

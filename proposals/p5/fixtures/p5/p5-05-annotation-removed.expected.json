@@ -1,0 +1,21 @@
+{
+  "file": "p5-05-annotation-removed.pdf",
+  "description": "増分更新で、校閲のコメント（注釈）をページから外した（注釈そのものは残る）",
+  "leaks": [
+    {
+      "id": "p5-05-annotation-removed#L1",
+      "pattern": "P5",
+      "object": 7,
+      "kind": "annotation",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-05-annotation-removed#N1",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

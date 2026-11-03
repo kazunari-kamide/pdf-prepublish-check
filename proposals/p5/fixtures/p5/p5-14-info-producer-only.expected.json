@@ -1,0 +1,13 @@
+{
+  "file": "p5-14-info-producer-only.pdf",
+  "description": "増分更新で文書情報を差し替えたが、前の文書情報は作成ソフト名と日付だけ（漏れでない）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p5-14-info-producer-only#N1",
+      "object": 6,
+      "kind": "info",
+      "where": "unreferenced"
+    }
+  ]
+}
