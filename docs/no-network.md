@@ -30,7 +30,8 @@
 
 ### 層 4 の数え方
 
-- Chrome（または Edge）を headless で動かし、DevTools の決まり（CDP）で、ページと、その中で作られた Worker（検査の Worker・PDF.js の Worker）の要求を数える。
+- Chrome（または Edge）を headless で動かし、DevTools の決まり（CDP）で、ページと、その中で作られた Worker（検査の Worker・片付けの Worker・PDF.js の Worker）の要求を数える。
+- 既定では、検査のあとに「片付ける」を押し、読み直し（片付けた PDF の検査）が終わるまで待ち、「片付けた PDF を保存する」を押す。その間の要求も数える。保存は `blob:` の URL を `a[download]` で開くだけで、通信ではない。保存された PDF が `%PDF-` で始まり、名前が画面のとおりかも確かめる（`--no-sanitize` で押さない）。
 - 同じサイト（`vite preview`）・`blob:`・`data:` 以外への要求が1件でもあれば失敗。CSP に止められた要求（要求になる前に止まり、console にだけ出るものも）も1件でもあれば失敗。
 - `npm run check:browser -- --self-test` で、わざと外へ要求を出し、数える仕組みが捕まえられることを確かめる（捕まえられなければ失敗）。
 - 入れる PDF は `fixtures/` の合成 PDF だけ。

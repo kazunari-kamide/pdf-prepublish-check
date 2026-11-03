@@ -334,6 +334,23 @@ button {
   color: var(--color-accent);
 }
 
+/* 片付けた所：緑の点線の細い枠と「済」の札。押せない（残っている所の枠と、色・線・字で見分ける） */
+.mark.mark-done {
+  border: var(--border-done) dashed var(--color-ok);
+  background: var(--color-ok-wash);
+  cursor: default;
+}
+
+.mark.mark-done .mark-no {
+  left: calc(-1 * var(--border-done));
+  background: var(--color-ok);
+  border-color: var(--color-ok);
+}
+
+.thumb-count.thumb-done {
+  background: var(--color-ok);
+}
+
 .sheet-wrap figcaption {
   font-size: var(--text-small);
   margin-top: var(--space-2);
@@ -503,21 +520,134 @@ progress {
   color: var(--color-muted);
 }
 
+/* ---------------------------------------------------------------- 3 片付ける */
+
 .actions {
-  margin-top: var(--space-5);
+  margin: var(--space-3) 0 var(--space-4);
 }
 
 .actions button {
   width: 100%;
   font-weight: 700;
+  font-size: var(--text-h2);
   padding: var(--space-3);
-  border: var(--border-strong) solid var(--color-line);
+  border: var(--border-strong) solid var(--color-base);
+  background: var(--color-base);
+  color: var(--color-on-dark);
+  cursor: pointer;
+}
+
+.actions button:disabled {
+  border-color: var(--color-line);
   background: var(--color-surface);
   color: var(--color-muted);
+  cursor: default;
 }
 
 .actions p {
   margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+}
+
+/* ---------------------------------------------------------------- 4 読み直す：片付けた結果 */
+
+.clean {
+  margin: var(--space-3) 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-ok-tint);
+  border: var(--border-strong) solid var(--color-ok);
+}
+
+/* 残っている所がある・言い切れないときは、緑にしない */
+.clean[data-verdict="left"] {
+  background: var(--color-surface);
+  border-color: var(--color-accent);
+}
+
+.clean[data-verdict="unsure"] {
+  background: var(--color-surface);
+  border-color: var(--color-base);
+}
+
+.clean h3 {
+  font-size: var(--text-h2);
+  margin: 0 0 var(--space-1);
+}
+
+.clean-count {
+  margin: 0 0 var(--space-3);
+  font-weight: 700;
+}
+
+.clean-count[data-verdict="left"] {
+  color: var(--color-accent);
+}
+
+.download {
+  display: block;
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--text-h2);
+  padding: var(--space-3);
+  background: var(--color-ok);
+  color: var(--color-on-dark);
+  border: var(--border-strong) solid var(--color-ok);
+  text-decoration: none;
+}
+
+.clean[data-verdict="left"] .download,
+.clean[data-verdict="unsure"] .download {
+  background: var(--color-base);
+  border-color: var(--color-base);
+}
+
+.download:hover {
+  text-decoration: underline;
+}
+
+.download-note {
+  margin: var(--space-1) 0 var(--space-3);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+
+.not-done {
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border-left: 4px solid var(--color-accent);
+}
+
+.not-done h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--color-accent);
+}
+
+.not-done ul,
+.removed ul,
+.clean-notes {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-small);
+}
+
+.removed summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.removed-group h4 {
+  font-size: var(--text-small);
+  margin: var(--space-2) 0 0;
+}
+
+.clean-notes {
+  margin-top: var(--space-2);
+}
+
+.clean-scope {
+  margin: var(--space-2) 0 0;
   font-size: var(--text-small);
 }
 
