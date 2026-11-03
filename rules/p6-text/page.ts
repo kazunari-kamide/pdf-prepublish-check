@@ -32,10 +32,21 @@ import {
 import { readFont, type FontInfo } from "./fonts.ts";
 import { operations, type Operand } from "./lexer.ts";
 import type { P6TextSettings } from "./settings.ts";
+import { measureImageDarkness } from "./images.ts";
 
-export type Cover = { seq: number; rect: Rect; how: "fill" | "stroke"; luminance: number };
+/** 覆っているものの種類（rubric/p6.md §1 の内訳の「覆っているもの」） */
+export type CoverKind = "fill" | "image" | "annotation";
+export type Cover = {
+  seq: number;
+  rect: Rect;
+  kind: CoverKind;
+  how: "fill" | "stroke" | "image" | "redact";
+  /** 塗りの明るさ。画像は濃い画素の割合ではなく、1 − 割合（小さいほど濃い）。墨消しの注釈は 0 */
+  luminance: number;
+};
+export type UncheckedImage = { reason: "unsupported_filter" | "too_large" | "unsupported_color" | "broken" };
 export type GlyphBox = { seq: number; rect: Rect; isSpace: boolean; text: string };
-export type PageScan = { covers: Cover[]; glyphs: GlyphBox[]; operations: number };
+export type PageScan = { covers: Cover[]; glyphs: GlyphBox[]; operations: number; uncheckedImages: UncheckedImage[] };
 
 export class TooManyOperations extends Error {}
 
@@ -137,19 +148,30 @@ function componentsOfSpace(ctx: PDFContext, resources: PDFDict | undefined, name
   return 0; // Pattern・Separation・Indexed・Lab などは、いまは見分けない
 }
 
-export function scanPage(
-  ctx: PDFContext,
-  content: Uint8Array,
-  resources: PDFDict | undefined,
-  settings: P6TextSettings,
-): PageScan {
+export type PageScanner = {
+  /** ページの命令の列（または注釈の見た目）を読む。coverKind は、そこで見つけた塗りを何の覆いとして数えるか */
+  run(data: Uint8Array, res: PDFDict | undefined, ctm: Matrix, coverKind: CoverKind): void;
+  /** 命令を読まずに覆いを足す（未適用の墨消し注釈など）。いま読んだものより上に重なる */
+  addCover(rect: Rect, kind: CoverKind, how: Cover["how"], luminance: number): void;
+  result(): PageScan;
+};
+
+export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): PageScanner {
   const covers: Cover[] = [];
   const glyphs: GlyphBox[] = [];
+  const uncheckedImages: UncheckedImage[] = [];
   let seq = 0;
   let opCount = 0;
   const fontCache = new Map<PDFObject, FontInfo>();
 
-  const run = (data: Uint8Array, res: PDFDict | undefined, start: GState, depth: number, seen: Set<PDFObject>) => {
+  const run = (
+    data: Uint8Array,
+    res: PDFDict | undefined,
+    start: GState,
+    depth: number,
+    seen: Set<PDFObject>,
+    coverKind: CoverKind,
+  ) => {
     let gs = cloneState(start);
     const stack: GState[] = [];
     // 道（パス）：いまの行列にかける前の点を、部分ごとに持つ
@@ -176,7 +198,7 @@ export function scanPage(
             const boxArea = area(box);
             // 四角に近い図形だけ（外枠の箱をほぼ埋めるもの）
             if (boxArea > 0 && polygonArea(dev) / boxArea >= settings.rectangularityMin) {
-              covers.push({ seq: ++seq, rect: box, how: "fill", luminance: lum });
+              covers.push({ seq: ++seq, rect: box, kind: coverKind, how: "fill", luminance: lum });
             }
           }
         }
@@ -195,13 +217,39 @@ export function scanPage(
               const r: Rect = horizontal
                 ? [Math.min(x0, x1), y0 - half, Math.max(x0, x1), y0 + half]
                 : [x0 - half, Math.min(y0, y1), x0 + half, Math.max(y0, y1)];
-              if (area(r) > 0) covers.push({ seq: ++seq, rect: r, how: "stroke", luminance: lum });
+              if (area(r) > 0) covers.push({ seq: ++seq, rect: r, kind: coverKind, how: "stroke", luminance: lum });
             }
           }
         }
       }
       subpaths = [];
       current = null;
+    };
+
+    // 画像：単位の正方形を、いまの行列で置いた所に描く。ほぼ全部が濃い画像なら覆いとする
+    const paintImage = (img: PDFStream, imgRes: PDFDict | undefined) => {
+      if (!isFiniteMatrix(gs.ctm)) return;
+      if (gs.fillAlpha < settings.opacityMin) return;
+      const dev = [apply(gs.ctm, 0, 0), apply(gs.ctm, 1, 0), apply(gs.ctm, 1, 1), apply(gs.ctm, 0, 1)];
+      const box = boundsOf(dev);
+      const boxArea = area(box);
+      if (boxArea <= 0 || polygonArea(dev) / boxArea < settings.rectangularityMin) return;
+      const m = measureImageDarkness({
+        ctx,
+        stream: img,
+        colorSpaces: imgRes?.lookupMaybe(PDFName.of("ColorSpace"), PDFDict),
+        fillLuminance: gs.fill.luminance,
+        darkLuminanceMax: settings.darkLuminanceMax,
+        opacityMin: settings.opacityMin,
+        maxImageBytes: settings.maxImageBytes,
+      });
+      if (m.kind === "unknown") {
+        uncheckedImages.push({ reason: m.reason });
+        return;
+      }
+      if (m.darkFraction >= settings.darkImageFractionMin) {
+        covers.push({ seq: ++seq, rect: box, kind: coverKind === "annotation" ? "annotation" : "image", how: "image", luminance: 1 - m.darkFraction });
+      }
     };
 
     const showText = (bytes: Uint8Array) => {
@@ -470,7 +518,11 @@ export function scanPage(
           const obj = ref ? ctx.lookup(ref) : undefined;
           if (!(obj instanceof PDFStream) || !ref || seen.has(ref)) break;
           const sub = obj.dict.lookup(PDFName.of("Subtype"));
-          if (!(sub instanceof PDFName) || sub.decodeText() !== "Form") break; // 画像は、この版では覆いとして数えない
+          if (sub instanceof PDFName && sub.decodeText() === "Image") {
+            paintImage(obj, res);
+            break;
+          }
+          if (!(sub instanceof PDFName) || sub.decodeText() !== "Form") break;
           const mObj = obj.dict.lookup(PDFName.of("Matrix"));
           let m: Matrix = IDENTITY;
           if (mObj instanceof PDFArray && mObj.size() === 6) {
@@ -483,7 +535,7 @@ export function scanPage(
           inner.ctm = multiply(m, gs.ctm);
           const nextSeen = new Set(seen);
           nextSeen.add(ref);
-          run(data2, subRes, inner, depth + 1, nextSeen);
+          run(data2, subRes, inner, depth + 1, nextSeen, coverKind);
           break;
         }
         default:
@@ -509,6 +561,27 @@ export function scanPage(
     leading: 0,
     rise: 0,
   };
-  run(content, resources, initial, 0, new Set());
-  return { covers, glyphs, operations: opCount };
+  return {
+    run(data, res, ctm, coverKind) {
+      run(data, res, { ...cloneState(initial), ctm }, 0, new Set(), coverKind);
+    },
+    addCover(rect, kind, how, luminance) {
+      covers.push({ seq: ++seq, rect, kind, how, luminance });
+    },
+    result() {
+      return { covers, glyphs, operations: opCount, uncheckedImages };
+    },
+  };
+}
+
+/** ページの命令の列だけを読む（注釈は読まない） */
+export function scanPage(
+  ctx: PDFContext,
+  content: Uint8Array,
+  resources: PDFDict | undefined,
+  settings: P6TextSettings,
+): PageScan {
+  const scanner = createPageScanner(ctx, settings);
+  scanner.run(content, resources, IDENTITY, "fill");
+  return scanner.result();
 }
