@@ -6,82 +6,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
     <title>お守りPDF</title>
+    <!-- アイコンを取りに行かせない（/favicon.ico への要求をなくす） -->
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header class="site-header">
-      <h1>お守りPDF</h1>
-      <p class="lead">PDF を公開・提出する前に、見た目では分からない情報が残っていないかを確かめます。</p>
-      <p class="promise">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</p>
+    <header class="band">
+      <h1 class="brand">お守りPDF</h1>
+      <ol class="steps" aria-label="手順">
+        <li id="step-pick" data-state="now">
+          <span class="step-name">1 選ぶ</span>
+          <span class="step-note" id="step-pick-note">PDF を置く</span>
+        </li>
+        <li id="step-check" data-state="todo">
+          <span class="step-name">2 確かめる</span>
+          <span class="step-note" id="step-check-note">まだです</span>
+        </li>
+        <li id="step-clean" data-state="todo">
+          <span class="step-name">3 片付ける</span>
+          <span class="step-note">これから足します</span>
+        </li>
+        <li id="step-verify" data-state="todo">
+          <span class="step-name">4 読み直す</span>
+          <span class="step-note">全部 緑になれば完了</span>
+        </li>
+      </ol>
+      <p class="zero-send">送信 0 件・このパソコンの中だけで確かめています</p>
     </header>
 
-    <main>
-      <section aria-labelledby="pick-title" class="pick">
-        <h2 id="pick-title">PDF を選ぶ</h2>
+    <main class="workspace" id="workspace" data-state="empty">
+      <nav class="thumbs" id="thumbs" aria-label="ページの一覧" hidden></nav>
+
+      <section class="stage" aria-labelledby="stage-title">
+        <h2 id="stage-title" class="visually-hidden">ページ</h2>
+
         <label id="drop" class="drop" for="file">
-          <span>ここに PDF を置くか、クリックして選んでください。</span>
+          <span class="drop-title">ここに PDF を置くか、クリックして選んでください。</span>
+          <span class="drop-note">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
           <input id="file" type="file" accept="application/pdf,.pdf" />
         </label>
+
+        <div class="filebar" id="filebar" hidden>
+          <span class="filebar-name" id="file-name"></span>
+          <span class="filebar-facts" id="file-facts"></span>
+          <label class="filebar-again" for="file">別の PDF を選ぶ</label>
+        </div>
+
+        <figure class="sheet-wrap" id="sheet-wrap" hidden>
+          <div class="sheet" id="sheet">
+            <canvas id="sheet-canvas" aria-hidden="true"></canvas>
+            <div class="marks" id="marks"></div>
+          </div>
+          <figcaption id="sheet-caption"></figcaption>
+        </figure>
+        <p class="render-note" id="render-note" hidden></p>
       </section>
 
-      <section aria-labelledby="result-title" class="result">
-        <h2 id="result-title">結果</h2>
+      <aside class="results" aria-labelledby="result-title">
+        <h2 id="result-title">種類ごとの結果</h2>
         <p id="status" role="status" aria-live="polite">まだ PDF を選んでいません。</p>
         <progress id="progress" max="1" value="0" hidden></progress>
-        <dl id="facts" class="facts" hidden></dl>
+
+        <div id="verified" class="verified" data-state="none" hidden>
+          <p id="verified-text"></p>
+        </div>
 
         <div id="notices" class="notices" hidden>
           <h3>お知らせ</h3>
           <ul id="notice-list"></ul>
         </div>
 
-        <div id="findings" class="findings" hidden>
-          <h3 id="findings-title">見つかった所</h3>
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">番号</th>
-                <th scope="col">深刻度</th>
-                <th scope="col">型</th>
-                <th scope="col">ページ</th>
-                <th scope="col">何が残っているか</th>
-              </tr>
-            </thead>
-            <tbody id="finding-rows"></tbody>
-          </table>
-        </div>
-
-        <div id="unchecked" class="unchecked" hidden>
-          <h3>調べられなかった項目</h3>
-          <ul id="unchecked-list"></ul>
-        </div>
-
-        <div id="coverage" class="coverage" hidden>
-          <h3>調べた項目</h3>
-          <ul id="coverage-list"></ul>
-          <p class="scope-note">見つけられるのは、ここに並べた項目だけです。すべての漏れを見つけられるわけではありません。</p>
-        </div>
+        <div id="groups" class="groups"></div>
 
         <div id="actions" class="actions" hidden>
           <button id="sanitize" type="button" disabled aria-describedby="sanitize-note">片付ける</button>
           <p id="sanitize-note">片付ける機能は、これから足します。</p>
         </div>
 
-        <div id="verified" class="verified" data-state="none" hidden>
-          <p id="verified-text"></p>
-        </div>
-      </section>
-
-      <section id="pages-section" aria-labelledby="pages-title" class="pages-section" hidden>
-        <h2 id="pages-title">ページの上の場所</h2>
-        <p class="pages-note">ページの中身は描いていません。ページの形の上に、見つかった所を枠と番号で示します。</p>
-        <div id="pages" class="pages"></div>
-      </section>
+        <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。見つけた字の中身は、画面に出しません。数と場所だけを出します。</p>
+      </aside>
     </main>
-
-    <footer class="site-footer">
-      <p>見つけた字の中身は、画面に出しません。数と場所だけを出します。</p>
-    </footer>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

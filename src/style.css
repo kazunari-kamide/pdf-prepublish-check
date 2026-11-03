@@ -1,218 +1,583 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /*
- * 土台の仮の見た目。色・書体・余白の決まりは design/ で決めてから置き換える（CLAUDE.md §6）。
- * 書体は外から読み込まない。いまは端末に入っている書体を使う。
+ * 画面の見た目。値は design/tokens.css の変数だけを使う（決まりは design/README.md）。
+ * 書体は外から読み込まない（CLAUDE.md §2-1）。危ない所は色だけで示さない（番号・形・文字でも示す）。
  */
 
-:root {
-  --base: #1f2a37;
-  --accent: #2f6f5e;
-  --problem: #9a3412;
-  --paper: #fbfaf7;
-  --line: #d6d3cc;
-  font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
-  font-size: 18px;
-  line-height: 1.7;
-  color: var(--base);
-  background: var(--paper);
+@import "../design/tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading);
+  color: var(--color-base);
+  background: var(--color-paper);
 }
 
 body {
   margin: 0;
-  max-width: 56rem;
-  padding: 2rem 1.5rem 4rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-h1 {
-  font-size: 1.8rem;
-  margin: 0 0 0.25rem;
+h1,
+h2,
+h3 {
+  font-family: var(--font-head);
+  line-height: 1.35;
 }
 
-h2 {
-  font-size: 1.2rem;
-  margin: 2rem 0 0.75rem;
-  border-left: 0.3rem solid var(--accent);
-  padding-left: 0.6rem;
+button {
+  font: inherit;
+  color: inherit;
 }
 
-.lead {
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- 上：手順の帯 */
+
+.band {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  border-bottom: var(--border-strong) solid var(--color-base);
+}
+
+.brand {
+  font-size: var(--text-h1);
   margin: 0;
+  align-self: center;
+  white-space: nowrap;
 }
 
-.promise {
-  margin: 0.5rem 0 0;
-  font-weight: 600;
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  flex: 1;
+  border: 1px solid var(--color-base);
+}
+
+.steps li {
+  padding: var(--space-1) var(--space-3);
+  border-right: 1px solid var(--color-base);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.steps li:last-child {
+  border-right: 0;
+}
+
+.step-name {
+  font-weight: 700;
+}
+
+.step-note {
+  font-size: var(--text-small);
+}
+
+.steps li[data-state="now"] {
+  background: var(--color-base);
+  color: var(--color-on-dark);
+}
+
+.steps li[data-state="done"] .step-name::after {
+  content: "　済";
+  color: var(--color-ok);
+}
+
+.steps li[data-state="todo"] {
+  color: var(--color-muted);
+}
+
+.zero-send {
+  margin: 0;
+  align-self: center;
+  background: var(--color-base);
+  color: var(--color-on-dark);
+  border: var(--border-strong) solid var(--color-base);
+  outline: 1px solid var(--color-on-dark);
+  outline-offset: -5px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-small);
+  font-weight: 700;
+  max-width: 14rem;
+  line-height: 1.45;
+}
+
+/* ---------------------------------------------------------------- 3つの段 */
+
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--width-thumbs) minmax(0, 1fr) var(--width-results);
+  min-height: 0;
+}
+
+.workspace[data-state="empty"],
+.workspace[data-state="working"],
+.workspace[data-thumbs="none"] {
+  grid-template-columns: minmax(0, 1fr) var(--width-results);
+}
+
+/* ---------------------------------------------------------------- 左：縮小した各ページ */
+
+.thumbs {
+  background: var(--color-sunken);
+  border-right: 1px solid var(--color-line);
+  padding: var(--space-4) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: center;
+}
+
+.thumb-pic {
+  display: block;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  aspect-ratio: 210 / 297;
+}
+
+.thumb-pic canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.thumb[aria-current="page"] .thumb-pic {
+  outline: var(--border-mark) solid var(--color-base);
+}
+
+.thumb-no {
+  font-size: var(--text-small);
+}
+
+.thumb-count {
+  position: absolute;
+  top: calc(-1 * var(--space-2));
+  right: calc(-1 * var(--space-2));
+  background: var(--color-accent);
+  color: var(--color-on-dark);
+  font-weight: 700;
+  font-size: var(--text-small);
+  line-height: 1.2;
+  padding: 0 var(--space-2);
+}
+
+/* ---------------------------------------------------------------- 真ん中：大きなページ */
+
+.stage {
+  background: var(--color-sunken);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .drop {
-  display: block;
-  border: 2px dashed var(--line);
-  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(100%, 40rem);
+  margin-top: var(--space-6);
+  padding: var(--space-6) var(--space-5);
+  background: var(--color-surface);
+  border: var(--border-strong) dashed var(--color-base);
   cursor: pointer;
-  background: #fff;
 }
 
 .drop[data-over="true"] {
-  border-color: var(--accent);
+  border-style: solid;
+  border-color: var(--color-accent);
+}
+
+.drop-title {
+  font-family: var(--font-head);
+  font-size: var(--text-h2);
+  font-weight: 700;
+}
+
+.drop-note {
+  font-size: var(--text-small);
 }
 
 .drop input {
-  display: block;
-  margin-top: 0.75rem;
   font-size: 1rem;
 }
 
-#status[data-tone="ok"]::before {
-  content: "◯ ";
-  color: var(--accent);
+.workspace[data-state="result"] .drop,
+.workspace[data-state="working"] .drop {
+  display: none;
+}
+
+.filebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  padding: var(--space-2) var(--space-4);
+}
+
+.filebar-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.filebar-facts {
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.filebar-again {
+  margin-left: auto;
+  border: 1px solid var(--color-base);
+  padding: 0 var(--space-3);
+  cursor: pointer;
+  font-size: var(--text-small);
+  background: var(--color-surface);
+}
+
+.sheet-wrap {
+  margin: 0;
+}
+
+.sheet {
+  position: relative;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sheet);
+  max-width: 100%;
+}
+
+.sheet canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.marks {
+  position: absolute;
+  inset: 0;
+}
+
+.mark {
+  position: absolute;
+  padding: 0;
+  border: var(--border-mark) solid var(--color-accent);
+  background: var(--color-accent-wash);
+  min-width: 0.75rem;
+  min-height: 0.75rem;
+  cursor: pointer;
+}
+
+/* 番号の札を、枠の左上の外に出す（色だけに頼らない） */
+.mark-no {
+  position: absolute;
+  left: calc(-1 * var(--border-mark));
+  bottom: 100%;
+  background: var(--color-accent);
+  color: var(--color-on-dark);
+  border: var(--border-strong) solid var(--color-accent);
+  font-size: var(--text-small);
+  font-weight: 700;
+  line-height: 1.1;
+  padding: 0 var(--space-1);
+}
+
+/* 選んだ枠：太く、札を白抜きに（形も変える） */
+.mark.is-selected {
+  border-width: calc(var(--border-mark) * 2);
+  outline: var(--border-strong) dashed var(--color-base);
+  outline-offset: 3px;
+}
+
+.mark.is-selected .mark-no {
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
+.sheet-wrap figcaption {
+  font-size: var(--text-small);
+  margin-top: var(--space-2);
+  text-align: center;
+}
+
+.render-note {
+  margin: 0;
+  max-width: 40rem;
+  border-left: 4px solid var(--color-base);
+  background: var(--color-surface);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-small);
+}
+
+/* ---------------------------------------------------------------- 右：種類ごとの結果 */
+
+.results {
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-line);
+  padding: var(--space-4) var(--space-5) var(--space-6);
+}
+
+.results h2 {
+  font-size: var(--text-h2);
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: var(--border-strong) solid var(--color-base);
+}
+
+#status {
+  margin: var(--space-2) 0;
+  font-weight: 700;
+}
+
+#status[data-tone="problem"] {
+  color: var(--color-accent);
 }
 
 #status[data-tone="problem"]::before {
   content: "！ ";
-  color: var(--problem);
-  font-weight: 700;
 }
 
-.facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.25rem 1.5rem;
-  margin: 0;
+#status[data-tone="ok"] {
+  color: var(--color-ok);
 }
 
-.facts dt {
-  font-weight: 600;
-}
-
-.facts dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.site-footer {
-  margin-top: 3rem;
-  border-top: 1px solid var(--line);
-  padding-top: 1rem;
-  font-size: 0.9rem;
-}
-
-/*
- * ここから下は、結果の一覧とページの枠を置くための最小限の決まり（仮）。
- * 色・形は design/ の案を選んでから決め直す。危ない所は色だけで示さない（番号・文字でも示す）。
- */
-
-h3 {
-  font-size: 1.05rem;
-  margin: 1.5rem 0 0.5rem;
+#status[data-tone="ok"]::before {
+  content: "◯ ";
 }
 
 progress {
   width: 100%;
 }
 
-.findings table {
+.notices {
+  margin: var(--space-3) 0;
+  border-left: 4px solid var(--color-base);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-sunken);
+}
+
+.notices h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.notices ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-small);
+}
+
+.group {
+  margin-top: var(--space-4);
+}
+
+.group-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 1rem;
+  margin: 0;
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.group[data-status="found"] .group-count {
+  color: var(--color-accent);
+}
+
+.group[data-status="none"] .group-count {
+  color: var(--color-ok);
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+
+.group[data-status="error"] .group-count {
+  color: var(--color-muted);
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+
+.group-message {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item {
+  display: block;
   width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-}
-
-.findings th,
-.findings td {
-  border: 1px solid var(--line);
-  padding: 0.5rem 0.6rem;
   text-align: left;
-  vertical-align: top;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  padding: var(--space-2) var(--space-1);
+  cursor: pointer;
 }
 
-.findings td strong,
-.findings td span,
-.findings td a {
+.item:hover,
+.item.is-selected {
+  background: var(--color-accent-tint);
+}
+
+.item.is-selected {
+  box-shadow: inset 4px 0 0 var(--color-accent);
+}
+
+.item > span {
   display: block;
 }
 
-.findings .why {
-  font-size: 0.95rem;
+.item > .item-top {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-small);
 }
 
-.findings .detail {
-  font-size: 0.9rem;
-  color: #4b5563;
-}
-
-.sev-high {
+.item-no {
   font-weight: 700;
-  color: var(--problem);
+  border: 1px solid var(--color-base);
+  padding: 0 var(--space-1);
+  line-height: 1.4;
 }
 
-.notices ul,
-.unchecked ul,
-.coverage ul {
-  margin: 0;
-  padding-left: 1.25rem;
+.item-sev.sev-high {
+  color: var(--color-accent);
+  font-weight: 700;
 }
 
-.scope-note {
-  font-size: 0.9rem;
+.item-title {
+  font-weight: 700;
+}
+
+.item-why {
+  font-size: var(--text-small);
+}
+
+.item-detail {
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.actions {
+  margin-top: var(--space-5);
 }
 
 .actions button {
-  font-size: 1rem;
-  padding: 0.5rem 1.25rem;
+  width: 100%;
+  font-weight: 700;
+  padding: var(--space-3);
+  border: var(--border-strong) solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-muted);
+}
+
+.actions p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
 }
 
 .verified[data-state="clean"] {
-  border: 2px solid var(--accent);
-  padding: 0.5rem 1rem;
-  background: #fff;
-}
-
-.pages {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-}
-
-.page {
-  margin: 0;
-  width: min(100%, 22rem);
-}
-
-.sheet {
-  position: relative;
-  background: #fff;
-  border: 1px solid var(--line);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
-}
-
-.mark {
-  position: absolute;
-  box-sizing: border-box;
-  border: 3px solid var(--problem);
-  background: rgb(154 52 18 / 8%);
-  min-width: 0.75rem;
-  min-height: 0.75rem;
-  text-decoration: none;
-}
-
-/* 番号の札を枠の左上の外に出す（色だけに頼らない） */
-.mark-no {
-  position: absolute;
-  left: -3px;
-  bottom: 100%;
-  background: var(--problem);
-  color: #fff;
-  font-size: 0.8rem;
+  border: var(--border-strong) solid var(--color-ok);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-ok);
   font-weight: 700;
-  line-height: 1;
-  padding: 0.15rem 0.35rem;
 }
 
-.mark:focus-visible {
-  outline: 3px solid var(--base);
-  outline-offset: 2px;
+.verified p {
+  margin: 0;
 }
 
-.page figcaption {
-  font-size: 0.9rem;
-  margin-top: 0.25rem;
+.scope-note {
+  margin-top: var(--space-5);
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------- 狭い画面 */
+
+@media (max-width: 56rem) {
+  .band {
+    flex-direction: column;
+  }
+  .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .steps li {
+    border-bottom: 1px solid var(--color-base);
+  }
+  .steps li:nth-child(2n) {
+    border-right: 0;
+  }
+  .steps li:nth-child(n + 3) {
+    border-bottom: 0;
+  }
+  .zero-send {
+    max-width: none;
+    align-self: stretch;
+  }
+  .workspace,
+  .workspace[data-state="empty"],
+  .workspace[data-state="working"] {
+    display: flex;
+    flex-direction: column;
+  }
+  .results {
+    order: -1;
+    border-left: 0;
+  }
+  .thumbs {
+    flex-direction: row;
+    position: static;
+    max-height: none;
+    overflow-x: auto;
+  }
+  .thumb {
+    width: 4.5rem;
+    flex: none;
+  }
 }

@@ -2,7 +2,9 @@
 # 画面の案（選ぶ前の見本）
 
 検査器の画面の案を3つ並べる。どれも**動かない見本**で、項目と数字は架空のもの（実在の PDF・団体・人は出てこない）。
-選ばなかった案も、ここに残す。選んだ案は、`design/`（`tokens.css` と `design/README.md`）に決まりとして移してから、画面（`index.html`・`src/style.css`）に当てる（CLAUDE.md §6）。
+選ばなかった案も、ここに残す。
+
+**2026-11-03 決定**：A・B・C の組み合わせにした（上：C の手順の帯と B の「送信 0 件」、左と真ん中：B のページ、右：C の種類ごとの結果）。決まりは `design/README.md` と `design/tokens.css`。選んだ案は、`design/`（`tokens.css` と `design/README.md`）に決まりとして移してから、画面（`index.html`・`src/style.css`）に当てる（CLAUDE.md §6）。
 
 ビルド（`npm run build`）には入らない（入口は `index.html` だけ）。ブラウザでファイルを直接開いて見る。
 

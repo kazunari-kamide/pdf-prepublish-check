@@ -75,4 +75,26 @@ describe("画面の形", () => {
     expect(v.pages).toHaveLength(1);
     expect(v.pages[0]!.marks.map((m) => m.no)).toEqual([1]);
   });
+
+  it("型ごとにまとめ、見つからなかった型も並べる", () => {
+    const v = buildView(
+      summary([
+        rule({ items: [{ pattern: "P6", severity: "high", title: "b", why: "", detail: "", page: 1, rect: [0, 0, 10, 10] }] }),
+        rule({ ruleId: "p9-attach", label: "添付ファイル", pattern: "P9" }),
+        rule({ ruleId: "p1-info", label: "文書情報", pattern: "P1", status: "error", message: "読めません。" }),
+      ]),
+    );
+    expect(v.groups.map((g) => [g.label, g.status, g.rows.map((r) => r.no), g.message])).toEqual([
+      ["見せかけの黒塗り", "ok", [1], null],
+      ["添付ファイル", "ok", [], null],
+      ["文書情報", "error", [], "読めません。"],
+    ]);
+  });
+
+  it("図形が多すぎて省いたページを、ルールをまたいでまとめる（絵も描かない）", () => {
+    const heavy = (pages: number[]) => ({ kind: "skipped_pages" as const, message: "省きました。", pages, reason: "heavy" as const });
+    const broken = { kind: "skipped_pages" as const, message: "読めませんでした。", pages: [9], reason: "unreadable" as const };
+    const v = buildView(summary([rule({ notices: [heavy([3, 1])] }), rule({ ruleId: "p7-hidden", notices: [heavy([3]), broken] })]));
+    expect(v.heavyPages).toEqual([1, 3]);
+  });
 });
