@@ -320,6 +320,83 @@ describe("文書全体の隠れた情報", () => {
   });
 });
 
+/** ファイルの全体と、すべてのストリームを開いた中身（中身が残っていないかを確かめる） */
+async function everything(bytes: Uint8Array): Promise<string> {
+  const doc = await PDFDocument.load(bytes);
+  const parts = [latin1(bytes)];
+  for (const [, obj] of doc.context.enumerateIndirectObjects()) {
+    if (obj instanceof PDFRawStream) parts.push(latin1(decodePDFRawStream(obj).decode()));
+  }
+  return parts.join("\n");
+}
+
+describe("字の読み替え・縮小画像・独自データ", () => {
+  it("/ActualText を、構造ツリー・属性の辞書・ページの中のマーク付きの中身から消す。見える字は残す", async () => {
+    const doc = await PDFDocument.create({ updateMetadata: false });
+    const ctx = doc.context;
+    const page = doc.addPage([300, 200]);
+    const font = ctx.register(ctx.obj({ Type: "Font", Subtype: "Type1", BaseFont: "Helvetica", Encoding: "WinAnsiEncoding" }));
+    const prop = ctx.register(ctx.obj({ ActualText: PDFString.of("PROP-SECRET"), MCID: 1 }));
+    page.node.set(PDFName.of("Resources"), ctx.obj({ Font: { F1: font }, Properties: { P0: prop } }));
+    page.node.set(PDFName.of("Contents"), ctx.register(ctx.stream(
+      "BT /F1 12 Tf 20 150 Td /Span <</MCID 0 /ActualText (INLINE-SECRET)>> BDC (Visible) Tj EMC ET\n" +
+      "BT /F1 12 Tf 20 120 Td /Span /P0 BDC (Second) Tj EMC ET",
+    )));
+    const elem = ctx.register(ctx.obj({ Type: "StructElem", S: "Span", ActualText: PDFString.of("STRUCT-SECRET"), Alt: PDFString.of("alt"), Pg: page.ref, K: 0 }));
+    const root = ctx.register(ctx.obj({ Type: "StructTreeRoot", K: [elem] }));
+    doc.catalog.set(PDFName.of("StructTreeRoot"), root);
+    const before = new Uint8Array(await doc.save({ useObjectStreams: false }));
+    const itemsBefore = await textItems(before);
+
+    const r = ok(await sanitizePdf(before));
+    const all = await everything(r.bytes);
+    for (const secret of ["INLINE-SECRET", "PROP-SECRET", "STRUCT-SECRET", "/ActualText"]) expect(all).not.toContain(secret);
+    // 見える字と位置は変わらない。構造ツリーそのもの・マーク付きの中身の番号（MCID）は残す
+    expect(await textItems(r.bytes)).toEqual(itemsBefore);
+    expect(all).toContain("/StructTreeRoot");
+    expect(all).toContain("/MCID 0");
+    const items = r.removed.filter((x) => x.kind === "actual_text");
+    expect(items.reduce((n, x) => n + x.count, 0)).toBe(3);
+    expect(items.every((x) => x.pattern === "P7")).toBe(true);
+    expect(JSON.stringify(r.removed)).not.toMatch(/SECRET/);
+  });
+
+  it("ページの縮小画像（/Thumb）を外し、画像もファイルから消す", async () => {
+    const doc = await PDFDocument.create({ updateMetadata: false });
+    const ctx = doc.context;
+    for (let i = 0; i < 2; i++) {
+      const page = doc.addPage([200, 200]);
+      const thumb = ctx.register(ctx.stream("THUMB-SECRET-PIXELS", { Width: 19, Height: 1, ColorSpace: "DeviceGray", BitsPerComponent: 8 }));
+      page.node.set(PDFName.of("Thumb"), thumb);
+    }
+    const r = ok(await sanitizePdf(new Uint8Array(await doc.save({ useObjectStreams: false }))));
+    const all = await everything(r.bytes);
+    expect(all).not.toContain("THUMB-SECRET");
+    expect(all).not.toContain("/Thumb");
+    expect(r.removed.find((x) => x.kind === "thumbnail")?.count).toBe(2);
+    expect((await PDFDocument.load(r.bytes)).getPageCount()).toBe(2);
+  });
+
+  it("アプリの独自データ（/PieceInfo と /LastModified）を、文書・ページ・部品から外す", async () => {
+    const doc = await PDFDocument.create({ updateMetadata: false });
+    const ctx = doc.context;
+    const page = doc.addPage([200, 200]);
+    const piece = () => ctx.obj({ App: { LastModified: PDFString.of("D:20260101"), Private: ctx.register(ctx.stream("PIECE-SECRET-DATA")) } });
+    doc.catalog.set(PDFName.of("PieceInfo"), piece());
+    page.node.set(PDFName.of("PieceInfo"), piece());
+    page.node.set(PDFName.of("LastModified"), PDFString.of("D:20260102"));
+    const form = ctx.register(ctx.stream("0 0 10 10 re f", { Type: "XObject", Subtype: "Form", BBox: [0, 0, 10, 10], PieceInfo: piece(), LastModified: PDFString.of("D:20260103") }));
+    page.node.set(PDFName.of("Resources"), ctx.obj({ XObject: { Fm1: form } }));
+    page.node.set(PDFName.of("Contents"), ctx.register(ctx.stream("q /Fm1 Do Q")));
+    const r = ok(await sanitizePdf(new Uint8Array(await doc.save({ useObjectStreams: false }))));
+    const all = await everything(r.bytes);
+    for (const secret of ["PIECE-SECRET", "/PieceInfo", "/LastModified", "D:2026"]) expect(all).not.toContain(secret);
+    expect(r.removed.find((x) => x.kind === "piece_info")?.count).toBe(3);
+    // 部品そのものは残す（描いた中身は変えない）
+    expect(all).toContain("/Fm1");
+  });
+});
+
 describe("通信しない（sanitize/）", () => {
   const list = (dir: string): string[] =>
     readdirSync(dir).flatMap((n) => {

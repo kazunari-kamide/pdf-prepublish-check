@@ -21,7 +21,10 @@ export type RemovedKind =
   | "comment_annotation" // P8：付箋の注釈（まるごと外した）
   | "annotation_content" // P8：注釈のコメント・作者名
   | "popup" // P8：コメントの吹き出し
-  | "javascript"; // P12：JavaScript
+  | "javascript" // P12：JavaScript
+  | "actual_text" // P7：字の読み替え（/ActualText。構造ツリー・マーク付きの中身）
+  | "thumbnail" // P5：ページの縮小画像（/Thumb。古い見た目が残っていることがある）
+  | "piece_info"; // P2：アプリの独自データ（/PieceInfo・/LastModified）
 
 export type RemovedItem = {
   pattern: SanitizePattern;
