@@ -1,0 +1,25 @@
+{
+  "file": "p9-13-names-and-annotation.pdf",
+  "description": "名前の木の添付と、別の注釈の添付。中身のない（外のファイルを指すだけの）注釈もある",
+  "leaks": [
+    {
+      "id": "p9-13-names-and-annotation#L1",
+      "pattern": "P9",
+      "name": "単価表.xlsx",
+      "where": "names"
+    },
+    {
+      "id": "p9-13-names-and-annotation#L2",
+      "pattern": "P9",
+      "name": "校正メモ.txt",
+      "where": "annotation"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p9-13-names-and-annotation#N1",
+      "kind": "external_ref",
+      "name": "参考資料.docx"
+    }
+  ]
+}

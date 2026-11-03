@@ -1,0 +1,13 @@
+{
+  "file": "p9-04-annotation-page2.pdf",
+  "description": "2ページ目の添付ファイルの注釈",
+  "leaks": [
+    {
+      "id": "p9-04-annotation-page2#L1",
+      "pattern": "P9",
+      "name": "旧様式.xls",
+      "where": "annotation"
+    }
+  ],
+  "negatives": []
+}

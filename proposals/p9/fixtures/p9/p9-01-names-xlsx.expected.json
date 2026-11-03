@@ -1,0 +1,13 @@
+{
+  "file": "p9-01-names-xlsx.pdf",
+  "description": "名前の木に、名簿の Excel（のふり）が添付されている",
+  "leaks": [
+    {
+      "id": "p9-01-names-xlsx#L1",
+      "pattern": "P9",
+      "name": "名簿.xlsx",
+      "where": "names"
+    }
+  ],
+  "negatives": []
+}

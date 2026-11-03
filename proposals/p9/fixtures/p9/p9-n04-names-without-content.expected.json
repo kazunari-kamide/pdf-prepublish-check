@@ -1,0 +1,17 @@
+{
+  "file": "p9-n04-names-without-content.pdf",
+  "description": "名前の木に2つあるが、どちらも外のファイルを指すだけで、中身がない",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p9-n04-names-without-content#N1",
+      "kind": "external_ref",
+      "name": "別添1.pdf"
+    },
+    {
+      "id": "p9-n04-names-without-content#N2",
+      "kind": "external_ref",
+      "name": "別添2.pdf"
+    }
+  ]
+}

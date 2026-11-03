@@ -1,0 +1,13 @@
+{
+  "file": "p9-12-same-file-two-places.pdf",
+  "description": "同じ中身を、名前の木と注釈の両方から指している（1件と数える）",
+  "leaks": [
+    {
+      "id": "p9-12-same-file-two-places#L1",
+      "pattern": "P9",
+      "name": "決裁文書.docx",
+      "where": "names"
+    }
+  ],
+  "negatives": []
+}

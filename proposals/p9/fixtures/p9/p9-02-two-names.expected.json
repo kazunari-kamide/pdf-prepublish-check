@@ -1,0 +1,19 @@
+{
+  "file": "p9-02-two-names.pdf",
+  "description": "名前の木に、Word の原本と CSV の2つ",
+  "leaks": [
+    {
+      "id": "p9-02-two-names#L1",
+      "pattern": "P9",
+      "name": "見積書_原本.docx",
+      "where": "names"
+    },
+    {
+      "id": "p9-02-two-names#L2",
+      "pattern": "P9",
+      "name": "集計.csv",
+      "where": "names"
+    }
+  ],
+  "negatives": []
+}

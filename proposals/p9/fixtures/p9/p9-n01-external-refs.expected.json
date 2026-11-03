@@ -1,0 +1,22 @@
+{
+  "file": "p9-n01-external-refs.pdf",
+  "description": "添付ファイルの注釈が3つあるが、どれも外のファイルを指すだけで、中身（/EF）がない",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p9-n01-external-refs#N1",
+      "kind": "external_ref",
+      "name": "共有フォルダの資料.docx"
+    },
+    {
+      "id": "p9-n01-external-refs#N2",
+      "kind": "external_ref",
+      "name": "様式1.xlsx"
+    },
+    {
+      "id": "p9-n01-external-refs#N3",
+      "kind": "external_ref",
+      "name": "写真.jpg"
+    }
+  ]
+}

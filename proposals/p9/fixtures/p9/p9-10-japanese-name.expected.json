@@ -1,0 +1,13 @@
+{
+  "file": "p9-10-japanese-name.pdf",
+  "description": "ファイル名に個人名が入った添付（日本語のファイル名）",
+  "leaks": [
+    {
+      "id": "p9-10-japanese-name#L1",
+      "pattern": "P9",
+      "name": "山田太郎_履歴書.pdf",
+      "where": "names"
+    }
+  ],
+  "negatives": []
+}

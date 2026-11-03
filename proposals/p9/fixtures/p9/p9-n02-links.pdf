@@ -1,0 +1,137 @@
+%PDF-1.7
+%
+
+1 0 obj
+<<
+/Type /Pages
+/Kids [ 4 0 R ]
+/Count 1
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+/Encoding /WinAnsiEncoding
+>>
+endobj
+
+4 0 obj
+<<
+/Type /Page
+/Parent 1 0 R
+/Resources <<
+/Font <<
+/Helvetica-7098480789 3 0 R
+>>
+/XObject <<
+>>
+/ExtGState <<
+>>
+>>
+/MediaBox [ 0 0 420 300 ]
+/Annots [ 6 0 R 8 0 R 10 0 R ]
+/Contents [ 5 0 R ]
+>>
+endobj
+
+5 0 obj
+<<
+/Filter /FlateDecode
+/Length 115
+>>
+stream
+xœÊ;
+AEÑ¼VQ± ¾útW7ˆàÀ€‰PEÑ@×ï(NtŸ4$½.´ÚM÷Ïô¾Ë@oŞ­³8ç™tvOò_…¬œZXW„×n[E¦
+m*5jQ˜hßpŞ(4&èê_
+endstream
+endobj
+
+6 0 obj
+<<
+/Type /Annot
+/Rect [ 40 40 60 60 ]
+/F 4
+/Subtype /Link
+/A <<
+/S /URI
+/URI (https://example.com/form.xlsx)
+>>
+>>
+endobj
+
+7 0 obj
+<<
+/Type /Filespec
+/F (external.bin)
+/UF <FEFF75338ACB66F8002E0078006C00730078>
+>>
+endobj
+
+8 0 obj
+<<
+/Type /Annot
+/Rect [ 80 40 100 60 ]
+/F 4
+/Subtype /Link
+/A <<
+/S /Launch
+/F 7 0 R
+>>
+>>
+endobj
+
+9 0 obj
+<<
+/Type /Filespec
+/F (external.bin)
+/UF <FEFF5225518A002E007000640066>
+>>
+endobj
+
+10 0 obj
+<<
+/Type /Annot
+/Rect [ 120 40 140 60 ]
+/F 4
+/Subtype /Link
+/A <<
+/S /GoToR
+/F 9 0 R
+/D [ 0 /Fit ]
+>>
+>>
+endobj
+
+xref
+0 11
+0000000000 65535 f 
+0000000016 00000 n 
+0000000076 00000 n 
+0000000126 00000 n 
+0000000224 00000 n 
+0000000438 00000 n 
+0000000626 00000 n 
+0000000757 00000 n 
+0000000856 00000 n 
+0000000963 00000 n 
+0000001054 00000 n 
+
+trailer
+<<
+/Size 11
+/Root 2 0 R
+>>
+
+startxref
+1176
+%%EOF

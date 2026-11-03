@@ -1,0 +1,12 @@
+{
+  "file": "p9-n06-javascript-names.pdf",
+  "description": "名前の木に JavaScript があるが、添付の木（/EmbeddedFiles）ではない（P12 の範囲）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p9-n06-javascript-names#N1",
+      "kind": "javascript_names",
+      "name": "init"
+    }
+  ]
+}
