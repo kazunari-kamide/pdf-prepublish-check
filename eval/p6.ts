@@ -57,6 +57,7 @@ async function main() {
   const names = readdirSync(FIXTURES).filter((f) => f.endsWith(".expected.json")).sort();
   const results: Array<FileMatch & { expected: Expected }> = [];
   const residual: Array<{ file: string; items: number | null; status: string; skipped: number }> = [];
+  let uncheckedImages = 0; // 検出ルールが濃いかどうかを調べられなかった画像（参考）
   const subject = reportsDir ? `別の版の報告（${path.basename(reportsDir)}）` : "検出ルール rules/p6-text";
 
   for (const name of names) {
@@ -70,7 +71,9 @@ async function main() {
         : { status: "error", items: [], skipped_pages: [] };
     } else {
       const bytes = new Uint8Array(readFileSync(path.join(FIXTURES, expected.file)));
-      report = adaptP6Text(await detectP6Text(bytes));
+      const raw = await detectP6Text(bytes);
+      uncheckedImages += raw.uncheckedImages.length;
+      report = adaptP6Text(raw);
     }
     results.push({ ...matchFile(expected, report, rubric.match), expected });
 
@@ -136,7 +139,8 @@ async function main() {
   say(`検出率　　　　　：${found} / ${leaks} = ${pct(found, leaks)}　（基準 ${rubric.pass.recall_min * 100}% 以上）→ ${passRecall ? "満たす" : "満たさない"}`);
   say(`誤検知率　　　　：${fp} / ${negatives} = ${pct(fp, negatives)}　（基準 ${rubric.pass.false_positive_rate_max * 100}% 以下）→ ${passFpr ? "満たす" : "満たさない"}`);
   say(`　うち漏れでないものに重なった報告：${fpOnNegative} 件、正解のどれにも重ならなかった報告：${fpNowhere} 件`);
-  if (duplicates) say(`　（参考）漏れに重なったが、1対1のため結べなかった報告：${duplicates} 件（誤検知には数えていない）`);
+  // 1対1のため結べなかった報告は、誤検知に数えず、件数を別に出す（2026-11-03、人が決めた。0 件でも出す）
+  say(`結べなかった報告（漏れに重なったが、その漏れには、もっと重なる報告が結ばれていた）：${duplicates} 件（誤検知には数えない）`);
   say(
     residualMeasured
       ? `片付けたあとに残る情報：${residualTotal} 件（読めない・省いたページあり：${residualBad.length} 個）　（基準 ${rubric.pass.residual_after_sanitize_max} 件）→ ${passResidual ? "満たす" : "満たさない"}`
@@ -144,9 +148,17 @@ async function main() {
   );
   if (errors.length) say(`読めなかった合成 PDF：${errors.join("、")}`);
   if (skipped) say(`省いたページ：${skipped} ページ`);
+  if (!reportsDir) say(`（参考）濃いかどうかを調べられなかった画像（JPEG など）：${uncheckedImages} 個`);
   say();
   say("型ごとの内訳（見つけた / 漏れ）：");
   for (const b of breakdown) say(`  ${b.type.padEnd(17)} ${b.total} 件中 ${b.found} 件`);
+  // 層ごとの小計（参考。合否は全体の数字で決める。rubric/p6.md §1）
+  for (const layer of ["text", "image"]) {
+    const rows = breakdown.filter((b) => b.type.startsWith(`${layer}/`));
+    const t = rows.reduce((s, b) => s + b.total, 0);
+    const f = rows.reduce((s, b) => s + b.found, 0);
+    say(`  （参考）${layer}/* の小計    ${t} 件中 ${f} 件（${pct(f, t)}）`);
+  }
   say();
   say("見逃した漏れ：");
   const missed = results.flatMap((r) => r.missed);
