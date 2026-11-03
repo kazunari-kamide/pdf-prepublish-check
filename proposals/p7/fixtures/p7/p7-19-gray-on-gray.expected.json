@@ -1,0 +1,34 @@
+{
+  "file": "p7-19-gray-on-gray.pdf",
+  "description": "灰色（0.5）の地に、ほぼ同じ灰色（0.52）の字と、黒い字（見える）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-19-gray-on-gray#L1",
+      "pattern": "P7",
+      "reason": "same_color",
+      "page": 1,
+      "rect": [
+        40,
+        207.52,
+        124.96,
+        218.62
+      ],
+      "chars": 13
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p7-19-gray-on-gray#N1",
+      "kind": "visible_on_gray",
+      "page": 1,
+      "rect": [
+        40,
+        157.52,
+        113.44,
+        168.62
+      ],
+      "note": "灰色の地の黒い字"
+    }
+  ]
+}

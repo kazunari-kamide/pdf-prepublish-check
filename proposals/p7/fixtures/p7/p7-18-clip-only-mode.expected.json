@@ -1,0 +1,21 @@
+{
+  "file": "p7-18-clip-only-mode.pdf",
+  "description": "描き方 7（切り抜きだけに使い、描かない字）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-18-clip-only-mode#L1",
+      "pattern": "P7",
+      "reason": "invisible",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        126.45,
+        208.62
+      ],
+      "chars": 13
+    }
+  ],
+  "negatives": []
+}

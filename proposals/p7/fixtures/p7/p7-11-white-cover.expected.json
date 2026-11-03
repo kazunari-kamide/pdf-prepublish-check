@@ -1,0 +1,21 @@
+{
+  "file": "p7-11-white-cover.pdf",
+  "description": "字のあとに、白い四角を重ねて隠した",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-11-white-cover#L1",
+      "pattern": "P7",
+      "reason": "covered_light",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        109.36,
+        208.62
+      ],
+      "chars": 11
+    }
+  ],
+  "negatives": []
+}

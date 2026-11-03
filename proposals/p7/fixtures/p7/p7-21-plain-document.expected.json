@@ -1,0 +1,20 @@
+{
+  "file": "p7-21-plain-document.pdf",
+  "description": "ふつうの黒い字だけ（隠れた字はない）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p7-21-plain-document#N1",
+      "kind": "plain_text",
+      "page": 1,
+      "rect": [
+        40,
+        247.52,
+        127.91,
+        258.62
+      ],
+      "note": "ふつうの字"
+    }
+  ]
+}

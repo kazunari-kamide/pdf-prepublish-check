@@ -1,0 +1,20 @@
+{
+  "file": "p7-24-white-on-dark-circle.pdf",
+  "description": "黒い円（曲線の形）の上の白い字（見える）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p7-24-white-on-dark-circle#N1",
+      "kind": "visible_on_dark",
+      "page": 1,
+      "rect": [
+        68,
+        193.52,
+        96,
+        204.62
+      ],
+      "note": "黒い円の上の白い字。円は四角でない形"
+    }
+  ]
+}

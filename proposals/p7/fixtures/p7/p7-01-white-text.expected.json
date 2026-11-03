@@ -1,0 +1,21 @@
+{
+  "file": "p7-01-white-text.pdf",
+  "description": "白い地のページに、白い字で氏名が書いてある",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-01-white-text#L1",
+      "pattern": "P7",
+      "reason": "same_color",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        108.5,
+        208.62
+      ],
+      "chars": 10
+    }
+  ],
+  "negatives": []
+}

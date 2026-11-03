@@ -1,0 +1,34 @@
+{
+  "file": "p7-10-clipped.pdf",
+  "description": "切り抜き（クリップ）の外にある字と、切り抜きの中の字",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-10-clipped#L1",
+      "pattern": "P7",
+      "reason": "clipped",
+      "page": 1,
+      "rect": [
+        40,
+        217.52,
+        141.94,
+        228.62
+      ],
+      "chars": 16
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p7-10-clipped#N1",
+      "kind": "inside_clip",
+      "page": 1,
+      "rect": [
+        40,
+        152.52,
+        113.37,
+        163.62
+      ],
+      "note": "切り抜きの中"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "file": "p7-06-tiny.pdf",
+  "description": "大きさ 0.5 の字（見えない）と、大きさ 6 の字（小さいが読める）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-06-tiny#L1",
+      "pattern": "P7",
+      "reason": "tiny",
+      "page": 1,
+      "rect": [
+        40,
+        199.9,
+        43.6,
+        200.36
+      ],
+      "chars": 13
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p7-06-tiny#N1",
+      "kind": "small_legible",
+      "page": 1,
+      "rect": [
+        40,
+        148.76,
+        91.4,
+        154.31
+      ],
+      "note": "大きさ 6"
+    }
+  ]
+}

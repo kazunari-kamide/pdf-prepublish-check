@@ -1,0 +1,46 @@
+{
+  "file": "p7-12-light-covers.pdf",
+  "description": "不透明な薄い黄色の四角で隠した字（漏れ）と、半透明・乗算の黄色のマーカー（漏れでない）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-12-light-covers#L1",
+      "pattern": "P7",
+      "reason": "covered_light",
+      "page": 1,
+      "rect": [
+        40,
+        217.52,
+        108.92,
+        228.62
+      ],
+      "chars": 11
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p7-12-light-covers#N1",
+      "kind": "translucent_highlight",
+      "page": 1,
+      "rect": [
+        40,
+        157.52,
+        111.36,
+        168.62
+      ],
+      "note": "不透明さ 0.3"
+    },
+    {
+      "id": "p7-12-light-covers#N2",
+      "kind": "translucent_highlight",
+      "page": 1,
+      "rect": [
+        40,
+        107.52,
+        111.36,
+        118.62
+      ],
+      "note": "乗算（Multiply）"
+    }
+  ]
+}

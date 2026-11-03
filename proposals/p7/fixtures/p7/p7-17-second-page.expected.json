@@ -1,0 +1,21 @@
+{
+  "file": "p7-17-second-page.pdf",
+  "description": "1ページ目はふつうの字だけ、2ページ目に白い字",
+  "pages": 2,
+  "leaks": [
+    {
+      "id": "p7-17-second-page#L1",
+      "pattern": "P7",
+      "reason": "same_color",
+      "page": 2,
+      "rect": [
+        40,
+        197.52,
+        95.13,
+        208.62
+      ],
+      "chars": 9
+    }
+  ],
+  "negatives": []
+}

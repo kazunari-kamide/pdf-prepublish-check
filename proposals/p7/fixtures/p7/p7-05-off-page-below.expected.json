@@ -1,0 +1,21 @@
+{
+  "file": "p7-05-off-page-below.pdf",
+  "description": "ページの下の外に置いた字",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-05-off-page-below#L1",
+      "pattern": "P7",
+      "reason": "off_page",
+      "page": 1,
+      "rect": [
+        40,
+        -42.48,
+        179.85,
+        -31.38
+      ],
+      "chars": 22
+    }
+  ],
+  "negatives": []
+}

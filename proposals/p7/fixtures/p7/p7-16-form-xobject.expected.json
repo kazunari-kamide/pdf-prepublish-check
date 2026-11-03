@@ -1,0 +1,21 @@
+{
+  "file": "p7-16-form-xobject.pdf",
+  "description": "部品（Form XObject）の中の白い字",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-16-form-xobject#L1",
+      "pattern": "P7",
+      "reason": "same_color",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        115.98,
+        208.62
+      ],
+      "chars": 13
+    }
+  ],
+  "negatives": []
+}

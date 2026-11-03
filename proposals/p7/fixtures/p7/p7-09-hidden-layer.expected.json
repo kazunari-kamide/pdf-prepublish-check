@@ -1,0 +1,34 @@
+{
+  "file": "p7-09-hidden-layer.pdf",
+  "description": "表示しないレイヤーの中の字と、表示するレイヤーの中の字",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-09-hidden-layer#L1",
+      "pattern": "P7",
+      "reason": "hidden_layer",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        135.75,
+        208.62
+      ],
+      "chars": 14
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p7-09-hidden-layer#N1",
+      "kind": "visible_layer",
+      "page": 1,
+      "rect": [
+        40,
+        147.52,
+        103.84,
+        158.62
+      ],
+      "note": "表示するレイヤー"
+    }
+  ]
+}

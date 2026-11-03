@@ -1,0 +1,47 @@
+{
+  "file": "p7-15-several.pdf",
+  "description": "1ページに、白い字・とても小さい字・ページの外の字",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p7-15-several#L1",
+      "pattern": "P7",
+      "reason": "same_color",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        108.69,
+        208.62
+      ],
+      "chars": 12
+    },
+    {
+      "id": "p7-15-several#L2",
+      "pattern": "P7",
+      "reason": "tiny",
+      "page": 1,
+      "rect": [
+        40,
+        149.92,
+        42.71,
+        150.29
+      ],
+      "chars": 13
+    },
+    {
+      "id": "p7-15-several#L3",
+      "pattern": "P7",
+      "reason": "off_page",
+      "page": 1,
+      "rect": [
+        40,
+        397.52,
+        108.5,
+        408.62
+      ],
+      "chars": 10
+    }
+  ],
+  "negatives": []
+}
