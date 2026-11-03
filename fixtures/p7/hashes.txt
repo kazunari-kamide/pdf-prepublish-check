@@ -22,3 +22,4 @@ b1ea038f29b19b533b552b8cd4b59c30f605f080dcbf2a3229661fe31d062907  p7-21-plain-do
 0d56a7b7529d1134b9eae85ffd77e2f33a8856df1a8cd9bcc6b033e08a787781  p7-22-white-on-dark-photo.pdf
 1ee046f28f3766d7634c8b77b0993936fd6f95ac7dd3eae28c5f761ed852d108  p7-23-small-and-light.pdf
 009e42fcc07a152c7060e73facafc9ace30a0b72b177fce7be27b3b7933f1239  p7-24-white-on-dark-circle.pdf
+59774d3d13b285ebcdee07ad4ad1dd65d72357bb268cdaf77bdeae0860bf83e0  p7-25-ocr-layer-before-image.pdf

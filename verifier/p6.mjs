@@ -18,7 +18,7 @@ import { createHash } from "node:crypto";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
 export const VERIFIER_NAME = "omamori-verifier-p6";
-export const VERIFIER_VERSION = "0.1.0";
+export const VERIFIER_VERSION = "0.2.0";
 
 // 判定に使う値。合成 PDF（fixtures/p6/）で測って決めた（proposals/p6/verifier/README.md に測った値を書く）。
 export const THRESHOLDS = Object.freeze({
@@ -28,7 +28,8 @@ export const THRESHOLDS = Object.freeze({
   minAlpha: 0.9,
   // 字の箱のうち、この割合以上が覆われていれば「覆われた字」
   glyphCoverRatio: 0.5,
-  // 線で描いた図形（四角など）を、外枠の箱とみなせる面積の割合の下限
+  // 線で描いた図形（四角など）を、外枠の箱とみなせる面積の割合の下限。
+  // これより小さい図形（楕円・回した四角・角の丸い四角など）は、箱でなく形そのもので、字や画素が中にあるかを見る
   polygonFillRatio: 0.9,
   // 画像を「覆うもの」とみなす：濃い画素の割合の下限
   coverImageDarkRatio: 0.95,
@@ -57,6 +58,12 @@ const FILL_OPS = new Set([
 const STROKE_OPS = new Set([
   OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke,
 ]);
+// 偶奇の決まりで塗る命令（f* など）。ほかは、巻き数が 0 でない所を塗る
+const EO_FILL_OPS = new Set([OPS.eoFill, OPS.eoFillStroke, OPS.closeEOFillStroke]);
+// 曲線を、何本の直線に分けて形を近似するか
+const CURVE_STEPS = 8;
+// 形で見る覆いで、字の箱の中に置く点の数（1辺あたり）。点のうち形の中にある割合を「覆われた割合」とする
+const GLYPH_SAMPLES = 8;
 
 // ---------- 行列と箱 ----------
 const IDENTITY = [1, 0, 0, 1, 0, 0];
@@ -100,6 +107,59 @@ function intersect(a, b) {
 }
 function round2(b) {
   return b.map((v) => Math.round(v * 100) / 100);
+}
+// 3次・2次のベジエ曲線の、t の位置の点
+function bez3(p0, p1, p2, p3, t) {
+  const u = 1 - t;
+  return [
+    u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+    u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1],
+  ];
+}
+function bez2(p0, p1, p2, t) {
+  const u = 1 - t;
+  return [u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]];
+}
+// 点 (x, y) が、多角形の集まり（閉じた部分ごと）の塗られる所にあるか。
+// 右へ伸ばした半直線と辺の交わりを数える。偶奇なら交わりの数、そうでなければ巻き数（向きつきの数）で決める
+function insideShape(polys, evenOdd, x, y) {
+  let winding = 0;
+  let crossings = 0;
+  for (const poly of polys) {
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i];
+      const [xj, yj] = poly[j];
+      if (yj <= y === yi <= y) continue;
+      const xc = xj + ((y - yj) * (xi - xj)) / (yi - yj);
+      if (x < xc) {
+        crossings++;
+        winding += yi > yj ? 1 : -1;
+      }
+    }
+  }
+  return evenOdd ? (crossings & 1) === 1 : winding !== 0;
+}
+// 覆いが点 (x, y) を覆っているか。形を持たない覆い（四角に近いもの）は箱で見る
+function coverContains(c, x, y) {
+  if (!c.polys) return x >= c.box[0] && x <= c.box[2] && y >= c.box[1] && y <= c.box[3];
+  return insideShape(c.polys, c.evenOdd, x, y);
+}
+// 字の箱のうち、覆いに隠れている割合。四角に近い覆いは面積で、形で見る覆いは字の箱の中に置いた点で測る
+function coveredRatio(gbox, c) {
+  const ov = intersect(gbox, c.box);
+  if (!ov) return 0;
+  if (!c.polys) return area(ov) / area(gbox);
+  const w = gbox[2] - gbox[0];
+  const h = gbox[3] - gbox[1];
+  let hit = 0;
+  for (let i = 0; i < GLYPH_SAMPLES; i++) {
+    for (let j = 0; j < GLYPH_SAMPLES; j++) {
+      const x = gbox[0] + ((i + 0.5) * w) / GLYPH_SAMPLES;
+      const y = gbox[1] + ((j + 0.5) * h) / GLYPH_SAMPLES;
+      if (insideShape(c.polys, c.evenOdd, x, y)) hit++;
+    }
+  }
+  return hit / (GLYPH_SAMPLES * GLYPH_SAMPLES);
 }
 // 行列が「回転なし・裏返しなし」か（または 90 度単位か）。斜めのものは箱で近似できないので覆いにしない
 function isAxisAligned(m) {
@@ -147,13 +207,16 @@ function cloneState(s) {
   return { ...s };
 }
 
-// 道の中身から、外枠の箱（ページの座標）と「箱をどれだけ埋めているか」を出す
-function analysePath(ctm, data) {
+// 道の中身から、外枠の箱（ページの座標）と「箱をどれだけ埋めているか」を出す。
+// flatten のときは、曲線を CURVE_STEPS 本の直線に分けて形（polys）を作り、面積もその形で測る。
+// flatten でないときは、曲線の面積を端の点を結んだ弦で近似する（形は作らない。重いページで軽く読むため）
+function analysePath(ctm, data, flatten = false) {
   const pts = [];
   let polyArea = 0;
   let hasCurve = false;
   let segments = 0;
   const lines = []; // 直線の線分（始点・終点）。同じ点への moveTo が続いても、線分だけを数える
+  const polys = []; // 閉じた部分ごとの点の並び（flatten のときだけ）
   for (const sub of data ?? []) {
     if (!sub || typeof sub.length !== "number") continue;
     let i = 0;
@@ -167,6 +230,7 @@ function analysePath(ctm, data) {
           a += x1 * y2 - x2 * y1;
         }
         polyArea += Math.abs(a) / 2;
+        if (flatten) polys.push(poly);
       }
       poly = [];
     };
@@ -181,13 +245,24 @@ function analysePath(ctm, data) {
         if (poly.length) lines.push([poly[poly.length - 1], p]);
         poly.push(p); pts.push(p); segments++;
       } else if (op === DRAW.curveTo) {
-        // 曲線は、制御点を箱に入れ、面積は端点を結んだ弦で近似する
-        pts.push(apply(ctm, sub[i], sub[i + 1]), apply(ctm, sub[i + 2], sub[i + 3]));
+        // 曲線は、制御点を箱に入れる。面積は、flatten なら分けた直線で、そうでなければ端点を結んだ弦で近似する
+        const c1 = apply(ctm, sub[i], sub[i + 1]);
+        const c2 = apply(ctm, sub[i + 2], sub[i + 3]);
+        pts.push(c1, c2);
         const p = apply(ctm, sub[i + 4], sub[i + 5]); i += 6;
+        if (flatten && poly.length) {
+          const p0 = poly[poly.length - 1];
+          for (let k = 1; k < CURVE_STEPS; k++) poly.push(bez3(p0, c1, c2, p, k / CURVE_STEPS));
+        }
         poly.push(p); pts.push(p); hasCurve = true; segments++;
       } else if (op === DRAW.quadraticCurveTo) {
-        pts.push(apply(ctm, sub[i], sub[i + 1]));
+        const c1 = apply(ctm, sub[i], sub[i + 1]);
+        pts.push(c1);
         const p = apply(ctm, sub[i + 2], sub[i + 3]); i += 4;
+        if (flatten && poly.length) {
+          const p0 = poly[poly.length - 1];
+          for (let k = 1; k < CURVE_STEPS; k++) poly.push(bez2(p0, c1, p, k / CURVE_STEPS));
+        }
         poly.push(p); pts.push(p); hasCurve = true; segments++;
       } else if (op === DRAW.closePath) {
         flush();
@@ -200,7 +275,7 @@ function analysePath(ctm, data) {
   if (pts.length === 0) return null;
   const box = boxOfPoints(pts);
   const a = area(box);
-  return { box, fillRatio: a > 0 ? polyArea / a : 0, hasCurve, segments, lines };
+  return { box, fillRatio: a > 0 ? polyArea / a : 0, polyArea, hasCurve, segments, lines, polys };
 }
 
 // ---------- 画像の画素 ----------
@@ -254,8 +329,9 @@ function darkRatioOfImage(reader) {
   return n ? dark / n : 0;
 }
 
-// 画像（行列 m で単位正方形に置かれたもの）のうち、ページ上の箱 region に入る画素を数える
-function sampleRegion(reader, m, region) {
+// 画像（行列 m で単位正方形に置かれたもの）のうち、ページ上の箱 region に入る画素を数える。
+// contains を渡したときは、画素の中心がその形の中にあるものだけを数える（四角でない覆い）
+function sampleRegion(reader, m, region, contains = null) {
   const inv = invert(m);
   if (!inv) return null;
   // region の四隅を画像の座標（0〜1）に戻し、画素の範囲を出す
@@ -279,6 +355,7 @@ function sampleRegion(reader, m, region) {
       // 画素の中心がページ上で region に入っているか
       const [x, y] = apply(m, (px + 0.5) / W, 1 - (py + 0.5) / H);
       if (x < region[0] || x > region[2] || y < region[1] || y > region[3]) continue;
+      if (contains && !contains(x, y)) continue;
       total++;
       const l = reader.lum(px, py);
       if (l <= THRESHOLDS.inkLuminance) ink++;
@@ -324,9 +401,10 @@ async function readPage(page, { includeText }) {
     return info;
   };
 
-  const addCover = (seq, box, kind) => {
+  // shape：四角でない覆いのとき { polys, evenOdd }。ないときは箱そのものを覆いとみなす
+  const addCover = (seq, box, kind, shape = null) => {
     if (area(box) <= 0) return;
-    covers.push({ seq, box, cover: kind });
+    covers.push({ seq, box, cover: kind, polys: shape?.polys ?? null, evenOdd: shape?.evenOdd ?? false });
   };
 
   for (let seq = 0; seq < fnArray.length; seq++) {
@@ -389,12 +467,17 @@ async function readPage(page, { includeText }) {
       }
       case OPS.constructPath: {
         const renderOp = args?.[0];
-        const info = analysePath(st.ctm, args?.[1]);
+        const darkFill = FILL_OPS.has(renderOp) && st.fillLum <= THRESHOLDS.darkLuminance && st.fillAlpha >= THRESHOLDS.minAlpha;
+        // 形を作るのは、覆いになりうる濃い塗りのときだけ（重いページで、線だけの図形に手間をかけない）
+        const info = analysePath(st.ctm, args?.[1], darkFill);
         if (!info) break;
         const kind = annotationDepth > 0 ? "annotation" : "fill";
-        // 塗りの覆い
-        if (FILL_OPS.has(renderOp) && st.fillLum <= THRESHOLDS.darkLuminance && st.fillAlpha >= THRESHOLDS.minAlpha) {
+        // 塗りの覆い。四角に近いものは箱で、そうでないもの（楕円・回した四角・角の丸い四角など）は形で見る
+        if (darkFill) {
           if (info.fillRatio >= THRESHOLDS.polygonFillRatio) addCover(seq, info.box, kind);
+          else if (info.polys.length && info.polyArea > 0) {
+            addCover(seq, info.box, kind, { polys: info.polys, evenOdd: EO_FILL_OPS.has(renderOp) });
+          }
         }
         // 太い線の覆い（マーカーで塗りつぶしたような線）。直線1本だけを扱う
         if (STROKE_OPS.has(renderOp) && !FILL_OPS.has(renderOp) && st.strokeLum <= THRESHOLDS.darkLuminance &&
@@ -404,6 +487,16 @@ async function readPage(page, { includeText }) {
           const half = lw / 2;
           if (Math.abs(ay - by) < 1e-6) addCover(seq, [Math.min(ax, bx), ay - half, Math.max(ax, bx), ay + half], kind);
           else if (Math.abs(ax - bx) < 1e-6) addCover(seq, [ax - half, Math.min(ay, by), ax + half, Math.max(ay, by)], kind);
+          else {
+            // 斜めの線は、線の幅の分だけ広げた、回した四角の形で見る（線の端の形は見ない）
+            const len = Math.hypot(bx - ax, by - ay);
+            if (len > 0 && half > 0) {
+              const nx = (-(by - ay) / len) * half;
+              const ny = ((bx - ax) / len) * half;
+              const poly = [[ax + nx, ay + ny], [bx + nx, by + ny], [bx - nx, by - ny], [ax - nx, ay - ny]];
+              addCover(seq, boxOfPoints(poly), kind, { polys: [poly], evenOdd: false });
+            }
+          }
         }
         break;
       }
@@ -516,9 +609,7 @@ function judgePage(pageNo, { covers, glyphs, images }, { includeText }) {
     let best = null, bestRatio = 0;
     for (const c of covers) {
       if (c.seq <= g.seq) continue;
-      const ov = intersect(g.box, c.box);
-      if (!ov) continue;
-      const ratio = area(ov) / ga;
+      const ratio = coveredRatio(g.box, c);
       if (ratio > bestRatio) { bestRatio = ratio; best = c; }
     }
     if (best && bestRatio >= THRESHOLDS.glyphCoverRatio) {
@@ -546,7 +637,7 @@ function judgePage(pageNo, { covers, glyphs, images }, { includeText }) {
       if (im.seq >= c.seq) continue;
       const region = intersect(im.box, c.box);
       if (!region) continue;
-      const s = sampleRegion(im.reader, im.m, region);
+      const s = sampleRegion(im.reader, im.m, region, c.polys ? (x, y) => coverContains(c, x, y) : null);
       if (!s || s.sampled === 0) continue;
       total += s.total; ink += s.ink; paper += s.paper;
     }

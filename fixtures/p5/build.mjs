@@ -6,7 +6,7 @@
 // 増分更新は、元のバイト列のあとに、変えたオブジェクトと新しい xref と trailer を書き足す。
 // 名前・団体はすべて架空（山田太郎、○○市、○○課 など）。日時も乱数も使わないので、何度作っても同じバイト列になる。
 
-import { createHash } from "node:crypto";
+import { createCipheriv, createHash } from "node:crypto";
 import { readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,7 +33,7 @@ const lit = (s) => `(${s.replace(/[\\()]/g, (m) => "\\" + m)})`;
 /** ストリームのオブジェクト（中身は Flate で圧縮する） */
 const stream = (dict, data) => ({ dict, data: deflateSync(Buffer.from(data, "latin1"), { level: 9 }) });
 
-function objBytes(num, gen, body) {
+function objBytesPlain(num, gen, body) {
   if (typeof body === "string") return Buffer.from(`${num} ${gen} obj\n${body}\nendobj\n`, "latin1");
   const dict = body.dict.replace(/>>\s*$/, ` /Length ${body.data.length}${body.filtered === false ? "" : body.dict.includes("/Filter") ? "" : " /Filter /FlateDecode"} >>`);
   return Buffer.concat([Buffer.from(`${num} ${gen} obj\n${dict}\nstream\n`, "latin1"), body.data, Buffer.from("\nendstream\nendobj\n", "latin1")]);
@@ -44,7 +44,11 @@ function objBytes(num, gen, body) {
  * objects：{ 番号: 中身 }。free：「使っていない」と印をつける番号。trailer：Root・Info などの文字列。
  * xrefStream：xref をストリームで書く（番号 xrefNum）。objstm：{ num, members: [番号…] } のとき、その番号をオブジェクトストリームに入れる
  */
-function writeRevision({ base = null, objects, free = [], size, trailer, xrefStream = false, xrefNum, objstm = null }) {
+function writeRevision({ base = null, objects, free = [], size, trailer, xrefStream = false, xrefNum, objstm = null, enc = null }) {
+  // enc（暗号化の道具）があれば、オブジェクトの文字列とストリームを暗号化して書く。
+  // 暗号化の辞書そのもの・オブジェクトストリームの中のオブジェクト・xref ストリームは暗号化しない（ISO 32000-1 §7.6.1）
+  const seal = (num, body) => (enc && num !== enc.dictNum ? encryptObject(enc, num, 0, body) : body);
+  const objBytes = (num, gen, body) => objBytesPlain(num, gen, seal(num, body));
   const parts = [];
   let at = 0;
   if (base) {
@@ -115,6 +119,178 @@ function writeRevision({ base = null, objects, free = [], size, trailer, xrefStr
 function lastStartXref(bytes) {
   const s = Buffer.from(bytes).toString("latin1");
   return Number(/startxref\s+(\d+)/.exec(s.slice(s.lastIndexOf("startxref")))[1]);
+}
+
+// ---------- 暗号化（標準のセキュリティハンドラ。PR #21 の返事の 5 の確かめ用） ----------
+// 検証器の復号（verifier/p5-decrypt.mjs）は import しない。同じ思い込みで作り、同じ思い込みで解くのを避けるため、ここに別に書く。
+// 正しく暗号化できたかは、PDF.js（別の実装）でパスワードなしに開けて、いまの版の字が読めることで確かめる。
+// 日時も乱数も使わない。AES の IV も、番号から決まった値で作るので、何度作っても同じバイト列になる。
+
+const PDF_PAD = Buffer.from("28bf4e5e4e758a4164004e56fffa01082e2e00b6d0683e802f0ca9fe6453697a", "hex");
+const md5b = (...parts) => {
+  const h = createHash("md5");
+  for (const p of parts) h.update(p);
+  return h.digest();
+};
+const shaN = (alg, ...parts) => {
+  const h = createHash(alg);
+  for (const p of parts) h.update(p);
+  return h.digest();
+};
+const le32b = (n) => Buffer.from([n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff]);
+function rc4b(key, data) {
+  const s = Array.from({ length: 256 }, (_, i) => i);
+  for (let i = 0, j = 0; i < 256; i++) {
+    j = (j + s[i] + key[i % key.length]) & 0xff;
+    [s[i], s[j]] = [s[j], s[i]];
+  }
+  const out = Buffer.alloc(data.length);
+  for (let k = 0, i = 0, j = 0; k < data.length; k++) {
+    i = (i + 1) & 0xff;
+    j = (j + s[i]) & 0xff;
+    [s[i], s[j]] = [s[j], s[i]];
+    out[k] = data[k] ^ s[(s[i] + s[j]) & 0xff];
+  }
+  return out;
+}
+const padPw = (pw) => {
+  const b = Buffer.from(pw, "latin1").subarray(0, 32);
+  return Buffer.concat([b, PDF_PAD.subarray(0, 32 - b.length)]);
+};
+const aesRaw = (alg, key, iv, data) => {
+  const c = createCipheriv(alg, key, iv);
+  c.setAutoPadding(false);
+  return Buffer.concat([c.update(data), c.final()]);
+};
+/** ISO 32000-2 アルゴリズム 2.B（R6 のハッシュ） */
+function hash2B(pw, salt, udata) {
+  let k = shaN("sha256", pw, salt, udata);
+  let e = Buffer.alloc(0);
+  for (let i = 0; i < 64 || e[e.length - 1] > i - 32; ) {
+    const one = Buffer.concat([pw, k, udata]);
+    e = aesRaw("aes-128-cbc", k.subarray(0, 16), k.subarray(16, 32), Buffer.concat(Array(64).fill(one)));
+    let sum = 0;
+    for (let b = 0; b < 16; b++) sum += e[b];
+    k = shaN(["sha256", "sha384", "sha512"][sum % 3], e);
+    i++;
+  }
+  return k.subarray(0, 32);
+}
+
+/**
+ * 暗号化の道具を作る。method：rc4（V2・R3、128 ビット）・aes128（V4・R4、AESV2）・aes256（V5・R6、AESV3）。
+ * userPassword を渡すと、開くときにパスワードが要る PDF になる。dictNum は暗号化の辞書のオブジェクトの番号。
+ */
+function makeEncryptor({ method, dictNum, userPassword = "", ownerPassword = "owner-secret" }) {
+  const P = -3904; // 印刷・変更・コピーなどを禁止（ビットの組み合わせ。例）
+  const id0 = md5b(Buffer.from(`omamori-p5-fixture-${method}`, "latin1"));
+  const hex = (b) => `<${Buffer.from(b).toString("hex").toUpperCase()}>`;
+  const ivFor = (num, gen, n) => md5b(Buffer.from(`iv ${num} ${gen} ${n}`, "latin1"));
+  let counter = 0;
+  let dictBody;
+  let fileKey;
+  if (method === "rc4" || method === "aes128") {
+    const R = method === "rc4" ? 3 : 4;
+    // アルゴリズム 3：O
+    let h = md5b(padPw(ownerPassword));
+    for (let i = 0; i < 50; i++) h = md5b(h);
+    const okey = h.subarray(0, 16);
+    let O = rc4b(okey, padPw(userPassword));
+    for (let i = 1; i <= 19; i++) O = rc4b(Buffer.from(okey.map((b) => b ^ i)), O);
+    // アルゴリズム 2：文書の鍵
+    h = md5b(padPw(userPassword), O, le32b(P), id0);
+    for (let i = 0; i < 50; i++) h = md5b(h.subarray(0, 16));
+    fileKey = h.subarray(0, 16);
+    // アルゴリズム 5：U
+    let U = rc4b(fileKey, md5b(PDF_PAD, id0));
+    for (let i = 1; i <= 19; i++) U = rc4b(Buffer.from(fileKey.map((b) => b ^ i)), U);
+    U = Buffer.concat([U, Buffer.alloc(16)]);
+    dictBody =
+      method === "rc4"
+        ? `<< /Filter /Standard /V 2 /R 3 /Length 128 /P ${P} /O ${hex(O)} /U ${hex(U)} >>`
+        : `<< /Filter /Standard /V 4 /R 4 /Length 128 /CF << /StdCF << /CFM /AESV2 /AuthEvent /DocOpen /Length 16 >> >> /StmF /StdCF /StrF /StdCF /P ${P} /O ${hex(O)} /U ${hex(U)} >>`;
+  } else if (method === "aes256") {
+    fileKey = shaN("sha256", Buffer.from("omamori-p5-fixture-file-key", "latin1"));
+    const upw = Buffer.from(userPassword, "utf8");
+    const opw = Buffer.from(ownerPassword, "utf8");
+    const salt = (s) => md5b(Buffer.from(s, "latin1")).subarray(0, 8);
+    const uvs = salt("u-validation"), uks = salt("u-key"), ovs = salt("o-validation"), oks = salt("o-key");
+    const U = Buffer.concat([hash2B(upw, uvs, Buffer.alloc(0)), uvs, uks]);
+    const UE = aesRaw("aes-256-cbc", hash2B(upw, uks, Buffer.alloc(0)), Buffer.alloc(16), fileKey);
+    const O = Buffer.concat([hash2B(opw, ovs, U), ovs, oks]);
+    const OE = aesRaw("aes-256-cbc", hash2B(opw, oks, U), Buffer.alloc(16), fileKey);
+    const permsPlain = Buffer.concat([le32b(P), Buffer.from([0xff, 0xff, 0xff, 0xff]), Buffer.from("Tadb", "latin1"), Buffer.from([1, 2, 3, 4])]);
+    const Perms = aesRaw("aes-256-ecb", fileKey, null, permsPlain);
+    dictBody = `<< /Filter /Standard /V 5 /R 6 /Length 256 /CF << /StdCF << /CFM /AESV3 /AuthEvent /DocOpen /Length 32 >> >> /StmF /StdCF /StrF /StdCF /P ${P} /O ${hex(O)} /U ${hex(U)} /OE ${hex(OE)} /UE ${hex(UE)} /Perms ${hex(Perms)} >>`;
+  } else throw new Error(`知らない方式: ${method}`);
+
+  const objectKey = (num, gen, aes) =>
+    md5b(fileKey, Buffer.from([num & 0xff, (num >> 8) & 0xff, (num >> 16) & 0xff, gen & 0xff, (gen >> 8) & 0xff]), aes ? Buffer.from("sAlT", "latin1") : Buffer.alloc(0)).subarray(0, Math.min(fileKey.length + 5, 16));
+  const aesEncrypt = (key, num, gen, data) => {
+    const iv = ivFor(num, gen, counter++);
+    const c = createCipheriv(key.length === 32 ? "aes-256-cbc" : "aes-128-cbc", key, iv);
+    return Buffer.concat([iv, c.update(data), c.final()]); // 詰め物は PKCS#5
+  };
+  const crypt = (num, gen, data) => {
+    const b = Buffer.from(data);
+    if (method === "rc4") return rc4b(objectKey(num, gen, false), b);
+    if (method === "aes128") return aesEncrypt(objectKey(num, gen, true), num, gen, b);
+    return aesEncrypt(fileKey, num, gen, b);
+  };
+  return {
+    dictNum,
+    dictBody,
+    trailer: `/Encrypt ${dictNum} 0 R /ID [${hex(id0)} ${hex(id0)}]`,
+    str: crypt,
+    stm: crypt,
+  };
+}
+
+/** 中身の文字の中の文字列（( … ) と < … >）を、暗号化した 16 進の文字列に置き換える */
+function encryptStringsInBody(body, f) {
+  let out = "";
+  let i = 0;
+  while (i < body.length) {
+    const c = body[i];
+    if (c === "<" && body[i + 1] === "<") {
+      out += "<<";
+      i += 2;
+    } else if (c === "<") {
+      const j = body.indexOf(">", i);
+      const h = body.slice(i + 1, j).replace(/\s/g, "");
+      out += `<${Buffer.from(f(Buffer.from(h.length % 2 ? h + "0" : h, "hex"))).toString("hex").toUpperCase()}>`;
+      i = j + 1;
+    } else if (c === "(") {
+      const bytes = [];
+      let depth = 1;
+      i++;
+      while (i < body.length) {
+        const d = body[i++];
+        if (d === "\\") {
+          const e = body[i++];
+          const map = { n: 10, r: 13, t: 9, b: 8, f: 12 };
+          bytes.push(map[e] ?? e.charCodeAt(0));
+        } else if (d === "(") {
+          depth++;
+          bytes.push(40);
+        } else if (d === ")") {
+          if (--depth === 0) break;
+          bytes.push(41);
+        } else bytes.push(d.charCodeAt(0) & 0xff);
+      }
+      out += `<${Buffer.from(f(Buffer.from(bytes))).toString("hex").toUpperCase()}>`;
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return out;
+}
+
+/** オブジェクト1つを暗号化する（文字の中身は文字列だけ、ストリームは中身のバイト列ごと） */
+function encryptObject(enc, num, gen, body) {
+  if (typeof body === "string") return encryptStringsInBody(body, (b) => enc.str(num, gen, b));
+  return { ...body, dict: encryptStringsInBody(body.dict, (b) => enc.str(num, gen, b)), data: enc.stm(num, gen, body.data) };
 }
 
 // ---------- 部品 ----------
@@ -280,7 +456,7 @@ const CASES = [
     description: "最後の %%EOF のあとに、xref に載っていないオブジェクト（字を描く中身）が書き足されている",
     make() {
       const v1 = writeRevision({ objects: basic(), size: 6, trailer: "/Root 1 0 R" });
-      const orphan = objBytes(9, 0, content("Draft: Ichiro Suzuki"));
+      const orphan = objBytesPlain(9, 0, content("Draft: Ichiro Suzuki"));
       // startxref は末尾 2048 バイトの中にあればよいので、小さなオブジェクトを足しても読める
       return new Uint8Array(Buffer.concat([Buffer.from(v1), orphan]));
     },
@@ -385,6 +561,64 @@ const CASES = [
     leaks: [],
     negatives: [[7, "annotation", "unreferenced"], [3, "structure", "superseded"]],
   },
+  // ----- 暗号化した PDF（利用者のパスワードが空。開くときにパスワードを聞かれない。PR #21 の返事の 5） -----
+  {
+    name: "p5-22-encrypted-rc4-info",
+    description: "RC4 128 ビットで暗号化（パスワードなしで開ける）。増分更新で、文書情報の作成者を個人名から課の名前に書き直した",
+    make() {
+      const E = makeEncryptor({ method: "rc4", dictNum: 7 });
+      const trailer = `/Root 1 0 R /Info 6 0 R ${E.trailer}`;
+      const v1 = writeRevision({ objects: basic({ 6: INFO({ Author: u16("山田太郎"), Producer: PRODUCER }), 7: E.dictBody }), size: 8, trailer, enc: E });
+      return writeRevision({ base: v1, objects: { 6: INFO({ Author: u16("○○市○○課"), Producer: PRODUCER }) }, size: 8, trailer, enc: E });
+    },
+    leaks: [[6, "info", "superseded"]],
+    negatives: [],
+  },
+  {
+    name: "p5-23-encrypted-aes128-content",
+    description: "AES-128 で暗号化（パスワードなしで開ける）。増分更新で、ページの中身を新しい番号のものに差し替えた",
+    make() {
+      const E = makeEncryptor({ method: "aes128", dictNum: 6 });
+      const trailer = `/Root 1 0 R ${E.trailer}`;
+      const v1 = writeRevision({ objects: basic({ 4: content("Applicant: Hanako Sato, tel 000-2345-6789"), 6: E.dictBody }), size: 7, trailer, enc: E });
+      return writeRevision({ base: v1, objects: { 3: PAGE("7 0 R"), 7: content("Applicant: (withheld)") }, size: 8, trailer, enc: E });
+    },
+    leaks: [[4, "content", "unreferenced"]],
+    negatives: [[3, "structure", "superseded"]],
+  },
+  {
+    name: "p5-24-encrypted-aes256-objstm",
+    description: "AES-256 で暗号化（パスワードなしで開ける）。xref ストリームとオブジェクトストリームで保存し、増分更新でコメントの注釈を外した",
+    make() {
+      const E = makeEncryptor({ method: "aes256", dictNum: 8 });
+      const trailer = `/Root 1 0 R ${E.trailer}`;
+      const v1 = writeRevision({
+        objects: basic({ 3: PAGE("4 0 R", " /Annots [7 0 R]"), 7: annotText("公開前に削除", "伊藤三郎"), 8: E.dictBody }),
+        objstm: { num: 9, members: [1, 2, 3, 5, 7] },
+        xrefStream: true,
+        xrefNum: 10,
+        size: 11,
+        trailer,
+        enc: E,
+      });
+      return writeRevision({ base: v1, objects: { 3: PAGE() }, xrefStream: true, xrefNum: 11, size: 12, trailer, enc: E });
+    },
+    leaks: [[7, "annotation", "unreferenced"]],
+    negatives: [[3, "structure", "superseded"]],
+  },
+  {
+    name: "p5-25-encrypted-user-password",
+    description: "RC4 で暗号化（利用者のパスワードつき。開けない）。増分更新で文書情報を書き直してある",
+    make() {
+      const E = makeEncryptor({ method: "rc4", dictNum: 7, userPassword: "user-secret" });
+      const trailer = `/Root 1 0 R /Info 6 0 R ${E.trailer}`;
+      const v1 = writeRevision({ objects: basic({ 6: INFO({ Author: u16("鈴木一郎") }), 7: E.dictBody }), size: 8, trailer, enc: E });
+      return writeRevision({ base: v1, objects: { 6: INFO({ Author: u16("○○課") }) }, size: 8, trailer, enc: E });
+    },
+    leaks: [],
+    negatives: [],
+    expected_error: "encrypted",
+  },
 ];
 
 // ---------- 書き出し ----------
@@ -406,6 +640,8 @@ for (const c of CASES) {
     leaks: c.leaks.map(([object, kind, where], i) => ({ id: `${c.name}#L${i + 1}`, pattern: "P5", object, kind, where })),
     negatives: c.negatives.map(([object, kind, where], i) => ({ id: `${c.name}#N${i + 1}`, object, kind, where })),
   };
+  // 開けないことが正しい入力（パスワードが要る PDF）。検証器の error.code と同じ値
+  if (c.expected_error) expected.expected_error = c.expected_error;
   writeFileSync(path.join(HERE, `${c.name}.expected.json`), JSON.stringify(expected, null, 2) + "\n");
   const sha = createHash("sha256").update(bytes).digest("hex");
   hashes.push(`${sha}  ${file}`);

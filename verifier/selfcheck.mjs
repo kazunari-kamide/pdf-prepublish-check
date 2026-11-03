@@ -5,6 +5,8 @@
 // fixtures/p6/ の片付ける前の合成 PDF を検証器にかけ、正解データ（*.expected.json）と合うかを見る。
 // 照らし合わせ方は rubric/p6.md の「照らし合わせ方」と同じ（型・ページ・箱の重なり）。
 // さらに厳しく、字の層は「残っている字数」も正解と同じかを見る。
+// 正解データに expected_error（例 "encrypted"）があるものは、検証器が status: "error" とその code を返せば正解とする
+// （パスワードが要る PDF など、開けないことが正しい入力。PR #16 の返事の 2）。
 
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -26,12 +28,23 @@ function overlap(a, b) {
 
 let failures = 0;
 let leaksTotal = 0, leaksFound = 0, negTotal = 0, negHit = 0, unexpected = 0;
+let errorsExpected = 0, errorsMatched = 0;
 const byType = new Map();
 
 for (const name of readdirSync(FIXTURES).filter((n) => n.endsWith(".expected.json")).sort()) {
   const exp = JSON.parse(readFileSync(path.join(FIXTURES, name), "utf8"));
   const res = await verifyP6(readFileSync(path.join(FIXTURES, exp.file)));
   const problems = [];
+  if (exp.expected_error !== undefined) {
+    // 開けないことが正しい入力。漏れ・漏れでないものは書かない決まり（書いてあれば正解データの誤り）
+    errorsExpected++;
+    if (exp.leaks.length || exp.negatives.length) problems.push("expected_error があるのに、漏れか漏れでないものが書いてある");
+    if (res.status === "error" && res.error?.code === exp.expected_error) errorsMatched++;
+    else problems.push(`期待するエラー ${exp.expected_error} を返さなかった（${res.status}${res.error ? `、${res.error.code}` : ""}）`);
+    if (problems.length) failures++;
+    console.log(`${problems.length ? "NG" : "OK"}  ${exp.file}（期待するエラー ${exp.expected_error}）${problems.length ? "\n      " + problems.join("\n      ") : ""}`);
+    continue;
+  }
   if (res.status !== "ok") problems.push(`読めなかった: ${res.error?.code}`);
   if (res.skipped_pages.length) problems.push(`省いたページ: ${JSON.stringify(res.skipped_pages)}`);
   const used = new Set();
@@ -86,6 +99,7 @@ for (const [label, bytes, code] of broken) {
 
 console.log("");
 console.log(`漏れ ${leaksTotal} 件中 ${leaksFound} 件を見つけた。漏れでないもの ${negTotal} 件中 ${negHit} 件に反応。正解にない出力 ${unexpected} 件`);
+console.log(`期待するエラー ${errorsExpected} 件中 ${errorsMatched} 件で、同じエラーを返した`);
 for (const [k, v] of [...byType.entries()].sort()) console.log(`  ${k}: ${v.total} 件中 ${v.found} 件`);
 console.log(failures ? `合わなかったもの ${failures} 個` : "すべて正解データと合った");
 process.exit(failures ? 1 : 0);

@@ -1,0 +1,20 @@
+{
+  "file": "p7-25-ocr-layer-before-image.pdf",
+  "description": "描き方 3 の字（文字認識の層）を先に書き、あとからスキャン画像を重ねた（描く順番が逆の道具。漏れでない）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p7-25-ocr-layer-before-image#N1",
+      "kind": "ocr_layer",
+      "page": 1,
+      "rect": [
+        40,
+        197.52,
+        139.71,
+        208.62
+      ],
+      "note": "画像の前に書いた見えない字（文字認識の層。描く順番は問わない）"
+    }
+  ]
+}

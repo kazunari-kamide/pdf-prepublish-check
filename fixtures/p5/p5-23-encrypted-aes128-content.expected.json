@@ -1,0 +1,21 @@
+{
+  "file": "p5-23-encrypted-aes128-content.pdf",
+  "description": "AES-128 で暗号化（パスワードなしで開ける）。増分更新で、ページの中身を新しい番号のものに差し替えた",
+  "leaks": [
+    {
+      "id": "p5-23-encrypted-aes128-content#L1",
+      "pattern": "P5",
+      "object": 4,
+      "kind": "content",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-23-encrypted-aes128-content#N1",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

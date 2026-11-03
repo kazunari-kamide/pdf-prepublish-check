@@ -7,6 +7,7 @@
 // - 漏れでないもの（negatives）は items になく、not_counted に同じ番号・種類・場所である
 // - 正解にない items・not_counted を出していない
 // - 壊れた入力で止まらない
+// - 正解データに expected_error（例 "encrypted"）があるものは、status: "error" とその code を返す（P6 の selfcheck と同じ決まり）
 
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -23,12 +24,21 @@ let found = 0;
 let negatives = 0;
 let negHit = 0;
 let extra = 0;
+let errorsExpected = 0;
+let errorsMatched = 0;
 const files = readdirSync(FIXTURES).filter((f) => f.endsWith(".expected.json")).sort();
 const key = (x) => `${x.object}|${x.kind}|${x.where}`;
 
 for (const name of files) {
   const exp = JSON.parse(readFileSync(path.join(FIXTURES, name), "utf8"));
   const r = await verifyP5(new Uint8Array(readFileSync(path.join(FIXTURES, exp.file))));
+  if (exp.expected_error !== undefined) {
+    errorsExpected++;
+    if (exp.leaks.length || exp.negatives.length) problems.push(`${exp.file}：expected_error があるのに、漏れか漏れでないものが書いてある`);
+    if (r.status === "error" && r.error?.code === exp.expected_error) errorsMatched++;
+    else problems.push(`${exp.file}：期待するエラー ${exp.expected_error} を返さなかった（${r.status}${r.error ? `、${r.error.code}` : ""}）`);
+    continue;
+  }
   if (r.status !== "ok") {
     problems.push(`${exp.file}：読めなかった（${r.error?.code}）`);
     continue;
@@ -83,6 +93,7 @@ for (const [label, bytes, want] of broken) {
 }
 
 console.log(`合成 PDF ${files.length} 個：漏れ ${leaks} 件中 ${found} 件を見つけた。漏れでないもの ${negatives} 件中 ${negHit} 件に反応。正解にない出力 ${extra} 件`);
+console.log(`期待するエラー ${errorsExpected} 件中 ${errorsMatched} 件で、同じエラーを返した`);
 console.log(`壊れた入力 ${broken.length} 種：止まらずに返した（下に NG がなければ、期待どおり）`);
 if (problems.length) {
   for (const p of problems) console.log(`  NG ${p}`);

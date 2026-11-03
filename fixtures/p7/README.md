@@ -27,7 +27,7 @@
 | `visible_on_dark_image` | 暗い写真の上の白い字 |
 | `near_edge` | ページの端の内側の字 |
 | `small_legible` | 小さいが読める字（大きさ 3・6） |
-| `ocr_layer` | スキャン画像の上の、描き方 3 の字（文字認識の層） |
+| `ocr_layer` | スキャン画像と重なる、描き方 3 の字（文字認識の層）。画像の前に書いたもの（p7-25）も含む |
 | `visible_layer` | 表示するレイヤーの中の字 |
 | `inside_clip` | 切り抜きの中の字 |
 | `translucent_highlight` | 半透明・乗算のマーカーの下の字 |

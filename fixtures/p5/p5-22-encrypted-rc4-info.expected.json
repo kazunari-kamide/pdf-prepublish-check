@@ -1,0 +1,14 @@
+{
+  "file": "p5-22-encrypted-rc4-info.pdf",
+  "description": "RC4 128 ビットで暗号化（パスワードなしで開ける）。増分更新で、文書情報の作成者を個人名から課の名前に書き直した",
+  "leaks": [
+    {
+      "id": "p5-22-encrypted-rc4-info#L1",
+      "pattern": "P5",
+      "object": 6,
+      "kind": "info",
+      "where": "superseded"
+    }
+  ],
+  "negatives": []
+}
