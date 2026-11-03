@@ -1,0 +1,21 @@
+{
+  "file": "p1-04-literal-and-pdfdoc.pdf",
+  "description": "( ) の文字列の作成者と、PDFDocEncoding の8進エスケープを含むタイトル",
+  "leaks": [
+    {
+      "id": "p1-04-literal-and-pdfdoc#L1",
+      "pattern": "P1",
+      "key": "Author",
+      "where": "current"
+    },
+    {
+      "id": "p1-04-literal-and-pdfdoc#L2",
+      "pattern": "P1",
+      "key": "Title",
+      "where": "current"
+    }
+  ],
+  "negatives": [],
+  "out_of_scope": [],
+  "previous_info": false
+}

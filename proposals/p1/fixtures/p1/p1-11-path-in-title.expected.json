@@ -1,0 +1,15 @@
+{
+  "file": "p1-11-path-in-title.pdf",
+  "description": "タイトルに、作った PC のファイルの場所が残っている（P4 とも重なる）",
+  "leaks": [
+    {
+      "id": "p1-11-path-in-title#L1",
+      "pattern": "P1",
+      "key": "Title",
+      "where": "current"
+    }
+  ],
+  "negatives": [],
+  "out_of_scope": [],
+  "previous_info": false
+}

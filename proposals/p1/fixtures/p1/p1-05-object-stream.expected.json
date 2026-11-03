@@ -1,0 +1,27 @@
+{
+  "file": "p1-05-object-stream.pdf",
+  "description": "xref ストリームとオブジェクトストリームで保存（文書情報がストリームの中にある）",
+  "leaks": [
+    {
+      "id": "p1-05-object-stream#L1",
+      "pattern": "P1",
+      "key": "Author",
+      "where": "current"
+    },
+    {
+      "id": "p1-05-object-stream#L2",
+      "pattern": "P1",
+      "key": "Title",
+      "where": "current"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p1-05-object-stream#N1",
+      "kind": "producer",
+      "key": "Producer"
+    }
+  ],
+  "out_of_scope": [],
+  "previous_info": false
+}

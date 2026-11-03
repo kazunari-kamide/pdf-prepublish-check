@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omamori-verifier-p1/0.1.0",
+  "title": "検証器 P1（文書情報）の出力",
+  "type": "object",
+  "required": ["verifier", "checked", "input", "status", "items", "not_counted", "previous_info", "revisions", "cross_check"],
+  "properties": {
+    "verifier": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "omamori-verifier-p1" }, "version": { "type": "string" } }
+    },
+    "checked": { "description": "調べた漏洩パターン。ここにない型は調べていない", "type": "array", "items": { "const": "P1" } },
+    "input": {
+      "type": "object",
+      "required": ["bytes", "sha256"],
+      "properties": {
+        "bytes": { "type": "integer" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "status": { "enum": ["ok", "error"] },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "enum": ["empty", "too_large", "unreadable", "encrypted", "timeout"] },
+        "message": { "type": "string" }
+      }
+    },
+    "items": {
+      "description": "いまの版の文書情報に残っている欄（数える欄だけ）。status が error のときは空",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "key", "where", "chars", "encoding", "found_by"],
+        "additionalProperties": false,
+        "properties": {
+          "pattern": { "const": "P1" },
+          "key": { "description": "Info 辞書の鍵（Author、Title、Company など。#xx は解いたもの）", "type": "string" },
+          "where": { "description": "どの版か。いまは current だけ", "const": "current" },
+          "chars": { "description": "値の字数（前後の空白を除く）", "type": "integer" },
+          "encoding": { "enum": ["utf16be", "utf16le", "utf8", "pdfdoc", "name", "other", "unknown"] },
+          "found_by": { "description": "どの読み方で見つけたか", "enum": ["bytes", "pdfjs", "both"] },
+          "value": { "description": "--include-values を付けたときだけ。値そのもの", "type": "string" }
+        }
+      }
+    },
+    "not_counted": {
+      "description": "あったが数えなかった欄と理由（rubric/p1.md §2）",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "reason"],
+        "properties": { "key": { "type": "string" }, "reason": { "enum": ["producer", "date", "trapped", "empty"] } }
+      }
+    },
+    "previous_info": { "description": "前の版の文書情報の数（P5 の範囲。数えるだけで、items には入れない）", "type": "integer" },
+    "revisions": { "description": "xref の区切り（版）の数", "type": "integer" },
+    "cross_check": {
+      "description": "2つの読み方の食い違い（鍵の名前だけ）",
+      "type": "object",
+      "properties": {
+        "only_bytes": { "type": "array", "items": { "type": "string" } },
+        "only_pdfjs": { "type": "array", "items": { "type": "string" } },
+        "value_mismatch": { "type": "array", "items": { "type": "string" } },
+        "bytes_unreadable": { "type": "boolean" }
+      }
+    }
+  }
+}

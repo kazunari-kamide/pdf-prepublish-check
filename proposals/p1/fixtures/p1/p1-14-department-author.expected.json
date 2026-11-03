@@ -1,0 +1,15 @@
+{
+  "file": "p1-14-department-author.pdf",
+  "description": "作成者が課の名前（意図して残すこともある）",
+  "leaks": [
+    {
+      "id": "p1-14-department-author#L1",
+      "pattern": "P1",
+      "key": "Author",
+      "where": "current"
+    }
+  ],
+  "negatives": [],
+  "out_of_scope": [],
+  "previous_info": false
+}

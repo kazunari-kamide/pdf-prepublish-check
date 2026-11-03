@@ -1,0 +1,19 @@
+{
+  "file": "p1-18-object-stream-incremental-clean.pdf",
+  "description": "オブジェクトストリームで保存した PDF で、文書情報を空にした（正しく片付けた形。前の版はない）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p1-18-object-stream-incremental-clean#N1",
+      "kind": "empty",
+      "key": "Author"
+    },
+    {
+      "id": "p1-18-object-stream-incremental-clean#N2",
+      "kind": "producer",
+      "key": "Producer"
+    }
+  ],
+  "out_of_scope": [],
+  "previous_info": false
+}

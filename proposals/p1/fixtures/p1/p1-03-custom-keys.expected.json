@@ -1,0 +1,27 @@
+{
+  "file": "p1-03-custom-keys.pdf",
+  "description": "決まった欄の外の、独自の欄（会社名・管理者・元のファイルの更新日時）が残っている",
+  "leaks": [
+    {
+      "id": "p1-03-custom-keys#L1",
+      "pattern": "P1",
+      "key": "Company",
+      "where": "current"
+    },
+    {
+      "id": "p1-03-custom-keys#L2",
+      "pattern": "P1",
+      "key": "Manager",
+      "where": "current"
+    },
+    {
+      "id": "p1-03-custom-keys#L3",
+      "pattern": "P1",
+      "key": "SourceModified",
+      "where": "current"
+    }
+  ],
+  "negatives": [],
+  "out_of_scope": [],
+  "previous_info": false
+}

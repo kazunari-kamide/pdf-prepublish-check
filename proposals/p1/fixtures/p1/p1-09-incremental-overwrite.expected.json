@@ -1,0 +1,21 @@
+{
+  "file": "p1-09-incremental-overwrite.pdf",
+  "description": "増分更新で、作成者を個人名から課の名前に書き換えた（前の版に個人名が残る）",
+  "leaks": [
+    {
+      "id": "p1-09-incremental-overwrite#L1",
+      "pattern": "P1",
+      "key": "Author",
+      "where": "current"
+    }
+  ],
+  "negatives": [],
+  "out_of_scope": [
+    {
+      "key": "Author",
+      "where": "previous",
+      "note": "前の版の個人名（P5 の範囲）"
+    }
+  ],
+  "previous_info": true
+}
