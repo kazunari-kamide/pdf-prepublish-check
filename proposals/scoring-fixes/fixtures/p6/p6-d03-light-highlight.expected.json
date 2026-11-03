@@ -1,0 +1,32 @@
+{
+  "file": "p6-d03-light-highlight.pdf",
+  "description": "薄い灰色（半透明）・黄色（乗算）のマーカーを字の上に重ねている（下の字が透けて見える）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-d03-light-highlight#N1",
+      "kind": "light_highlight",
+      "page": 1,
+      "rect": [
+        106.5,
+        697.06,
+        265.5,
+        712.05
+      ],
+      "note": "薄い灰色、不透明さ 0.4"
+    },
+    {
+      "id": "p6-d03-light-highlight#N2",
+      "kind": "light_highlight",
+      "page": 1,
+      "rect": [
+        118.5,
+        667.06,
+        193.5,
+        682.05
+      ],
+      "note": "黄色、乗算"
+    }
+  ]
+}

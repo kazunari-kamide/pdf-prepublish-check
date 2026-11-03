@@ -1,0 +1,48 @@
+{
+  "pattern": "P7",
+  "name": "隠れたテキスト",
+  "status": "案",
+  "proposed": "2026-11-03",
+  "pass": {
+    "recall_min": 0.95,
+    "false_positive_rate_max": 0.05,
+    "residual_after_sanitize_max": 0
+  },
+  "judge_on": "total",
+  "breakdown": ["hidden_layer", "off_page", "clipped", "invisible", "tiny", "same_color", "covered_light"],
+  "unit": "1回の字を描く命令の中で、同じ理由で続く、見えない字のまとまり",
+  "reason_order": ["hidden_layer", "off_page", "clipped", "invisible", "tiny", "same_color", "covered_light"],
+  "thresholds": {
+    "outside_fraction": 0.5,
+    "invisible_alpha_below": 0.1,
+    "tiny_height_below_pt": 1.0,
+    "same_color_luminance_delta_below": 0.1,
+    "cover_alpha_min": 0.9,
+    "dark_luminance_max_for_p6": 0.3
+  },
+  "not_counted": {
+    "dark_cover": "P6 で数える",
+    "ocr_layer": "見えない字で、字の中心に画像が重なっているもの（文字認識の層）。描く順番は問わない",
+    "annotations": "P8 で数える"
+  },
+  "match": {
+    "same_page": true,
+    "same_reason": true,
+    "overlap": "intersection_over_smaller",
+    "min_overlap": 0.5,
+    "one_to_one": true
+  },
+  "false_positive": {
+    "numerator": "漏れでないもの（negatives）に重なった報告の数 ＋ 正解のどれにも重ならなかった報告の数",
+    "denominator": "正解データの negatives の件数"
+  },
+  "residual": {
+    "how": "片付けたあとの PDF を、合成 PDF ごとに検証器にかけ、items の件数を合計する",
+    "fail_if": [
+      "検証器の status が ok でない（読めない PDF を 0 件とは数えない）",
+      "skipped_pages が1つでもある（確かめていないページを 0 件とは数えない）"
+    ]
+  },
+  "fixtures": "fixtures/p7/*.expected.json",
+  "verifier": "verifier/p7-cli.mjs"
+}
