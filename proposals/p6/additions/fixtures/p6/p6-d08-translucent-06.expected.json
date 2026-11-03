@@ -1,0 +1,20 @@
+{
+  "file": "p6-d08-translucent-06.pdf",
+  "description": "不透明さ 0.6 の黒い四角を、字の上に重ねている（字は暗いが読める）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-d08-translucent-06#N1",
+      "kind": "translucent_mark",
+      "page": 1,
+      "rect": [
+        68,
+        693.1,
+        156.14,
+        714.05
+      ],
+      "note": "不透明さ 0.6。漏れとするかは人が決める（README の決めてほしいこと 1）"
+    }
+  ]
+}

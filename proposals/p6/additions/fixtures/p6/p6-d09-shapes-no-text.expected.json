@@ -1,0 +1,44 @@
+{
+  "file": "p6-d09-shapes-no-text.pdf",
+  "description": "字のない所の黒い円と斜めの帯、黒い丸の上の白い字（どれも下に字がない）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p6-d09-shapes-no-text#N1",
+      "kind": "decorative_shape",
+      "page": 1,
+      "rect": [
+        90,
+        470,
+        150,
+        530
+      ],
+      "note": "下に字のない黒い円"
+    },
+    {
+      "id": "p6-d09-shapes-no-text#N2",
+      "kind": "decorative_shape",
+      "page": 1,
+      "rect": [
+        244.53,
+        470,
+        437.94,
+        553.44
+      ],
+      "note": "下に字のない斜めの帯"
+    },
+    {
+      "id": "p6-d09-shapes-no-text#N3",
+      "kind": "label_box",
+      "page": 1,
+      "rect": [
+        80,
+        360,
+        160,
+        400
+      ],
+      "note": "黒い丸の上に白い字（字は丸のあと）"
+    }
+  ]
+}
