@@ -1,0 +1,21 @@
+{
+  "file": "p5-19-content-freed.pdf",
+  "description": "増分更新で中身を差し替え、前の中身に xref で「使っていない」と印をつけた",
+  "leaks": [
+    {
+      "id": "p5-19-content-freed#L1",
+      "pattern": "P5",
+      "object": 4,
+      "kind": "content",
+      "where": "free"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-19-content-freed#N1",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

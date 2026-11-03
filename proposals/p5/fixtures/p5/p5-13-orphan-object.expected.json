@@ -1,0 +1,14 @@
+{
+  "file": "p5-13-orphan-object.pdf",
+  "description": "最後の %%EOF のあとに、xref に載っていないオブジェクト（字を描く中身）が書き足されている",
+  "leaks": [
+    {
+      "id": "p5-13-orphan-object#L1",
+      "pattern": "P5",
+      "object": 9,
+      "kind": "content",
+      "where": "orphan"
+    }
+  ],
+  "negatives": []
+}

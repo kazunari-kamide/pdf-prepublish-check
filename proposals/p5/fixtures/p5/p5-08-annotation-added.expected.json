@@ -1,0 +1,13 @@
+{
+  "file": "p5-08-annotation-added.pdf",
+  "description": "増分更新で、注釈を足しただけ（消したものはない。前の版のページの辞書が残るだけ）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p5-08-annotation-added#N1",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

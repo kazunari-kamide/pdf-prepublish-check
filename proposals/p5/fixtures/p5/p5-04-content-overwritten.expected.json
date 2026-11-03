@@ -1,0 +1,14 @@
+{
+  "file": "p5-04-content-overwritten.pdf",
+  "description": "増分更新で、ページの中身を同じ番号のまま書き直した",
+  "leaks": [
+    {
+      "id": "p5-04-content-overwritten#L1",
+      "pattern": "P5",
+      "object": 4,
+      "kind": "content",
+      "where": "superseded"
+    }
+  ],
+  "negatives": []
+}

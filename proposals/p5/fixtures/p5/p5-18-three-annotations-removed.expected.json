@@ -1,0 +1,35 @@
+{
+  "file": "p5-18-three-annotations-removed.pdf",
+  "description": "増分更新で、コメントの注釈を3つまとめて外した",
+  "leaks": [
+    {
+      "id": "p5-18-three-annotations-removed#L1",
+      "pattern": "P5",
+      "object": 7,
+      "kind": "annotation",
+      "where": "unreferenced"
+    },
+    {
+      "id": "p5-18-three-annotations-removed#L2",
+      "pattern": "P5",
+      "object": 8,
+      "kind": "annotation",
+      "where": "unreferenced"
+    },
+    {
+      "id": "p5-18-three-annotations-removed#L3",
+      "pattern": "P5",
+      "object": 9,
+      "kind": "annotation",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-18-three-annotations-removed#N1",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

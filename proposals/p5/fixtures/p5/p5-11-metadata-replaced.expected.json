@@ -1,0 +1,21 @@
+{
+  "file": "p5-11-metadata-replaced.pdf",
+  "description": "増分更新で、XMP を新しい番号のものに差し替えた（前の XMP の作成者が残る）",
+  "leaks": [
+    {
+      "id": "p5-11-metadata-replaced#L1",
+      "pattern": "P5",
+      "object": 7,
+      "kind": "metadata",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-11-metadata-replaced#N1",
+      "object": 1,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

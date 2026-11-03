@@ -1,0 +1,19 @@
+{
+  "file": "p5-21-link-removed.pdf",
+  "description": "増分更新で、字のないリンクの注釈を外した（字がないので漏れでない）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p5-21-link-removed#N1",
+      "object": 7,
+      "kind": "annotation",
+      "where": "unreferenced"
+    },
+    {
+      "id": "p5-21-link-removed#N2",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}

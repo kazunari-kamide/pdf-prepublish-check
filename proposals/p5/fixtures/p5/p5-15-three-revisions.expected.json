@@ -1,0 +1,21 @@
+{
+  "file": "p5-15-three-revisions.pdf",
+  "description": "増分更新を2回して、作成者を2回書き直した（前の定義が2つ残る）",
+  "leaks": [
+    {
+      "id": "p5-15-three-revisions#L1",
+      "pattern": "P5",
+      "object": 6,
+      "kind": "info",
+      "where": "superseded"
+    },
+    {
+      "id": "p5-15-three-revisions#L2",
+      "pattern": "P5",
+      "object": 6,
+      "kind": "info",
+      "where": "superseded"
+    }
+  ],
+  "negatives": []
+}

@@ -1,0 +1,14 @@
+{
+  "file": "p5-02-info-new-number.pdf",
+  "description": "増分更新で、文書情報を新しい番号に差し替えた（前の文書情報は、どこからも指されずに残る）",
+  "leaks": [
+    {
+      "id": "p5-02-info-new-number#L1",
+      "pattern": "P5",
+      "object": 6,
+      "kind": "info",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": []
+}

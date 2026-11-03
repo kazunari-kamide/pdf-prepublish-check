@@ -1,0 +1,13 @@
+{
+  "file": "p5-10-single-revision-stray.pdf",
+  "description": "増分更新のない PDF に、どこからも指されていない小さな辞書がある（中身はない）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p5-10-single-revision-stray#N1",
+      "object": 6,
+      "kind": "structure",
+      "where": "unreferenced"
+    }
+  ]
+}

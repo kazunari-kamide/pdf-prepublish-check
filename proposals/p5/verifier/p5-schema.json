@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omamori-verifier-p5/0.1.0",
+  "title": "検証器 P5（旧版の残存）の出力",
+  "type": "object",
+  "required": ["verifier", "checked", "input", "status", "revisions", "items", "not_counted", "summary"],
+  "properties": {
+    "verifier": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "omamori-verifier-p5" }, "version": { "type": "string" } }
+    },
+    "checked": { "description": "調べた漏洩パターン。ここにない型は調べていない", "type": "array", "items": { "const": "P5" } },
+    "input": {
+      "type": "object",
+      "required": ["bytes", "sha256"],
+      "properties": { "bytes": { "type": "integer" }, "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+    },
+    "status": { "enum": ["ok", "error"] },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "enum": ["empty", "too_large", "unreadable", "encrypted", "too_deep"] },
+        "message": { "type": "string" }
+      }
+    },
+    "revisions": { "description": "xref の区切り（版）の数", "type": "integer" },
+    "items": {
+      "description": "いまの版では使っていないのに残っている、漏れになりうる中身。1件 ＝ オブジェクトの定義1つ",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "object", "gen", "kind", "where", "revision"],
+        "additionalProperties": false,
+        "properties": {
+          "pattern": { "const": "P5" },
+          "object": { "description": "オブジェクトの番号", "type": "integer" },
+          "gen": { "type": "integer" },
+          "kind": { "enum": ["info", "content", "annotation", "form_value", "metadata", "image", "embedded_file"] },
+          "where": {
+            "description": "superseded＝同じ番号を書き直した前の定義、free＝いまの xref が使っていないと印をつけた、unreferenced＝いまの xref にあるが根からたどれない、orphan＝どの xref にも載っていない",
+            "enum": ["superseded", "free", "unreferenced", "orphan"]
+          },
+          "revision": { "description": "その定義を載せている版（1 ＝ いちばん古い版）。orphan は null", "type": ["integer", "null"] },
+          "chars": { "description": "info・annotation・form_value・content のとき：残っている字の数（目安）", "type": "integer" }
+        }
+      }
+    },
+    "not_counted": {
+      "description": "残っているが、漏れとして数えなかったもの",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["object", "kind", "where", "reason"],
+        "properties": {
+          "object": { "type": "integer" },
+          "kind": { "type": "string" },
+          "where": { "enum": ["superseded", "free", "unreferenced", "orphan"] },
+          "reason": {
+            "enum": ["structure", "unreadable_stream", "info_without_counted_keys", "annotation_without_text", "form_without_value", "filespec", "counted_by_p9"]
+          }
+        }
+      }
+    },
+    "summary": {
+      "description": "ほかの型との対応（参考）。previous_info＝前の版の文書情報（P1 の previous_info に当たる）、removed_attachment＝外した添付の中身（P9 で分母に入れないもの）",
+      "type": "object",
+      "properties": { "previous_info": { "type": "integer" }, "removed_attachment": { "type": "integer" } }
+    }
+  }
+}
