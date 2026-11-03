@@ -14,6 +14,10 @@ export type P6TextSettings = {
   coveredFractionMin: number;
   /** 1ページの命令の数の上限。超えたページは調べずに「省いた」と返す【仮の値】 */
   maxOperationsPerPage: number;
+  /** 画像を「覆い」とみなす、濃い画素（明るさ darkLuminanceMax 以下）の割合の下限 */
+  darkImageFractionMin: number;
+  /** 解く画像の大きさの上限（バイト）。超えた画像は解かずに「調べられなかった画像」とする【仮の値】 */
+  maxImageBytes: number;
 };
 
 export const DEFAULT_SETTINGS: P6TextSettings = {
@@ -22,4 +26,6 @@ export const DEFAULT_SETTINGS: P6TextSettings = {
   rectangularityMin: 0.9,
   coveredFractionMin: 0.5,
   maxOperationsPerPage: 200_000,
+  darkImageFractionMin: 0.97,
+  maxImageBytes: 64 * 1024 * 1024,
 };

@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // 検出ルール P6（見せかけの黒塗り）の文字の層（docs/prd.md §3）。
-// 字のあとに、その字を覆う濃い塗りを描いていれば、「黒い四角の下に字が残っている」とする。
-// 見ないもの（この版）：濃い画像で覆った型、注釈で覆った型、スキャン画像の画素が残っている型。
+// 字のあとに、その字を覆う濃い塗り・濃い画像・注釈を描いていれば、「黒い四角の下に字が残っている」とする。
+// 見ないもの（この版）：スキャン画像の画素が残っている型（画像の層。image/*）。
 
 import { EncryptedPDFError, PDFDocument } from "pdf-lib";
-import { area, intersectionArea, type Rect } from "./geometry.ts";
-import { contentBytes, scanPage, TooManyOperations, type Cover } from "./page.ts";
+import { scanAnnotations } from "./annotations.ts";
+import { contentBytes, createPageScanner, TooManyOperations, type Cover, type CoverKind, type UncheckedImage } from "./page.ts";
+import { IDENTITY, area, intersectionArea, type Rect } from "./geometry.ts";
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 export type P6TextFinding = {
   pattern: "P6";
   layer: "text";
-  cover: "fill";
+  /** 覆っているもの。fill＝濃い塗り・太い線、image＝濃い画像、annotation＝注釈 */
+  cover: CoverKind;
   page: number;
   /** 覆っているものの箱。ページの既定の座標（ポイント、左下が原点、/Rotate はかけない） */
   rect: Rect;
@@ -32,6 +34,8 @@ export type P6TextReport = {
   pages: number | null;
   findings: P6TextFinding[];
   skippedPages: Array<{ page: number; reason: "too_many_operations" | "unreadable_page" }>;
+  /** 濃いかどうかを調べられなかった画像（JPEG など）。覆いとしては数えていない。「問題なし」ではない */
+  uncheckedImages: Array<{ page: number } & UncheckedImage>;
 };
 
 export type DetectOptions = { settings?: Partial<P6TextSettings>; includeText?: boolean };
@@ -79,7 +83,7 @@ function mergeSameArea(items: Array<{ cover: Cover; chars: number; text: string 
 
 export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {}): Promise<P6TextReport> {
   const settings = { ...DEFAULT_SETTINGS, ...options.settings };
-  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], skippedPages: [] };
+  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], skippedPages: [], uncheckedImages: [] };
   if (bytes.length === 0) {
     return { ...base, status: "error", pages: null, error: { code: "empty", message: "ファイルが空です。" } };
   }
@@ -93,7 +97,7 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
     return { ...base, status: "error", pages: null, error: { code: "unreadable", message: "PDF として読めませんでした。" } };
   }
 
-  const report: P6TextReport = { ...base, status: "ok", pages: 0, findings: [], skippedPages: [] };
+  const report: P6TextReport = { ...base, status: "ok", pages: 0, findings: [], skippedPages: [], uncheckedImages: [] };
   let pages;
   try {
     pages = doc.getPages();
@@ -107,10 +111,14 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
     try {
       const node = page.node;
       const data = contentBytes(doc.context, node.Contents());
-      const scan = scanPage(doc.context, data, node.Resources(), settings);
+      const scanner = createPageScanner(doc.context, settings);
+      scanner.run(data, node.Resources(), IDENTITY, "fill");
+      scanAnnotations(doc.context, node.Annots(), scanner, settings); // 注釈は、ページの中身のあとに重なる
+      const scan = scanner.result();
+      for (const u of scan.uncheckedImages) report.uncheckedImages.push({ page: pageNo, ...u });
       const hits = mergeSameArea(findCoveredText(scan.covers, scan.glyphs, settings.coveredFractionMin));
       for (const h of hits) {
-        const f: P6TextFinding = { pattern: "P6", layer: "text", cover: "fill", page: pageNo, rect: h.cover.rect, chars: h.chars };
+        const f: P6TextFinding = { pattern: "P6", layer: "text", cover: h.cover.kind, page: pageNo, rect: h.cover.rect, chars: h.chars };
         if (options.includeText) f.text = h.text;
         report.findings.push(f);
       }
