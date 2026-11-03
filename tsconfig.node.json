@@ -4,5 +4,6 @@
     "lib": ["ES2022"],
     "types": ["node"]
   },
-  "include": ["tests", "eval", "vite.config.ts", "csp.ts"]
+  "include": ["tests", "eval", "sanitize/check", "vite.config.ts", "csp.ts"],
+  "exclude": []
 }
