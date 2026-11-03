@@ -363,6 +363,16 @@ const CASES = [
       return { doc, leaks: [], negatives: [NEG("visible_on_dark", 1, n, "黒い円の上の白い字。円は四角でない形")] };
     },
   },
+  {
+    name: "p7-25-ocr-layer-before-image",
+    description: "描き方 3 の字（文字認識の層）を先に書き、あとからスキャン画像を重ねた（描く順番が逆の道具。漏れでない）",
+    async make() {
+      const { doc, font, page } = await base();
+      const n = withState(page, [op(N.SetTextRenderingMode, 3)], () => text(page, font, "Scanned page text", 40, 200));
+      placeImage(page, grayImage(doc, 220), 20, 100, 360, 150);
+      return { doc, leaks: [], negatives: [NEG("ocr_layer", 1, n, "画像の前に書いた見えない字（文字認識の層。描く順番は問わない）")] };
+    },
+  },
 ];
 
 // ---------- 書き出し ----------

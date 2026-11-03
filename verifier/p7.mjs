@@ -11,7 +11,7 @@
 //   same_color     字の色が、下の色（ページの白・先に塗った塗り・画像）とほぼ同じ
 //   covered_light  字のあとに、濃くない不透明な塗りを重ねて隠した（白い四角など）
 // 字のあとに濃い塗り・濃い画像を重ねて隠した字は P6（見せかけの黒塗り）で数えるので、ここでは出さない（excluded_p6 に数だけ）。
-// 文字認識の層（描き方 3 の字を、画像の上に置いたもの）は、漏れでないので出さない（ocr_layer に数だけ）。
+// 文字認識の層（描き方 3 などの見えない字で、画像と重なるもの。描く順番は問わない）は、漏れでないので出さない（ocr_layer に数だけ）。
 //
 // 検査器から独立させるため、pdf-lib は使わない。PDF.js（pdfjs-dist）の描画命令の列（getOperatorList）を読む。
 // 注釈の中の字は P8 の範囲なので見ない（annotationMode: DISABLE）。
@@ -19,7 +19,7 @@
 import { createHash } from "node:crypto";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
-export const VERIFIER = { name: "omamori-verifier-p7", version: "0.1.0" };
+export const VERIFIER = { name: "omamori-verifier-p7", version: "0.2.0" };
 
 export const THRESHOLDS = Object.freeze({
   /** 字が「見えない」とみなす不透明さの上限 */
@@ -437,7 +437,12 @@ function reasonOf(g, view, paints) {
   // 下にあるもの：字より先に描いた、字の中心を含む、いちばん新しい不透明な塗り・画像
   let under = null;
   for (const p of paints) if (p.seq < g.seq && p.opaque && inside(p.box, cx, cy) && (p.rectLike || pointInPolygon(p.poly, cx, cy))) under = p;
-  if (g.mode === 3 || g.mode === 7 || g.alpha < THRESHOLDS.invisibleAlpha) return under?.kind === "image" ? "ocr" : "invisible";
+  if (g.mode === 3 || g.mode === 7 || g.alpha < THRESHOLDS.invisibleAlpha) {
+    // 文字認識の層：字の中心に画像が重なっていれば、描く順番（画像の前か後か）に関係なく数えない（PR #22 の返事の 4）。
+    // 画像の前に見えない字を書く道具があるため。表示しないレイヤーの画像は paints に入れていないので、ここでも数えない
+    const onImage = paints.some((p) => p.kind === "image" && inside(p.box, cx, cy));
+    return onImage ? "ocr" : "invisible";
+  }
   if (g.box[3] - g.box[1] < THRESHOLDS.tinyHeight) return "tiny";
   const bg = under ? under.lum : 1; // ページの地は白
   // 上に重ねたもの：字のあとに描いた、不透明で、字の箱の半分以上を隠すもの

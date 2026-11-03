@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fontkit from "@pdf-lib/fontkit";
 import {
-  PDFDocument, PDFName, rgb, cmyk, degrees,
+  PDFDocument, PDFName, rgb, cmyk, degrees, BlendMode,
   pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject,
   beginText, endText, setFontAndSize, moveText, showText, setTextRenderingMode, TextRenderingMode,
   setFillingColor,
@@ -172,8 +172,8 @@ class Fixture {
     const x1 = x0 + this.width(target, size);
     return [x0 - pad, y + DESC * size - pad, x1 + pad, y + ASC * size + pad];
   }
-  rect(page, box, color = BLACK, opacity = 1) {
-    page.drawRectangle({ x: box[0], y: box[1], width: box[2] - box[0], height: box[3] - box[1], color, opacity });
+  rect(page, box, color = BLACK, opacity = 1, blendMode = undefined) {
+    page.drawRectangle({ x: box[0], y: box[1], width: box[2] - box[0], height: box[3] - box[1], color, opacity, blendMode });
   }
   leak(page, layer, cover, rect, remaining) {
     this.leaks.push({ id: `${this.name}#L${this.leaks.length + 1}`, pattern: "P6", layer, cover, page: page.__no ?? page, rect: r2(rect), remaining });
@@ -544,18 +544,21 @@ def("p6-d02-bars-and-underline", "字のない飾りの帯、字のすぐ横の�
   f.negative(p, "underline", ul, "字の下端に少しかかる下線");
 });
 
-def("p6-d03-light-highlight", "薄い灰色・黄色のマーカーを字の上に重ねている（濃くないので隠れていない）", (f) => {
+// 本物の蛍光ペンに合わせ、下の字が透ける描き方にする（PR #22 の返事の 2）。
+// 灰色は不透明さ 0.4 の半透明、黄色は不透明のまま乗算（Multiply）で重ねる。どちらも下の字は見えている。
+// 不透明な薄い色の四角の下の字は、P7 の漏れ（covered_light）として P7 の合成 PDF で扱う。
+def("p6-d03-light-highlight", "薄い灰色（半透明）・黄色（乗算）のマーカーを字の上に重ねている（下の字が透けて見える）", (f) => {
   const p = f.addPage();
   const pre = "注意：", s = "提出は窓口でも受け付けます";
   f.text(p, pre + s, 72, 700);
   const b = f.spanBox(72, 700, 12, pre, s);
-  f.rect(p, b, rgb(0.87, 0.87, 0.87));
-  f.negative(p, "light_highlight", b, "薄い灰色");
+  f.rect(p, b, rgb(0.87, 0.87, 0.87), 0.4);
+  f.negative(p, "light_highlight", b, "薄い灰色、不透明さ 0.4");
   const pre2 = "持ち物：", s2 = "本人確認書類";
   f.text(p, pre2 + s2, 72, 670);
   const b2 = f.spanBox(72, 670, 12, pre2, s2);
-  f.rect(p, b2, rgb(1, 1, 0));
-  f.negative(p, "light_highlight", b2, "黄色");
+  f.rect(p, b2, rgb(1, 1, 0), 1, BlendMode.Multiply);
+  f.negative(p, "light_highlight", b2, "黄色、乗算");
 });
 
 def("p6-d04-dark-photo", "暗い写真の上に、白い字の説明を載せている（字は写真のあと）", (f) => {

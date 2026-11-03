@@ -21,8 +21,10 @@ const bytesModuleUrl = existsSync(new URL("./p9-pdfbytes.mjs", import.meta.url))
   ? new URL("./p9-pdfbytes.mjs", import.meta.url)
   : new URL("../../../verifier/p9-pdfbytes.mjs", import.meta.url);
 const { LIMITS, ParseError, decodeTextString, latin1, parseValue, readIndirectAt, streamData } = await import(bytesModuleUrl.href);
+// 利用者のパスワードが空の暗号化を解く（PR #21 の返事の 5）。同じフォルダの p5-decrypt.mjs
+import { makeDecryptor, decryptValue } from "./p5-decrypt.mjs";
 
-export const VERIFIER = { name: "omamori-verifier-p5", version: "0.1.0" };
+export const VERIFIER = { name: "omamori-verifier-p5", version: "0.2.0" };
 
 /** 漏れとして数える種類（rubric/p5.md §2） */
 export const COUNTED_KINDS = ["info", "content", "annotation", "form_value", "metadata", "image", "embedded_file"];
@@ -143,16 +145,25 @@ function readSections(buf) {
 
 // ---------- オブジェクトを読む ----------
 
-function makeReader(buf) {
+/**
+ * crypt：{ decryptor, encNum } のとき、暗号化された版（enc が false でないもの）の文字列とストリームを解いて返す。
+ * 解くときのオブジェクトの番号・世代は、ファイルに書いてある「N G obj」の頭のものを使う。
+ * 暗号化の辞書そのもの（encNum）と、オブジェクトストリームの中のオブジェクト（ストリームごと解く）は、個別には解かない。
+ */
+function makeReader(buf, crypt = null) {
   const objstmCache = new Map();
+  const shouldDecrypt = (enc, n) => crypt && enc !== false && n !== crypt.encNum;
+  const rawStream = (st, enc) =>
+    shouldDecrypt(enc, st.num) ? crypt.decryptor.decryptStream(st.num, st.gen, st.stream, st.value.v) : st.stream;
   /** オブジェクトストリームの中身を開く（どの版のものでも、オフセットで開く） */
-  const openObjStm = (offset) => {
-    if (objstmCache.has(offset)) return objstmCache.get(offset);
+  const openObjStm = (offset, enc) => {
+    const ck = `${offset}|${enc !== false}`;
+    if (objstmCache.has(ck)) return objstmCache.get(ck);
     let out = null;
     try {
       const st = readIndirectAt(buf, offset);
       if (st.value.t === "dict" && st.stream) {
-        const data = streamData(st.value.v, st.stream);
+        const data = streamData(st.value.v, rawStream(st, enc));
         const n = st.value.v.get("N")?.v ?? 0;
         const first = st.value.v.get("First")?.v ?? 0;
         const list = [];
@@ -168,16 +179,18 @@ function makeReader(buf) {
     } catch {
       out = null;
     }
-    objstmCache.set(offset, out);
+    objstmCache.set(ck, out);
     return out;
   };
   /** 定義の場所から、値（とストリームの中身）を読む */
   const readDef = (def) => {
     if (def.offset !== undefined) {
       const o = readIndirectAt(buf, def.offset);
-      return { value: o.value, stream: o.stream };
+      if (!shouldDecrypt(def.enc, o.num)) return { value: o.value, stream: o.stream };
+      const value = decryptValue(o.value, crypt.decryptor.decryptString, o.num, o.gen);
+      return { value, stream: o.stream ? rawStream(o, def.enc) : undefined };
     }
-    const os = openObjStm(def.objstmOffset);
+    const os = openObjStm(def.objstmOffset, def.enc);
     const entry = os?.list[def.index];
     if (!os || !entry) return null;
     return { value: parseValue(os.data, os.first + entry.off)[0] };
@@ -281,12 +294,14 @@ function reachableFrom(roots, readCurrent) {
 function analyze(buf) {
   const sections = readSections(buf);
   const current = sections[0];
-  if (current.trailer.v.get("Encrypt")) return { encrypted: true };
-  const { openObjStm, readDef } = makeReader(buf);
+  // その版が暗号化されているか（trailer に /Encrypt があるか）。暗号化のない古い版の中身は、解かずに読む
+  const sectionEncrypted = (sec) => !!sec.trailer.v.get("Encrypt");
 
-  // いまの版の場所（新しい版から順に、最初に出てきた場所）
+  // いまの版の場所（新しい版から順に、最初に出てきた場所）。その場所を書いた版が暗号化されていたかも持つ
   const currentLoc = new Map();
-  for (const sec of sections) for (const [n, loc] of sec.entries) if (!currentLoc.has(n)) currentLoc.set(n, loc);
+  for (const sec of sections) {
+    for (const [n, loc] of sec.entries) if (!currentLoc.has(n)) currentLoc.set(n, { ...loc, enc: sectionEncrypted(sec), sec });
+  }
   const xrefStreamNums = new Set(sections.flatMap((s) => s.xrefStreamNums ?? []));
 
   // オブジェクトストリームの番号 → オフセット（その版で）
@@ -301,13 +316,44 @@ function analyze(buf) {
     return undefined;
   };
 
+  // 暗号化：利用者のパスワードが空のものだけ解く。解けなければ調べない（前の版の中身も暗号化されているため）
+  let crypt = null;
+  const encVal = current.trailer.v.get("Encrypt");
+  if (encVal) {
+    let encDict = null;
+    let encNum = null;
+    if (encVal.t === "dict") encDict = encVal.v;
+    else if (encVal.t === "ref") {
+      encNum = encVal.v[0];
+      const loc = currentLoc.get(encNum);
+      const plain = makeReader(buf); // 暗号化の辞書は暗号化されていない
+      try {
+        let o = null;
+        if (loc?.kind === "offset") o = plain.readDef({ offset: loc.offset });
+        else if (loc?.kind === "objstm") {
+          const off = objstmOffsetFor(loc.sec, loc.stream);
+          if (off !== undefined) o = plain.readDef({ objstmOffset: off, index: loc.index });
+        }
+        if (o?.value?.t === "dict") encDict = o.value.v;
+      } catch {
+        encDict = null;
+      }
+    }
+    const idArr = current.trailer.v.get("ID");
+    const id0 = idArr?.t === "array" && idArr.v[0]?.t === "str" ? idArr.v[0].v : null;
+    const d = makeDecryptor(encDict, id0);
+    if (!d.ok) return { encrypted: true, reason: d.reason };
+    crypt = { decryptor: d, encNum };
+  }
+  const { readDef } = makeReader(buf, crypt);
+
   // すべての定義（どの版の xref にも載っているもの）
   const defs = [];
   const knownOffsets = new Set();
   sections.forEach((sec, si) => {
     for (const [num, loc] of sec.entries) {
       if (loc.kind === "free") continue;
-      const def = { num, gen: loc.gen ?? 0, revision: sections.length - si, key: locKey(num, loc) };
+      const def = { num, gen: loc.gen ?? 0, revision: sections.length - si, key: locKey(num, loc), enc: sectionEncrypted(sec) };
       if (loc.kind === "offset") {
         def.offset = loc.offset;
         knownOffsets.add(loc.offset);
@@ -324,10 +370,10 @@ function analyze(buf) {
     const loc = currentLoc.get(num);
     if (!loc || loc.kind === "free") return null;
     try {
-      if (loc.kind === "offset") return readDef({ offset: loc.offset });
+      if (loc.kind === "offset") return readDef({ offset: loc.offset, enc: loc.enc });
       const off = objstmOffsetFor(current, loc.stream);
       if (off === undefined) return null;
-      return readDef({ objstmOffset: off, index: loc.index });
+      return readDef({ objstmOffset: off, index: loc.index, enc: loc.enc });
     } catch {
       return null;
     }
@@ -398,7 +444,8 @@ function analyze(buf) {
     if (streamRanges.some(([a, b]) => at >= a && at < b)) continue;
     // 表の xref のオフセットは、行の頭の空白を含めて指すことがあるので、前後の空白のずれも見る
     if (knownOffsets.has(at - 1) || knownOffsets.has(at - 2)) continue;
-    consider({ num: Number(m[1]), gen: Number(m[2]), offset: at, key: `o${at}`, revision: null }, "orphan");
+    // xref の外のものは、どの版のものか分からないので、いまの版の暗号化に従う
+    consider({ num: Number(m[1]), gen: Number(m[2]), offset: at, key: `o${at}`, revision: null, enc: sectionEncrypted(current) }, "orphan");
   }
 
   return { found, revisions: sections.length };
@@ -431,7 +478,14 @@ export async function verifyP5(bytes) {
     if (e instanceof ParseError && /深すぎる|多すぎる/.test(e.message)) return fail("too_deep", "入れ子が深すぎる・大きすぎるため、読みませんでした");
     return fail("unreadable", "PDF として読めません");
   }
-  if (a.encrypted) return fail("encrypted", "暗号化されていて、前の版の中身を調べられません");
+  if (a.encrypted) {
+    return fail(
+      "encrypted",
+      a.reason === "password_required"
+        ? "パスワードで守られていて開けません"
+        : "この暗号化の方式は解けないため、前の版の中身を調べられません",
+    );
+  }
   result.revisions = a.revisions;
   const order = { superseded: 0, free: 1, unreferenced: 2, orphan: 3 };
   a.found.sort((x, y) => order[x.where] - order[y.where] || x.object - y.object || (x.revision ?? 0) - (y.revision ?? 0));

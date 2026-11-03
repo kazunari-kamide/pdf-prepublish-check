@@ -35,7 +35,7 @@
 | `decorative_bar` | 下に字のない飾りの帯 |
 | `adjacent_box` | 字のすぐ横の黒い四角。字には重なっていない |
 | `underline` | 字の下端に少しかかる黒い下線 |
-| `light_highlight` | 字の上の薄い色のマーカー（濃くないので隠れていない） |
+| `light_highlight` | 字の上の薄い色のマーカー。半透明か乗算で重ね、下の字が透けて見える（不透明な薄い色の四角は P7 の covered_light） |
 | `dark_photo` | 暗い写真。説明の字は写真の上 |
 | `dark_background` | 黒い背景の表紙 |
 | `label_box` | 黒い四角の上に白い字（下には何もない） |
@@ -43,4 +43,6 @@
 | `translucent_mark` | 字の上の半透明の黒（不透明さ 0.3・0.6。字が透けて見えるので隠れていない） |
 | `decorative_shape` | 下に字のない円や斜めの帯 |
 
+- `expected_error`（なくてよい）：開けないことが正しい入力（パスワードが要る PDF など）。値は検証器の `error.code`（例 `"encrypted"`）。このとき `leaks`・`negatives` は空にする。検証器が `status: "error"` と同じ `code` を返せば正解。
+- `expected_skipped_pages`（なくてよい）：重いページの合成 PDF で、省いてよいページの番号。
 - 座標は、ページの既定の座標（ポイント。左下が原点。ページの回転 `/Rotate` はかけない）。
