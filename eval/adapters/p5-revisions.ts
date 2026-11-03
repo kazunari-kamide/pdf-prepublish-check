@@ -8,6 +8,8 @@ import type { P5Report } from "../../rules/p5-revisions/index.ts";
 export type P5Item = { pattern: "P5"; object: number; gen: number; kind: string; where: string; revision: number | null; chars?: number };
 export type P5VerifierShapedReport = {
   status: "ok" | "error";
+  /** status が error のときの理由（expected_error と比べる。eval/expected-error.ts） */
+  error?: { code: string };
   items: P5Item[];
   not_counted: Array<{ object: number; kind: string; where: string; reason: string }>;
   summary?: { previous_info?: number; removed_attachment?: number };
@@ -16,6 +18,7 @@ export type P5VerifierShapedReport = {
 export function adaptP5Revisions(report: P5Report): P5VerifierShapedReport {
   return {
     status: report.status,
+    ...(report.error ? { error: { code: report.error.code } } : {}),
     items: report.findings.map((f) => {
       const item: P5Item = { pattern: "P5", object: f.object, gen: f.gen, kind: f.kind, where: f.where, revision: f.revision };
       if (f.chars !== undefined) item.chars = f.chars;
