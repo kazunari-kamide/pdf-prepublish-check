@@ -1,0 +1,21 @@
+{
+  "file": "p5-24-encrypted-aes256-objstm.pdf",
+  "description": "AES-256 で暗号化（パスワードなしで開ける）。xref ストリームとオブジェクトストリームで保存し、増分更新でコメントの注釈を外した",
+  "leaks": [
+    {
+      "id": "p5-24-encrypted-aes256-objstm#L1",
+      "pattern": "P5",
+      "object": 7,
+      "kind": "annotation",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p5-24-encrypted-aes256-objstm#N1",
+      "object": 3,
+      "kind": "structure",
+      "where": "superseded"
+    }
+  ]
+}
