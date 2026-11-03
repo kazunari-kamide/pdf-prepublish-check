@@ -1,0 +1,30 @@
+{
+  "pattern": "P9",
+  "name": "添付ファイル",
+  "status": "案",
+  "proposed": "2026-11-03",
+  "pass": {
+    "recall_min": 0.95,
+    "false_positive_rate_max": 0.05,
+    "residual_after_sanitize_max": 0
+  },
+  "judge_on": "total",
+  "breakdown": ["names", "annotation", "af", "unreferenced"],
+  "unit": "ファイルの中に残っている、添付の中身（/EF が指すストリーム）1つ。同じ中身を2つの場所が指していても1件",
+  "match": {
+    "same_file": true,
+    "same_name": true,
+    "same_where": true,
+    "one_to_one": true
+  },
+  "false_positive": {
+    "numerator": "漏れでないもの（negatives）への報告の数 ＋ 正解のどれにも当たらない報告の数",
+    "denominator": "正解データの negatives の件数"
+  },
+  "residual": {
+    "how": "片付けたあとの PDF を、合成 PDF ごとに検証器にかけ、items の件数を合計する",
+    "fail_if": ["検証器の status が ok でない（読めない PDF を 0 件とは数えない）"]
+  },
+  "fixtures": "fixtures/p9/*.expected.json",
+  "verifier": "verifier/p9-cli.mjs"
+}

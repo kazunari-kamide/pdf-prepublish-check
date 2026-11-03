@@ -1,0 +1,12 @@
+{
+  "file": "p9-n03-empty-tree.pdf",
+  "description": "名前の木はあるが、中が空（片付けたあと）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p9-n03-empty-tree#N1",
+      "kind": "empty_names_tree",
+      "name": ""
+    }
+  ]
+}

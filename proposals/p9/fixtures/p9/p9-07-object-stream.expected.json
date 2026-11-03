@@ -1,0 +1,13 @@
+{
+  "file": "p9-07-object-stream.pdf",
+  "description": "xref ストリームとオブジェクトストリームで保存（ファイル指定がストリームの中にある）",
+  "leaks": [
+    {
+      "id": "p9-07-object-stream#L1",
+      "pattern": "P9",
+      "name": "議事録_下書き.docx",
+      "where": "names"
+    }
+  ],
+  "negatives": []
+}

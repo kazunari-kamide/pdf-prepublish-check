@@ -1,0 +1,22 @@
+{
+  "file": "p9-n02-links.pdf",
+  "description": "リンクだけ（URL を開く・外のファイルを開く・別の PDF に飛ぶ）。添付ではない",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p9-n02-links#N1",
+      "kind": "url_link",
+      "name": "https://example.com/form.xlsx"
+    },
+    {
+      "id": "p9-n02-links#N2",
+      "kind": "launch_external",
+      "name": "申請書.xlsx"
+    },
+    {
+      "id": "p9-n02-links#N3",
+      "kind": "goto_remote",
+      "name": "別冊.pdf"
+    }
+  ]
+}

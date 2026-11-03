@@ -1,0 +1,19 @@
+{
+  "file": "p9-03-annotation.pdf",
+  "description": "ページの添付ファイルの注釈（クリップのしるし）に、メモが入っている。URL のリンクもある",
+  "leaks": [
+    {
+      "id": "p9-03-annotation#L1",
+      "pattern": "P9",
+      "name": "メモ.txt",
+      "where": "annotation"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "p9-03-annotation#N1",
+      "kind": "url_link",
+      "name": "https://example.com/notice.pdf"
+    }
+  ]
+}

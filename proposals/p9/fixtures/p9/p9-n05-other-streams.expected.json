@@ -1,0 +1,17 @@
+{
+  "file": "p9-n05-other-streams.pdf",
+  "description": "画像と XMP のストリームはあるが、添付ではない",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p9-n05-other-streams#N1",
+      "kind": "other_stream",
+      "name": "image"
+    },
+    {
+      "id": "p9-n05-other-streams#N2",
+      "kind": "other_stream",
+      "name": "xmp"
+    }
+  ]
+}

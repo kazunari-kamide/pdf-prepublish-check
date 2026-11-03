@@ -1,0 +1,13 @@
+{
+  "file": "p9-09-incremental-removed.pdf",
+  "description": "増分更新で、文書の根から添付を外した（前の版の中身が、ファイルの中に残っている）",
+  "leaks": [
+    {
+      "id": "p9-09-incremental-removed#L1",
+      "pattern": "P9",
+      "name": "応募者一覧.csv",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": []
+}

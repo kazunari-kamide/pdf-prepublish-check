@@ -1,0 +1,37 @@
+{
+  "file": "p9-11-many.pdf",
+  "description": "名前の木に5つの添付",
+  "leaks": [
+    {
+      "id": "p9-11-many#L1",
+      "pattern": "P9",
+      "name": "別紙1.csv",
+      "where": "names"
+    },
+    {
+      "id": "p9-11-many#L2",
+      "pattern": "P9",
+      "name": "別紙2.csv",
+      "where": "names"
+    },
+    {
+      "id": "p9-11-many#L3",
+      "pattern": "P9",
+      "name": "別紙3.csv",
+      "where": "names"
+    },
+    {
+      "id": "p9-11-many#L4",
+      "pattern": "P9",
+      "name": "別紙4.csv",
+      "where": "names"
+    },
+    {
+      "id": "p9-11-many#L5",
+      "pattern": "P9",
+      "name": "別紙5.csv",
+      "where": "names"
+    }
+  ],
+  "negatives": []
+}

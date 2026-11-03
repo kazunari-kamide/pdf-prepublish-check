@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omamori-verifier-p9/0.1.0",
+  "title": "検証器 P9（添付ファイル）の出力",
+  "type": "object",
+  "required": ["verifier", "checked", "input", "status", "items", "revisions", "cross_check"],
+  "properties": {
+    "verifier": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "omamori-verifier-p9" }, "version": { "type": "string" } }
+    },
+    "checked": { "description": "調べた漏洩パターン。ここにない型は調べていない", "type": "array", "items": { "const": "P9" } },
+    "input": {
+      "type": "object",
+      "required": ["bytes", "sha256", "pages"],
+      "properties": {
+        "bytes": { "type": "integer" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "pages": { "type": ["integer", "null"] }
+      }
+    },
+    "status": { "enum": ["ok", "error"] },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "enum": ["empty", "too_large", "unreadable", "encrypted", "too_deep", "timeout"] },
+        "message": { "type": "string" }
+      }
+    },
+    "items": {
+      "description": "ファイルの中に残っている添付ファイル（中身のストリーム1つで1件）。status が error のときは空",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "where", "object", "also", "name_chars", "ext", "size", "subtype"],
+        "additionalProperties": false,
+        "properties": {
+          "pattern": { "const": "P9" },
+          "where": {
+            "description": "どこから指されているか。names＝名前の木、annotation＝ページの添付ファイルの注釈、af＝関連ファイル（/AF）、unreferenced＝どこからも指されていない",
+            "enum": ["names", "annotation", "af", "unreferenced"]
+          },
+          "page": { "description": "where が annotation（またはページの /AF）のとき：ページ番号", "type": "integer", "minimum": 1 },
+          "object": { "description": "中身のストリームのオブジェクト番号", "type": "integer" },
+          "also": { "description": "同じ中身を、ほかに指している場所", "type": "array", "items": { "enum": ["names", "annotation", "af"] } },
+          "name_chars": { "description": "ファイル名の字数（名前が分からなければ 0）", "type": "integer" },
+          "ext": { "description": "ファイル名の拡張子（小文字）", "type": ["string", "null"] },
+          "size": { "description": "中身の大きさ（バイト。圧縮を解いたもの。解けなければ /Params の /Size か、保存されている大きさ）", "type": ["integer", "null"] },
+          "subtype": { "description": "中身のストリームの /Subtype（MIME の種類）", "type": ["string", "null"] },
+          "name": { "description": "--include-names を付けたときだけ。ファイル名そのもの", "type": "string" }
+        }
+      }
+    },
+    "revisions": { "description": "xref の区切り（版）の数", "type": "integer" },
+    "cross_check": {
+      "description": "2つの読み方の食い違いの数（名前の木と注釈のものだけ。PDF.js は /AF だけのものと、指されていないものは返さないため）",
+      "type": "object",
+      "properties": {
+        "only_bytes": { "type": "integer" },
+        "only_pdfjs": { "type": "integer" },
+        "pdfjs_unreadable": { "type": "boolean" }
+      }
+    }
+  }
+}

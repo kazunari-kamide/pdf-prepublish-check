@@ -1,0 +1,25 @@
+{
+  "file": "p9-05-nested-tree.pdf",
+  "description": "名前の木が入れ子（/Kids）になっていて、3つの添付が2つの枝に分かれている",
+  "leaks": [
+    {
+      "id": "p9-05-nested-tree#L1",
+      "pattern": "P9",
+      "name": "資料A.csv",
+      "where": "names"
+    },
+    {
+      "id": "p9-05-nested-tree#L2",
+      "pattern": "P9",
+      "name": "資料B.csv",
+      "where": "names"
+    },
+    {
+      "id": "p9-05-nested-tree#L3",
+      "pattern": "P9",
+      "name": "資料C.csv",
+      "where": "names"
+    }
+  ],
+  "negatives": []
+}

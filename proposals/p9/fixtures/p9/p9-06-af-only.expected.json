@@ -1,0 +1,13 @@
+{
+  "file": "p9-06-af-only.pdf",
+  "description": "名前の木には入れず、文書の関連ファイル（/AF）だけから指している",
+  "leaks": [
+    {
+      "id": "p9-06-af-only#L1",
+      "pattern": "P9",
+      "name": "元データ.xlsx",
+      "where": "af"
+    }
+  ],
+  "negatives": []
+}

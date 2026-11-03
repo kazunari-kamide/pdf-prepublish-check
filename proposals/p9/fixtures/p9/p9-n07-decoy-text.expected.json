@@ -1,0 +1,12 @@
+{
+  "file": "p9-n07-decoy-text.pdf",
+  "description": "ページの字に「/Type /EmbeddedFile」と書いてある（字であって、添付ではない）",
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "p9-n07-decoy-text#N1",
+      "kind": "decoy_text",
+      "name": ""
+    }
+  ]
+}

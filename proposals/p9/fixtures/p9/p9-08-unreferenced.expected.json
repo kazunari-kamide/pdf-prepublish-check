@@ -1,0 +1,13 @@
+{
+  "file": "p9-08-unreferenced.pdf",
+  "description": "中身のストリームとファイル指定は残っているが、どこからも指されていない（名前の木から外しただけ）",
+  "leaks": [
+    {
+      "id": "p9-08-unreferenced#L1",
+      "pattern": "P9",
+      "name": "外したはずの名簿.xlsx",
+      "where": "unreferenced"
+    }
+  ],
+  "negatives": []
+}
