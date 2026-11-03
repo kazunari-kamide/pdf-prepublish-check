@@ -33,7 +33,8 @@ const report2 = await detectP1Info(bytes, { includeValues: true }); // 値その
 2. **いまの版の trailer を読み直す。** pdf-lib は、新しい trailer に `/Info` がないとき、古い trailer の `/Info` を使い続ける（`node_modules/pdf-lib/cjs/core/parser/PDFParser.js` の `maybeParseTrailerDict`、267 行）。そのままだと、片付けで `/Info` を外した PDF でも、前の版の作成者を「いま残っている」と報告してしまう。そこで、最後の版（最後から2つ目の `%%EOF` のあと）の中の `trailer` を pdf-lib の `PDFObjectParser` で読み、`/Info` があるかを確かめる。`trailer` のない版（xref ストリーム）は、pdf-lib が xref ストリームの辞書から読んだものを使う（こちらは古い値を引き継がない。`PDFXRefStreamParser.js` 40 行）。
 3. 値の文字は、UTF-16BE（BOM）・UTF-16LE（BOM）・UTF-8（BOM）・PDFDocEncoding を読み分ける。UTF-16BE の中の言語のしるし（ESC で囲んだ部分）は除く。
 4. 値が名前・数・真偽のときも、値ありとする。配列は中の文字をつないで見る。辞書は、中身があれば値ありとする（どれも合成 PDF にはない。安全側に倒した）。
-5. 暗号化された PDF は `encrypted` で止める。pdf-lib 1.17.1 の `EncryptedPDFError` は `instanceof` で見分けられない（ES5 向けに変換されたクラスで、作られたエラーの型が `Error` になる。2026-11-03 に Node 24.19.0 で確かめた）。そのため、`ignoreEncryption: true` で読み、`isEncrypted` で見分ける。
+5. 暗号化された PDF：読み込みは共通の入口（`rules/shared/load.ts`。P6 の検出ルールと同じ）を使う（1.1.0 から）。パスワードなしで開ける暗号化（RC4・AES-128・AES-256）は復号して調べ、パスワードが要るものは `encrypted` で止める。復号した文書のオブジェクトの番号は元のままなので、いまの版の trailer を元のバイト列から読み直すやり方（3）は変えていない。
+   - pdf-lib 1.17.1 の `EncryptedPDFError` は `instanceof` で見分けられない（ES5 向けに変換されたクラスで、作られたエラーの型が `Error` になる。2026-11-03 に Node 24.19.0 で確かめた）。そのため、共通の入口は `ignoreEncryption: true` で読み、`isEncrypted` で見分ける。
 
 ### 前の版（`previousInfo`）
 
@@ -52,4 +53,5 @@ const report2 = await detectP1Info(bytes, { includeValues: true }); // 値その
 - 前の版の数は、`%%EOF` で区切って数える。ストリームの中にたまたま `%%EOF` の並びがあると、版を多く数えることがある（合否には使わない）。
 - いまの版の trailer は、最後の版の中で最後に出てくる `trailer` の文字で探す。圧縮していないストリームの中に、たまたま `trailer` の並びがあると、読み違えることがある（読めなければ pdf-lib の読んだものを使う）。
 - 前の版の読み直しは、版ごとにファイルの頭から読み直すので、版が多い大きなファイルでは時間がかかる。時間の上限はこのルールの中にはない。画面では Worker の時間の上限で止める。
-- 暗号化された PDF は読まない（`encrypted`）。
+- パスワードが要る暗号化 PDF は読まない（`encrypted`）。パスワードなしで開ける暗号化は、復号して読む（1.1.0 から）。
+- 増分更新した暗号化 PDF の前の版（`previousInfo`）も、版ごとに復号して読む。合成 PDF ではまだ試していない。
