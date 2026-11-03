@@ -1,0 +1,24 @@
+{
+  "file": "p6-t14-ellipse.pdf",
+  "description": "黒い楕円で、氏名を覆っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t14-ellipse#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        56,
+        685.58,
+        167.91,
+        721.58
+      ],
+      "remaining": {
+        "chars": 10
+      }
+    }
+  ],
+  "negatives": []
+}

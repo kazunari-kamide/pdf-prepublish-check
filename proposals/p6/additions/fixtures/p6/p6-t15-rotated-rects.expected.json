@@ -1,0 +1,40 @@
+{
+  "file": "p6-t15-rotated-rects.pdf",
+  "description": "1度と3度だけ回した黒い四角で、2つの氏名を覆っている",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t15-rotated-rects#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        65.58,
+        690.1,
+        157.9,
+        715.7
+      ],
+      "remaining": {
+        "chars": 10
+      }
+    },
+    {
+      "id": "p6-t15-rotated-rects#L2",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        64.53,
+        628.1,
+        166.51,
+        661.33
+      ],
+      "remaining": {
+        "chars": 13
+      }
+    }
+  ],
+  "negatives": []
+}

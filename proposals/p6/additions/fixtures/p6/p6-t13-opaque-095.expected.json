@@ -1,0 +1,24 @@
+{
+  "file": "p6-t13-opaque-095.pdf",
+  "description": "不透明さ 0.95 の黒い四角で、氏名を覆っている（下の字はほぼ見えない）",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-t13-opaque-095#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        68,
+        693.1,
+        155.91,
+        714.05
+      ],
+      "remaining": {
+        "chars": 10
+      }
+    }
+  ],
+  "negatives": []
+}
