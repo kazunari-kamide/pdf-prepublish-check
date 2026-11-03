@@ -69,3 +69,64 @@ export function scaleOf(m: Matrix): number {
 export function isFiniteMatrix(m: Matrix): boolean {
   return m.every((v) => Number.isFinite(v));
 }
+
+/** 多角形の符号つきの面積（反時計回りが正） */
+export function signedPolygonArea(points: Point[]): number {
+  let s = 0;
+  for (let i = 0; i < points.length; i++) {
+    const [x0, y0] = points[i]!;
+    const [x1, y1] = points[(i + 1) % points.length]!;
+    s += x0 * y1 - x1 * y0;
+  }
+  return s / 2;
+}
+
+/** 3次ベジエ曲線を、n 本の直線に分けた点（始点は含まない） */
+export function flattenCubic(p0: Point, p1: Point, p2: Point, p3: Point, n: number): Point[] {
+  const out: Point[] = [];
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const u = 1 - t;
+    const a = u * u * u;
+    const b = 3 * u * u * t;
+    const c = 3 * u * t * t;
+    const d = t * t * t;
+    out.push([a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0], a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]]);
+  }
+  return out;
+}
+
+/**
+ * 多角形を、縦横の箱で切り取る（Sutherland–Hodgman。切り取る側の箱は凸なので、どんな多角形でも面積は正しく出る）。
+ * 向き（符号）はもとの多角形のまま。
+ */
+export function clipPolygonToRect(points: Point[], r: Rect): Point[] {
+  let out = points;
+  const edges: Array<[(p: Point) => boolean, (a: Point, b: Point) => Point]> = [
+    [(p) => p[0] >= r[0], (a, b) => [r[0], a[1] + ((b[1] - a[1]) * (r[0] - a[0])) / (b[0] - a[0])]],
+    [(p) => p[0] <= r[2], (a, b) => [r[2], a[1] + ((b[1] - a[1]) * (r[2] - a[0])) / (b[0] - a[0])]],
+    [(p) => p[1] >= r[1], (a, b) => [a[0] + ((b[0] - a[0]) * (r[1] - a[1])) / (b[1] - a[1]), r[1]]],
+    [(p) => p[1] <= r[3], (a, b) => [a[0] + ((b[0] - a[0]) * (r[3] - a[1])) / (b[1] - a[1]), r[3]]],
+  ];
+  for (const [inside, cross] of edges) {
+    if (out.length === 0) break;
+    const input = out;
+    out = [];
+    for (let i = 0; i < input.length; i++) {
+      const cur = input[i]!;
+      const prev = input[(i + input.length - 1) % input.length]!;
+      const ci = inside(cur);
+      const pi = inside(prev);
+      if (ci) {
+        if (!pi) out.push(cross(prev, cur));
+        out.push(cur);
+      } else if (pi) out.push(cross(prev, cur));
+    }
+  }
+  return out;
+}
+
+/** 箱と箱が重なるか */
+export function rectsOverlap(a: Rect, b: Rect): boolean {
+  return a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+}

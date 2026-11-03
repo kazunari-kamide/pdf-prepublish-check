@@ -95,12 +95,14 @@ describe("黒い四角の下の字", () => {
     expect((await detectP6Text(pdf)).findings).toHaveLength(0);
   });
 
-  it("円で覆ったものは、この版では見つけない（四角に近い図形だけ）", async () => {
+  it("円で覆ったものも、見つける（1.3.0 から。形そのものの面積で測る）", async () => {
     const pdf = await makePdf((page, font) => {
       page.drawText("Taro", { x: 20, y: 100, size: 12, font });
       page.drawEllipse({ x: 32, y: 104, xScale: 20, yScale: 20, color: rgb(0, 0, 0) });
     });
-    expect((await detectP6Text(pdf)).findings).toHaveLength(0);
+    const r = await detectP6Text(pdf);
+    expect(r.findings).toHaveLength(1);
+    expect(r.findings[0]!.chars).toBe(4);
   });
 
   it("includeText を付けたときだけ、覆われた字を返す", async () => {

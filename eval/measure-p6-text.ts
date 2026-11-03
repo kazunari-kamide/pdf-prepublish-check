@@ -12,20 +12,21 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { PDFDocument } from "pdf-lib";
+import type { PDFDocument } from "pdf-lib";
+import { loadPdf } from "../rules/shared/load.ts";
 import { area, intersectionArea } from "../rules/p6-text/geometry.ts";
 import { scanAnnotations } from "../rules/p6-text/annotations.ts";
 import { IDENTITY } from "../rules/p6-text/geometry.ts";
-import { contentBytes, createPageScanner, type PageScan } from "../rules/p6-text/page.ts";
+import { contentBytes, coverageOf, createPageScanner, type PageScan } from "../rules/p6-text/page.ts";
 import type { P6TextSettings } from "../rules/p6-text/settings.ts";
 import { DEFAULT_SETTINGS } from "../rules/p6-text/settings.ts";
 import { overlap, type Expected } from "./match.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = path.join(ROOT, "fixtures", "p6");
-const loose = { ...DEFAULT_SETTINGS, darkLuminanceMax: 1, opacityMin: 0, rectangularityMin: 0 };
+const loose = { ...DEFAULT_SETTINGS, darkLuminanceMax: 1, opacityMin: 0, minStrokeWidth: 0 };
 // 画像は、画素の明るさの上限はそのまま、覆いとみなす割合だけを 0 にする（すべての画像を並べる）
-const looseImages = { ...DEFAULT_SETTINGS, opacityMin: 0, rectangularityMin: 0, darkImageFractionMin: 0 };
+const looseImages = { ...DEFAULT_SETTINGS, opacityMin: 0, darkImageFractionMin: 0 };
 
 function scanWith(doc: PDFDocument, page: ReturnType<PDFDocument["getPages"]>[number], settings: P6TextSettings): PageScan {
   const scanner = createPageScanner(doc.context, settings);
@@ -42,7 +43,10 @@ const rows: Row[] = [];
 
 for (const name of readdirSync(FIXTURES).filter((f) => f.endsWith(".expected.json")).sort()) {
   const exp = JSON.parse(readFileSync(path.join(FIXTURES, name), "utf8")) as Expected;
-  const doc = await PDFDocument.load(new Uint8Array(readFileSync(path.join(FIXTURES, exp.file))), { updateMetadata: false });
+  // 読み込みは検出ルールと同じ入口（暗号化した合成 PDF も、復号して測る）
+  const loaded = await loadPdf(new Uint8Array(readFileSync(path.join(FIXTURES, exp.file))));
+  if (loaded.status !== "ok") continue;
+  const doc = loaded.doc;
   doc.getPages().forEach((page, i) => {
     const pageNo = i + 1;
     const scan = scanWith(doc, page, loose);
@@ -52,7 +56,7 @@ for (const name of readdirSync(FIXTURES).filter((f) => f.endsWith(".expected.jso
       for (const g of imgScan.glyphs) {
         if (g.seq >= c.seq || g.isSpace) continue;
         const a = area(g.rect);
-        if (a > 0) best = Math.max(best, intersectionArea(g.rect, c.rect) / a);
+        if (a > 0) best = Math.max(best, coverageOf(c, g.rect) / a);
       }
       // ページ全体のスキャン画像は、どの正解の箱にも「小さいほうで割る重なり」で重なってしまうので、
       // 先に描いた字に重ならない画像は、正解と結ばずに「字に重ならない」とする
@@ -66,7 +70,7 @@ for (const name of readdirSync(FIXTURES).filter((f) => f.endsWith(".expected.jso
       for (const g of scan.glyphs) {
         if (g.seq >= c.seq || g.isSpace) continue;
         const a = area(g.rect);
-        if (a > 0) best = Math.max(best, intersectionArea(g.rect, c.rect) / a);
+        if (a > 0) best = Math.max(best, coverageOf(c, g.rect) / a);
       }
       if (best === 0) continue; // 先に描いた字に重ならない塗りは、判定に関係しない
       const leak = exp.leaks.find((l) => l.layer === "text" && l.page === pageNo && overlap(l.rect, c.rect) >= 0.5);

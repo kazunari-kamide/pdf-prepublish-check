@@ -21,9 +21,12 @@ import {
   apply,
   area,
   boundsOf,
+  clipPolygonToRect,
   isFiniteMatrix,
   multiply,
-  polygonArea,
+  flattenCubic,
+  rectsOverlap,
+  signedPolygonArea,
   scaleOf,
   type Matrix,
   type Point,
@@ -43,12 +46,87 @@ export type Cover = {
   how: "fill" | "stroke" | "image" | "redact";
   /** 塗りの明るさ。画像は濃い画素の割合ではなく、1 − 割合（小さいほど濃い）。墨消しの注釈は 0 */
   luminance: number;
+  /**
+   * 覆いの形（ページの座標の多角形。曲線は直線に分けたもの）。ないときは rect の箱そのものが形（1.3.0 から）。
+   * parts の面積を足し合わせて、字の箱が隠れる割合を出す（coverageOf）。
+   */
+  shape?: CoverShape;
 };
+export type CoverShape = { parts: Point[][]; rule: "nonzero" | "evenodd" };
+
+/** 曲線1本を分ける直線の数 */
+const CURVE_SEGMENTS = 8;
+
+/** 覆いの形が、箱 r をどれだけ隠すか（面積。0〜箱の面積） */
+export function coverageOf(cover: Pick<Cover, "rect" | "shape">, r: Rect): number {
+  const boxArea = area(r);
+  if (boxArea <= 0) return 0;
+  if (!cover.shape) {
+    const w = Math.min(r[2], cover.rect[2]) - Math.max(r[0], cover.rect[0]);
+    const h = Math.min(r[3], cover.rect[3]) - Math.max(r[1], cover.rect[1]);
+    return w > 0 && h > 0 ? w * h : 0;
+  }
+  const { parts, rule } = cover.shape;
+  let sum = 0;
+  if (rule === "nonzero") {
+    // 向きつきの面積を足す。逆向きの内側（枠の穴）は引かれる。同じ向きで重なった分は、箱の面積で頭打ちにする
+    for (const part of parts) sum += signedPolygonArea(clipPolygonToRect(part, r));
+    sum = Math.abs(sum);
+  } else {
+    // 偶奇の決まり：ほかの部分の外枠の箱の中にいくつ入っているか（入れ子の深さ）で、足すか引くかを決める（目安）
+    const boxes = parts.map((pt) => boundsOf(pt));
+    parts.forEach((part, i) => {
+      const b = boxes[i]!;
+      let depth = 0;
+      boxes.forEach((o, j) => {
+        if (j !== i && o[0] <= b[0] && o[1] <= b[1] && o[2] >= b[2] && o[3] >= b[3] && area(o) > area(b)) depth++;
+      });
+      sum += (depth % 2 === 0 ? 1 : -1) * Math.abs(signedPolygonArea(clipPolygonToRect(part, r)));
+    });
+  }
+  return Math.min(boxArea, Math.max(0, sum));
+}
+
+/** 外枠の箱が重なり合う部分どうしを、1つのまとまりにする（離れた四角は別の覆いにするため） */
+function groupOverlapping(parts: Point[][]): Point[][][] {
+  const boxes = parts.map((p) => boundsOf(p));
+  const parent = parts.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
+  for (let i = 0; i < parts.length; i++) {
+    for (let j = i + 1; j < parts.length; j++) {
+      if (rectsOverlap(boxes[i]!, boxes[j]!)) parent[find(i)] = find(j);
+    }
+  }
+  const groups = new Map<number, Point[][]>();
+  parts.forEach((p, i) => {
+    const g = find(i);
+    groups.set(g, [...(groups.get(g) ?? []), p]);
+  });
+  return [...groups.values()];
+}
+
+/** 線の1本（p0→p1）を、太さ w の四角（向きは線のまま）にする */
+function segmentQuad(p0: Point, p1: Point, half: number): Point[] | null {
+  const dx = p1[0] - p0[0];
+  const dy = p1[1] - p0[1];
+  const len = Math.hypot(dx, dy);
+  if (len <= 0 || half <= 0) return null;
+  const nx = (-dy / len) * half;
+  const ny = (dx / len) * half;
+  return [
+    [p0[0] + nx, p0[1] + ny],
+    [p1[0] + nx, p1[1] + ny],
+    [p1[0] - nx, p1[1] - ny],
+    [p0[0] - nx, p0[1] - ny],
+  ];
+}
 export type UncheckedImage = { reason: "unsupported_filter" | "too_large" | "unsupported_color" | "broken" };
 export type GlyphBox = { seq: number; rect: Rect; isSpace: boolean; text: string };
 export type PageScan = { covers: Cover[]; glyphs: GlyphBox[]; operations: number; uncheckedImages: UncheckedImage[] };
 
 export class TooManyOperations extends Error {}
+/** 先に描いた字に重なる濃い塗りが多すぎる（1.3.0 から） */
+export class TooManyCovers extends Error {}
 
 type Color = { luminance: number | null };
 
@@ -159,6 +237,54 @@ export type PageScanner = {
 export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): PageScanner {
   const covers: Cover[] = [];
   const glyphs: GlyphBox[] = [];
+  // 字の位置の索引（マス目）。覆いになりうるのは、先に描いた字に重なる塗りだけなので、
+  // 重ならない塗りは覆いの一覧に入れずに捨てる（図形の多い重いページで、メモリと時間を抑えるため。1.3.0 から）
+  const CELL = 32;
+  const MAX_CELLS = 4096;
+  const grid = new Map<number, GlyphBox[]>();
+  const wide: GlyphBox[] = []; // マス目に入れきれない大きな字
+  const cellKey = (cx: number, cy: number) => cx * 100_003 + cy;
+  const cellsOf = (r: Rect) => {
+    const x0 = Math.floor(r[0] / CELL);
+    const x1 = Math.floor(r[2] / CELL);
+    const y0 = Math.floor(r[1] / CELL);
+    const y1 = Math.floor(r[3] / CELL);
+    return { x0, x1, y0, y1, n: (x1 - x0 + 1) * (y1 - y0 + 1) };
+  };
+  const addGlyph = (g: GlyphBox) => {
+    glyphs.push(g);
+    const c = cellsOf(g.rect);
+    if (!Number.isFinite(c.n) || c.n > 16) {
+      wide.push(g);
+      return;
+    }
+    for (let cx = c.x0; cx <= c.x1; cx++) {
+      for (let cy = c.y0; cy <= c.y1; cy++) {
+        const k = cellKey(cx, cy);
+        const list = grid.get(k);
+        if (list) list.push(g);
+        else grid.set(k, [g]);
+      }
+    }
+  };
+  const overlapsAnyGlyph = (r: Rect): boolean => {
+    const hit = (g: GlyphBox) => !g.isSpace && g.rect[0] < r[2] && r[0] < g.rect[2] && g.rect[1] < r[3] && r[1] < g.rect[3];
+    if (wide.some(hit)) return true;
+    const c = cellsOf(r);
+    if (!Number.isFinite(c.n) || c.n > MAX_CELLS) return glyphs.some(hit); // 大きな覆いは、字を全部見る
+    for (let cx = c.x0; cx <= c.x1; cx++) {
+      for (let cy = c.y0; cy <= c.y1; cy++) {
+        const list = grid.get(cellKey(cx, cy));
+        if (list && list.some(hit)) return true;
+      }
+    }
+    return false;
+  };
+  const pushCover = (c: Cover) => {
+    if (!overlapsAnyGlyph(c.rect)) return;
+    if (covers.length >= settings.maxCoversPerPage) throw new TooManyCovers();
+    covers.push(c);
+  };
   const uncheckedImages: UncheckedImage[] = [];
   let seq = 0;
   let opCount = 0;
@@ -186,38 +312,45 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
       subpaths.push(current);
     };
 
-    const paint = (doFill: boolean, doStroke: boolean) => {
+    // 1.3.0 から：四角らしさで選ばず、塗った形そのもの（曲線は直線に分けたもの）を覆いとして持つ。
+    // 字が隠れる割合は、形と字の箱の重なった面積で測る（coverageOf）。
+    const paint = (doFill: boolean, doStroke: boolean, rule: "nonzero" | "evenodd" = "nonzero") => {
       if (!isFiniteMatrix(gs.ctm)) return;
-      for (const sp of subpaths) {
-        if (sp.points.length < 2) continue;
-        const dev = sp.points.map(([x, y]) => apply(gs.ctm, x, y));
-        if (doFill && !sp.curved && sp.points.length >= 3) {
-          const lum = gs.fill.luminance;
-          if (lum !== null && lum <= settings.darkLuminanceMax && gs.fillAlpha >= settings.opacityMin) {
-            const box = boundsOf(dev);
-            const boxArea = area(box);
-            // 四角に近い図形だけ（外枠の箱をほぼ埋めるもの）
-            if (boxArea > 0 && polygonArea(dev) / boxArea >= settings.rectangularityMin) {
-              covers.push({ seq: ++seq, rect: box, kind: coverKind, how: "fill", luminance: lum });
-            }
+      const devs = subpaths.filter((sp) => sp.points.length >= 2).map((sp) => ({ sp, dev: sp.points.map(([x, y]) => apply(gs.ctm, x, y)) }));
+      if (doFill) {
+        const lum = gs.fill.luminance;
+        if (lum !== null && lum <= settings.darkLuminanceMax && gs.fillAlpha >= settings.opacityMin) {
+          const parts = devs.map((d) => d.dev).filter((d) => d.length >= 3 && area(boundsOf(d)) > 0);
+          for (const group of groupOverlapping(parts)) {
+            const box = boundsOf(group.flat());
+            // 縦横の四角1つなら、形を持たずに箱で測る（これまでと同じ結果になる）
+            const plainRect = group.length === 1 && group[0]!.length === 4 && Math.abs(Math.abs(signedPolygonArea(group[0]!)) - area(box)) <= 1e-6 * Math.max(1, area(box));
+            pushCover({ seq: ++seq, rect: box, kind: coverKind, how: "fill", luminance: lum, ...(plainRect ? {} : { shape: { parts: group, rule } }) });
           }
         }
-        if (doStroke && !sp.curved) {
-          const lum = gs.stroke.luminance;
-          if (lum !== null && lum <= settings.darkLuminanceMax && gs.strokeAlpha >= settings.opacityMin) {
-            const half = (gs.lineWidth * scaleOf(gs.ctm)) / 2;
+      }
+      if (doStroke) {
+        const lum = gs.stroke.luminance;
+        const half = (gs.lineWidth * scaleOf(gs.ctm)) / 2;
+        // 細い線（太さが minStrokeWidth より細い）は、字を半分も隠せないので覆いにしない
+        if (lum !== null && lum <= settings.darkLuminanceMax && gs.strokeAlpha >= settings.opacityMin && half * 2 >= settings.minStrokeWidth) {
+          for (const { sp, dev } of devs) {
             const pts = sp.closed ? [...dev, dev[0]!] : dev;
+            const quads: Point[][] = [];
             for (let k = 0; k + 1 < pts.length; k++) {
-              const [x0, y0] = pts[k]!;
-              const [x1, y1] = pts[k + 1]!;
-              // 縦か横の直線だけを覆いとして扱う（斜めの線は外枠の箱が大きくなりすぎるため）
-              const horizontal = Math.abs(y1 - y0) <= 0.01 * Math.max(1, Math.abs(x1 - x0));
-              const vertical = Math.abs(x1 - x0) <= 0.01 * Math.max(1, Math.abs(y1 - y0));
-              if (!horizontal && !vertical) continue;
-              const r: Rect = horizontal
-                ? [Math.min(x0, x1), y0 - half, Math.max(x0, x1), y0 + half]
-                : [x0 - half, Math.min(y0, y1), x0 + half, Math.max(y0, y1)];
-              if (area(r) > 0) covers.push({ seq: ++seq, rect: r, kind: coverKind, how: "stroke", luminance: lum });
+              const q = segmentQuad(pts[k]!, pts[k + 1]!, half);
+              if (q) quads.push(q);
+            }
+            if (sp.curved) {
+              // 曲線は、分けた直線をまとめて1つの覆いにする
+              if (quads.length) pushCover({ seq: ++seq, rect: boundsOf(quads.flat()), kind: coverKind, how: "stroke", luminance: lum, shape: { parts: quads, rule: "nonzero" } });
+            } else {
+              // 直線は、1本ずつ別の覆いにする（これまでと同じ。縦横の線は箱そのもの）
+              for (const q of quads) {
+                const box = boundsOf(q);
+                const axis = Math.abs(Math.abs(signedPolygonArea(q)) - area(box)) <= 1e-6 * Math.max(1, area(box));
+                pushCover({ seq: ++seq, rect: box, kind: coverKind, how: "stroke", luminance: lum, ...(axis ? {} : { shape: { parts: [q], rule: "nonzero" } }) });
+              }
             }
           }
         }
@@ -233,7 +366,10 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
       const dev = [apply(gs.ctm, 0, 0), apply(gs.ctm, 1, 0), apply(gs.ctm, 1, 1), apply(gs.ctm, 0, 1)];
       const box = boundsOf(dev);
       const boxArea = area(box);
-      if (boxArea <= 0 || polygonArea(dev) / boxArea < settings.rectangularityMin) return;
+      if (boxArea <= 0) return;
+      // 回したり傾けたりして置いた画像は、置いた形（平行四辺形）を覆いの形にする（1.3.0 から）
+      const imageShape: CoverShape | undefined =
+        Math.abs(Math.abs(signedPolygonArea(dev)) - boxArea) <= 1e-6 * Math.max(1, boxArea) ? undefined : { parts: [dev], rule: "nonzero" };
       const m = measureImageDarkness({
         ctx,
         stream: img,
@@ -248,7 +384,7 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
         return;
       }
       if (m.darkFraction >= settings.darkImageFractionMin) {
-        covers.push({ seq: ++seq, rect: box, kind: coverKind === "annotation" ? "annotation" : "image", how: "image", luminance: 1 - m.darkFraction });
+        pushCover({ seq: ++seq, rect: box, kind: coverKind === "annotation" ? "annotation" : "image", how: "image", luminance: 1 - m.darkFraction, ...(imageShape ? { shape: imageShape } : {}) });
       }
     };
 
@@ -267,7 +403,7 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
             apply(trm, g.width, font.ascent),
             apply(trm, 0, font.ascent),
           ];
-          glyphs.push({ seq: ++seq, rect: boundsOf(corners), isSpace: g.isSpace, text: g.text });
+          addGlyph({ seq: ++seq, rect: boundsOf(corners), isSpace: g.isSpace, text: g.text });
         }
         const tx = (g.width * gs.fontSize + gs.charSpacing + (g.isWordSpace ? gs.wordSpacing : 0)) * gs.hScale;
         tm = multiply([1, 0, 0, 1, tx, 0], tm);
@@ -374,11 +510,16 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
         case "c":
         case "v":
         case "y":
-          if (a.length >= 4) {
+          if ((op === "c" && a.length >= 6) || (op !== "c" && a.length >= 4)) {
             if (!current) startSub(a[a.length - 2]!, a[a.length - 1]!);
             const cur = current as unknown as { points: Point[]; curved: boolean };
+            const p0 = cur.points[cur.points.length - 1]!;
+            const p3: Point = [a[a.length - 2]!, a[a.length - 1]!];
+            // v：1つめの制御点が今の点。y：2つめの制御点が終点
+            const p1: Point = op === "v" ? p0 : [a[0]!, a[1]!];
+            const p2: Point = op === "c" ? [a[2]!, a[3]!] : op === "v" ? [a[0]!, a[1]!] : p3;
             cur.curved = true;
-            cur.points.push([a[a.length - 2]!, a[a.length - 1]!]);
+            cur.points.push(...flattenCubic(p0, p1, p2, p3, CURVE_SEGMENTS));
           }
           break;
         case "h":
@@ -393,8 +534,10 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           break;
         case "f":
         case "F":
-        case "f*":
           paint(true, false);
+          break;
+        case "f*":
+          paint(true, false, "evenodd");
           break;
         case "S":
           paint(false, true);
@@ -404,13 +547,15 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           paint(false, true);
           break;
         case "B":
-        case "B*":
           paint(true, true);
+          break;
+        case "B*":
+          paint(true, true, "evenodd");
           break;
         case "b":
         case "b*":
           if (current) (current as { closed: boolean }).closed = true;
-          paint(true, true);
+          paint(true, true, op === "b*" ? "evenodd" : "nonzero");
           break;
         case "n":
           subpaths = [];
@@ -566,7 +711,7 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
       run(data, res, { ...cloneState(initial), ctm }, 0, new Set(), coverKind);
     },
     addCover(rect, kind, how, luminance) {
-      covers.push({ seq: ++seq, rect, kind, how, luminance });
+      pushCover({ seq: ++seq, rect, kind, how, luminance });
     },
     result() {
       return { covers, glyphs, operations: opCount, uncheckedImages };
