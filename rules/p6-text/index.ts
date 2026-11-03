@@ -4,14 +4,15 @@
 // 字のあとに、その字を覆う濃い塗り・濃い画像・注釈を描いていれば、「黒い四角の下に字が残っている」とする。
 // 見ないもの（この版）：スキャン画像の画素が残っている型（画像の層。image/*）。
 
-import { PDFDocument } from "pdf-lib";
+import { loadPdf } from "../shared/load.ts";
+import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { scanAnnotations } from "./annotations.ts";
 import { contentBytes, createPageScanner, TooManyOperations, type Cover, type CoverKind, type UncheckedImage } from "./page.ts";
 import { IDENTITY, area, intersectionArea, type Rect } from "./geometry.ts";
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.1.1";
+export const RULE_VERSION = "1.2.0";
 
 export type P6TextFinding = {
   pattern: "P6";
@@ -36,6 +37,8 @@ export type P6TextReport = {
   skippedPages: Array<{ page: number; reason: "too_many_operations" | "unreadable_page" }>;
   /** 濃いかどうかを調べられなかった画像（JPEG など）。覆いとしては数えていない。「問題なし」ではない */
   uncheckedImages: Array<{ page: number } & UncheckedImage>;
+  /** パスワードなしで開ける暗号化 PDF を、復号して調べたときだけ。どの暗号化だったか（1.2.0 から） */
+  decrypted?: EncryptionSummary & { failedObjects: number };
 };
 
 export type DetectOptions = { settings?: Partial<P6TextSettings>; includeText?: boolean };
@@ -87,20 +90,23 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
   if (bytes.length === 0) {
     return { ...base, status: "error", pages: null, error: { code: "empty", message: "ファイルが空です。" } };
   }
-  // pdf-lib 1.17.1 の EncryptedPDFError は ES5 向けに変換されたクラスで、instanceof で見分けられない
-  // （投げられるのは素の Error に見える。2026-11-03、暗号化のしるしを付けた合成 PDF で確かめた）。
-  // そのため、暗号化を気にせずに読み、isEncrypted で見分ける。暗号化された PDF の中身は読まない。
-  let doc: PDFDocument;
-  try {
-    doc = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: false, ignoreEncryption: true });
-  } catch {
+  // 読み込みは共通の入口（rules/shared/load.ts）。パスワードなしで開ける暗号化 PDF は、復号して調べる（1.2.0 から）。
+  // パスワードが要る・対応していない暗号化は、encrypted で止める（中身は読まない）。
+  const loaded = await loadPdf(bytes);
+  if (loaded.status === "error") {
+    if (loaded.code === "encrypted") {
+      const message =
+        loaded.reason === "password_required"
+          ? "パスワードが要る PDF は、調べられません。"
+          : "この形の暗号化は、いまは調べられません。";
+      return { ...base, status: "error", pages: null, error: { code: "encrypted", message } };
+    }
     return { ...base, status: "error", pages: null, error: { code: "unreadable", message: "PDF として読めませんでした。" } };
   }
-  if (doc.isEncrypted) {
-    return { ...base, status: "error", pages: null, error: { code: "encrypted", message: "暗号化された PDF は、いまは調べられません。" } };
-  }
+  const doc = loaded.doc;
 
   const report: P6TextReport = { ...base, status: "ok", pages: 0, findings: [], skippedPages: [], uncheckedImages: [] };
+  if (loaded.decrypted) report.decrypted = loaded.decrypted;
   let pages;
   try {
     pages = doc.getPages();

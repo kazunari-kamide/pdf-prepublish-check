@@ -21,9 +21,10 @@ import {
   pdfDocEncodingDecode,
   type PDFObject,
 } from "pdf-lib";
+import { loadPdf } from "../shared/load.ts";
 
 export const RULE_ID = "p1-info";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 /** 決まった欄（rubric/p1.json の breakdown.standard と同じ並び）。それ以外は独自の欄 */
 export const STANDARD_KEYS = ["Title", "Author", "Subject", "Keywords", "Creator"] as const;
@@ -208,13 +209,17 @@ function currentInfo(doc: PDFDocument, bytes: Uint8Array, segmentStart: number):
 class Encrypted extends Error {}
 
 /**
- * pdf-lib 1.17.1 の EncryptedPDFError は ES5 向けに変換されたクラスで、instanceof で見分けられない。
- * そのため、暗号化を気にせずに読み、isEncrypted で見分ける。
+ * 読み込みは共通の入口（rules/shared/load.ts）。パスワードなしで開ける暗号化 PDF は、復号して読む。
+ * 復号した doc のオブジェクトの番号は元のままなので、元のバイト列の trailer から引く currentInfo はそのまま使える。
+ * パスワードが要る・対応していない暗号化は Encrypted を投げる。
  */
 async function load(bytes: Uint8Array): Promise<PDFDocument> {
-  const doc = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: false, ignoreEncryption: true });
-  if (doc.isEncrypted) throw new Encrypted();
-  return doc;
+  const loaded = await loadPdf(bytes);
+  if (loaded.status === "error") {
+    if (loaded.code === "encrypted") throw new Encrypted();
+    throw new Error("unreadable");
+  }
+  return loaded.doc;
 }
 
 async function readRevision(bytes: Uint8Array, segmentStart: number): Promise<Field[] | null> {
