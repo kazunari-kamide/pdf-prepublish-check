@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- 画面の案 A「検査票」。見本の画面（動かない）。数字・項目は架空の見本。 -->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>案A 検査票 — お守りPDF</title>
+    <style>
+      :root {
+        --base: #1f2a37; /* 墨紺：文字・線 */
+        --accent: #b42318; /* 朱：危ない所 */
+        --ok: #2f6f5e; /* 緑：片付いた所（状態の色。2色の外に置くかは決めてほしいこと） */
+        --paper: #f7f5f0;
+        --line: #cfcac0;
+        --head: "Yu Mincho", "Hiragino Mincho ProN", serif;
+        --body: "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--paper); color: var(--base); font: 18px/1.7 var(--body); }
+      header { border-bottom: 3px double var(--base); padding: 1.25rem 2rem 0.75rem; display: flex; align-items: baseline; gap: 2rem; }
+      h1 { font: 700 1.9rem/1.2 var(--head); margin: 0; letter-spacing: 0.05em; }
+      header p { margin: 0; font-size: 0.95rem; }
+      main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 2rem; padding: 1.5rem 2rem 3rem; }
+      h2 { font: 700 1.2rem/1.4 var(--head); margin: 0 0 0.75rem; }
+      .drop { border: 2px solid var(--base); background: #fff; padding: 0.9rem 1.2rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+      .drop b { font-size: 1.05rem; }
+      .drop span { font-size: 0.9rem; }
+      .verdict { border-left: 0.5rem solid var(--accent); background: #fff; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+      .verdict strong { font-size: 1.15rem; }
+      table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.95rem; }
+      th, td { border: 1px solid var(--line); padding: 0.55rem 0.6rem; text-align: left; vertical-align: top; }
+      th { background: #ebe7de; font-weight: 600; }
+      .no { width: 2.6rem; text-align: center; font-weight: 700; }
+      .sev-high { color: var(--accent); font-weight: 700; white-space: nowrap; }
+      .sev-mid { white-space: nowrap; }
+      td small { display: block; color: #4b5563; }
+      .notice { margin: 1rem 0; padding: 0.6rem 1rem; border: 1px dashed var(--base); background: #fff; font-size: 0.95rem; }
+      .actions { display: flex; gap: 1rem; align-items: center; margin-top: 1.25rem; }
+      button { font: 600 1.05rem var(--body); padding: 0.6rem 1.6rem; border: 2px solid var(--base); background: var(--base); color: #fff; }
+      button:disabled { background: #fff; color: #6b7280; border-color: #9ca3af; }
+      .page { background: #fff; border: 1px solid var(--line); aspect-ratio: 210 / 297; position: relative; box-shadow: 0 1px 3px rgb(0 0 0 / 10%); }
+      .page .ln { position: absolute; left: 10%; right: 10%; height: 0.45rem; background: #e5e7eb; }
+      .mark { position: absolute; border: 3px solid var(--accent); }
+      .mark span { position: absolute; left: -3px; bottom: 100%; background: var(--accent); color: #fff; font-weight: 700; font-size: 0.8rem; padding: 0 0.35rem; }
+      .mark.done { border-color: var(--ok); border-style: dashed; }
+      .mark.done span { background: var(--ok); }
+      figcaption { font-size: 0.9rem; margin-top: 0.4rem; }
+      .after { margin-top: 2rem; }
+      .verdict.ok { border-left-color: var(--ok); }
+      .stamp { display: inline-block; border: 2px solid var(--ok); color: var(--ok); padding: 0 0.5rem; font-weight: 700; margin-right: 0.5rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>お守りPDF</h1>
+      <p>公開・提出の前に、見た目では分からない情報を確かめます。PDF はこのパソコンの外に送りません。</p>
+    </header>
+    <main>
+      <section>
+        <div class="drop"><b>ここに PDF を置く</b><span>または クリックして選ぶ</span></div>
+        <div class="verdict"><strong>見た目では分からない情報が、3 か所見つかりました。</strong></div>
+        <h2>検査票</h2>
+        <table>
+          <thead><tr><th>番号</th><th>深刻度</th><th>型</th><th>ページ</th><th>何が残っているか</th></tr></thead>
+          <tbody>
+            <tr><td class="no">1</td><td class="sev-high">▲ 高</td><td>見せかけの黒塗り</td><td>2</td><td>黒い四角の下に、字が残っています<small>上から重ねただけなので、下の字を選んでコピーできます。残っている字：10字</small></td></tr>
+            <tr><td class="no">2</td><td class="sev-high">▲ 高</td><td>旧版の残存</td><td>全体</td><td>修正する前の版の「ページの中身」が残っています<small>見た目は新しい版でも、修正する前の内容を取り出せます。</small></td></tr>
+            <tr><td class="no">3</td><td class="sev-mid">■ 中</td><td>文書情報</td><td>全体</td><td>文書情報の「作成者」に値が入っています<small>意図したものでなければ消してください。4字</small></td></tr>
+          </tbody>
+        </table>
+        <p class="notice">お知らせ：このページの画像は調べていません（ページ 3）。</p>
+        <div class="actions"><button disabled>片付ける</button><span>片付ける機能は、これから足します。</span></div>
+      </section>
+      <section>
+        <h2>ページの上の場所</h2>
+        <figure style="margin:0">
+          <div class="page">
+            <div class="ln" style="top:10%"></div><div class="ln" style="top:14%"></div><div class="ln" style="top:18%;right:40%"></div>
+            <div class="mark" style="left:10%;top:13%;width:28%;height:5%"><span>1</span></div>
+            <div class="ln" style="top:30%"></div><div class="ln" style="top:34%"></div>
+          </div>
+          <figcaption>ページ 2（1 か所）</figcaption>
+        </figure>
+        <div class="after">
+          <div class="verdict ok"><span class="stamp">済</span><strong>片付けたあと：調べた項目では、残っていません。</strong></div>
+          <p style="font-size:.9rem">（片付けたあとの見本。枠が緑の点線に変わる）</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

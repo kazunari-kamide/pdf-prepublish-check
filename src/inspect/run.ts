@@ -5,11 +5,15 @@
 // ファイルごとに Worker を作り直すのは、細工された PDF の影響を次のファイルに残さないため。
 
 import { WORKER_TIMEOUT_MS } from "./limits";
-import type { InspectOutcome, InspectRequest, InspectResponse } from "./protocol";
+import type { InspectOutcome, InspectProgress, InspectRequest, InspectResponse } from "./protocol";
 
 let nextId = 1;
 
-export function inspectInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER_TIMEOUT_MS): Promise<InspectOutcome> {
+export function inspectInWorker(
+  buffer: ArrayBuffer,
+  onProgress: (p: InspectProgress) => void = () => {},
+  timeoutMs: number = WORKER_TIMEOUT_MS,
+): Promise<InspectOutcome> {
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
   const id = nextId++;
@@ -30,7 +34,11 @@ export function inspectInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER_
     worker.onmessage = (e: MessageEvent<InspectResponse>) => {
       const res = e.data;
       if (!res || res.id !== id) return;
-      if (res.type === "result") finish({ kind: "done", precheck: res.precheck, elapsedMs: elapsed() });
+      if (res.type === "progress") {
+        if (!settled) onProgress({ done: res.done, total: res.total, label: res.label });
+        return;
+      }
+      if (res.type === "result") finish({ kind: "done", precheck: res.precheck, summary: res.summary, elapsedMs: elapsed() });
       else finish({ kind: "error", message: res.message, elapsedMs: elapsed() });
     };
     worker.onerror = () => finish({ kind: "error", message: "検査の Worker が止まりました。", elapsedMs: elapsed() });

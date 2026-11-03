@@ -95,3 +95,124 @@ h2 {
   padding-top: 1rem;
   font-size: 0.9rem;
 }
+
+/*
+ * ここから下は、結果の一覧とページの枠を置くための最小限の決まり（仮）。
+ * 色・形は design/ の案を選んでから決め直す。危ない所は色だけで示さない（番号・文字でも示す）。
+ */
+
+h3 {
+  font-size: 1.05rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+progress {
+  width: 100%;
+}
+
+.findings table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.findings th,
+.findings td {
+  border: 1px solid var(--line);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.findings td strong,
+.findings td span,
+.findings td a {
+  display: block;
+}
+
+.findings .why {
+  font-size: 0.95rem;
+}
+
+.findings .detail {
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.sev-high {
+  font-weight: 700;
+  color: var(--problem);
+}
+
+.notices ul,
+.unchecked ul,
+.coverage ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.scope-note {
+  font-size: 0.9rem;
+}
+
+.actions button {
+  font-size: 1rem;
+  padding: 0.5rem 1.25rem;
+}
+
+.verified[data-state="clean"] {
+  border: 2px solid var(--accent);
+  padding: 0.5rem 1rem;
+  background: #fff;
+}
+
+.pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.page {
+  margin: 0;
+  width: min(100%, 22rem);
+}
+
+.sheet {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.mark {
+  position: absolute;
+  box-sizing: border-box;
+  border: 3px solid var(--problem);
+  background: rgb(154 52 18 / 8%);
+  min-width: 0.75rem;
+  min-height: 0.75rem;
+  text-decoration: none;
+}
+
+/* 番号の札を枠の左上の外に出す（色だけに頼らない） */
+.mark-no {
+  position: absolute;
+  left: -3px;
+  bottom: 100%;
+  background: var(--problem);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+}
+
+.mark:focus-visible {
+  outline: 3px solid var(--base);
+  outline-offset: 2px;
+}
+
+.page figcaption {
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}

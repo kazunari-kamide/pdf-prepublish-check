@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// 画面に返す結果の形。検出ルールごとの報告を、この1つの形にそろえてから Worker の外へ出す。
+// 覆われた字・欄の値・添付のファイル名など、中身そのものはこの形に入れない（数と場所だけ。docs/prd.md §3-5）。
+
+/** [x0, y0, x1, y1]。ページの既定の座標（ポイント、左下が原点、/Rotate はかけない） */
+export type Rect = [number, number, number, number];
+
+/** 深刻度（用語集 §3）。高・中・低の3段 */
+export type Severity = "high" | "medium" | "low";
+
+/** 漏洩パターンの番号（用語集 §1） */
+export type Pattern = "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "P7" | "P8" | "P9" | "P10" | "P11" | "P12";
+
+/** 見つけた所1つ */
+export type Item = {
+  pattern: Pattern;
+  severity: Severity;
+  /** 一覧の見出し（何が残っているか） */
+  title: string;
+  /** なぜ危ないか（1文） */
+  why: string;
+  /** 数や種類の補足（中身そのものは入れない）。例：「12字」 */
+  detail: string;
+  /** ページの上の場所があるときだけ */
+  page: number | null;
+  rect: Rect | null;
+};
+
+/** 知らせること（漏れではないが、利用者に伝えること） */
+export type NoticeKind = "decrypted" | "unchecked_images" | "skipped_pages" | "partial";
+export type Notice = { kind: NoticeKind; message: string; pages: number[] };
+
+/** 検出ルール1つの結果 */
+export type RuleResult = {
+  ruleId: string;
+  ruleVersion: string;
+  /** 画面で見せる名前（用語集の言葉） */
+  label: string;
+  pattern: Pattern;
+  status: "ok" | "error";
+  /** status が error のとき、利用者に見せる文（ファイルの中身は入れない） */
+  message?: string;
+  items: Item[];
+  notices: Notice[];
+};
+
+/** ページの形。画面でページの枠を描き、赤い枠の場所を決めるのに使う */
+export type PageBox = {
+  page: number;
+  /** 見える範囲（CropBox を MediaBox で切ったもの）。既定の座標 */
+  view: Rect;
+  /** /Rotate（0・90・180・270） */
+  rotate: 0 | 90 | 180 | 270;
+};
+
+/** 1つのファイルの検査の結果 */
+export type InspectSummary = {
+  pages: PageBox[];
+  /** ページの形を読めなかったとき true（一覧は出せるが、ページの上には描けない） */
+  pagesUnreadable: boolean;
+  rules: RuleResult[];
+};
