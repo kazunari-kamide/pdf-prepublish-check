@@ -7,6 +7,7 @@
 //   npm run check:browser -- --shots <フォルダ>              … スクリーンショットも撮る
 //   npm run check:browser -- <PDF のパス>...                  … 入れる PDF を変える（既定は下の DEFAULT_PDFS）
 //   npm run check:browser -- --self-test                     … 数える仕組みの点検。わざと外へ要求を出し、失敗になることを確かめる
+//   npm run check:browser -- --url https://omamoripdf.com/   … vite preview の代わりに、配信したサイト（本番）を開く（docs/deploy.md）
 //
 // - Chrome（または Edge）を headless で動かし、DevTools の決まり（CDP）で操作する。場所は CHROME_PATH で変えられる。
 // - 数えるもの：ページを開いてから閉じるまでの、すべての要求（CSP で止められた要求も数える）。
@@ -32,14 +33,16 @@ const DEFAULT_PDFS = [
 const args = process.argv.slice(2);
 let shotsDir = null;
 let selfTest = false;
+let liveUrl = null;
 const pdfs = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--shots") shotsDir = path.resolve(args[++i]);
   else if (args[i] === "--self-test") selfTest = true;
+  else if (args[i] === "--url") liveUrl = new URL(args[++i]).href;
   else pdfs.push(path.resolve(args[i]));
 }
 if (!pdfs.length) pdfs.push(...DEFAULT_PDFS.slice(0, selfTest ? 1 : undefined).map((p) => path.join(ROOT, p)));
-if (!existsSync(path.join(ROOT, "dist", "index.html"))) {
+if (!liveUrl && !existsSync(path.join(ROOT, "dist", "index.html"))) {
   console.error("dist/ がありません。先に npm run build を実行してください。");
   process.exit(1);
 }
@@ -60,8 +63,9 @@ if (!chromePath) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const server = await preview({ root: ROOT, logLevel: "silent", preview: { host: "127.0.0.1", port: 0, strictPort: false, open: false } });
-const appUrl = server.resolvedUrls.local[0];
+// --url のときは、手元の vite preview を立てずに、配信したサイトを開く
+const server = liveUrl ? null : await preview({ root: ROOT, logLevel: "silent", preview: { host: "127.0.0.1", port: 0, strictPort: false, open: false } });
+const appUrl = liveUrl ?? server.resolvedUrls.local[0];
 const origin = new URL(appUrl).origin;
 
 const profile = mkdtempSync(path.join(tmpdir(), "omamori-chrome-"));
@@ -84,7 +88,7 @@ try {
   const results = [];
   for (const pdf of pdfs) results.push(await checkOne(cdp, pdf));
 
-  console.log(`\n画面：${appUrl}（vite preview。配信と同じヘッダー）`);
+  console.log(`\n画面：${appUrl}（${liveUrl ? "配信したサイト" : "vite preview。配信と同じヘッダー"}）`);
   console.log(`ブラウザ：${path.basename(chromePath)} ${version.Browser}`);
   for (const r of results) {
     console.log(`\n■ ${r.name}`);
@@ -119,7 +123,7 @@ try {
 } finally {
   cdp?.close();
   chrome.kill();
-  await server.close();
+  await server?.close();
   await sleep(300);
   rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
