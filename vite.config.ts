@@ -2,6 +2,7 @@
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import { cspForMeta, securityHeaders } from "./csp.ts";
+import { buildHtaccess } from "./htaccess.ts";
 
 // ビルドした HTML にだけ CSP の <meta> を入れる。
 // 開発サーバーは更新の通知に WebSocket を使うので、開発中はかけない。
@@ -21,8 +22,19 @@ function cspMeta(): Plugin {
   };
 }
 
+// 配信先（Xserver）で CSP などをヘッダーで返すための .htaccess を、csp.ts から作って dist/ に置く（docs/deploy.md）
+function htaccess(): Plugin {
+  return {
+    name: "omamori-htaccess",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: ".htaccess", source: buildHtaccess() });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [cspMeta()],
+  plugins: [cspMeta(), htaccess()],
   build: {
     // 小さな資源を data: の形で JavaScript に埋め込まない（読み込み先を見えるままにする）
     assetsInlineLimit: 0,

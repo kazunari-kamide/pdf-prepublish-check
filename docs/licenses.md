@@ -28,6 +28,14 @@
 | BSD-3-Clause | 1 | source-map-js |
 | 0BSD | 1 | tslib（pdf-lib が使う） |
 
+## 配信で使う道具（GitHub Actions の中だけ。dist/ には入らない。2026-11-04 時点）
+
+| 名前 | 版 | ライセンス | 何に使うか | 足した日 | 出典 |
+|---|---|---|---|---|---|
+| actions/checkout | v6.1.0（`d23441a48e516b6c34aea4fa41551a30e30af803` で固定） | MIT | コードを取り出す | 2026-11-04 | https://github.com/actions/checkout |
+| actions/setup-node | v6.5.0（`249970729cb0ef3589644e2896645e5dc5ba9c38` で固定） | MIT | Node を用意する | 2026-11-04 | https://github.com/actions/setup-node |
+| lftp | Ubuntu 24.04 の apt のもの | GPL-3.0-or-later | dist/ を FTPS で上げる（コマンドとして動かすだけで、コードは取り込まない） | 2026-11-04 | https://lftp.yar.ru/ |
+
 ## フォント・素材
 
 | 名前 | ライセンス | 何に使うか | 置き場所 | 出典 | 足した日 |

@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# 本番の配信（docs/deploy.md）。main に入ったら、ビルドして Xserver に FTPS で上げ、本番を確かめる。
+# - 動かすきっかけは main への push と、手で動かす（workflow_dispatch）だけ。pull_request_target は使わない
+# - Secrets は Environment「production」にだけ置く（デプロイできるブランチは main だけ）
+# - 他人の Action はコミットの SHA で固定する。lftp は Ubuntu の apt から入れる
+# - lftp のコマンドを表示しない（set -x を使わない）。パスワードはコマンドの引数に書かず、環境変数で渡す
+
+name: 本番の配信
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 配信は1つずつ。途中で止めると、上げかけのまま残るため、後から来た方を待たせる
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - name: コードを取り出す
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Node を用意する
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24.19.0
+
+      - name: 依存を入れる（package-lock.json のとおり）
+        run: npm ci
+
+      - name: ビルドする（dist/ の確かめも含む）
+        run: npm run build
+
+      - name: テスト
+        run: npm test
+
+      - name: 配信するファイルのハッシュ
+        run: |
+          cd dist
+          find . -type f | LC_ALL=C sort | xargs sha256sum
+
+      - name: lftp を入れる
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends lftp
+
+      - name: dist/ を上げる（FTPS。public_html の中だけを、dist/ と同じにする）
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_DIR: ${{ secrets.FTP_DIR }}
+          LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # 先に assets/ を足し（消さない）、あとで index.html・.htaccess を上げて古いものを消す。
+          # 上げている途中に、新しい index.html がまだ無い資源を指す時間を作らないため
+          test -n "$FTP_HOST" && test -n "$FTP_USER" && test -n "$FTP_DIR" && test -n "$LFTP_PASSWORD"
+          lftp -c "
+            set cmd:fail-exit true;
+            set ftp:ssl-force true;
+            set ftp:ssl-protect-data true;
+            set ssl:verify-certificate yes;
+            set net:max-retries 3;
+            set net:timeout 30;
+            open --env-password -u \"$FTP_USER\" \"$FTP_HOST\";
+            mirror -R --no-perms --verbose=1 dist/assets/ \"${FTP_DIR%/}/assets\";
+            mirror -R --delete --no-perms --verbose=1 dist/ \"$FTP_DIR\";
+          "
+
+      - name: 本番のヘッダー・ファイルの種類・中身を確かめる
+        run: npm run check:live
+
+      - name: 本番で、外への要求が0件かを確かめる
+        run: npm run check:browser -- --url https://omamoripdf.com/
