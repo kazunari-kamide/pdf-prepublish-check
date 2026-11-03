@@ -4,14 +4,14 @@
 // 字のあとに、その字を覆う濃い塗り・濃い画像・注釈を描いていれば、「黒い四角の下に字が残っている」とする。
 // 見ないもの（この版）：スキャン画像の画素が残っている型（画像の層。image/*）。
 
-import { EncryptedPDFError, PDFDocument } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import { scanAnnotations } from "./annotations.ts";
 import { contentBytes, createPageScanner, TooManyOperations, type Cover, type CoverKind, type UncheckedImage } from "./page.ts";
 import { IDENTITY, area, intersectionArea, type Rect } from "./geometry.ts";
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.1.0";
+export const RULE_VERSION = "1.1.1";
 
 export type P6TextFinding = {
   pattern: "P6";
@@ -87,14 +87,17 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
   if (bytes.length === 0) {
     return { ...base, status: "error", pages: null, error: { code: "empty", message: "ファイルが空です。" } };
   }
+  // pdf-lib 1.17.1 の EncryptedPDFError は ES5 向けに変換されたクラスで、instanceof で見分けられない
+  // （投げられるのは素の Error に見える。2026-11-03、暗号化のしるしを付けた合成 PDF で確かめた）。
+  // そのため、暗号化を気にせずに読み、isEncrypted で見分ける。暗号化された PDF の中身は読まない。
   let doc: PDFDocument;
   try {
-    doc = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: false });
-  } catch (e) {
-    if (e instanceof EncryptedPDFError) {
-      return { ...base, status: "error", pages: null, error: { code: "encrypted", message: "暗号化された PDF は、いまは調べられません。" } };
-    }
+    doc = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: false, ignoreEncryption: true });
+  } catch {
     return { ...base, status: "error", pages: null, error: { code: "unreadable", message: "PDF として読めませんでした。" } };
+  }
+  if (doc.isEncrypted) {
+    return { ...base, status: "error", pages: null, error: { code: "encrypted", message: "暗号化された PDF は、いまは調べられません。" } };
   }
 
   const report: P6TextReport = { ...base, status: "ok", pages: 0, findings: [], skippedPages: [], uncheckedImages: [] };

@@ -72,5 +72,8 @@ const report2 = await detectP6Text(bytes, { includeText: true }); // 字その�
 - 縦書きの字は、横書きと同じ箱で近似している。
 - Identity 以外の CMap（UniJIS-UCS2-H など）を使うフォントは、2バイトずつ区切り、幅は `/W` の CID ではなくコードで引く。字の幅がずれることがある。
 - `/Widths` のない1バイトのフォント（標準の14書体など）は、字の幅を 0.5em とみなす。
-- 暗号化された PDF は `encrypted` で止める（合成 PDF ではまだ試していない）。
+- 暗号化された PDF は `encrypted` で止め、中身は調べない（1.1.1 から。1.1.0 までは、pdf-lib の EncryptedPDFError を instanceof で見分けられず、「読めない」と返していた）。
+  - 確かめた形（2026-11-03、テストの中で作った合成 PDF）：暗号化のしるしだけ、RC4 128 ビット（表の xref）、RC4 でオブジェクトストリームごと暗号化、利用者のパスワードつき。
+  - **利用者のパスワードが空の暗号化**（開くときにパスワードを聞かれず、印刷・編集の禁止だけをかけたもの）も調べない。検証器（PDF.js）は、この形を開いて調べる。
+  - オブジェクトストリームごと暗号化した PDF では、読むときに pdf-lib が「Trying to parse invalid object」などの警告をコンソールに出す（結果は `encrypted`）。
 - 時間の上限はこのルールの中にはない。画面では Worker の時間の上限（src/inspect/limits.ts）で止める。

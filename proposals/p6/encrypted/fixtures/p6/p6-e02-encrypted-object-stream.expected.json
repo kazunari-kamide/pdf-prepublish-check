@@ -1,0 +1,24 @@
+{
+  "file": "p6-e02-encrypted-object-stream.pdf",
+  "description": "RC4 で、オブジェクトストリームごと暗号化（利用者のパスワードは空）。中に見せかけの黒塗り",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "p6-e02-encrypted-object-stream#L1",
+      "pattern": "P6",
+      "layer": "text",
+      "cover": "fill",
+      "page": 1,
+      "rect": [
+        15,
+        95,
+        135,
+        115
+      ],
+      "remaining": {
+        "chars": 10
+      }
+    }
+  ],
+  "negatives": []
+}
