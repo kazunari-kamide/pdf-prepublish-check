@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- 画面の案 B「ページが主役」。見本の画面（動かない）。数字・項目は架空の見本。 -->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>案B ページが主役 — お守りPDF</title>
+    <style>
+      :root {
+        --base: #263238; /* 青墨：文字・帯 */
+        --accent: #c2410c; /* 柿色：危ない所 */
+        --ok: #3f7d4e;
+        --paper: #eef0f1;
+        --line: #c5cbcf;
+        --head: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+        --body: "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--paper); color: var(--base); font: 18px/1.7 var(--body); }
+      header { background: var(--base); color: #fff; padding: 0.6rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+      h1 { font: 700 1.4rem/1.2 var(--head); margin: 0; }
+      header .zero { font-size: 0.9rem; border: 1px solid #fff; padding: 0.1rem 0.6rem; }
+      .bar { display: flex; gap: 1rem; align-items: center; padding: 0.75rem 1.5rem; background: #fff; border-bottom: 1px solid var(--line); }
+      .bar .file { font-weight: 700; }
+      .bar .count { color: var(--accent); font-weight: 700; }
+      .bar button { margin-left: auto; font: 700 1rem var(--body); padding: 0.5rem 1.4rem; border: 0; background: #cfd5d9; color: #59656c; }
+      main { display: grid; grid-template-columns: 6rem minmax(0, 1fr) 22rem; min-height: 80vh; }
+      .thumbs { border-right: 1px solid var(--line); padding: 1rem 0.75rem; display: grid; gap: 0.75rem; align-content: start; }
+      .thumb { background: #fff; aspect-ratio: 210/297; border: 1px solid var(--line); position: relative; font-size: 0.75rem; text-align: center; }
+      .thumb.on { outline: 3px solid var(--base); }
+      .thumb b { position: absolute; right: -0.4rem; top: -0.4rem; background: var(--accent); color: #fff; padding: 0 0.3rem; font-size: 0.75rem; }
+      .stage { padding: 1.5rem; display: grid; justify-items: center; }
+      .page { background: #fff; width: min(100%, 34rem); aspect-ratio: 210/297; position: relative; box-shadow: 0 2px 6px rgb(0 0 0 / 12%); }
+      .page .ln { position: absolute; left: 10%; right: 10%; height: 0.55rem; background: #e3e6e8; }
+      .mark { position: absolute; border: 4px solid var(--accent); }
+      .mark span { position: absolute; left: -4px; bottom: 100%; background: var(--accent); color: #fff; font-weight: 700; padding: 0 0.45rem; }
+      .side { background: #fff; border-left: 1px solid var(--line); padding: 1rem 1.25rem; }
+      .side h2 { font-size: 1.05rem; margin: 0 0 0.5rem; }
+      .item { border-top: 1px solid var(--line); padding: 0.75rem 0; }
+      .item .tag { display: inline-block; border: 2px solid var(--accent); color: var(--accent); font-weight: 700; padding: 0 0.4rem; font-size: 0.85rem; margin-right: 0.4rem; }
+      .item .tag.mid { border-color: var(--base); color: var(--base); }
+      .item p { margin: 0.25rem 0 0; font-size: 0.92rem; }
+      .notice { background: #fff7ed; border-left: 4px solid var(--accent); padding: 0.5rem 0.75rem; font-size: 0.9rem; margin-top: 1rem; }
+      .okstate { margin-top: 1.25rem; border: 3px solid var(--ok); padding: 0.6rem 0.8rem; font-weight: 700; color: var(--ok); }
+      .okstate::before { content: "✓ "; }
+    </style>
+  </head>
+  <body>
+    <header><h1>お守りPDF</h1><span class="zero">送信 0 件・このパソコンの中だけで確かめています</span></header>
+    <div class="bar">
+      <span class="file">見本の書類.pdf（3 ページ）</span>
+      <span class="count">！ 3 か所</span>
+      <span>別の PDF を置く</span>
+      <button disabled>片付ける（準備中）</button>
+    </div>
+    <main>
+      <nav class="thumbs" aria-label="ページ">
+        <div class="thumb">1</div>
+        <div class="thumb on">2<b>1</b></div>
+        <div class="thumb">3</div>
+      </nav>
+      <div class="stage">
+        <div class="page">
+          <div class="ln" style="top:9%"></div><div class="ln" style="top:13%"></div><div class="ln" style="top:17%;right:45%"></div>
+          <div class="mark" style="left:10%;top:12%;width:30%;height:5.5%"><span>1</span></div>
+          <div class="ln" style="top:28%"></div><div class="ln" style="top:32%"></div><div class="ln" style="top:36%"></div>
+        </div>
+      </div>
+      <aside class="side">
+        <h2>見つかった所</h2>
+        <div class="item"><span class="tag">高</span><b>1. 黒い四角の下に、字が残っています</b><p>ページ 2・見せかけの黒塗り・10字。上から重ねただけなので、下の字をコピーできます。</p></div>
+        <div class="item"><span class="tag">高</span><b>2. 修正する前の版が残っています</b><p>ファイル全体・旧版の残存。修正する前の内容を取り出せます。</p></div>
+        <div class="item"><span class="tag mid">中</span><b>3. 文書情報の「作成者」に値があります</b><p>ファイル全体・文書情報・4字。意図したものでなければ消してください。</p></div>
+        <div class="notice">ページ 3 の画像は調べていません。</div>
+        <div class="okstate">片付けたあとの見本：調べた項目では、残っていません</div>
+      </aside>
+    </main>
+  </body>
+</html>
