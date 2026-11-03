@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "eval": "node eval/p6.ts",
+    "eval": "node eval/all.ts",
+    "eval:p6": "node eval/p6.ts",
     "eval:p1": "node eval/p1.ts"
   },
   "devDependencies": {

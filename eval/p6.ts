@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 採点：P6（見せかけの黒塗り）。npm run eval で動く。
+// 採点：P6（見せかけの黒塗り）。npm run eval:p6 で動く（npm run eval は P1 と一緒に回す。eval/all.ts）。
 //
-//   npm run eval                          この検査器の検出ルール（rules/p6-text）を採点する
-//   npm run eval -- --reports <フォルダ>   別の版の報告を採点する。<合成PDFの名前>.json を、検証器の出力と同じ形で置く
-//   npm run eval -- --sanitized <フォルダ> 片付けたあとの PDF（<合成PDFの名前>.pdf）を検証器にかけ、残っている件数も数える
-//   npm run eval -- --json <ファイル>      結果を JSON でも書き出す
+//   npm run eval:p6                          この検査器の検出ルール（rules/p6-text）を採点する
+//   npm run eval:p6 -- --reports <フォルダ>   別の版の報告を採点する。<合成PDFの名前>.json を、検証器の出力と同じ形で置く
+//   npm run eval:p6 -- --sanitized <フォルダ> 片付けたあとの PDF（<合成PDFの名前>.pdf）を検証器にかけ、残っている件数も数える
+//   npm run eval:p6 -- --json <ファイル>      結果を JSON でも書き出す
 //
 // 決まり：合格基準と照らし合わせ方は rubric/p6.json（値はここに書かない）。正解は fixtures/p6/*.expected.json。
 // 検証器（verifier/）はコマンドとして呼ぶだけで、import しない。検出ルールの報告をそろえる変換は eval/adapters に置く。
