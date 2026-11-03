@@ -7,12 +7,12 @@
 import { loadPdf } from "../shared/load.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { scanAnnotations } from "./annotations.ts";
-import { contentBytes, createPageScanner, TooManyOperations, type Cover, type CoverKind, type UncheckedImage } from "./page.ts";
+import { contentBytes, coverageOf, createPageScanner, TooManyCovers, TooManyOperations, type Cover, type CoverKind, type UncheckedImage } from "./page.ts";
 import { IDENTITY, area, intersectionArea, type Rect } from "./geometry.ts";
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.2.0";
+export const RULE_VERSION = "1.3.0";
 
 export type P6TextFinding = {
   pattern: "P6";
@@ -34,7 +34,7 @@ export type P6TextReport = {
   error?: { code: "empty" | "unreadable" | "encrypted"; message: string };
   pages: number | null;
   findings: P6TextFinding[];
-  skippedPages: Array<{ page: number; reason: "too_many_operations" | "unreadable_page" }>;
+  skippedPages: Array<{ page: number; reason: "too_many_operations" | "too_many_covers" | "unreadable_page" }>;
   /** 濃いかどうかを調べられなかった画像（JPEG など）。覆いとしては数えていない。「問題なし」ではない */
   uncheckedImages: Array<{ page: number } & UncheckedImage>;
   /** パスワードなしで開ける暗号化 PDF を、復号して調べたときだけ。どの暗号化だったか（1.2.0 から） */
@@ -57,7 +57,9 @@ export function findCoveredText(
       if (g.seq >= cover.seq) continue; // 覆いのあとに描いた字は、上に見えている
       const a = area(g.rect);
       if (a <= 0) continue;
-      if (intersectionArea(g.rect, cover.rect) / a < coveredFractionMin) continue;
+      // 形を持つ覆い（曲線・回した四角など）は、形と字の箱の重なった面積で測る（1.3.0 から）
+      if (intersectionArea(g.rect, cover.rect) <= 0) continue;
+      if (coverageOf(cover, g.rect) / a < coveredFractionMin) continue;
       text += g.text;
       if (!g.isSpace) chars++;
     }
@@ -132,7 +134,7 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
         report.findings.push(f);
       }
     } catch (e) {
-      report.skippedPages.push({ page: pageNo, reason: e instanceof TooManyOperations ? "too_many_operations" : "unreadable_page" });
+      report.skippedPages.push({ page: pageNo, reason: e instanceof TooManyOperations ? "too_many_operations" : e instanceof TooManyCovers ? "too_many_covers" : "unreadable_page" });
     }
   });
   return report;
