@@ -14,6 +14,7 @@ const EVALS = [
   { pattern: "P6", script: "p6.ts" },
   { pattern: "P1", script: "p1.ts" },
   { pattern: "P9", script: "p9.ts" },
+  { pattern: "P5", script: "p5.ts" },
   { pattern: "P7", script: "p7.ts" },
 ];
 
