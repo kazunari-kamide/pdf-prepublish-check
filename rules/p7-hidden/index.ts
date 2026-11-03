@@ -19,16 +19,15 @@ import {
   PDFRawStream,
   PDFRef,
   PDFStream,
-  StandardFontEmbedder,
-  StandardFonts,
   decodePDFRawStream,
 } from "pdf-lib";
+import { operations, type Op, type Tok } from "../shared/content-lexer.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
+import { readFont, type FontInfo } from "../shared/fonts.ts";
 import { loadPdf } from "../shared/load.ts";
-import { operations, type Op, type Tok } from "./lexer.ts";
 
 export const RULE_ID = "p7-hidden";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.0.1";
 
 export type P7Reason = "hidden_layer" | "off_page" | "clipped" | "invisible" | "tiny" | "same_color" | "covered_light";
 
@@ -155,24 +154,8 @@ function luminance(space: Space, comps: number[]): number | null {
   return null;
 }
 
-// ---------------------------------------------------------------- 書体
-
-type FontInfo = {
-  twoByte: boolean;
-  /** 字の幅（1000 分の 1 em）。type3 のときは、書体の行列をかけて 1000 分の 1 em に直したもの */
-  width(code: number): number;
-  ascent: number;
-  descent: number;
-};
-
-const STANDARD: Record<string, StandardFonts> = {
-  Helvetica: StandardFonts.Helvetica, "Helvetica-Bold": StandardFonts.HelveticaBold, "Helvetica-Oblique": StandardFonts.HelveticaOblique,
-  "Helvetica-BoldOblique": StandardFonts.HelveticaBoldOblique, "Times-Roman": StandardFonts.TimesRoman, "Times-Bold": StandardFonts.TimesRomanBold,
-  "Times-Italic": StandardFonts.TimesRomanItalic, "Times-BoldItalic": StandardFonts.TimesRomanBoldItalic, Courier: StandardFonts.Courier,
-  "Courier-Bold": StandardFonts.CourierBold, "Courier-Oblique": StandardFonts.CourierOblique, "Courier-BoldOblique": StandardFonts.CourierBoldOblique,
-  Symbol: StandardFonts.Symbol, ZapfDingbats: StandardFonts.ZapfDingbats,
-  Arial: StandardFonts.Helvetica, "Arial,Bold": StandardFonts.HelveticaBold, TimesNewRoman: StandardFonts.TimesRoman,
-};
+// ---------------------------------------------------------------- 辞書を引く道具
+// 書体の寸法は、P6 と同じ rules/shared/fonts.ts で読む（PR #25 の返事の 1）
 
 function numOf(ctx: PDFContext, o: PDFObject | undefined): number | null {
   const v = o instanceof PDFRef ? ctx.lookup(o) : o;
@@ -191,92 +174,6 @@ function arrOf(ctx: PDFContext, o: PDFObject | undefined): PDFArray | null {
 function nameOf(ctx: PDFContext, o: PDFObject | undefined): string | null {
   const v = o instanceof PDFRef ? ctx.lookup(o) : o;
   return v instanceof PDFName ? v.decodeText() : null;
-}
-
-function readFont(ctx: PDFContext, font: PDFDict): FontInfo {
-  const subtype = nameOf(ctx, font.get(PDFName.of("Subtype")));
-  let desc: PDFDict | null = dictOf(ctx, font.get(PDFName.of("FontDescriptor")));
-  let base = (nameOf(ctx, font.get(PDFName.of("BaseFont"))) ?? "").replace(/^[A-Z]{6}\+/, "");
-  let std: StandardFontEmbedder | null = null;
-  const stdName = STANDARD[base];
-  if (stdName) {
-    try {
-      // pdf-lib の StandardFonts と、StandardFontEmbedder の受け取る名前の型は別だが、中身は同じ文字（"Helvetica" など）
-      std = StandardFontEmbedder.for(stdName as unknown as Parameters<typeof StandardFontEmbedder.for>[0]);
-    } catch {
-      std = null;
-    }
-  }
-
-  let twoByte = false;
-  let width: (code: number) => number;
-  let fontScale = 1; // type3 の書体の行列
-  if (subtype === "Type0") {
-    twoByte = true;
-    const kids = arrOf(ctx, font.get(PDFName.of("DescendantFonts")));
-    const cid = kids && kids.size() > 0 ? dictOf(ctx, kids.get(0)) : null;
-    desc = cid ? dictOf(ctx, cid.get(PDFName.of("FontDescriptor"))) : desc;
-    if (cid) base = (nameOf(ctx, cid.get(PDFName.of("BaseFont"))) ?? base).replace(/^[A-Z]{6}\+/, "");
-    const dw = (cid && numOf(ctx, cid.get(PDFName.of("DW")))) ?? 1000;
-    const map = new Map<number, number>();
-    const w = cid ? arrOf(ctx, cid.get(PDFName.of("W"))) : null;
-    if (w) {
-      for (let i = 0; i < w.size() && map.size < 100_000; ) {
-        const first = numOf(ctx, w.get(i));
-        const next = w.get(i + 1);
-        const nextArr = arrOf(ctx, next);
-        if (first === null) break;
-        if (nextArr) {
-          for (let k = 0; k < nextArr.size(); k++) map.set(first + k, numOf(ctx, nextArr.get(k)) ?? dw);
-          i += 2;
-        } else {
-          const last = numOf(ctx, next);
-          const ww = numOf(ctx, w.get(i + 2));
-          if (last === null || ww === null) break;
-          for (let c = first; c <= last && c - first < 65536; c++) map.set(c, ww);
-          i += 3;
-        }
-      }
-    }
-    width = (code) => map.get(code) ?? dw;
-  } else {
-    const first = numOf(ctx, font.get(PDFName.of("FirstChar"))) ?? 0;
-    const widths = arrOf(ctx, font.get(PDFName.of("Widths")));
-    const missing = (desc && numOf(ctx, desc.get(PDFName.of("MissingWidth")))) ?? null;
-    if (subtype === "Type3") {
-      const fm = arrOf(ctx, font.get(PDFName.of("FontMatrix")));
-      fontScale = fm ? (numOf(ctx, fm.get(0)) ?? 0.001) * 1000 : 1;
-    }
-    width = (code) => {
-      if (widths) {
-        const w = numOf(ctx, widths.get(code - first));
-        if (w !== null && code >= first) return w * fontScale;
-      }
-      if (std) {
-        try {
-          return std.widthOfTextAtSize(String.fromCharCode(code), 1000);
-        } catch {
-          // 書体にない字
-        }
-      }
-      return missing ?? 500;
-    };
-  }
-
-  let ascent = desc ? numOf(ctx, desc.get(PDFName.of("Ascent"))) : null;
-  let descent = desc ? numOf(ctx, desc.get(PDFName.of("Descent"))) : null;
-  if (!ascent && !descent) {
-    const fb = subtype === "Type3" ? arrOf(ctx, font.get(PDFName.of("FontBBox"))) : desc ? arrOf(ctx, desc.get(PDFName.of("FontBBox"))) : null;
-    if (fb && fb.size() === 4) {
-      descent = (numOf(ctx, fb.get(1)) ?? -250) * fontScale;
-      ascent = (numOf(ctx, fb.get(3)) ?? 750) * fontScale;
-    } else if (std) {
-      const f = (std as unknown as { font: { Ascender?: number; Descender?: number; FontBBox: number[] } }).font;
-      ascent = f.Ascender || f.FontBBox[3]!;
-      descent = f.Descender || f.FontBBox[1]!;
-    }
-  }
-  return { twoByte, width, ascent: ascent || 750, descent: descent ?? -250 };
 }
 
 // ---------------------------------------------------------------- 集めるもの
@@ -479,22 +376,20 @@ class PageScanner {
     const showText = (bytes: Uint8Array, opNo: number) => {
       const f = g.font;
       if (!f) return;
-      const step = f.twoByte ? 2 : 1;
-      for (let i = 0; i + step <= bytes.length; i += step) {
-        const code = f.twoByte ? (bytes[i]! << 8) | bytes[i + 1]! : bytes[i]!;
-        const w0 = f.width(code) / 1000;
+      for (const gl of f.decode(bytes)) {
+        const w0 = gl.width;
         const trm = mul([g.size * g.th, 0, 0, g.size, 0, g.rise], mul(tm, g.ctm));
         const corners: Array<[number, number]> = [
-          apply(trm, 0, f.descent / 1000),
-          apply(trm, w0, f.descent / 1000),
-          apply(trm, 0, f.ascent / 1000),
-          apply(trm, w0, f.ascent / 1000),
+          apply(trm, 0, f.descent),
+          apply(trm, w0, f.descent),
+          apply(trm, 0, f.ascent),
+          apply(trm, w0, f.ascent),
         ];
         const rect = boxOf(corners);
-        const [bx, by] = apply(trm, 0, f.descent / 1000);
-        const [tx, ty] = apply(trm, 0, f.ascent / 1000);
+        const [bx, by] = apply(trm, 0, f.descent);
+        const [tx, ty] = apply(trm, 0, f.ascent);
         const height = Math.hypot(tx - bx, ty - by);
-        const isSpace = !f.twoByte && code === 32;
+        const isSpace = gl.isSpace;
         const strokeMode = g.mode === 1 || g.mode === 5;
         this.glyphs.push({
           seq: this.seq++,
@@ -502,14 +397,14 @@ class PageScanner {
           rect,
           height,
           isSpace,
-          text: String.fromCharCode(code),
+          text: gl.text,
           hidden: isHidden(),
           clip: g.clip,
           mode: g.mode,
           alpha: strokeMode ? g.CA : g.ca,
           lum: strokeMode ? g.stroke : g.fill,
         });
-        const adv = (w0 * g.size + g.tc + (isSpace ? g.tw : 0)) * g.th;
+        const adv = (w0 * g.size + g.tc + (gl.isWordSpace ? g.tw : 0)) * g.th;
         tm = mul([1, 0, 0, 1, adv, 0], tm);
       }
     };
