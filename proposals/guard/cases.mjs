@@ -152,7 +152,7 @@ const cases = [
   ["すり抜け", "止める", "PowerShell：; のあとの Copy-Item の書き先", S(`git status; Copy-Item src\\a.ts -Destination verifier\\`)],
   ["すり抜け", "止める", "cmd /c del", B(`cmd /c "del /q rubric\\x.md"`)],
   ["すり抜け", "止める", "コミットのあとに cp で verifier/", B('git commit -m "x" && cp a.txt verifier/a.txt')],
-  // 直した版の最初の案が通してしまい、直したもの（今の版はたまたま止める）
+  // 直した版の最初の案が通してしまい、見直して直したもの（8 件のうち 5 件は今の版が止める）
   ["すり抜け（案の見直し）", "止める", "スクリプトのファイルを書いて、同じコマンドで動かす", B("echo 'rm -rf rubric' > .tmp/x.sh && bash .tmp/x.sh")],
   ["すり抜け（案の見直し）", "止める", "ヒアドキュメントでスクリプトを書いて ./ で動かす", B("cat > .tmp/x.sh <<'EOF'\nrm -rf fixtures\nEOF\n./.tmp/x.sh")],
   ["すり抜け（案の見直し）", "止める", "リンクを作ってから、リンクを通して書く", B("ln -s ../rubric .tmp/l && echo x > .tmp/l/a.md")],
@@ -161,10 +161,10 @@ const cases = [
   ["すり抜け（案の見直し）", "止める", "拡張ワイルドカード @(…)", B("shopt -s extglob; rm -rf @(rubric)")],
   ["すり抜け（案の見直し）", "止める", "知らない命令（watch）の中の rm と、別の所の node", B('watch "rm -rf rubric"; node x.js')],
   ["すり抜け（案の見直し）", "止める", "trap に書いた rm", B("trap 'rm -rf rubric' EXIT")],
-  // 今の版でも通ってしまうもの
-  ["すり抜け（今の版も通す）", "止める", "git apply（パッチの中に rubric/）", B("git apply <<'EOF'\n--- a/rubric/p6.md\n+++ b/rubric/p6.md\n@@ -1 +1 @@\n-a\n+b\nEOF")],
-  ["すり抜け（今の版も通す）", "止める", "patch（パッチの中に verifier/）", B("patch -p1 <<'EOF'\n--- a/verifier/p6.mjs\n+++ b/verifier/p6.mjs\n@@ -1 +1 @@\n-a\n+b\nEOF")],
-  ["すり抜け（今の版も通す）", "止める", "git clone の行き先が fixtures", B("git clone https://example.com/x.git fixtures")],
+  // パッチの中身・clone の行き先
+  ["すり抜け（パッチ・clone）", "止める", "git apply（パッチの中に rubric/）", B("git apply <<'EOF'\n--- a/rubric/p6.md\n+++ b/rubric/p6.md\n@@ -1 +1 @@\n-a\n+b\nEOF")],
+  ["すり抜け（パッチ・clone）", "止める", "patch（パッチの中に verifier/）", B("patch -p1 <<'EOF'\n--- a/verifier/p6.mjs\n+++ b/verifier/p6.mjs\n@@ -1 +1 @@\n-a\n+b\nEOF")],
+  ["すり抜け（パッチ・clone）", "止める", "git clone の行き先が fixtures", B("git clone https://example.com/x.git fixtures")],
   // 通すもの（直した版で、新しく止めないこと）
   ["通す（追加）", "通す", "git apply（パッチの中は src/ だけ）", B("git apply <<'EOF'\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-a\n+b\nEOF")],
   ["通す（追加）", "通す", "スクリプトを書いて動かす（守る場所の名前なし）", B("echo 'console.log(1)' > .tmp/x.mjs && node .tmp/x.mjs")],
