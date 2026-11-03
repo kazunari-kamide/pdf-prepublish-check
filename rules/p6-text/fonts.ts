@@ -10,6 +10,7 @@ import {
   PDFNumber,
   PDFRawStream,
   PDFStream,
+  StandardFontEmbedder,
   decodePDFRawStream,
   type PDFContext,
   type PDFObject,
@@ -39,8 +40,43 @@ export type FontInfo = {
 
 const DEFAULT_ASCENT = 0.8;
 const DEFAULT_DESCENT = -0.2;
-/** 幅が分からない字に使う幅（em）。標準の14書体で /Widths がないときなど */
+/** 幅が分からない字に使う幅（em）。/Widths がなく、標準の書体でもないときなど */
 const FALLBACK_WIDTH = 0.5;
+
+/** 標準の14書体のうち、ラテン文字の12書体（Symbol・ZapfDingbats は独自の符号なので除く） */
+const STANDARD_LATIN = new Set([
+  "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique",
+  "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+  "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
+]);
+
+/**
+ * /Widths のない標準の書体の、字の幅（em）を引く関数。pdf-lib が持つ標準の書体の寸法（AFM）を使う（1.3.0 から）。
+ * 引けない字は undefined（呼ぶ側で FALLBACK_WIDTH にする）。
+ */
+function standardWidths(baseFont: string | undefined): ((code: number) => number | undefined) | null {
+  const name = baseFont?.replace(/^[A-Z]{6}\+/, ""); // 一部だけ埋め込んだ書体の頭の6字（ABCDEF+）を外す
+  if (!name || !STANDARD_LATIN.has(name)) return null;
+  let embedder: StandardFontEmbedder;
+  try {
+    embedder = StandardFontEmbedder.for(name as Parameters<typeof StandardFontEmbedder.for>[0]);
+  } catch {
+    return null;
+  }
+  const cache = new Map<number, number | undefined>();
+  return (code) => {
+    if (cache.has(code)) return cache.get(code);
+    let w: number | undefined;
+    try {
+      w = code >= 0x20 && code !== 0x7f && !(code >= 0x80 && code < 0xa0) ? embedder.widthOfTextAtSize(String.fromCharCode(code), 1) : undefined;
+    } catch {
+      w = undefined;
+    }
+    if (w !== undefined && !(Number.isFinite(w) && w >= 0)) w = undefined;
+    cache.set(code, w);
+    return w;
+  };
+}
 
 function num(ctx: PDFContext, obj: PDFObject | undefined): number | undefined {
   const v = obj ? ctx.lookup(obj) : undefined;
@@ -206,6 +242,7 @@ export function readFont(ctx: PDFContext, fontObj: PDFObject | undefined): FontI
   }
   const desc = ctx.lookup(font.get(PDFName.of("FontDescriptor")));
   const { ascent, descent } = readDescriptor(ctx, desc instanceof PDFDict ? desc : undefined);
+  const stdWidth = widthList.length === 0 && subtype === "Type1" ? standardWidths(nameOf(ctx, font.get(PDFName.of("BaseFont")))) : null;
   return {
     ascent,
     descent,
@@ -214,7 +251,7 @@ export function readFont(ctx: PDFContext, fontObj: PDFObject | undefined): FontI
       const out: Glyph[] = [];
       for (const code of bytes) {
         const raw = widthList[code - firstChar];
-        const width = raw !== undefined && widthList.length > 0 ? raw * unitsPerGlyphSpace : FALLBACK_WIDTH;
+        const width = raw !== undefined && widthList.length > 0 ? raw * unitsPerGlyphSpace : stdWidth?.(code) ?? FALLBACK_WIDTH;
         const text = toUnicode.get(code) ?? (code >= 0x20 && code < 0x7f ? String.fromCharCode(code) : "");
         out.push({ width, isSpace: code === 0x20 || isBlank(text), isWordSpace: code === 0x20, text });
       }
