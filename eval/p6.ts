@@ -8,6 +8,7 @@
 //   npm run eval:p6 -- --json <ファイル>      結果を JSON でも書き出す
 //
 // 決まり：合格基準と照らし合わせ方は rubric/p6.json（値はここに書かない）。正解は fixtures/p6/*.expected.json。
+// 正解データに expected_error があるもの（開けないことが正しい入力）は、同じエラーを返せば「合っている」と数える（eval/expected-error.ts）。
 // 検証器（verifier/）はコマンドとして呼ぶだけで、import しない。検出ルールの報告をそろえる変換は eval/adapters に置く。
 
 import { spawnSync } from "node:child_process";
@@ -15,6 +16,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { detectP6Text } from "../rules/p6-text/index.ts";
 import { adaptP6Text } from "./adapters/p6-text.ts";
+import { checkExpectedError, describeExpectedErrors, type ExpectedErrorResult } from "./expected-error.ts";
 import { matchFile, type Expected, type FileMatch, type MatchRule, type VerifierShapedReport } from "./match.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -28,6 +30,21 @@ type Rubric = {
   breakdown: string[];
   match: MatchRule & { overlap: string };
 };
+
+/** 正解データ。expected_error があるものは、開けないことが正しい入力（fixtures/p6/README.md） */
+export type P6ExpectedFile = Expected & { expected_error?: string };
+
+export type P6FixtureScore =
+  | { kind: "expected_error"; result: ExpectedErrorResult }
+  | { kind: "match"; result: FileMatch };
+
+/** 合成 PDF 1つを採点する。expected_error があれば、エラーが同じかだけを見る（照らし合わせはしない） */
+export function scoreP6Fixture(expected: P6ExpectedFile, report: VerifierShapedReport, rule: MatchRule): P6FixtureScore {
+  if (expected.expected_error !== undefined) {
+    return { kind: "expected_error", result: checkExpectedError(expected.file, expected.expected_error, report) };
+  }
+  return { kind: "match", result: matchFile(expected, report, rule) };
+}
 
 function argValue(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -56,12 +73,13 @@ async function main() {
   // 2. 合成 PDF ごとに採点する
   const names = readdirSync(FIXTURES).filter((f) => f.endsWith(".expected.json")).sort();
   const results: Array<FileMatch & { expected: Expected }> = [];
+  const expectedErrors: ExpectedErrorResult[] = [];
   const residual: Array<{ file: string; items: number | null; status: string; skipped: number }> = [];
   let uncheckedImages = 0; // 検出ルールが濃いかどうかを調べられなかった画像（参考）
   const subject = reportsDir ? `別の版の報告（${path.basename(reportsDir)}）` : "検出ルール rules/p6-text";
 
   for (const name of names) {
-    const expected = JSON.parse(readFileSync(path.join(FIXTURES, name), "utf8")) as Expected;
+    const expected = JSON.parse(readFileSync(path.join(FIXTURES, name), "utf8")) as P6ExpectedFile;
     const base = expected.file.replace(/\.pdf$/, "");
     let report: VerifierShapedReport;
     if (reportsDir) {
@@ -75,7 +93,13 @@ async function main() {
       uncheckedImages += raw.uncheckedImages.length;
       report = adaptP6Text(raw);
     }
-    results.push({ ...matchFile(expected, report, rubric.match), expected });
+    const score = scoreP6Fixture(expected, report, rubric.match);
+    if (score.kind === "expected_error") {
+      // 開けないことが正しい入力：片付けることもできないので、片付けたあとの確かめもしない
+      expectedErrors.push(score.result);
+      continue;
+    }
+    results.push({ ...score.result, expected });
 
     if (sanitizedDir) {
       const p = path.join(sanitizedDir, expected.file);
@@ -121,7 +145,8 @@ async function main() {
   const passFpr = fpr <= rubric.pass.false_positive_rate_max;
   const passResidual =
     residualMeasured && residualBad.length === 0 && residualTotal <= rubric.pass.residual_after_sanitize_max;
-  const pass = passRecall && passFpr && passResidual && errors.length === 0;
+  const passExpectedErrors = expectedErrors.every((r) => r.ok);
+  const pass = passRecall && passFpr && passResidual && errors.length === 0 && passExpectedErrors;
 
   // 字数の食い違い（合否には使わない。rubric/p6.md §3）
   const charDiffs = results.flatMap((r) =>
@@ -134,7 +159,7 @@ async function main() {
   const say = (s = "") => lines.push(s);
   say(`採点：P6（見せかけの黒塗り）　対象：${subject}`);
   say(`検証器そのものの確かめ（verifier/selfcheck.mjs）：${selfOk ? "合格" : "不合格"}　${selfLast}`);
-  say(`合成 PDF：${results.length} 個　漏れ：${leaks} 件　漏れでないもの：${negatives} 件`);
+  say(`合成 PDF：${results.length + expectedErrors.length} 個（うち開けないことが正しいもの ${expectedErrors.length} 個）　漏れ：${leaks} 件　漏れでないもの：${negatives} 件`);
   say();
   say(`検出率　　　　　：${found} / ${leaks} = ${pct(found, leaks)}　（基準 ${rubric.pass.recall_min * 100}% 以上）→ ${passRecall ? "満たす" : "満たさない"}`);
   say(`誤検知率　　　　：${fp} / ${negatives} = ${pct(fp, negatives)}　（基準 ${rubric.pass.false_positive_rate_max * 100}% 以下）→ ${passFpr ? "満たす" : "満たさない"}`);
@@ -146,6 +171,7 @@ async function main() {
       ? `片付けたあとに残る情報：${residualTotal} 件（読めない・省いたページあり：${residualBad.length} 個）　（基準 ${rubric.pass.residual_after_sanitize_max} 件）→ ${passResidual ? "満たす" : "満たさない"}`
       : "片付けたあとに残る情報：未測定（片付けた PDF が渡されていない。--sanitized で測る）→ 満たさない",
   );
+  for (const l of describeExpectedErrors(expectedErrors)) say(l);
   if (errors.length) say(`読めなかった合成 PDF：${errors.join("、")}`);
   if (skipped) say(`省いたページ：${skipped} ページ`);
   if (!reportsDir) say(`（参考）濃いかどうかを調べられなかった画像（JPEG など）：${uncheckedImages} 個`);
@@ -184,7 +210,7 @@ async function main() {
     const out = {
       subject,
       verifier_selfcheck: selfOk,
-      fixtures: results.length,
+      fixtures: results.length + expectedErrors.length,
       leaks,
       negatives,
       found,
@@ -193,6 +219,7 @@ async function main() {
       false_positive_rate: fpr,
       residual: residualMeasured ? { total: residualTotal, bad_files: residualBad.map((r) => r.file) } : null,
       breakdown,
+      expected_errors: { total: expectedErrors.length, matched: expectedErrors.filter((r) => r.ok).length, mismatched: expectedErrors.filter((r) => !r.ok).map((r) => r.file) },
       missed: missed.map((m) => m.id),
       pass,
     };
@@ -201,4 +228,4 @@ async function main() {
   process.exitCode = pass ? 0 : 1;
 }
 
-await main();
+if (import.meta.main) await main();

@@ -17,6 +17,8 @@ export type ReportItem = {
 /** 検証器の出力と同じ形（verifier/schema.json のうち、採点に使う所） */
 export type VerifierShapedReport = {
   status: "ok" | "error";
+  /** status が error のときの理由（expected_error と比べる。eval/expected-error.ts） */
+  error?: { code: string };
   items: ReportItem[];
   skipped_pages: Array<{ page: number; reason: string }>;
 };
