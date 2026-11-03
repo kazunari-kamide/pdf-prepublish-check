@@ -8,6 +8,10 @@
 //   npm run check:browser -- <PDF のパス>...                  … 入れる PDF を変える（既定は下の DEFAULT_PDFS）
 //   npm run check:browser -- --self-test                     … 数える仕組みの点検。わざと外へ要求を出し、失敗になることを確かめる
 //   npm run check:browser -- --url https://omamoripdf.com/   … vite preview の代わりに、配信したサイト（本番）を開く（docs/deploy.md）
+//   npm run check:browser -- --no-sanitize                   … 「片付ける」を押さない（検査だけを確かめる）
+//
+// - 既定では、検査のあとに「片付ける」を押し、読み直すまで待ち、「片付けた PDF を保存する」を押して、保存された PDF を確かめる。
+//   片付け・読み直し・保存の間の要求も数える。保存先は一時フォルダで、終わったら消す。
 //
 // - Chrome（または Edge）を headless で動かし、DevTools の決まり（CDP）で操作する。場所は CHROME_PATH で変えられる。
 // - 数えるもの：ページを開いてから閉じるまでの、すべての要求（CSP で止められた要求も数える）。
@@ -15,7 +19,7 @@
 // - このスクリプト自身は、手元の Chrome と話すために通信を使う（検査器のコードではない。dist/ には入らない）。
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { preview } from "vite";
@@ -34,11 +38,13 @@ const args = process.argv.slice(2);
 let shotsDir = null;
 let selfTest = false;
 let liveUrl = null;
+let sanitize = true;
 const pdfs = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--shots") shotsDir = path.resolve(args[++i]);
   else if (args[i] === "--self-test") selfTest = true;
   else if (args[i] === "--url") liveUrl = new URL(args[++i]).href;
+  else if (args[i] === "--no-sanitize") sanitize = false;
   else pdfs.push(path.resolve(args[i]));
 }
 if (!pdfs.length) pdfs.push(...DEFAULT_PDFS.slice(0, selfTest ? 1 : undefined).map((p) => path.join(ROOT, p)));
@@ -69,6 +75,8 @@ const appUrl = liveUrl ?? server.resolvedUrls.local[0];
 const origin = new URL(appUrl).origin;
 
 const profile = mkdtempSync(path.join(tmpdir(), "omamori-chrome-"));
+const downloads = path.join(profile, "downloads");
+mkdirSync(downloads);
 const debugPort = 9300 + Math.floor(Math.random() * 500);
 const chrome = spawn(chromePath, ["--headless=new", `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-background-networking", "--disable-component-update", "--disable-sync", "about:blank"], { stdio: "ignore" });
 
@@ -94,15 +102,22 @@ try {
     console.log(`\n■ ${r.name}`);
     console.log(`  状態：${r.status}`);
     console.log(`  ページの絵：${r.drawn}`);
+    if (r.cleaned) {
+      console.log(`  片付け：${r.cleaned.status}`);
+      if (r.cleaned.count) console.log(`  読み直し：${r.cleaned.count}`);
+      console.log(`  保存：${r.cleaned.saved}`);
+    }
     console.log(`  要求：全部で ${r.all.length} 件。同じサイト ${r.same.length} 件、外 ${r.outside.length} 件、CSP で止められた ${r.blocked.length} 件`);
     for (const u of r.same) console.log(`    同じサイト：${u}`);
     for (const u of r.outside) console.log(`    外：${u}`);
     for (const b of r.blocked) console.log(`    CSP で止められた：${b}`);
     if (r.errors.length) console.log(`  console のエラー：${r.errors.join(" / ")}`);
     if (r.shot) console.log(`  スクリーンショット：${r.shot}`);
+    if (r.cleanShot) console.log(`  スクリーンショット（片付けたあと）：${r.cleanShot}`);
   }
   const outside = results.reduce((n, r) => n + r.outside.length, 0);
   const blocked = results.reduce((n, r) => n + r.blocked.length, 0);
+  const notSaved = results.filter((r) => r.cleaned && r.cleaned.ok === false);
   console.log(`\n合計：PDF ${results.length} 件、外への要求 ${outside} 件、CSP で止められた要求 ${blocked} 件`);
   if (selfTest) {
     // 点検では、外への要求を捕まえられていれば成功
@@ -113,6 +128,9 @@ try {
     }
   } else if (outside > 0 || blocked > 0) {
     console.error("失敗：外への要求、または止められた要求がありました。");
+    exitCode = 1;
+  } else if (notSaved.length) {
+    console.error(`失敗：片付けた PDF を保存できませんでした（${notSaved.map((r) => r.name).join("、")}）。`);
     exitCode = 1;
   } else {
     console.log("外への要求は0件でした。");
@@ -231,12 +249,15 @@ async function checkOne(c, pdf) {
     );
 
     let shot = null;
-    if (shotsDir) {
-      const h = await evaluate("Math.ceil(document.documentElement.scrollHeight)");
-      const w = await evaluate("Math.ceil(document.documentElement.clientWidth)");
-      const { data } = await c.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: w, height: Math.min(h, 4000), scale: 1 } }, sessionId);
-      shot = path.join(shotsDir, `${path.basename(pdf, ".pdf")}.png`);
-      writeFileSync(shot, Buffer.from(data, "base64"));
+    if (shotsDir) shot = await screenshot(c, sessionId, evaluate, path.join(shotsDir, `${path.basename(pdf, ".pdf")}.png`));
+    let cleaned = null;
+    let cleanShot = null;
+    if (sanitize && !selfTest) {
+      cleaned = await pressSanitize(c, sessionId, evaluate, pdf);
+      if (cleaned.pressed && shotsDir) {
+        await sleep(1500); // 縮小した絵を描く時間
+        cleanShot = await screenshot(c, sessionId, evaluate, path.join(shotsDir, `${path.basename(pdf, ".pdf")}-cleaned.png`));
+      }
     }
     const local = (u) => u.startsWith(origin + "/") || u.startsWith("blob:") || u.startsWith("data:") || u === "about:blank";
     return {
@@ -249,9 +270,60 @@ async function checkOne(c, pdf) {
       blocked,
       errors,
       shot: shot ? path.relative(ROOT, shot).replace(/\\/g, "/") : null,
+      cleaned,
+      cleanShot: cleanShot ? path.relative(ROOT, cleanShot).replace(/\\/g, "/") : null,
     };
   } finally {
     off();
     await c.send("Target.closeTarget", { targetId }).catch(() => {});
   }
+}
+
+async function screenshot(c, sessionId, evaluate, file) {
+  const h = await evaluate("Math.ceil(document.documentElement.scrollHeight)");
+  const w = await evaluate("Math.ceil(document.documentElement.clientWidth)");
+  const { data } = await c.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: w, height: Math.min(h, 4000), scale: 1 } }, sessionId);
+  writeFileSync(file, Buffer.from(data, "base64"));
+  return file;
+}
+
+// ---------------------------------------------------------------- 3 片付ける → 4 読み直す → 保存
+
+/** 「片付ける」を押し、読み直しが終わるまで待ち、保存のボタンを押して、保存された PDF を確かめる */
+async function pressSanitize(c, sessionId, evaluate, pdf) {
+  const can = await evaluate("(() => { const b = document.getElementById('sanitize'); return !b.disabled && !document.getElementById('actions').hidden; })()");
+  if (!can) {
+    const note = await evaluate("document.getElementById('actions').hidden ? '片付けるボタンが出ていません' : document.getElementById('sanitize-note').textContent");
+    return { pressed: false, status: `押せない形でした（${note}）`, count: null, saved: "—", ok: null };
+  }
+  await evaluate("document.getElementById('sanitize').click(); void 0");
+  const working = "(() => { const s = document.getElementById('status').textContent; return s.startsWith('片付けています') || s.startsWith('片付けた PDF を、最初から'); })()";
+  for (let i = 0; i < 400 && (await evaluate(working)); i++) await sleep(200);
+  const status = await evaluate("document.getElementById('status').textContent");
+  if (!(await evaluate("!document.getElementById('clean').hidden"))) return { pressed: true, status, count: null, saved: "保存のボタンが出ませんでした", ok: false };
+  const count = await evaluate("document.getElementById('clean-count').textContent");
+  const name = await evaluate("document.getElementById('download').download");
+
+  // 保存：ブラウザの保存先を一時フォルダにし、保存のボタンを押す
+  const target = path.join(downloads, path.basename(pdf, ".pdf"));
+  mkdirSync(target, { recursive: true });
+  await c.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: target });
+  await evaluate("document.getElementById('download').click(); void 0");
+  let file = null;
+  for (let i = 0; i < 100 && !file; i++) {
+    await sleep(100);
+    const done = readdirSync(target).filter((f) => !f.endsWith(".crdownload"));
+    if (done.length) file = path.join(target, done[0]);
+  }
+  if (!file) return { pressed: true, status, count, saved: "保存されませんでした", ok: false };
+  const bytes = readFileSync(file);
+  const isPdf = bytes.subarray(0, 5).toString("latin1") === "%PDF-";
+  const sameName = path.basename(file) === name;
+  return {
+    pressed: true,
+    status,
+    count,
+    saved: `${sameName ? `「${name}」` : `名前が違う（${path.basename(file)}）`}・${bytes.length} バイト・${isPdf ? "%PDF- で始まる" : "PDF ではない"}`,
+    ok: isPdf && sameName,
+  };
 }
