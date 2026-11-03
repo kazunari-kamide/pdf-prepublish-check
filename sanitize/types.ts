@@ -18,6 +18,7 @@ export type RemovedKind =
   | "previous_versions" // P5：前の版（増分更新）
   | "unused_objects" // P5：どこからも使われていない中身
   | "attachment" // P9：添付ファイル
+  | "comment_annotation" // P8：付箋の注釈（まるごと外した）
   | "annotation_content" // P8：注釈のコメント・作者名
   | "popup" // P8：コメントの吹き出し
   | "javascript"; // P12：JavaScript

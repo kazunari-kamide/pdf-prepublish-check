@@ -3,7 +3,8 @@
 // 文書全体の隠れた情報を取り除く。
 // - P1 文書情報：Info 辞書を丸ごと消す（作成者などの欄は書き換えずに消す。2026-11-03 人が決めた）
 // - P2 XMP：/Metadata をすべて外す（文書・ページ・画像・部品のもの）
-// - P8 注釈の中身：コメント（/Contents・/RC）・作者名（/T）・件名・日時を消し、吹き出し（Popup）を外す。見た目は残す
+// - P8 注釈の中身：付箋（Text）と吹き出し（Popup）の注釈はまるごと外す（2026-11-04 人が決めた）。
+//   リンクなどほかの注釈は、コメント（/Contents・/RC）・作者名（/T）・件名・日時を消し、見た目は残す
 // - P9 添付ファイル：名前の木の /EmbeddedFiles、添付ファイルの注釈、関連ファイル（/AF）、ポートフォリオ（/Collection）を外す
 // - P12 JavaScript：名前の木の /JavaScript、JavaScript の動作（/OpenAction・/A・/AA の中）を外す
 // - P5 前の版：最後に、文書の根（/Root）からたどれないオブジェクトをすべて捨て、1つの版として書き出す（index.ts）
@@ -191,14 +192,41 @@ export function removeAttachments(doc: PDFDocument): RemovedItem[] {
 /** 注釈の中で、作者名（/T）を消してよい種類（フォームの欄・リンクは /T の意味が違うので除く） */
 const NOT_MARKUP = new Set(["Widget", "Link", "Popup"]);
 
-/** P8：注釈のコメント・作者名を消し、吹き出しを外す。墨消し注釈（適用したもの）もここで外す */
+/** まるごと外すコメントの注釈：付箋（Text）。吹き出し（Popup）も外す（2026-11-04 人が決めた。リンクなど、ほかの注釈は残す） */
+const COMMENT_TYPES = new Set(["Text"]);
+
+/** 注釈のコメント・作者名などの欄を消す。中身があったら true */
+function stripAnnotation(ctx: PDFContext, a: PDFDict, subtype: string): boolean {
+  let had = false;
+  for (const key of ["Contents", "RC"]) if (a.has(N(key))) {
+    if (hasValue(ctx, a.get(N(key)))) had = true;
+    a.delete(N(key));
+  }
+  if (!NOT_MARKUP.has(subtype)) {
+    for (const key of ["T", "Subj", "M", "CreationDate"]) if (a.has(N(key))) {
+      if (key === "T" && hasValue(ctx, a.get(N(key)))) had = true;
+      a.delete(N(key));
+    }
+  }
+  if (a.has(N("Popup"))) a.delete(N("Popup"));
+  return had;
+}
+
+/**
+ * P8：付箋（Text）と吹き出し（Popup）の注釈をまるごと外す。ほかの注釈は、コメント・作者名を消して見た目を残す。
+ * 墨消し注釈（適用したもの）もここで外す。
+ * 外した注釈も、先に欄を消しておく（構造ツリーなど、ほかの所から指されていてファイルに残る場合のため）。
+ */
 export function cleanAnnotations(doc: PDFDocument, redactAnnots: Set<PDFObject>): RemovedItem[] {
   const ctx = doc.context;
   const out: RemovedItem[] = [];
+  const removedAnnots = new Set<PDFObject>();
+  const kept: PDFDict[] = [];
   doc.getPages().forEach((page, index) => {
     const annots = ctx.lookup(page.node.get(N("Annots")));
     if (!(annots instanceof PDFArray)) return;
     let contents = 0;
+    let comments = 0;
     let popups = 0;
     for (let i = annots.size() - 1; i >= 0; i--) {
       const ref = annots.get(i);
@@ -209,29 +237,28 @@ export function cleanAnnotations(doc: PDFDocument, redactAnnots: Set<PDFObject>)
         continue;
       }
       const subtype = nameOf(ctx, a.get(N("Subtype"))) ?? "";
-      if (subtype === "Popup") {
+      const had = stripAnnotation(ctx, a, subtype);
+      if (subtype === "Popup" || COMMENT_TYPES.has(subtype)) {
         annots.remove(i);
-        popups++;
+        removedAnnots.add(ref);
+        removedAnnots.add(a);
+        if (subtype === "Popup") popups++;
+        else comments++;
         continue;
       }
-      let had = false;
-      for (const key of ["Contents", "RC"]) if (a.has(N(key))) {
-        if (hasValue(ctx, a.get(N(key)))) had = true;
-        a.delete(N(key));
-      }
-      if (!NOT_MARKUP.has(subtype)) {
-        for (const key of ["T", "Subj", "M", "CreationDate"]) if (a.has(N(key))) {
-          if (key === "T" && hasValue(ctx, a.get(N(key)))) had = true;
-          a.delete(N(key));
-        }
-      }
-      if (a.has(N("Popup"))) a.delete(N("Popup"));
+      kept.push(a);
       if (had) contents++;
     }
     if (annots.size() === 0) page.node.delete(N("Annots"));
+    if (comments) out.push({ pattern: "P8", kind: "comment_annotation", page: index + 1, count: comments, label: `コメントの注釈（付箋 ${comments} 個）を、まるごと外しました` });
     if (contents) out.push({ pattern: "P8", kind: "annotation_content", page: index + 1, count: contents, label: `注釈のコメント・作者名（${contents} 個の注釈）を消しました（注釈の見た目は残しています）` });
     if (popups) out.push({ pattern: "P8", kind: "popup", page: index + 1, count: popups, label: `コメントの吹き出し（${popups} 個）を外しました` });
   });
+  // 残した注釈が、外した付箋への返信（/IRT）を指していたら、その指し先を外す
+  for (const a of kept) {
+    const irt = a.get(N("IRT"));
+    if (irt && (removedAnnots.has(irt) || removedAnnots.has(ctx.lookup(irt) as PDFObject))) a.delete(N("IRT"));
+  }
   return out;
 }
 

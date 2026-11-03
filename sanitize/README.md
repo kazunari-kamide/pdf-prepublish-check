@@ -28,7 +28,8 @@ if (r.status === "ok") {
 | P1 文書情報 | Info 辞書を丸ごと消す（作成者などは書き換えずに消す。2026-11-03 人が決めた） | — |
 | P2 XMP | `/Metadata` をすべて外す | — |
 | P5 前の版 | 文書の根からたどれないものを捨て、1つの版として書き出す（`%%EOF` が1つ） | — |
-| P8 注釈の中身 | コメント（`/Contents`・`/RC`）・作者名（`/T`）・件名・日時を消し、吹き出し（Popup）を外す。注釈の見た目は残す | 変わらない |
+| P8 コメントの注釈 | 付箋（Text）と吹き出し（Popup）の注釈を、まるごと外す（2026-11-04 人が決めた）。外した付箋への返信の指し先（`/IRT`）も外す | 付箋のアイコンが消える |
+| P8 ほかの注釈の中身 | リンク・強調などの注釈は残し、コメント（`/Contents`・`/RC`）・作者名（`/T`）・件名・日時だけを消す | 変わらない |
 | P9 添付ファイル | 名前の木の `/EmbeddedFiles`、添付ファイルの注釈、`/AF`、`/Collection` を外す。中身のストリームは、上の掃除でファイルから消える | 添付ファイルの注釈のアイコンが消える |
 | P12 JavaScript | 名前の木の `/JavaScript`、JavaScript の動作（`/OpenAction`・`/A`・`/AA`・`/Next` の中）を外す | — |
 
@@ -72,6 +73,7 @@ if (r.status === "ok") {
 ## 確かめ方
 
 ```
+npm run eval                                  # 検出ルールの採点と一緒に、片付けたあとに残る情報も型ごとに測る（先に片付けて --sanitized で渡す）
 npm run eval:sanitize                         # 合成 PDF（5つの型）を片付けて .tmp/sanitized/ に書き出し、型ごとに採点する
 npm run eval:p6 -- --sanitized .tmp/sanitized/p6   # 型ごとの採点だけ（p1・p9・p5・p7 も同じ）
 npm run check:sanitized -- fixtures/p6 .tmp/sanitized/p6   # 壊れていないか（開ける・ページ数・字・見た目）

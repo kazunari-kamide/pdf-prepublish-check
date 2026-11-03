@@ -246,13 +246,35 @@ describe("文書全体の隠れた情報", () => {
       expect(s).not.toContain(secret);
     }
     const kinds = new Set(r.removed.map((x) => x.kind));
-    for (const k of ["docinfo", "xmp", "attachment", "javascript", "annotation_content", "popup"]) expect(kinds.has(k as never)).toBe(true);
+    for (const k of ["docinfo", "xmp", "attachment", "javascript", "comment_annotation", "popup"]) expect(kinds.has(k as never)).toBe(true);
     // 片付けの結果の一覧に、中身（名前など）を入れない
     expect(JSON.stringify(r.removed)).not.toMatch(/Yamada|Suzuki|budget|Reviewer/);
-    // 注釈そのもの（見た目）は残る
+    // 付箋と吹き出しは、まるごと外す（ページに注釈が残らない）
     const doc = await PDFDocument.load(r.bytes);
-    const annots = doc.getPages()[0]!.node.lookup(PDFName.of("Annots"), PDFArray);
-    expect(annots.size()).toBe(1);
+    expect(doc.getPages()[0]!.node.get(PDFName.of("Annots"))).toBeUndefined();
+  });
+
+  it("付箋と吹き出しはまるごと外し、リンク・強調の注釈は残す（強調はコメント・作者名だけ消す）", async () => {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([200, 200]);
+    const ctx = doc.context;
+    const popup = ctx.register(ctx.obj({ Type: "Annot", Subtype: "Popup", Rect: [0, 0, 10, 10] }));
+    const note = ctx.register(ctx.obj({ Type: "Annot", Subtype: "Text", Rect: [10, 10, 30, 30], Contents: PDFString.of("NOTE-SECRET"), T: PDFString.of("NOTE-AUTHOR"), Popup: popup }));
+    const reply = ctx.register(ctx.obj({ Type: "Annot", Subtype: "Text", Rect: [10, 10, 30, 30], Contents: PDFString.of("REPLY-SECRET"), IRT: note }));
+    const hl = ctx.register(ctx.obj({ Type: "Annot", Subtype: "Highlight", Rect: [40, 40, 90, 50], QuadPoints: [40, 50, 90, 50, 40, 40, 90, 40], Contents: PDFString.of("HL-SECRET"), T: PDFString.of("HL-AUTHOR"), IRT: note }));
+    const link = ctx.register(ctx.obj({ Type: "Annot", Subtype: "Link", Rect: [100, 100, 150, 120], A: { S: "URI", URI: PDFString.of("https://example.com/") } }));
+    page.node.set(PDFName.of("Annots"), ctx.obj([note, popup, reply, hl, link]));
+    const r = ok(await sanitizePdf(new Uint8Array(await doc.save({ useObjectStreams: false }))));
+    const s = latin1(r.bytes);
+    for (const secret of ["NOTE-SECRET", "NOTE-AUTHOR", "REPLY-SECRET", "HL-SECRET", "HL-AUTHOR", "/Popup", "/IRT"]) expect(s).not.toContain(secret);
+    const after = await PDFDocument.load(r.bytes);
+    const annots = after.getPages()[0]!.node.lookup(PDFName.of("Annots"), PDFArray);
+    const subtypes = annots.asArray().map((x) => (after.context.lookup(x) as PDFDict).get(PDFName.of("Subtype"))?.toString());
+    expect(subtypes.sort()).toEqual(["/Highlight", "/Link"]);
+    const comment = r.removed.find((x) => x.kind === "comment_annotation");
+    expect(comment?.count).toBe(2);
+    expect(r.removed.find((x) => x.kind === "popup")?.count).toBe(1);
+    expect(r.removed.find((x) => x.kind === "annotation_content")?.count).toBe(1);
   });
 
   it("圧縮した中身のストリームの中にも、添付の中身が残っていない", async () => {
