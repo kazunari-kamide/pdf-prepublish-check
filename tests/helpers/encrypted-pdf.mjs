@@ -7,7 +7,7 @@
 // 中身：1ページ。「Taro Yamada」（架空の名前）を書き、その上に黒い四角を重ねた見せかけの黒塗り。
 // objectStream: true のときは、ページなどをオブジェクトストリームに入れ、xref ストリームで書く。
 
-import { createHash } from "node:crypto";
+import { createCipheriv, createHash } from "node:crypto";
 
 const PAD = Uint8Array.from([
   0x28, 0xbf, 0x4e, 0x5e, 0x4e, 0x75, 0x8a, 0x41, 0x64, 0x00, 0x4e, 0x56, 0xff, 0xfa, 0x01, 0x08,
@@ -69,27 +69,94 @@ function computeKeys(ownerPw, userPw, P, id0) {
   return { O, U: U32, key };
 }
 
-/** アルゴリズム 1：オブジェクトごとの鍵 */
-const objectKey = (key, num, gen) =>
-  md5(key, Uint8Array.from([num & 0xff, (num >> 8) & 0xff, (num >> 16) & 0xff, gen & 0xff, (gen >> 8) & 0xff])).subarray(0, 16);
+/** アルゴリズム 1：オブジェクトごとの鍵（AES-128 のときは "sAlT" を足す） */
+const objectKey = (key, num, gen, aes = false) =>
+  md5(key, Uint8Array.from([num & 0xff, (num >> 8) & 0xff, (num >> 16) & 0xff, gen & 0xff, (gen >> 8) & 0xff]), aes ? Uint8Array.from([0x73, 0x41, 0x6c, 0x54]) : new Uint8Array(0)).subarray(0, 16);
+
+const enc8 = (s) => Buffer.from(new TextEncoder().encode(s));
+const sha = (name, data) => new Uint8Array(createHash(name).update(data).digest());
+const sha256 = (data) => Buffer.from(sha("sha256", data));
+
+/** AES-CBC で暗号化し、先頭に IV を付ける（PDF の AESV2・AESV3）。IV はオブジェクトの番号から決める（作るたびに同じにするため） */
+function aesEncrypt(key, num, data) {
+  const iv = md5(enc8(`iv-${num}`));
+  const c = createCipheriv(key.length === 32 ? "aes-256-cbc" : "aes-128-cbc", key, iv);
+  return new Uint8Array(Buffer.concat([Buffer.from(iv), c.update(data), c.final()]));
+}
+
+/** 埋め草なしの AES-256-CBC（IV は 0）。UE・OE・Perms に使う */
+function aesNoPad(key, data) {
+  const c = createCipheriv("aes-256-cbc", key, Buffer.alloc(16));
+  c.setAutoPadding(false);
+  return Buffer.concat([c.update(data), c.final()]);
+}
+
+/** ISO 32000-2 のアルゴリズム 2.B（R6 のハッシュ） */
+function hash2B(pw, salt, udata) {
+  let k = Buffer.from(sha("sha256", Buffer.concat([pw, salt, udata])));
+  for (let i = 0; ; i++) {
+    const k1 = Buffer.concat([pw, k, udata]);
+    const rep = Buffer.concat(Array(64).fill(k1));
+    const c = createCipheriv("aes-128-cbc", k.subarray(0, 16), k.subarray(16, 32));
+    c.setAutoPadding(false);
+    const e = Buffer.concat([c.update(rep), c.final()]);
+    let sum = 0;
+    for (let j = 0; j < 16; j++) sum += e[j];
+    k = Buffer.from(sha(["sha256", "sha384", "sha512"][sum % 3], e));
+    const rounds = i + 1;
+    if (rounds >= 64 && e[e.length - 1] <= rounds - 32) break;
+  }
+  return k.subarray(0, 32);
+}
 
 const latin1 = (b) => Buffer.from(b).toString("latin1");
 
 /**
- * @param {{ objectStream?: boolean, ownerPassword?: string, userPassword?: string }} [opts]
+ * @param {{ objectStream?: boolean, ownerPassword?: string, userPassword?: string, method?: "rc4" | "aesv2" | "aes256r5" | "aes256r6" }} [opts]
  * @returns {Uint8Array}
  */
 export function makeEncryptedPdf(opts = {}) {
   const ownerPw = opts.ownerPassword ?? "owner-secret";
   const userPw = opts.userPassword ?? "";
+  const method = opts.method ?? "rc4";
   const P = -3904; // 印刷・変更・コピーなどを禁止（ビットの組み合わせ。例）
   const id0 = md5(new TextEncoder().encode("omamori-test-encrypted-fixed-id"));
-  const { O, U, key } = computeKeys(ownerPw, userPw, P, id0);
-  const enc = (num, data) => rc4(objectKey(key, num, 0), data);
+  let enc;
+  let encryptDict;
+  if (method === "rc4" || method === "aesv2") {
+    const { O, U, key } = computeKeys(ownerPw, userPw, P, id0);
+    if (method === "rc4") {
+      enc = (num, data) => rc4(objectKey(key, num, 0), data);
+      encryptDict = `<< /Filter /Standard /V 2 /R 3 /Length 128 /P ${P} /O <${hex(O)}> /U <${hex(U)}> >>`;
+    } else {
+      // V4・R4・AES-128（鍵の出し方は R3 と同じ。オブジェクトの鍵に "sAlT" を足す）
+      enc = (num, data) => aesEncrypt(objectKey(key, num, 0, true), num, data);
+      encryptDict = `<< /Filter /Standard /V 4 /R 4 /Length 128 /P ${P} /O <${hex(O)}> /U <${hex(U)}> /CF << /StdCF << /CFM /AESV2 /Length 16 /AuthEvent /DocOpen >> >> /StmF /StdCF /StrF /StdCF >>`;
+    }
+  } else {
+    // V5・R5 または R6・AES-256（ISO 32000-2 §7.6.4.4）
+    const r = method === "aes256r5" ? 5 : 6;
+    const fileKey = Buffer.concat([md5(enc8("file-key-1")), md5(enc8("file-key-2"))]); // 32 バイト。固定（作るたびに同じにするため）
+    const upw = enc8(userPw);
+    const opw = enc8(ownerPw);
+    const uvs = md5(enc8("u-validation-salt")).subarray(0, 8);
+    const uks = md5(enc8("u-key-salt")).subarray(0, 8);
+    const ovs = md5(enc8("o-validation-salt")).subarray(0, 8);
+    const oks = md5(enc8("o-key-salt")).subarray(0, 8);
+    const h = (pw, salt, udata) => (r === 5 ? sha256(Buffer.concat([pw, salt])) : hash2B(pw, salt, udata));
+    const U = Buffer.concat([h(upw, uvs, Buffer.alloc(0)), uvs, uks]);
+    const UE = aesNoPad(h(upw, uks, Buffer.alloc(0)), fileKey);
+    const O = Buffer.concat([h(opw, ovs, U), ovs, oks]);
+    const OE = aesNoPad(h(opw, oks, U), fileKey);
+    // /Perms：P と 'T'（EncryptMetadata）と 'adb' を、文書の鍵で AES-256（ECB 相当。1 ブロック）
+    const perms = Buffer.concat([Buffer.from(le32(P)), Buffer.from([0xff, 0xff, 0xff, 0xff]), Buffer.from("Tadb", "latin1"), Buffer.from("rand", "latin1")]);
+    const Perms = aesNoPad(fileKey, perms);
+    enc = (num, data) => aesEncrypt(fileKey, num, data);
+    encryptDict = `<< /Filter /Standard /V 5 /R ${r} /Length 256 /P ${P} /O <${hex(O)}> /U <${hex(U)}> /OE <${hex(OE)}> /UE <${hex(UE)}> /Perms <${hex(Perms)}> /CF << /StdCF << /CFM /AESV3 /Length 32 /AuthEvent /DocOpen >> >> /StmF /StdCF /StrF /StdCF >>`;
+  }
 
   const content = new TextEncoder().encode("BT /F1 12 Tf 20 100 Td (Taro Yamada) Tj ET\n0 g 15 95 120 20 re f\n");
   const title = enc(7, new TextEncoder().encode("Test document"));
-  const encryptDict = `<< /Filter /Standard /V 2 /R 3 /Length 128 /P ${P} /O <${hex(O)}> /U <${hex(U)}> >>`;
   const id = `[<${hex(id0)}> <${hex(id0)}>]`;
 
   const small = {
