@@ -22,16 +22,21 @@ const pdf = (rel: string) => new Uint8Array(readFileSync(path.join(ROOT, "fixtur
 describe("登録したルール", () => {
   it("ルールが1か所に並んでいる", () => {
     expect(RULES.map((r) => r.id).sort()).toEqual([
+      "alt-text",
+      "extras",
+      "font-glyphs",
       "p1-info",
       "p10-exif",
       "p11-forms",
       "p12-actions",
       "p2-xmp",
+      "p4-paths",
       "p5-revisions",
       "p6-text",
       "p7-hidden",
       "p8-annot",
       "p9-attach",
+      "props-diff",
     ]);
   });
 });
