@@ -194,10 +194,12 @@ describe("P6 の画像の層（1.5.0）", () => {
       page.drawText("Taro Yamada", { x: 20, y: 100, size: 12, font });
       page.drawImage(await doc.embedJpg(jpg), { x: 15, y: 95, width: 120, height: 20 });
     });
-    expect((await detectP6Text(pdf)).findings).toHaveLength(0);
+    // 1.11.0 から：解けなくても、型抜きのない不透明な画像として見つける（濃いかは分からないので coverTone: opaque）
+    expect((await detectP6Text(pdf)).findings).toMatchObject([{ layer: "text", cover: "image", coverTone: "opaque" }]);
     const r = await detectP6Text(pdf, { imageDecoder });
     expect(r.findings).toHaveLength(1);
     expect(r.findings[0]).toMatchObject({ layer: "text", cover: "image" });
+    expect(r.findings[0]).not.toHaveProperty("coverTone"); // PDF.js で解けば、濃い覆いとして出す
   });
 
   it("CCITT（G4）のスキャン画像も、PDF.js で解いて調べる（一様な白なので、漏れにはしない）", async () => {

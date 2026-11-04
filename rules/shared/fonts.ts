@@ -44,6 +44,11 @@ export type FontInfo = {
   /** 字の高さの範囲（em。下端は負） */
   ascent: number;
   descent: number;
+  /**
+   * 縦書き（CMap の名前が -V で終わる Type0）のとき（2026-11-05 から）。PDF 1.7 §9.7.4.3 の DW2 の値（em）。
+   * vy＝縦の原点の高さ（位置のベクトルの y）、w1＝縦の送り（下へ進むので負）。W2 の字ごとの値は読まない
+   */
+  vertical?: { vy: number; w1: number };
 };
 
 const DEFAULT_ASCENT = 0.8;
@@ -255,10 +260,19 @@ export function readFont(ctx: PDFContext, fontObj: PDFObject | undefined): FontI
     const std = standardMetrics(stripSubset(nameOf(ctx, cid?.get(PDFName.of("BaseFont")))));
     const { ascent, descent } = heights(ctx, desc, desc ? bboxOf(ctx, desc.get(PDFName.of("FontBBox")), 0.001) : undefined, std);
     // Identity-H/V 以外の CMap も、2バイトで区切る（日本語の CMap の多くは2バイト。限界は rules/p6-text/README.md に書く）
+    const encName = nameOf(ctx, font.get(PDFName.of("Encoding")));
+    let vertical: FontInfo["vertical"];
+    if (encName && /-V$/.test(encName)) {
+      const dw2 = cid ? arrOf(ctx, cid.get(PDFName.of("DW2"))) : undefined;
+      const vy = dw2 && dw2.size() >= 2 ? num(ctx, dw2.get(0)) : undefined;
+      const w1 = dw2 && dw2.size() >= 2 ? num(ctx, dw2.get(1)) : undefined;
+      vertical = { vy: (vy ?? 880) / 1000, w1: (w1 ?? -1000) / 1000 };
+    }
     return {
       twoByte: true,
       ascent,
       descent,
+      ...(vertical ? { vertical } : {}),
       decode(bytes) {
         const out: Glyph[] = [];
         for (let k = 0; k + 1 < bytes.length; k += 2) {

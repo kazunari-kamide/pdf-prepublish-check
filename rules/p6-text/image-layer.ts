@@ -214,7 +214,7 @@ export async function findCoveredImages(
   const view = options.view ?? null;
   const skip = (reason: Parameters<ExcludeCounter>[1]) => options.exclude?.("image", reason);
   // 線は見ない（写真の縁の飾りの線が、画像の端の上に乗るため。限界は README）
-  const onImages = covers.filter((c) => c.how !== "stroke" && images.some((im) => im.seq < c.seq && intersectionArea(im.rect, c.rect) > 0));
+  const onImages = covers.filter((c) => c.how !== "stroke" && c.tone !== "opaque" && images.some((im) => im.seq < c.seq && intersectionArea(im.rect, c.rect) > 0));
   // 数えない条件（1.6.0 から）。軽いものから順に。覆いの数の上限は、このあとで数える
   // （装飾の格子・アウトライン化した字の多いページを、上限で「省いた」にしないため）
   const visibleOf = new Map<Cover, Rect>();

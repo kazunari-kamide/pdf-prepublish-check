@@ -47,9 +47,10 @@ export type Cover = {
   how: "fill" | "stroke" | "image" | "redact";
   /**
    * 覆いの色の向き（1.5.0 から）。dark＝濃い（明るさ darkLuminanceMax 以下）、light＝白っぽい（lightLuminanceMin 以上）。
-   * 字の層は dark だけを覆いとする。light は、画像の上に置いたものだけを集め、画像の層でだけ使う
+   * 字の層は dark だけを覆いとする。light は、画像の上に置いたものだけを集め、画像の層でだけ使う。
+   * opaque（1.11.0 から）＝濃くない色の、不透明でふつうの重ね方の塗り・画像。字の層でだけ使う（覆いの下の字は、色によらず P6）
    */
-  tone: "dark" | "light";
+  tone: "dark" | "light" | "opaque";
   /** 塗りの明るさ。画像は濃い画素の割合ではなく、1 − 割合（小さいほど濃い）。墨消しの注釈は 0 */
   luminance: number;
   /**
@@ -140,6 +141,8 @@ export type GlyphBox = {
   code?: number;
   /** 回したり傾けたりして描いた字か（1.8.0 から。測るときだけ使う） */
   rotated?: boolean;
+  /** 描き方 3・7（塗りも輪郭もしない）の字（1.11.0 から）。濃くない覆い（opaque）の下では数えない（文字認識の層など） */
+  invisible?: boolean;
 };
 /**
  * 濃い覆いのあとに、その上に描いた字の形の塗り（曲線を含む、濃くない色の塗り）の真ん中（1.8.0 から）。
@@ -211,9 +214,26 @@ type GState = {
   rise: number;
   /** 切り抜き（W・部品の BBox）の外枠の箱（ページの座標）。null は切り抜きなし（1.6.0 から）。形は持たず、箱で近似する */
   clip: Rect | null;
+  /** 重ね方（/BM）がふつう（Normal・Compatible）か（1.11.0 から）。乗算などは、濃くない色では下が透ける */
+  blendNormal: boolean;
+  /** 字の描き方（Tr）（1.11.0 から） */
+  textMode: number;
+  /** やわらかい型抜き（ExtGState の /SMask）がかかっているか（1.11.0 から） */
+  softMask: boolean;
 };
 
 const MAX_FORM_DEPTH = 12;
+
+/** 型抜き（ImageMask・/Mask・/SMask）のない画像か（1.11.0 から）。型抜きがあると、下が透ける所がある */
+function isOpaqueImage(ctx: PDFContext, img: PDFStream): boolean {
+  const d = img.dict;
+  const flag = d.lookup(PDFName.of("ImageMask"));
+  if (flag && flag.toString() === "true") return false;
+  if (d.get(PDFName.of("Mask")) !== undefined) return false;
+  const sm = d.get(PDFName.of("SMask"));
+  if (sm !== undefined && !(ctx.lookup(sm) instanceof PDFName)) return false;
+  return true;
+}
 
 /** 切り抜きを、箱 r でさらに狭める。重ならなければ、何も見えない（幅 0 の箱） */
 function narrowClip(clip: Rect | null, r: Rect): Rect {
@@ -391,6 +411,13 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     overPaint.push({ after, rect, parts, ...(clip ? { clip } : {}) });
   };
   const pushCover = (c: Cover) => {
+    if (c.tone === "opaque") {
+      // 濃くない覆い（1.11.0 から）：先に描いた字に重なるものだけ。字の層でだけ使う
+      if (!overlapsAnyGlyph(c.rect)) return;
+      if (covers.length >= settings.maxCoversPerPage) throw new TooManyCovers();
+      covers.push(c);
+      return;
+    }
     if (c.tone === "dark" ? !overlapsAnyGlyph(c.rect) && !overlapsEarlierImage(c.rect) : !overlapsEarlierImage(c.rect)) return;
     if (covers.length >= settings.maxCoversPerPage) throw new TooManyCovers();
     covers.push(c);
@@ -493,6 +520,17 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           }
         }
       }
+      // 濃くない色の、不透明でふつうの重ね方の塗り（1.11.0 から）。字の層の覆いにする（覆いの下の字は、色によらず P6）
+      if (doFill && gs.fill.luminance !== null && gs.fill.luminance > settings.darkLuminanceMax && gs.fillAlpha >= settings.opacityMin && gs.blendNormal && !gs.softMask) {
+        const lum = gs.fill.luminance;
+        const parts = devs.map((d) => d.dev).filter((d) => d.length >= 3 && area(boundsOf(d)) > 0);
+        for (const group of groupOverlapping(parts)) {
+          const box = boundsOf(group.flat());
+          if (!overlapsAnyGlyph(box)) continue;
+          const plainRect = group.length === 1 && group[0]!.length === 4 && Math.abs(Math.abs(signedPolygonArea(group[0]!)) - area(box)) <= 1e-6 * Math.max(1, area(box));
+          pushCover({ seq: ++seq, rect: box, kind: coverKind, how: "fill", tone: "opaque", luminance: lum, ...(plainRect ? {} : { shape: { parts: group, rule } }), ...clipOpt() });
+        }
+      }
       // 濃い覆いの上の、字の形の塗り（白抜きの字をアウトライン化したもの）の真ん中を持つ（1.8.0 から）
       if (doFill && (darkWide.length > 0 || darkGrid.size > 0) && marks.length < MAX_MARKS) {
         const lum = gs.fill.luminance;
@@ -569,6 +607,9 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
       const kind: CoverKind = coverKind === "annotation" ? "annotation" : "image";
       if (m && m.kind === "measured" && m.darkFraction >= settings.darkImageFractionMin) {
         pushCover({ seq: mySeq, rect: box, kind, how: "image", tone: "dark", luminance: 1 - m.darkFraction, ...(imageShape ? { shape: imageShape } : {}), ...clipOpt() });
+      } else if (gs.blendNormal && !gs.softMask && isOpaqueImage(ctx, img) && overlapsAnyGlyph(box)) {
+        // 型抜きのない不透明な画像（1.11.0 から）：色や、解けるかどうかにかかわらず、下の字を隠す
+        pushCover({ seq: mySeq, rect: box, kind, how: "image", tone: "opaque", luminance: m && m.kind === "measured" ? 1 - m.darkFraction : 1, ...(imageShape ? { shape: imageShape } : {}), ...clipOpt() });
       }
       if (images.length >= settings.maxImagesPerPage) throw new TooManyCovers();
       const placement: ImagePlacement = {
@@ -598,13 +639,14 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           [gs.fontSize * gs.hScale, 0, 0, gs.fontSize, 0, gs.rise],
           multiply(tm, gs.ctm),
         );
+        // 縦書き（2026-11-05 から）：字は縦の原点から、横は幅の半分ずつ左右に、縦は原点から 1em 下へ広がる（PDF 1.7 §9.7.4.3）
+        const v = font.vertical;
         if (isFiniteMatrix(trm) && g.width > 0) {
-          const corners: Point[] = [
-            apply(trm, 0, font.descent),
-            apply(trm, g.width, font.descent),
-            apply(trm, g.width, font.ascent),
-            apply(trm, 0, font.ascent),
-          ];
+          const x0 = v ? -g.width / 2 : 0;
+          const x1 = v ? g.width / 2 : g.width;
+          const y0 = v ? font.descent - v.vy : font.descent;
+          const y1 = v ? font.ascent - v.vy : font.ascent;
+          const corners: Point[] = [apply(trm, x0, y0), apply(trm, x1, y0), apply(trm, x1, y1), apply(trm, x0, y1)];
           addGlyph({
             seq: ++seq,
             rect: boundsOf(corners),
@@ -613,8 +655,14 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
             fontId: fontIdOf(font),
             code: g.code,
             ...(Math.abs(trm[1]) > 1e-9 || Math.abs(trm[2]) > 1e-9 ? { rotated: true } : {}),
+            ...(gs.textMode === 3 || gs.textMode === 7 ? { invisible: true } : {}),
             ...clipOpt(),
           });
+        }
+        if (v) {
+          const ty = v.w1 * gs.fontSize - gs.charSpacing;
+          tm = multiply([1, 0, 0, 1, 0, ty], tm);
+          continue;
         }
         const tx = (g.width * gs.fontSize + gs.charSpacing + (g.isWordSpace ? gs.wordSpacing : 0)) * gs.hScale;
         tm = multiply([1, 0, 0, 1, tx, 0], tm);
@@ -656,6 +704,13 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
             if (ca instanceof PDFNumber) gs.fillAlpha = ca.asNumber();
             if (CA instanceof PDFNumber) gs.strokeAlpha = CA.asNumber();
             if (lw instanceof PDFNumber) gs.lineWidth = Math.abs(lw.asNumber());
+            const bm = d.lookup(PDFName.of("BM"));
+            const bmName = bm instanceof PDFName ? bm : bm instanceof PDFArray ? bm.lookup(0) : undefined;
+            if (bmName instanceof PDFName) gs.blendNormal = ["Normal", "Compatible"].includes(bmName.decodeText());
+            // やわらかい型抜き（/SMask）のある状態も、下が透けうるので、ふつうの重ね方とみなさない
+            const smk = d.lookup(PDFName.of("SMask"));
+            if (smk instanceof PDFDict) gs.softMask = true;
+            else if (smk instanceof PDFName) gs.softMask = false;
           }
           break;
         }
@@ -813,6 +868,9 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
         case "Ts":
           if (a.length >= 1) gs.rise = a[0]!;
           break;
+        case "Tr":
+          if (a.length >= 1) gs.textMode = a[0]!;
+          break;
         case "Td":
           if (a.length >= 2) {
             tlm = multiply([1, 0, 0, 1, a[0]!, a[1]!], tlm);
@@ -863,8 +921,12 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           const arr = arrArg(args[0]) ?? [];
           for (const item of arr) {
             if (item.t === "num") {
-              const tx = (-item.v / 1000) * gs.fontSize * gs.hScale;
-              tm = multiply([1, 0, 0, 1, tx, 0], tm);
+              if (gs.font?.vertical) {
+                tm = multiply([1, 0, 0, 1, 0, (-item.v / 1000) * gs.fontSize], tm); // 縦書きは、下へ詰める・空ける
+              } else {
+                const tx = (-item.v / 1000) * gs.fontSize * gs.hScale;
+                tm = multiply([1, 0, 0, 1, tx, 0], tm);
+              }
             } else {
               const b = bytesArg(item);
               if (b) showText(b);
@@ -936,6 +998,9 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     leading: 0,
     rise: 0,
     clip: null,
+    blendNormal: true,
+    textMode: 0,
+    softMask: false,
   };
   return {
     run(data, res, ctm, coverKind) {
@@ -944,6 +1009,8 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     addCover(rect, kind, how, luminance) {
       const tone = luminance <= settings.darkLuminanceMax ? "dark" : luminance >= settings.lightLuminanceMin ? "light" : null;
       if (tone) pushCover({ seq: ++seq, rect, kind, how, tone, luminance });
+      // 濃くない色の注釈（白い四角の注釈など）は、字の層の覆いにもする（1.11.0 から）
+      if (tone !== "dark") pushCover({ seq: ++seq, rect, kind, how, tone: "opaque", luminance });
     },
     addLateCover(cover) {
       pushCover(cover);
