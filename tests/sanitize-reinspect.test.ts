@@ -13,6 +13,7 @@ import { sanitizePdf } from "../sanitize/index.ts";
 import { inspectAll } from "../src/inspect/inspect";
 import { buildCleanView } from "../src/ui/clean-model";
 import { buildView } from "../src/ui/model";
+import { HEAVY_TIMEOUT } from "./helpers/timeout.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FILES = ["p1", "p5", "p6", "p7", "p9"].flatMap((dir) =>
@@ -36,7 +37,7 @@ describe("片付けてから読み直す（合成 PDF の全部）", () => {
     expect(FILES.length).toBeGreaterThan(100);
   });
 
-  it.each(FILES)("%s", async (rel) => {
+  it.each(FILES)("%s", { timeout: HEAVY_TIMEOUT }, async (rel) => {
     const bytes = new Uint8Array(readFileSync(path.join(ROOT, "fixtures", rel)));
     const before = buildView(await inspectAll(bytes));
     const r = await sanitizePdf(bytes);

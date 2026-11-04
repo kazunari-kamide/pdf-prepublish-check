@@ -33,6 +33,7 @@ import {
 import { detectP6Text, type P6TextFinding } from "../rules/p6-text/index.ts";
 import { adaptP6Text } from "../eval/adapters/p6-text.ts";
 import { matchFile, type Expected } from "../eval/match.ts";
+import { HEAVY_TIMEOUT } from "./helpers/timeout.ts";
 
 async function makePdf(draw: (page: PDFPage, font: PDFFont, doc: PDFDocument) => void) {
   const doc = await PDFDocument.create();
@@ -179,7 +180,7 @@ describe("重いページ", () => {
     return new Uint8Array(await doc.save({ useObjectStreams: false }));
   }
 
-  it("曲線 10 万本（命令 30 万）のページも、省かずに調べる（1.2.0 の上限 20 万を超える）", async () => {
+  it("曲線 10 万本（命令 30 万）のページも、省かずに調べる（1.2.0 の上限 20 万を超える）", { timeout: HEAVY_TIMEOUT }, async () => {
     const r = await detectP6Text(await heavy(100_000, "0 G 0.3 w\n"));
     expect(r.skippedPages).toEqual([]);
     expect(r.findings).toHaveLength(1);

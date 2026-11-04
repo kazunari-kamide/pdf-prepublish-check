@@ -15,6 +15,6 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "rules", "sanitize"],
+  "include": ["src", "rules", "sanitize", "compare", "formats"],
   "exclude": ["sanitize/check", "sanitize/node"]
 }
