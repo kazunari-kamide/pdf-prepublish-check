@@ -304,6 +304,9 @@ def("pii-09-email", "メールアドレス：個人らしいもの。団体の�
   x.line(1, 60, 688, ["お問い合わせ ", NG("info@kakuu.test", "office_email")]);
   x.line(1, 60, 664, ["総務課 ", NG("soumu-ka@kakuu.test", "office_email")]);
   x.line(1, 60, 640, ["例：", NG("sample@example.com", "sample")]);
+  // 例示用のドメイン（example.jp など）でも、記入例の印がなければ漏れとして数える（架空の資料は例示用のドメインで作るため。2026-11-05）
+  x.line(1, 60, 616, ["Mail: ", L("hinata.kasumi@example.jp", "email", "check")]);
+  x.line(1, 60, 592, ["記入例 ", NG("kogure.minato@example.jp", "sample")]);
 });
 
 def("pii-10-address", "住所：前の語つき（高）と、文の中の住所（確認）。団体の所在地・会場・条文・見本・番地だけは対照", 1, (x) => {
