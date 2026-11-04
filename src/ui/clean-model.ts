@@ -7,6 +7,7 @@
 
 import type { NotDoneItem, RemovedItem, SanitizePattern } from "../../sanitize/types.ts";
 import type { Rect } from "../inspect/report";
+import { CATALOG } from "./coverage";
 import type { ViewModel } from "./model";
 
 /** 片付けの型の名前（docs/glossary.md の言葉） */
@@ -81,10 +82,12 @@ export function buildCleanView(input: {
   if (decrypted) notes.push("パスワードなしで開ける暗号化がかかっていたので、外して書き出しました。");
 
   // 読み直しで調べた型と、片付けたが読み直しでは調べていない型
-  const checked = after ? after.groups.filter((g) => g.status === "ok" && !CANDIDATE_PATTERNS.includes(g.pattern)).map((g) => g.pattern) : [];
+  const checked = after
+    ? [...new Set(after.groups.filter((g) => g.status === "ok" && !CANDIDATE_PATTERNS.includes(g.pattern)).map((g) => g.pattern))]
+    : [];
   const notChecked = removedGroups.map((g) => g.pattern).filter((p) => !checked.includes(p));
   let scope = checked.length
-    ? `読み直しで調べたのは ${checked.map((p) => `${PATTERN_NAME[p as SanitizePattern] ?? p}（${p}）`).join("・")} です。`
+    ? `読み直しで調べたのは ${checked.map((p) => `${PATTERN_NAME[p as SanitizePattern] ?? CATALOG.find((c) => c.key === p)?.name ?? p}（${p}）`).join("・")} です。`
     : "読み直しでは、どの型も調べられませんでした。";
   if (notChecked.length) scope += `${notChecked.join("・")} は片付けましたが、読み直しでは調べていません（調べるルールがまだありません）。`;
   // 調べた型の中でも、調べていない層があれば添える（決め打ちの中身は src/ui/scope.ts の1か所）
@@ -113,6 +116,28 @@ export function buildCleanView(input: {
 
   return { verdict, headline, before: before.rows.length, left, removed: removedGroups, notDone: notDoneLines, notes, doneMarks, scope };
 }
+
+/**
+ * 保存のボタンを押せるか（11/5 B の 2）。保存のリンク（Blob の URL）は、読み直しが通ったあとでだけ作る。
+ * - ok：読み直しが通った（verdict が clean）。そのまま押せる
+ * - confirm：読み直して残りは 0 件だが、片付けられなかった所か、調べきれなかった所がある。
+ *   「言い切れない所があると分かったうえで保存する」に印を付けたときだけ押せる
+ * - blocked：読み直して残っている所がある、または読み直せなかった。押せない
+ */
+export type SaveGate = "ok" | "confirm" | "blocked";
+
+export function saveGate(c: Pick<CleanView, "verdict" | "left">): SaveGate {
+  if (c.verdict === "clean") return "ok";
+  if (c.verdict === "unsure" && c.left === 0) return "confirm";
+  return "blocked";
+}
+
+/** 保存のボタンの下に出す一言 */
+export const SAVE_NOTE: Record<SaveGate, string> = {
+  ok: "読み直しが通ったので、保存できます。",
+  confirm: "読み直して残りは 0 件でしたが、言い切れない所があります。下の一覧を確かめ、分かったうえで保存するときだけ、印を付けてください。",
+  blocked: "読み直しが通っていないため、保存できません。残っている所を確かめてください。",
+};
 
 /** 保存するファイルの名前。元の名前の後ろに「_片付け済み」をつける */
 export function cleanedFileName(original: string): string {

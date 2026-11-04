@@ -25,6 +25,11 @@ export type Item = {
   /** ページの上の場所があるときだけ */
   page: number | null;
   rect: Rect | null;
+  /**
+   * 確からしさ。check＝ルールが「確かめてください」とした所（P6 の confidence: check・画像を解けなかった所など）。
+   * 画面では、断定しない言葉で出す。省いたときは、ふつうの見つけた所
+   */
+  confidence?: "check";
 };
 
 /** 知らせること（漏れではないが、利用者に伝えること） */
@@ -58,6 +63,11 @@ export type PageBox = {
 
 /** 1つのファイルの検査の結果 */
 export type InspectSummary = {
+  /**
+   * プロパティの一覧（文書情報と XMP のすべての欄。値つき）。値を画面に出してよいのは、この一覧だけ（11/5 B の 8）。
+   * 読めなかったときは null。古い形の結果にはない
+   */
+  properties?: import("./properties").PropertyList | null;
   pages: PageBox[];
   /** ページの形を読めなかったとき true（一覧は出せるが、ページの上には描けない） */
   pagesUnreadable: boolean;

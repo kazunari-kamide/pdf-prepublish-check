@@ -32,7 +32,5 @@ export function fudaLabel(label: string, pattern: string): string {
   return pattern;
 }
 
-/** 見つからなかった種類をまとめた囲みの札 */
-export const FUDA_NONE = "済";
-/** 調べられなかった種類の札 */
-export const FUDA_ERROR = "未";
+/** 見た所・見なかった所の囲みの札（11/5 B。見つからなかった種類の「済」と、調べられなかった種類の「未」を、この1つにまとめた） */
+export const FUDA_SCOPE = "範囲";
