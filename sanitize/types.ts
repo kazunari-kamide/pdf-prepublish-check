@@ -24,7 +24,14 @@ export type RemovedKind =
   | "javascript" // P12：JavaScript
   | "actual_text" // P7：字の読み替え（/ActualText。構造ツリー・マーク付きの中身）
   | "thumbnail" // P5：ページの縮小画像（/Thumb。古い見た目が残っていることがある）
-  | "piece_info"; // P2：アプリの独自データ（/PieceInfo・/LastModified）
+  | "piece_info" // P2：アプリの独自データ（/PieceInfo・/LastModified）
+  // 自分で黒塗りする（redact.ts）。pattern は P6（墨消し）にそろえる
+  | "redacted_text" // 選んだ所の字
+  | "redacted_pixels" // 選んだ所の画像の画素
+  | "redacted_annotation" // 選んだ所に掛かる注釈
+  | "redacted_field" // 選んだ所に掛かるフォームの欄（値ごと）
+  | "font_unicode" // 消した字だけで使っていた、字の対応表（/ToUnicode）の行
+  | "redaction_box"; // 選んだ所に描いた黒い四角
 
 export type RemovedItem = {
   pattern: SanitizePattern;
@@ -47,7 +54,8 @@ export type NotDoneReason =
   | "inline_image" // ページの中に埋め込んだ画像があり、書き換えられない
   | "uncertain_cover" // 画像の上の白い塗りが、下を隠さない重ね方（Multiply など）・半透明・表示しないレイヤーの中にあり、塗らなかった
   | "too_many_operations" // 命令が多すぎるページ（重いページ）
-  | "unreadable_page"; // ページの中身を読めない
+  | "unreadable_page" // ページの中身を読めない
+  | "field_shared"; // 選んだ所のフォームの欄が、ほかの所にも見た目を持っていて、欄ごとは外せない（redact.ts）
 
 export type NotDoneItem = {
   pattern: SanitizePattern;
@@ -125,3 +133,60 @@ export type ImageCodec = {
   /** RGB の画素を JPEG に書く（quality は 0〜1） */
   encodeJpeg(rgb: Uint8Array, width: number, height: number, quality: number): Promise<Uint8Array | null>;
 };
+
+// ---------------------------------------------------------------- 自分で黒塗りする（redact.ts）
+
+/** 利用者が選んだ場所1つ。page は 1 から。rect はページの既定の座標（ポイント、左下が原点、/Rotate はかけない。removed の rect と同じ） */
+export type RedactArea = { page: number; rect: Rect };
+
+/** 読み直しで見つかった残り（中身は入れない。種類・数・場所だけ） */
+export type RedactLeftover = {
+  /** どの確かめで見つかったか。area＝選んだ場所の確かめ、rules＝作品の検査（全部のルール）、verifier＝検証器、not_done＝片付けられなかった所 */
+  check: "area" | "rules" | "verifier" | "not_done";
+  kind: "text" | "pixels" | "unchecked_image" | "inline_image" | "annotation" | "unreadable_page" | "rule_item" | "rule_error" | "verifier_item" | "verifier_error" | "not_done";
+  /** 画面にそのまま出せる文 */
+  label: string;
+  count: number;
+  page?: number;
+  rect?: Rect;
+  /** ルール・検証器の型の番号（P6 など） */
+  pattern?: string;
+};
+
+/** 読み直しの確かめを1つ足す（作品の検査・検証器など。片付けた PDF のバイト列だけを受け取る） */
+export type RedactCheck = {
+  name: "rules" | "verifier";
+  run(bytes: Uint8Array, areas: RedactArea[]): Promise<RedactLeftover[]>;
+};
+
+export type RedactOptions = SanitizeOptions & {
+  /**
+   * 保存の前の読み直しに足す確かめ。選んだ場所の確かめ（字・画素・注釈）は、渡さなくても必ず行う。
+   * 画面：作品の検査（src/inspect/rules.ts の RULES）を渡す。Node（テスト・採点）：さらに検証器（P6）を渡す
+   */
+  checks?: RedactCheck[];
+};
+
+export type RedactResult =
+  | {
+      status: "ok";
+      bytes: Uint8Array;
+      pages: number;
+      removed: RemovedItem[];
+      /** 保存させるのは残りが 0 件のときだけなので、いつも空 */
+      notDone: NotDoneItem[];
+      decrypted: boolean;
+      /** 読み直しで行った確かめ（"area" と、渡した checks の name） */
+      checked: string[];
+    }
+  | {
+      /** 残りがあるので、保存させない（バイト列は返さない） */
+      status: "blocked";
+      pages: number;
+      removed: RemovedItem[];
+      notDone: NotDoneItem[];
+      leftovers: RedactLeftover[];
+      decrypted: boolean;
+      checked: string[];
+    }
+  | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_areas"; message: string };

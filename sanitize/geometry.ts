@@ -12,7 +12,8 @@ export type SanCover = {
   /** 形（ページの座標の多角形）。ないときは rect の箱そのもの */
   shape?: { parts: Point[][]; rule: "nonzero" | "evenodd" };
   /** 何で覆っているか（画面に出す説明のため） */
-  kind: "fill" | "stroke" | "image" | "annotation" | "redact";
+  /** user は、利用者が選んで消す場所（redact.ts）。字の箱が少しでも掛かれば消す（ほかの覆いは半分以上） */
+  kind: "fill" | "stroke" | "image" | "annotation" | "redact" | "user";
   /**
    * 覆いの色の向き。ないときは dark（黒など濃い色）。light（白など明るい色）の覆いは、画像の画素を塗るときだけ使い、
    * 下の画素をその色（白）で塗る。字の消し方（P6 の字の層）には使わない（白い覆いの下の字は P7 の範囲）

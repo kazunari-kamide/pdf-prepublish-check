@@ -42,7 +42,11 @@ export type BurnResult =
    * perCover：覆いごとに塗った画素の数（covers と同じ並び。2つの覆いに入る画素は、あとに描いた覆いで数える）。
    * reached：覆いごとに、中心が入った画素が1つでもあったか（あとの覆いの色で塗られた画素も入れる。塗り損ねの安全網に使う）
    */
-  | { ok: true; stream: PDFRawStream; pixels: number; perCover: number[]; reached: boolean[]; via: "memory" | "stream" | "jpeg" | "bitonal" }
+  | {
+      ok: true; stream: PDFRawStream; pixels: number; perCover: number[]; reached: boolean[]; via: "memory" | "stream" | "jpeg" | "bitonal";
+      /** 覆いごとに、塗る前の値が塗る色から半分より離れていた画素の数（読み直しの確かめに使う。0 なら、もう塗られていた） */
+      offPerCover: number[];
+    }
   | { ok: false; reason: BurnFailure };
 
 export type BurnLimits = {
@@ -54,6 +58,8 @@ export type BurnLimits = {
   codec?: ImageCodec;
   /** JPEG に書き直すときの品質（0〜1） */
   jpegQuality: number;
+  /** 確かめるだけ（塗る前の値を数え、書き直した画像は作らない。stream は空のものを返す）。読み直しの確かめ（redact-check.ts）で使う */
+  checkOnly?: boolean;
 };
 
 const DECODABLE = new Set(["FlateDecode", "Fl", "LZWDecode", "LZW", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85", "RunLengthDecode", "RL"]);
@@ -183,6 +189,14 @@ function luminance(c: number[], cmyk: boolean): number {
   return v(0);
 }
 
+function readSample(data: Uint8Array, rowStart: number, index: number, bpc: number): number {
+  if (bpc === 8) return data[rowStart + index]!;
+  if (bpc === 16) return (data[rowStart + index * 2]! << 8) | data[rowStart + index * 2 + 1]!;
+  const bit = index * bpc;
+  const shift = 8 - bpc - (bit & 7);
+  return (data[rowStart + (bit >> 3)]! >> shift) & ((1 << bpc) - 1);
+}
+
 function writeSample(data: Uint8Array, rowStart: number, index: number, bpc: number, value: number) {
   if (bpc === 8) {
     data[rowStart + index] = value;
@@ -281,7 +295,9 @@ function layoutOf(ctx: PDFContext, d: PDFDict, colorSpaces: PDFDict | undefined)
  */
 function makePainter(L: Layout, ctm: Matrix, covers: SanCover[]) {
   const perCover = covers.map(() => 0);
+  const offPerCover = covers.map(() => 0);
   const reached = covers.map(() => false);
+  const half = (L.bpc === 16 ? 0xffff : (1 << L.bpc) - 1) / 2;
   let pixels = 0;
   // 覆いの箱の四隅を、画像の画素の位置に戻す（ctm の逆）。戻せないときは、すべての行・列を見る
   const det = ctm[0] * ctm[3] - ctm[1] * ctm[2];
@@ -330,6 +346,7 @@ function makePainter(L: Layout, ctm: Matrix, covers: SanCover[]) {
   }
   return {
     perCover,
+    offPerCover,
     reached,
     get pixels() {
       return pixels;
@@ -382,7 +399,12 @@ function makePainter(L: Layout, ctm: Matrix, covers: SanCover[]) {
           }
         }
         const fill = fills[hit]!;
-        for (let c = 0; c < L.comps; c++) writeSample(data, rowStart, x * L.comps + c, L.bpc, fill[c]!);
+        let off = false;
+        for (let c = 0; c < L.comps; c++) {
+          if (Math.abs(readSample(data, rowStart, x * L.comps + c, L.bpc) - fill[c]!) > half) off = true;
+          writeSample(data, rowStart, x * L.comps + c, L.bpc, fill[c]!);
+        }
+        if (off) offPerCover[hit]!++;
         perCover[hit]!++;
         pixels++;
       }
@@ -440,10 +462,11 @@ export async function burnImage(ctx: PDFContext, stream: PDFStream, colorSpaces:
 
   const painter = makePainter(L, ctm, covers);
   for (let y = 0; y < L.height; y++) painter.paintRow(data, y * L.rowLen, y);
+  if (limits.checkOnly) return { ok: true, stream: PDFRawStream.of(ctx.obj({}), new Uint8Array(0)), pixels: painter.pixels, perCover: painter.perCover, offPerCover: painter.offPerCover, reached: painter.reached, via: "memory" };
 
   const out = ctx.flateStream(data, {});
   copyEntries(d, out.dict, []);
-  return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, reached: painter.reached, via: "memory" };
+  return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, offPerCover: painter.offPerCover, reached: painter.reached, via: "memory" };
 }
 
 /** 大きな Flate の画像を、丸ごと解かずに、行ごとに解いて塗り、Flate で書き直す（予測は戻して、予測なしで書く） */
@@ -552,7 +575,7 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
   const out = PDFRawStream.of(ctx.obj({}), bytes);
   copyEntries(stream.dict, out.dict, []);
   out.dict.set(PDFName.of("Filter"), PDFName.of("FlateDecode"));
-  return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, reached: painter.reached, via: "stream" };
+  return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, offPerCover: painter.offPerCover, reached: painter.reached, via: "stream" };
 }
 
 /**
@@ -607,7 +630,7 @@ async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFD
   const painter = makePainter(L, ctm, covers);
   for (let y = 0; y < height; y++) painter.paintRow(data, y * L.rowLen, y);
   const via = format;
-  if (painter.pixels === 0) return { ok: true, stream: PDFRawStream.of(ctx.obj({}), new Uint8Array(0)), pixels: 0, perCover: painter.perCover, reached: painter.reached, via };
+  if (painter.pixels === 0 || limits.checkOnly) return { ok: true, stream: PDFRawStream.of(ctx.obj({}), new Uint8Array(0)), pixels: painter.pixels, perCover: painter.perCover, offPerCover: painter.offPerCover, reached: painter.reached, via };
 
   const skip = ["ColorSpace", "Decode", "BitsPerComponent", "ColorTransform", "ImageMask"];
   if (format === "jpeg" && !gray1) {
@@ -623,12 +646,12 @@ async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFD
     out.dict.set(PDFName.of("Filter"), PDFName.of("DCTDecode"));
     out.dict.set(PDFName.of("ColorSpace"), PDFName.of("DeviceRGB"));
     out.dict.set(PDFName.of("BitsPerComponent"), PDFNumber.of(8));
-    return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, reached: painter.reached, via };
+    return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, offPerCover: painter.offPerCover, reached: painter.reached, via };
   }
   // 1 ビットの灰色はそのまま、RGB は 8 ビットの RGB で、Flate に書き直す
   const out = ctx.flateStream(data.subarray(0, L.rowLen * height), {});
   copyEntries(d, out.dict, skip);
   out.dict.set(PDFName.of("ColorSpace"), PDFName.of(gray1 ? "DeviceGray" : "DeviceRGB"));
   out.dict.set(PDFName.of("BitsPerComponent"), PDFNumber.of(gray1 ? 1 : 8));
-  return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, reached: painter.reached, via };
+  return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, offPerCover: painter.offPerCover, reached: painter.reached, via };
 }

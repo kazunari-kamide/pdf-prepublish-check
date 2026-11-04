@@ -6,27 +6,49 @@
 // 使い方（画面へのつなぎ方は sanitize/README.md）：
 //   const r = await sanitizePdf(bytes);
 //   if (r.status === "ok") { r.bytes（片付けた PDF）, r.removed（取り除いた項目）, r.notDone（片付けられなかった所） }
+//   自分で黒塗りする：redact(bytes, areas, options)（redact.ts）
 //
 // 順番：
 //   1. 読む（rules/shared/load.ts。パスワードなしで開ける暗号化は外して読む）
-//   2. ページごとに、P6（覆いの下の字・画素、未適用の墨消し）と P7（見えない字）を片付ける（content.ts）
+//   2. ページごとに、P6（覆いの下の字・画素、未適用の墨消し、選んだ場所）と P7（見えない字）を片付ける（content.ts）
 //   3. 文書全体の P1・P2・P8・P9・P12 を片付ける（structure.ts）
 //   4. 文書の根からたどれないものを捨て、1つの版として書き出す（P5）。圧縮の設定・パスワードはまだ入れない
 
-import type { PDFObject } from "pdf-lib";
+import type { PDFDocument, PDFObject } from "pdf-lib";
 import { loadPdf } from "../rules/shared/load.ts";
+import type { Rect } from "../rules/p6-text/geometry.ts";
 import { SETTINGS, TooManyOperations, makeVisibility, sanitizePageContent } from "./content.ts";
 import { cleanAnnotations, countRevisions, dropUnreachable, removeAttachments, removeDocInfo, removeStructureExtras, removeJavaScript, removeXmp } from "./structure.ts";
 import type { NotDoneItem, RemovedItem, SanitizeOptions, SanitizeResult } from "./types.ts";
 
 export type * from "./types.ts";
+export { redact } from "./redact.ts";
 
-export const SANITIZER_VERSION = "0.4.0";
+export const SANITIZER_VERSION = "0.5.0";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
-const MAX_INPUT_BYTES = 512 * 1024 * 1024;
+export const MAX_INPUT_BYTES = 512 * 1024 * 1024;
 
-export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = {}): Promise<SanitizeResult> {
+type ErrorResult = Extract<SanitizeResult, { status: "error" }>;
+
+/** 片付けの途中に、呼ぶ側（redact.ts）が足す作業 */
+export type SanitizeHooks = {
+  /** ページ番号（1から）→ 利用者が選んだ場所 */
+  areas?: Map<number, Rect[]>;
+  /** ページの中身を片付ける前（黒塗りの前に使っていた字のコードを数える） */
+  beforePages?: (doc: PDFDocument) => void;
+  /** ページの中身を片付けたあと、文書全体の片付けの前（選んだ場所に掛かる注釈・フォームの欄を外す） */
+  afterPages?: (doc: PDFDocument) => RemovedItem[];
+  /** 文書全体の片付けのあと、たどれないものを捨てる前（字の対応表を絞る） */
+  beforeDrop?: (doc: PDFDocument) => RemovedItem[];
+};
+
+export type SanitizeCore =
+  | { status: "ok"; bytes: Uint8Array; pages: number; removed: RemovedItem[]; notDone: NotDoneItem[]; decrypted: boolean }
+  | ErrorResult;
+
+/** 片付けの本体（sanitizePdf と redact が使う） */
+export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions = {}, hooks: SanitizeHooks = {}): Promise<SanitizeCore> {
   if (bytes.length === 0) return { status: "error", code: "empty", message: "ファイルが空です。" };
   if (bytes.length > MAX_INPUT_BYTES) return { status: "error", code: "too_large", message: "ファイルが大きすぎるため、片付けられません。" };
   const settings = {
@@ -61,10 +83,12 @@ export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = 
   // 2. ページの中身
   const visible = makeVisibility(ctx, doc.catalog);
   const redactAnnots = new Set<PDFObject>();
+  hooks.beforePages?.(doc);
   for (const [index, page] of pages.entries()) {
     const pageNo = index + 1;
+    const areas = hooks.areas?.get(pageNo) ?? [];
     try {
-      const r = await sanitizePageContent(ctx, page, pageNo, visible, settings, options.codec, options.trace);
+      const r = await sanitizePageContent(ctx, page, pageNo, visible, settings, options.codec, options.trace, areas);
       removed.push(...r.removed);
       notDone.push(...r.notDone);
       for (const a of r.redactAnnots) redactAnnots.add(a);
@@ -75,12 +99,17 @@ export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = 
         pattern: "P6",
         reason: heavy ? "too_many_operations" : "unreadable_page",
         page: pageNo,
-        label: heavy
-          ? "このページは図形が多すぎるため、黒い四角の下の字・見えない字の片付けを省きました"
-          : "このページの中身を読めなかったため、黒い四角の下の字・見えない字の片付けを省きました",
+        label: areas.length
+          ? heavy
+            ? "このページは図形が多すぎるため、選んだ所を消せませんでした"
+            : "このページの中身を読めなかったため、選んだ所を消せませんでした"
+          : heavy
+            ? "このページは図形が多すぎるため、黒い四角の下の字・見えない字の片付けを省きました"
+            : "このページの中身を読めなかったため、黒い四角の下の字・見えない字の片付けを省きました",
       });
     }
   }
+  if (hooks.afterPages) removed.push(...hooks.afterPages(doc));
 
   // 3. 文書全体
   removed.push(...cleanAnnotations(doc, redactAnnots));
@@ -89,6 +118,7 @@ export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = 
   removed.push(...removeXmp(ctx));
   removed.push(...removeDocInfo(doc));
   removed.push(...removeStructureExtras(doc));
+  if (hooks.beforeDrop) removed.push(...hooks.beforeDrop(doc));
 
   // 4. 1つの版にまとめる
   ctx.trailerInfo.Encrypt = undefined;
@@ -111,3 +141,6 @@ export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = 
   return { status: "ok", bytes: out, pages: pages.length, removed, notDone, decrypted: loaded.decrypted !== null };
 }
 
+export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = {}): Promise<SanitizeResult> {
+  return sanitizeCore(bytes, options);
+}
