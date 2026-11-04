@@ -5,7 +5,7 @@
 
 import { WORKER_TIMEOUT_MS } from "../inspect/limits";
 import type { SanitizeOutcome, SanitizeRequest, SanitizeResponse } from "./protocol";
-import type { RedactArea } from "./redact";
+import type { RedactArea } from "./areas";
 
 let nextId = 1;
 

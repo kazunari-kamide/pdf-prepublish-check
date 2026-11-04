@@ -10,12 +10,9 @@
 // - 選んだ所の数とページの範囲に上限をかける。
 
 import { PDFDocument, PDFName, PDFNumber } from "pdf-lib";
-import type { Rect } from "../inspect/report";
+import { MAX_REDACT_AREAS, type RedactArea } from "./areas";
 
-export type RedactArea = { page: number; rect: Rect };
-
-/** 1回に選べる所の上限【仮の値】 */
-export const MAX_REDACT_AREAS = 200;
+export { MAX_REDACT_AREAS, type RedactArea };
 
 export type AddRedactResult = { status: "ok"; bytes: Uint8Array; added: number } | { status: "refused"; message: string };
 
