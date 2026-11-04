@@ -1,0 +1,103 @@
+{
+  "file": "pii-10-address.pdf",
+  "description": "住所：前の語つき（高）と、文の中の住所（確認）。団体の所在地・会場・条文・見本・番地だけは対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-10-address#1",
+      "type": "address",
+      "page": 1,
+      "rect": [
+        93,
+        758.68,
+        274.5,
+        769.67
+      ],
+      "confidence": "high",
+      "chars": 18
+    },
+    {
+      "id": "pii-10-address#2",
+      "type": "address",
+      "page": 1,
+      "rect": [
+        98.5,
+        734.68,
+        247,
+        745.67
+      ],
+      "confidence": "high",
+      "chars": 15
+    },
+    {
+      "id": "pii-10-address#3",
+      "type": "address",
+      "page": 1,
+      "rect": [
+        93,
+        710.68,
+        225,
+        721.67
+      ],
+      "confidence": "check",
+      "chars": 13
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-10-address#n1",
+      "kind": "office_address",
+      "page": 1,
+      "rect": [
+        104,
+        662.68,
+        230.5,
+        673.67
+      ]
+    },
+    {
+      "id": "pii-10-address#n2",
+      "kind": "office_address",
+      "page": 1,
+      "rect": [
+        87.5,
+        638.68,
+        291,
+        649.67
+      ]
+    },
+    {
+      "id": "pii-10-address#n3",
+      "kind": "article_number",
+      "page": 1,
+      "rect": [
+        82,
+        614.68,
+        170,
+        625.67
+      ]
+    },
+    {
+      "id": "pii-10-address#n4",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        93,
+        590.68,
+        219.5,
+        601.67
+      ]
+    },
+    {
+      "id": "pii-10-address#n5",
+      "kind": "partial_address",
+      "page": 1,
+      "rect": [
+        60,
+        566.68,
+        87.5,
+        577.67
+      ]
+    }
+  ]
+}

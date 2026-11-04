@@ -1,0 +1,129 @@
+{
+  "file": "pii-12-plain-document.pdf",
+  "description": "ふつうの文書（個人情報なし）：見出し・条文・日付・金額・ページ番号（全部が対照）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "pii-12-plain-document#n1",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        60,
+        778.68,
+        159,
+        789.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n2",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        159,
+        754.68,
+        230.5,
+        765.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n3",
+      "kind": "amount",
+      "page": 1,
+      "rect": [
+        98.5,
+        730.68,
+        159,
+        741.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n4",
+      "kind": "amount",
+      "page": 1,
+      "rect": [
+        219.5,
+        730.68,
+        252.5,
+        741.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n5",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        93,
+        682.68,
+        159,
+        693.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n6",
+      "kind": "amount",
+      "page": 1,
+      "rect": [
+        170,
+        682.68,
+        214,
+        693.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n7",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        109.5,
+        658.68,
+        164.5,
+        669.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n8",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        175.5,
+        658.68,
+        230.5,
+        669.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n9",
+      "kind": "organization",
+      "page": 1,
+      "rect": [
+        87.5,
+        634.68,
+        120.5,
+        645.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n10",
+      "kind": "extension",
+      "page": 1,
+      "rect": [
+        153.5,
+        634.68,
+        175.5,
+        645.67
+      ]
+    },
+    {
+      "id": "pii-12-plain-document#n11",
+      "kind": "page_number",
+      "page": 1,
+      "rect": [
+        280,
+        38.68,
+        307.5,
+        49.67
+      ]
+    }
+  ]
+}
