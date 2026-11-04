@@ -16,6 +16,14 @@ import * as p9i from "./p9-inner.ts";
 import { inspectAttachments } from "../../rules/p9-attach/inner.ts";
 import * as p10 from "./p10.ts";
 import { detectP10Exif } from "../../rules/p10-exif/index.ts";
+import * as p4 from "./p4.ts";
+import { detectP4Paths } from "../../rules/p4-paths/index.ts";
+import * as alt from "./alt-text.ts";
+import { detectAltText } from "../../rules/alt-text/index.ts";
+import * as ext from "./extras.ts";
+import { detectExtras } from "../../rules/extras/index.ts";
+import * as fg from "./font-glyphs.ts";
+import { detectFontGlyphs } from "../../rules/font-glyphs/index.ts";
 
 export type TypeCases = {
   /** 型の番号と、画面の名前 */
@@ -34,6 +42,10 @@ export const TYPES: TypeCases[] = [
   { pattern: "P11", label: "フォームの値", ruleId: "p11-forms", cases: p11.CASES, keys: async (b) => p11.keysOf(await detectP11Forms(b)) },
   { pattern: "P9", label: "添付ファイルの中身", ruleId: "p9-attach（inner）", cases: p9i.CASES, keys: async (b) => p9i.keysOf(await inspectAttachments(b, p9i.DETECTORS)) },
   { pattern: "P10", label: "画像の Exif", ruleId: "p10-exif", cases: p10.CASES, keys: async (b) => p10.keysOf(await detectP10Exif(b)) },
+  { pattern: "P4", label: "ファイルパス・内部ホスト名", ruleId: "p4-paths", cases: p4.CASES, keys: async (b) => p4.keysOf(await detectP4Paths(b)) },
+  { pattern: "P7", label: "しおりの題・代わりの文字", ruleId: "alt-text", cases: alt.CASES, keys: async (b) => alt.keysOf(await detectAltText(b)) },
+  { pattern: "P5", label: "ページの縮小画像・XFA・C2PA", ruleId: "extras", cases: ext.CASES, keys: async (b) => ext.keysOf(await detectExtras(b)) },
+  { pattern: "P7", label: "書体に残った字形", ruleId: "font-glyphs", cases: fg.CASES, keys: async (b) => fg.keysOf(await detectFontGlyphs(b)) },
 ];
 
 export type Score = {

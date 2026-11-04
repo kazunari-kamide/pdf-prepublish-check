@@ -19,6 +19,11 @@ import { detectP2Xmp, type P2XmpKind, type P2XmpReport } from "../../rules/p2-xm
 import { detectP10Exif, type P10Kind, type P10Report } from "../../rules/p10-exif/index.ts";
 import { detectP11Forms, type P11Report } from "../../rules/p11-forms/index.ts";
 import { detectP12Actions, type P12Kind, type P12Report, type P12Where } from "../../rules/p12-actions/index.ts";
+import { detectP4Paths, type P4Kind, type P4Report, type P4Where } from "../../rules/p4-paths/index.ts";
+import { detectAltText, type AltKind, type AltReport } from "../../rules/alt-text/index.ts";
+import { detectInfoXmpDiff, type DiffReport } from "../../rules/props/index.ts";
+import { detectExtras, type ExtrasReport } from "../../rules/extras/index.ts";
+import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/index.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report";
 
 export type RuleEntry = {
@@ -476,5 +481,144 @@ const p12 = defineRule<P12Report>({
   notices: (r) => (r.limits.length ? [{ kind: "partial", message: "動作が多すぎるため、途中までしか調べていません。", pages: [] }] : []),
 });
 
+// ---------------------------------------------------------------- P4 ファイルパス・内部ホスト名
+
+const P4_KIND: Record<P4Kind, { title: string; severity: Item["severity"]; unit: string }> = {
+  user_path: { title: "パソコンのユーザーのフォルダの名前が残っています", severity: "medium", unit: "ユーザーの名前" },
+  server: { title: "庁内のサーバーの名前が残っています", severity: "medium", unit: "サーバーの名前" },
+  drive_path: { title: "パソコンのフォルダの場所が残っています", severity: "low", unit: "場所" },
+};
+const P4_WHERE: Record<P4Where, string> = { info: "文書情報", xmp: "XMP メタデータ", annotation: "注釈", link: "リンクの行き先", filespec: "ファイルの名前" };
+
+const p4 = defineRule<P4Report>({
+  id: "p4-paths",
+  label: "ファイルパス・内部ホスト名",
+  pattern: "P4",
+  detect: (b) => detectP4Paths(b),
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P4",
+      severity: P4_KIND[f.kind].severity, // 【仮】
+      title: P4_KIND[f.kind].title,
+      why: "作ったパソコンや、庁内のサーバーの場所が分かります。意図したものでなければ消してください。",
+      detail: [`場所：${P4_WHERE[f.where]}`, `${P4_KIND[f.kind].unit}：${f.chars}字`, f.places > 1 ? `${f.places} か所` : ""].filter(Boolean).join("／"),
+      page: null,
+      rect: null,
+    })),
+});
+
+// ---------------------------------------------------------------- しおりの題・代わりの文字
+
+const ALT_KIND: Record<AltKind, { title: string; why: string; severity: Item["severity"] }> = {
+  actual_text_diff: {
+    title: "描かれた字と違う「代わりの字」が入っています",
+    why: "コピーや検索をすると、ページに見えている字ではなく、代わりの字が出てきます。",
+    severity: "medium",
+  },
+  outline: {
+    title: "しおりに、題が入っています",
+    why: "画面の横のしおりの欄に見えます。中身が公開してよいものか確かめてください。",
+    severity: "low",
+  },
+  alt: {
+    title: "読み上げ用の説明が入っています",
+    why: "読み上げのための大切な情報です。中身が公開してよいものか確かめてください。",
+    severity: "low",
+  },
+};
+
+const altText = defineRule<AltReport>({
+  id: "alt-text",
+  label: "しおりの題・代わりの文字",
+  pattern: "P7",
+  detect: (b) => detectAltText(b),
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P7",
+      severity: ALT_KIND[f.kind].severity, // 【仮】
+      title: ALT_KIND[f.kind].title,
+      why: ALT_KIND[f.kind].why,
+      detail: [`${f.count} か所`, `${f.chars}字`, pagesNote(f.pages)].filter(Boolean).join("／"),
+      page: f.pages[0] ?? null,
+      rect: null,
+    })),
+  notices: (r) => (r.limits.length ? [{ kind: "partial", message: "しおり・構造・ページの中身が多すぎる・読めないため、途中までしか調べていません。", pages: [] }] : []),
+});
+
+// ---------------------------------------------------------------- 文書情報と XMP の食い違い
+
+const DIFF_FIELD: Record<string, string> = { Title: "タイトル", Author: "作成者", Subject: "件名", Keywords: "キーワード", Creator: "作成したソフト", Producer: "PDF に変換したソフト" };
+
+const infoXmpDiff = defineRule<DiffReport>({
+  id: "props-diff",
+  label: "文書情報と XMP の食い違い",
+  pattern: "P1",
+  detect: (b) => detectInfoXmpDiff(b),
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P1",
+      severity: "medium", // 【仮】
+      title: `「${DIFF_FIELD[f.field] ?? "欄"}」が、文書情報と XMP メタデータで違います`,
+      why: "片方だけを直して、古い値がもう片方に残っているかもしれません。",
+      detail: `文書情報：${f.infoChars}字／XMP：${f.xmpChars}字`,
+      page: null,
+      rect: null,
+    })),
+});
+
+// ---------------------------------------------------------------- ページの縮小画像・XFA・C2PA
+
+const extras = defineRule<ExtrasReport>({
+  id: "extras",
+  label: "ページの縮小画像",
+  pattern: "P5",
+  detect: (b) => detectExtras(b),
+  items: (r) =>
+    r.thumbnails.map((t) => ({
+      pattern: "P5",
+      severity: "low", // 【仮】いまのページと違うかは、まだ比べていない
+      title: "ページの縮小画像が付いています",
+      why: "ページを差し替えたり黒塗りしたりしても、縮小画像は前の見た目のまま残ることがあります。確かめてください。",
+      detail: [t.width && t.height ? `${t.width}×${t.height} 画素` : "", formatSize(t.bytes)].filter(Boolean).join("／"),
+      page: t.page,
+      rect: null,
+    })),
+  notices: (r) =>
+    r.notices.map((n): Notice =>
+      n.kind === "xfa"
+        ? {
+            kind: "info",
+            message: n.dataChars
+              ? `この PDF には、XFA という形のフォームがあり、入力した値（${n.dataChars}字）が入っています。中身が公開してよいものか、作ったソフトで確かめてください。`
+              : "この PDF には、XFA という形のフォームがあります。入力した値が入っていないか、作ったソフトで確かめてください。",
+            pages: [],
+          }
+        : {
+            kind: "info",
+            message: "この PDF には、画像などの来歴の情報（C2PA）が入っています。作った人や編集の記録が含まれることがあります。",
+            pages: [],
+          },
+    ),
+});
+
+// ---------------------------------------------------------------- 書体に残った字形
+
+const fontGlyphs = defineRule<FontGlyphReport>({
+  id: "font-glyphs",
+  label: "書体に残った字形",
+  pattern: "P7",
+  detect: (b) => detectFontGlyphs(b),
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P7",
+      severity: "medium", // 【仮】
+      title: "埋め込んだ書体に、どこにも描かれていない字の形が残っています",
+      why: "前に書いてあって消した字（黒塗りの下だけにあった字など）の手がかりになることがあります。",
+      detail: `余った字の形：${f.leftover} 個（書体の字の形 ${f.glyphs} 個のうち）`,
+      page: null,
+      rect: null,
+    })),
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, p5, p1, p2, p9, p8, p11, p12, p10];
+export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, extras, p1, infoXmpDiff, p2, p4, p9, p8, p11, p12, p10];

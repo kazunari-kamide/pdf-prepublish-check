@@ -129,3 +129,65 @@ describe("P10 画像の Exif", () => {
     expect(() => readExif(t.subarray(0, 20))).toThrow();
   });
 });
+
+// ---------------------------------------------------------------- 後半（11/5 D の頼みの 7〜11）
+
+import { detectAltText } from "../rules/alt-text/index.ts";
+import { detectExtras, xfaDataChars } from "../rules/extras/index.ts";
+import { detectFontGlyphs } from "../rules/font-glyphs/index.ts";
+import { detectP4Paths, findPaths } from "../rules/p4-paths/index.ts";
+import * as alt from "../eval/cases/alt-text.ts";
+import * as ext from "../eval/cases/extras.ts";
+import * as fg from "../eval/cases/font-glyphs.ts";
+import * as p4 from "../eval/cases/p4.ts";
+
+describe("しおりの題・代わりの文字", () => {
+  it("同じ字の /ActualText は sameText に数え、出さない", async () => {
+    const r = await detectAltText(await pdf(alt.CASES, "alt-c01"));
+    expect(r.notCounted.sameText).toBe(2);
+  });
+  it("しおりの題の数と字数（入れ子もたどる）", async () => {
+    const r = await detectAltText(await pdf(alt.CASES, "alt-l03"));
+    expect(r.findings).toEqual([{ pattern: "P7", kind: "outline", where: "outlines", pages: [], count: 2, chars: 8 }]);
+  });
+  it("食い違いのページと字数", async () => {
+    const r = await detectAltText(await pdf(alt.CASES, "alt-l01"));
+    expect(r.findings[0]).toMatchObject({ kind: "actual_text_diff", pages: [1], count: 1, chars: 14 });
+  });
+});
+
+describe("P4 ファイルパス・内部ホスト名", () => {
+  it("ユーザーの名前・サーバーの名前の字数。値は返さない", async () => {
+    const r = await detectP4Paths(await pdf(p4.CASES, "p4-l02"));
+    expect(r.findings).toEqual([{ pattern: "P4", kind: "server", where: "annotation", places: 1, chars: 10 }]);
+  });
+  it("findPaths：Mac のユーザーのフォルダ・smb・file の共有フォルダ", () => {
+    expect(findPaths("/Users/yamada/Desktop/a.pdf").map((h) => [h.kind, h.chars])).toEqual([["user_path", 6]]);
+    expect(findPaths("smb://kakuu-nas/share").map((h) => h.kind)).toEqual(["server"]);
+    expect(findPaths("file://kakuu-fs/share/a.doc").map((h) => h.kind)).toEqual(["server"]);
+  });
+  it("findPaths の対照：https の公開のサイト・時刻・相対パス", () => {
+    expect(findPaths("https://www.example.jp/ 10:30 ../a.pdf C言語")).toEqual([]);
+  });
+});
+
+describe("ページの縮小画像・XFA・C2PA", () => {
+  it("縮小画像のページと大きさ", async () => {
+    const r = await detectExtras(await pdf(ext.CASES, "ext-l01"));
+    expect(r.thumbnails).toEqual([{ pattern: "P5", page: 2, width: 30, height: 20, bytes: 600 }]);
+  });
+  it("XFA の入力した値の字数（タグを除く）", async () => {
+    const r = await detectExtras(await pdf(ext.CASES, "ext-l02"));
+    expect(r.notices).toEqual([{ kind: "xfa", dataChars: 4, checked: true }]);
+    expect(xfaDataChars("<xfa:datasets><a>ab c</a></xfa:datasets>")).toBe(3);
+  });
+});
+
+describe("書体に残った字形", () => {
+  it("余った字の形の数（描いた字・記号の少しの余りは出さない）", async () => {
+    const r = await detectFontGlyphs(await pdf(fg.CASES, "fg-l01"));
+    expect(r.findings[0]).toMatchObject({ pattern: "P7", leftover: 5, used: 4 });
+    const c = await detectFontGlyphs(await pdf(fg.CASES, "fg-c02"));
+    expect(c).toMatchObject({ findings: [], belowThreshold: 1 });
+  });
+});
