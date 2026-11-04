@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- 検査の画面の案 F2「ページに赤字」（F を、角の丸め・DADS の値・WCAG 2.2 AA を目標に作り直したもの）。動かない見本。数字・項目は架空。 -->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>案F2 ページに赤字 — お守りPDF</title>
+    <link rel="stylesheet" href="tokens-v2.css" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      :root { --results-w: 20rem; }
+      /* 真ん中：ページと、その右に赤字（説明）。説明は読む順にページの後ろへ置く */
+      .stage { grid-template-columns: min(26rem, 100%) minmax(0, 1fr); gap: var(--space-6); place-items: start stretch; }
+      .lead { position: absolute; left: 100%; top: 50%; width: calc(26rem * 0.6 + var(--space-6)); border-top: var(--border-strong) solid var(--color-accent); }
+      .notes { display: grid; gap: var(--space-5); padding-top: 6.2rem; }
+      .akaji { width: 100%; padding: var(--space-4); border: 1px solid var(--color-control-line); border-left: 6px solid var(--color-accent); border-radius: var(--radius-panel); background: var(--color-surface); box-shadow: var(--shadow-panel); text-align: left; cursor: pointer; }
+      .akaji[aria-current="true"] { border-color: var(--color-accent); border-width: 2px 2px 2px 6px; }
+      .akaji .head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-small); font-weight: 700; }
+      .akaji .no { min-width: 1.8rem; text-align: center; border-radius: var(--radius-full); background: var(--color-accent); color: var(--color-on-dark); }
+      .akaji .title { display: block; margin: var(--space-2) 0 var(--space-1); font-size: var(--text-h2); font-weight: 700; }
+      .akaji .why { display: block; color: var(--color-muted); font-size: var(--text-small); }
+      .results .btn { margin-bottom: var(--space-4); }
+      .results h2 { font-size: var(--text-base); margin: var(--space-2) 0; }
+      .counts { list-style: none; margin: 0; padding: 0; font-size: var(--text-small); }
+      .counts li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0 var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-line); }
+      .counts .n { color: var(--color-accent); font-weight: 700; }
+      @media (max-width: 70rem) {
+        .stage { grid-template-columns: minmax(0, 1fr); place-items: start center; }
+        .lead { display: none; }
+        .notes { padding-top: 0; width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#notes">見つかった所の説明へ移る</a>
+    <header class="appbar">
+      <p class="brand"><span class="seal" aria-hidden="true">守</span>お守りPDF</p>
+      <nav aria-label="手順">
+        <ol class="steps">
+          <li class="done"><span class="n" aria-hidden="true">✓</span>選ぶ<span class="visually-hidden">（済み）</span></li>
+          <li aria-current="step"><span class="n">2</span>確かめる</li>
+          <li><span class="n">3</span>片付ける</li>
+          <li><span class="n">4</span>読み直す</li>
+        </ol>
+      </nav>
+      <p class="zero-send">送信しない作り・このパソコンの中だけで確かめます</p>
+    </header>
+    <main class="layout">
+      <nav class="thumbs" aria-label="ページ">
+        <h2>ページ</h2>
+        <button class="thumb" type="button" aria-label="ページ 1"><span class="pg" aria-hidden="true">1</span></button>
+        <button class="thumb" type="button" aria-current="page" aria-label="ページ 2、見つかった所 1 か所"><span class="thumb-count" aria-hidden="true">1</span><span class="pg" aria-hidden="true">2</span></button>
+        <button class="thumb" type="button" aria-label="ページ 3"><span class="pg" aria-hidden="true">3</span></button>
+      </nav>
+      <section class="stage" aria-labelledby="s-title">
+        <h1 id="s-title" class="visually-hidden">ページ 2 で見つかった所</h1>
+        <div class="sheet" role="img" aria-label="ページ 2。番号 1 の枠が、上から4行目の左にあります">
+          <div class="ln" style="top: 10%"></div><div class="ln" style="top: 14%"></div><div class="ln" style="top: 18%"></div>
+          <div class="ln" style="top: 22%; right: 45%"></div>
+          <div class="mark" style="left: 10%; top: 21%; width: 30%; height: 4.5%"><span class="mark-no">1</span><span class="lead"></span></div>
+          <div class="ln" style="top: 30%"></div><div class="ln" style="top: 34%"></div><div class="ln" style="top: 38%; right: 30%"></div>
+        </div>
+        <div class="notes" id="notes" tabindex="-1">
+          <button class="akaji" type="button" aria-current="true">
+            <span class="head"><span class="no">1</span><span class="sev high">▲ 高</span>見せかけの黒塗り（P6）</span>
+            <span class="title">黒い四角の下に、字が残っています（10字）</span>
+            <span class="why">上に重ねただけなので、下の字を選んでコピーできます。</span>
+          </button>
+          <button class="akaji" type="button">
+            <span class="head"><span class="no">2</span><span class="sev high">▲ 高</span>前の版の残り（P5）・書類全体</span>
+            <span class="title">直す前の版の中身が残っています</span>
+            <span class="why">見た目は新しくても、前の中身を取り出せます。</span>
+          </button>
+        </div>
+      </section>
+      <aside class="results" aria-labelledby="c-title">
+        <p class="summary" role="status"><strong>3 か所</strong> 見つかりました</p>
+        <button class="btn wide" type="button">3 か所を片付ける</button>
+        <h2 id="c-title">お守りの種類ごとの件数</h2>
+        <ul class="counts">
+          <li><span>見せかけの黒塗り（P6）</span><span class="n">1 件</span></li>
+          <li><span>前の版の残り（P5）</span><span class="n">1 件</span></li>
+          <li><span>文書情報（P1）</span><span class="n">1 件</span></li>
+          <li><span>隠れたテキスト（P7）</span><span class="zero">見つかりませんでした</span></li>
+          <li><span>添付ファイル（P9）</span><span class="zero">見つかりませんでした</span></li>
+        </ul>
+        <p class="notice">見つけられるのは、ここに並べた種類だけです。ページ 3 の画像の中身は、まだ調べていません。</p>
+      </aside>
+    </main>
+  </body>
+</html>

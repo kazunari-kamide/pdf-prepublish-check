@@ -58,3 +58,11 @@
 ## 配るもの（dist/）に入る外部のコード
 
 なし（2026-11-03 時点）。
+
+## 値を参考にしたもの（コード・ファイルは写していない）
+
+| 名前 | ライセンス | 参考にした値 | 使った所 | 出典 | 日 |
+|---|---|---|---|---|---|
+| デジタル庁デザインシステム（DADS） | サイトの説明・図（値だけを参考にした） | 角の丸め 8・12px、本文 16px 以上、字の間 2%、押せる所 44 CSS px 以上 | `design/tokens.css` | https://design.digital.go.jp/dads/foundations/ | 2026-11-05 |
+| digital-go-jp/design-tokens | MIT | 黄 `#FFD43D`（`--color-primitive-yellow-300`） | `design/tokens.css` の `--color-focus` | https://github.com/digital-go-jp/design-tokens | 2026-11-05 |
+| digital-go-jp/design-system-example-components-html | MIT | フォーカスの形（黒の 4px の線・2px 離す・黄の 2px の縁） | `design/tokens.css` の `--focus-*` | https://github.com/digital-go-jp/design-system-example-components-html | 2026-11-05 |
