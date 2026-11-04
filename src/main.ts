@@ -205,7 +205,7 @@ function reset() {
   setStep(ui.stepVerify, "todo");
   ui.stepCheckNote.textContent = "まだです";
   ui.stepCleanNote.textContent = "まだです";
-  ui.stepVerifyNote.textContent = "全部 緑になれば完了";
+  ui.stepVerifyNote.textContent = "残り 0 件なら完了";
 }
 
 // ---------------------------------------------------------------- 右：種類ごとの結果
@@ -751,10 +751,10 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.stepCleanNote.textContent = "片付けました";
   if (c.verdict === "clean") {
     setStep(ui.stepVerify, "done");
-    ui.stepVerifyNote.textContent = "全部 緑になりました";
+    ui.stepVerifyNote.textContent = "残り 0 件になりました";
   } else {
     setStep(ui.stepVerify, "now");
-    ui.stepVerifyNote.textContent = c.left === null ? "読み直せませんでした" : c.left > 0 ? `${c.left} か所 残っています` : "言い切れない所あり";
+    ui.stepVerifyNote.textContent = c.left === null ? "読み直せませんでした" : c.left > 0 ? `${c.left} か所 残っています` : "消えたと言い切れない所があります";
   }
 
   ui.cleanCount.textContent =

@@ -73,7 +73,7 @@ function defineRule<R extends BaseReport>(meta: {
 
 const DECRYPTED: Notice = {
   kind: "decrypted",
-  message: "パスワードなしで開ける暗号化がかかっていたので、ほどいて調べました。",
+  message: "パスワードなしで開ける暗号化がかかっていたので、外して調べました。",
   pages: [],
 };
 

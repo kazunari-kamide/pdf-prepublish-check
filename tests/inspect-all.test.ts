@@ -76,7 +76,7 @@ describe("検査の結果", () => {
   it("パスワードなしで開ける暗号化をほどいたことを知らせる", async () => {
     const s = await inspectAll(pdf("p6/p6-e01-encrypted-empty-userpw.pdf"));
     const view = buildView(s);
-    expect(view.notices).toContain("パスワードなしで開ける暗号化がかかっていたので、ほどいて調べました。");
+    expect(view.notices).toContain("パスワードなしで開ける暗号化がかかっていたので、外して調べました。");
   });
 });
 
