@@ -63,6 +63,11 @@ export type PageBox = {
 
 /** 1つのファイルの検査の結果 */
 export type InspectSummary = {
+  /**
+   * プロパティの一覧（文書情報と XMP のすべての欄。値つき）。値を画面に出してよいのは、この一覧だけ（11/5 B の 8）。
+   * 読めなかったときは null。古い形の結果にはない
+   */
+  properties?: import("./properties").PropertyList | null;
   pages: PageBox[];
   /** ページの形を読めなかったとき true（一覧は出せるが、ページの上には描けない） */
   pagesUnreadable: boolean;

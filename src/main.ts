@@ -19,6 +19,7 @@ import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, t
 import type { CoverageRow } from "./ui/coverage";
 import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { orgSegments } from "./ui/org-words";
 import { sampleFile } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex } from "./ui/process-report";
 
@@ -84,6 +85,7 @@ const ui = {
   notices: el<HTMLDivElement>("notices"),
   noticeList: el<HTMLUListElement>("notice-list"),
   groups: el<HTMLDivElement>("groups"),
+  props: el<HTMLDetailsElement>("props"),
   actions: el<HTMLDivElement>("actions"),
   sanitize: el<HTMLButtonElement>("sanitize"),
   sanitizeNote: el<HTMLParagraphElement>("sanitize-note"),
@@ -182,7 +184,7 @@ function applySaveGate(gate: SaveGate) {
 
 function clearResults() {
   for (const part of [ui.noticeList, ui.groups, ui.thumbs, ui.marks]) part.replaceChildren();
-  for (const part of [ui.notices, ui.actions, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote]) part.hidden = true;
+  for (const part of [ui.notices, ui.actions, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props]) part.hidden = true;
   ui.caption.textContent = "";
   delete ui.workspace.dataset.thumbs;
 }
@@ -482,6 +484,86 @@ async function select(r: Row) {
   markSelected(r.no);
 }
 
+// ---------------------------------------------------------------- プロパティの一覧（値を出してよいのは、ここだけ）
+
+/** 文書情報の欄の、画面での名前（用語集の言葉）。ない欄は、欄の名前をそのまま出す */
+const INFO_LABEL: Record<string, string> = {
+  Title: "タイトル",
+  Author: "作成者",
+  Subject: "件名",
+  Keywords: "キーワード",
+  Creator: "作成したソフト",
+  Producer: "PDF にしたソフト",
+  CreationDate: "作った日時",
+  ModDate: "直した日時",
+  Trapped: "トラッピング",
+};
+
+function valueWithMarks(text: string, truncated: boolean): HTMLElement {
+  const v = make("span", undefined, "prop-value");
+  for (const seg of orgSegments(text)) v.append(seg.org ? make("mark", seg.text, "prop-org") : document.createTextNode(seg.text));
+  if (truncated) v.append(make("span", "…（長いので途中まで）", "prop-cut"));
+  return v;
+}
+
+function propRows(list: Array<{ key: string; value: string; truncated: boolean }>, label: (k: string) => string): HTMLElement {
+  const dl = make("dl", undefined, "prop-list");
+  for (const p of list) {
+    const row = make("div", undefined, "prop-row");
+    row.append(make("dt", label(p.key)), make("dd"));
+    row.querySelector("dd")!.append(valueWithMarks(p.value, p.truncated));
+    dl.append(row);
+  }
+  return dl;
+}
+
+/** 文書情報と XMP のすべての欄を、値ごと出す。団体名らしい語に印を付け、「片付ける」へ案内する */
+function renderProperties(s: Session) {
+  const p = s.summary.properties;
+  ui.props.replaceChildren();
+  if (p === undefined) {
+    ui.props.hidden = true;
+    return;
+  }
+  const count = p ? p.info.length + p.xmp.length : 0;
+  const summary = make("summary", p ? `プロパティの一覧（文書情報 ${p.info.length} 欄・XMP ${p.xmp.length} 欄）` : "プロパティの一覧（読めませんでした）");
+  ui.props.append(summary);
+  const body = make("div", undefined, "props-body");
+  body.append(
+    make(
+      "p",
+      "この一覧だけは、欄の値をそのまま出します（このパソコンの画面の中だけで、外には出ません）。団体名らしい語には印を付けています（形で拾うだけなので、見落としや関係のない語もあります）。",
+      "props-note",
+    ),
+  );
+  if (p) {
+    if (p.info.length) {
+      body.append(make("h4", "文書情報"));
+      body.append(propRows(p.info, (k) => (INFO_LABEL[k] ? `${INFO_LABEL[k]}（${k}）` : k)));
+    }
+    if (p.xmp.length) {
+      body.append(make("h4", "XMP メタデータ"));
+      body.append(propRows(p.xmp, (k) => k));
+    }
+    if (p.xmpProblem) body.append(make("p", p.xmpProblem === "too_large" ? "XMP が大きすぎるため、欄を並べていません。" : "XMP の字を読めなかったため、欄を並べていません。", "props-note"));
+    if (p.limited) body.append(make("p", "欄が多すぎるため、途中までしか並べていません。", "props-note"));
+    if (!count) body.append(make("p", s.phase === "after" ? "文書情報と XMP に、値の入った欄は残っていません。" : "文書情報と XMP に、値の入った欄はありません。"));
+  }
+  // その場で「消す」へ案内する（片付ける前で、片付けられるときだけ）
+  if (count && s.phase === "before" && !ui.sanitize.disabled) {
+    const go = make("button", "この欄を消す（「片付ける」へ）", "props-go");
+    go.type = "button";
+    go.addEventListener("click", () => {
+      ui.actions.scrollIntoView({ block: "center", behavior: "smooth" });
+      ui.sanitize.focus({ preventScroll: true });
+    });
+    body.append(go, make("p", "「片付ける」を押すと、文書情報と XMP の欄を、まとめて消した PDF を新しく作ります（元の PDF は変えません）。", "props-note"));
+  }
+  ui.props.append(body);
+  ui.props.open = count > 0 && s.phase === "before";
+  ui.props.hidden = false;
+}
+
 // ---------------------------------------------------------------- 結果の全体
 
 /** 種類ごとの結果・お知らせ・ページを出す（片付ける前も、読み直したあとも同じ形） */
@@ -490,6 +572,7 @@ function renderInspection(s: Session) {
   for (const n of v.notices) ui.noticeList.append(make("li", n));
   ui.notices.hidden = v.notices.length === 0;
   renderGroups(s);
+  renderProperties(s);
   ui.scopeNote.hidden = false;
 
   renderThumbs(s);

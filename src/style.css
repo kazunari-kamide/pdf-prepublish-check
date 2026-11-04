@@ -684,6 +684,89 @@ progress {
   color: var(--color-muted);
 }
 
+/* プロパティの一覧：値を出してよいのは、ここだけ。団体名らしい語は、紅の下線と薄い紅の地（色だけにしない） */
+.props {
+  margin-top: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.props summary {
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.props-body {
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: var(--text-small);
+}
+
+.props-body h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--text-small);
+}
+
+.props-note {
+  margin: var(--space-1) 0;
+  color: var(--color-muted);
+}
+
+.prop-list {
+  margin: 0;
+}
+
+.prop-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 38%) minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.prop-row dt {
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.prop-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.prop-org {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.prop-cut {
+  color: var(--color-muted);
+}
+
+.props-go {
+  min-height: var(--target-min);
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 30rem) {
+  .prop-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
 .items {
   list-style: none;
   margin: 0;

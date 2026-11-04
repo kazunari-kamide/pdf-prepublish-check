@@ -4,6 +4,7 @@
 // 1つのルールが例外で止まっても、ほかのルールは続ける（止まったルールは「調べられなかった」と返す）。
 
 import { readPageBoxes } from "./pages";
+import { readProperties } from "./properties";
 import type { InspectSummary, RuleResult } from "./report";
 import { RULES, type RuleEntry, type RunContext } from "./rules";
 
@@ -40,5 +41,11 @@ export async function inspectAll(
       });
     }
   }
-  return { pages: pages ?? [], pagesUnreadable: pages === null, rules: results };
+  let properties: InspectSummary["properties"] = null;
+  try {
+    properties = await readProperties(bytes);
+  } catch {
+    properties = null;
+  }
+  return { pages: pages ?? [], pagesUnreadable: pages === null, rules: results, properties };
 }
