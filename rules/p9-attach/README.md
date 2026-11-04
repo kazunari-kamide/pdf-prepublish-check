@@ -51,3 +51,18 @@ const report2 = await detectP9Attach(bytes, { includeNames: true }); // ファ�
 - 添付の中身の中（添付した PDF の中の添付など）は見ない。
 - 上限：名前の木の節 1 万、入れ子 32 段、ページ 1 万。超えたら `limits` に出す。時間の上限はこのルールの中にはない。画面では Worker の時間の上限で止める。
 - 復号できない暗号化（パスワードが要るものなど）は `encrypted` で止める。暗号化した PDF での動きは、このルールのテストではまだ試していない。
+
+## 添付の中身を調べる（1.1.0、`inner.ts`）
+
+```ts
+import { inspectAttachments } from "./rules/p9-attach/inner.ts";
+const inner = await inspectAttachments(bytes, detectors); // detectors＝中の PDF にかける検出ルール（見つけた件の並びを返す関数）
+```
+
+- `detectP9Attach(bytes, { includeContents: true })` で、添付の中身（展開したもの。32 MB まで）を `findings[].contents` に返す。画面・記録には出さない。
+- 添付が **PDF**（先頭 1 KB に `%PDF-`）なら、渡された検出ルールで中も調べ、型ごとの件数（`counts`）を返す。中の PDF の添付も同じように調べ、中の添付そのものを P9 として 1 件ずつ、中で見つけた数も外の添付の数に足す。
+- 添付が**文字のファイル**（種類が `text/…`、拡張子が `txt`・`csv`・`json` など、または種類も拡張子も無く字として読めるもの）なら、字数（空白を除く）を返す。UTF-8・UTF-16（BOM）・Shift_JIS を読む。
+- 中身の字・ファイル名は返さない。
+- 上限：入れ子は 3 段まで（`too_deep`）、調べる添付は全部で 50 個まで（`not_checked`）、1つの添付は 32 MB まで（`too_large`）。
+- 画面（`src/inspect/rules.ts`）では、P9 以外の画面のルールを全部、中の PDF にかける。中で見つかれば、その添付を「高」【仮】にする。
+- 合成 PDF 6 件（`eval/cases/p9-inner.ts`。`npm run eval:new`）：検出 7/7、誤検知 0。
