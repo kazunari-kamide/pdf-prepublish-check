@@ -9,7 +9,8 @@
 // - 検出ルールのコード（rules/）と eval/adapters/ は読まない・import しない（ルールの作り方に合わせないため）。
 // - 表は Markdown と JSON で書く（夜にもう一度動かして比べるため）。字の中身は表に入れない（数・型・ページだけ）。
 //
-// 使い方：node eval/blind/run.ts [--dir <テスト集のフォルダ>] [--out <書き出すフォルダ>] [--no-sanitize]
+// 使い方：node eval/blind/run.ts [--dir <テスト集のフォルダ>] [--out <書き出すフォルダ>] [--compare <前の report.json>]
+//                                [--no-sanitize] [--save-sanitized <フォルダ>]
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -55,6 +56,8 @@ if (!dir) {
 }
 const outDir = path.resolve(opt("--out") ?? path.join(root, ".tmp/blind"));
 const doSanitize = !args.includes("--no-sanitize");
+/** 片付けた PDF を書き出すフォルダ（調べるとき用。指定したときだけ） */
+const saveSanitized = opt("--save-sanitized");
 const expected = JSON.parse(readFileSync(path.join(dir, "expected.json"), "utf8")) as Expected;
 
 // ---- RULES にかける ----
@@ -148,7 +151,8 @@ function judge(c: Case, r: RunOut): Verdict {
 function streamsOf(buf: Buffer): { dict: string; data: Buffer; inflated: Buffer | null }[] {
   const s = buf.toString("latin1");
   const out: { dict: string; data: Buffer; inflated: Buffer | null }[] = [];
-  const re = /stream\r?\n/g;
+  // endstream の中の "stream" には当てない
+  const re = /(?<!end)stream\r?\n/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(s))) {
     const start = m.index + m[0].length;
@@ -167,7 +171,7 @@ function streamsOf(buf: Buffer): { dict: string; data: Buffer; inflated: Buffer 
       }
     }
     out.push({ dict, data, inflated });
-    re.lastIndex = end;
+    re.lastIndex = end + "endstream".length;
   }
   return out;
 }
@@ -267,6 +271,8 @@ type CaseOut = {
 
 const codec = createNodeImageCodec();
 const results: CaseOut[] = [];
+/** 片付ける前の PDF で、目印・画素を見つけられなかった所（測り方の穴） */
+const measureProblems: string[] = [];
 const versions: Record<string, string> = {};
 for (const c of expected.cases) {
   const bytes = new Uint8Array(readFileSync(path.join(dir, c.file)));
@@ -275,9 +281,18 @@ for (const c of expected.cases) {
   const v = judge(c, r);
   const row: CaseOut = { id: c.id, type: c.type, kind: c.kind, ...v, found: r.items, notices: r.notices, errors: r.errors, sanitize: null };
   if (doSanitize && c.kind === "leak" && c.residual) {
+    // 測り方の確かめ：片付ける前の PDF では、目印も画素も「残っている」と出るはず。出ないなら、その所は測れない
+    const before = await measureResidual(bytes, c.residual);
+    if (before.markersLeft < before.markersTotal || (c.residual.image && before.image !== "left")) {
+      measureProblems.push(c.id);
+    }
     try {
       const s = await sanitizePdf(bytes.slice(), { codec });
       if (s.status === "ok") {
+        if (saveSanitized) {
+          mkdirSync(path.resolve(saveSanitized, "pdf"), { recursive: true });
+          writeFileSync(path.resolve(saveSanitized, c.file), s.bytes);
+        }
         const m = await measureResidual(s.bytes, c.residual);
         const after = await runRules(s.bytes);
         row.sanitize = { status: "ok", notDone: s.notDone.length, ...m, itemsAfter: after.items.length };
@@ -363,18 +378,43 @@ const total = {
   unchecked: sum((r) => r.unchecked),
   residual: sum((r) => r.residual),
   sanitizeNotOk: results.filter((r) => r.sanitize && r.sanitize.status !== "ok").length,
+  measureProblems,
 };
 
 mkdirSync(outDir, { recursive: true });
-const json = { date, commit, set: path.relative(root, dir).replace(/\\/g, "/"), rules: versions, total, types: typeRows, cases: results, skipped: expected.skipped };
-writeFileSync(path.join(outDir, "report.json"), JSON.stringify(json, null, 2) + "\n");
+const json = { date, commit, set: path.relative(root, dir).replace(/\\/g, "/"), rules: versions, total, types: typeRows, cases: results, skipped: expected.skipped };writeFileSync(path.join(outDir, "report.json"), JSON.stringify(json, null, 2) + "\n");
 
 const f = (p: [number, number] | null) => (p ? `${p[0]}/${p[1]}` : "—");
+
+// 前の結果と比べる（--compare <前の report.json>）。型ごとに、合否・検出・誤検知・残りが変わった所だけを並べる
+const comparePath = opt("--compare");
+type Prev = { date: string; commit: string; total: typeof total; types: TypeRow[] };
+const prev: Prev | null = comparePath ? (JSON.parse(readFileSync(path.resolve(comparePath), "utf8")) as Prev) : null;
+const changes: string[] = [];
+if (prev) {
+  for (const r of typeRows) {
+    const p = prev.types.find((x) => x.type === r.type);
+    if (!p) {
+      changes.push(`| ${r.type} | （前はなし） | ${r.verdict} 検出 ${f(r.leak)} 誤検知 ${f(r.control)} 残り ${f(r.residual)} |`);
+      continue;
+    }
+    const a = `${p.verdict} 検出 ${f(p.leak)} 誤検知 ${f(p.control)} お知らせ ${f(p.notice)} 残り ${f(p.residual)}`;
+    const b = `${r.verdict} 検出 ${f(r.leak)} 誤検知 ${f(r.control)} お知らせ ${f(r.notice)} 残り ${f(r.residual)}`;
+    if (a !== b) changes.push(`| ${r.type} | ${a} | ${b} |`);
+  }
+}
+
 let md = `# 見ないで作るテスト集の合否表\n\n`;
 md += `- 測った日：${date}（コミット ${commit}）\n- テスト集：\`${json.set}\`（${expected.cases.length} 個の PDF、${typeRows.length} の型）\n`;
 md += `- ルール：${Object.entries(versions).map(([k, v]) => `${k} ${v}`).join("、")}\n`;
 md += `- 合の型：**${total.typesPass}/${total.types}**。検出 ${f(total.leak)}、誤検知 ${f(total.control)}（対照のうち出てはいけない型が出た数）、お知らせ ${f(total.notice)}、調べられない ${f(total.unchecked)}\n`;
-md += `- 片付けたあとに残った（隠しのある PDF のうち、目印の字か覆いの下の画素が残った数／測った数）：${f(total.residual)}。片付けが ok にならなかった：${total.sanitizeNotOk}\n\n`;
+md += `- 片付けたあとに残った（隠しのある PDF のうち、目印の字か覆いの下の画素が残った数／測った数）：${f(total.residual)}。片付けが ok にならなかった：${total.sanitizeNotOk}\n`;
+md += `- 測り方の確かめ（片付ける前の PDF で、目印と画素が見つかるか）：${measureProblems.length ? `見つからなかった所 ${measureProblems.length}（${measureProblems.join("・")}）。この所の「残り」は当てにならない` : "すべて見つかった"}\n\n`;
+if (prev) {
+  md += `## 前の結果との差（${prev.date}、コミット ${prev.commit} → ${date}、コミット ${commit}）\n\n`;
+  md += `合の型 ${prev.total.typesPass}/${prev.total.types} → ${total.typesPass}/${total.types}、検出 ${f(prev.total.leak)} → ${f(total.leak)}、誤検知 ${f(prev.total.control)} → ${f(total.control)}、残り ${f(prev.total.residual)} → ${f(total.residual)}\n\n`;
+  md += changes.length ? `| 型 | 前 | 後 |\n|---|---|---|\n${changes.join("\n")}\n\n` : "変わった型はない。\n\n";
+}
 md += `見方：検出＝隠しのある PDF のうち、期待した型で出た数。誤検知＝対照のうち、出てはいけない型が出た数。深刻度＝期待が「高」か「確認」の PDF のうち、深刻度が合った数。残り＝片付けたあとに、目印の字か覆いの下の画素が残った数。合＝その型の PDF がすべて期待どおり。\n\n`;
 md += `| 型 | 説明 | 予定 | 合否 | 検出 | 誤検知 | お知らせ | 調べられない | 深刻度 | 片付け後の残り | 落ちた所 |\n|---|---|---|---|---|---|---|---|---|---|---|\n`;
 for (const r of typeRows)
