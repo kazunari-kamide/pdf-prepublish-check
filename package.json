@@ -23,7 +23,8 @@
     "eval:sanitize": "node eval/sanitize.ts",
     "check:sanitized": "node sanitize/check/cli.ts",
     "check:browser": "node scripts/check-browser.mjs",
-    "check:live": "node scripts/check-live.mjs"
+    "check:live": "node scripts/check-live.mjs",
+    "eval:redact": "vitest run tests/redact-eval.test.ts --silent=false"
   },
   "devDependencies": {
     "@napi-rs/canvas": "1.1.0",
