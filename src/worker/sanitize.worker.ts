@@ -8,7 +8,6 @@
 import pdfjsUrl from "pdfjs-dist/build/pdf.min.mjs?url";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { createPdfjsImageCodec, offscreenCanvasJpegEncoder, type PdfjsLike } from "../../sanitize/image-codec.ts";
-import { sanitizePdf } from "../../sanitize/index.ts";
 import type { ImageCodec } from "../../sanitize/types.ts";
 
 /**
@@ -27,8 +26,8 @@ async function imageCodec(): Promise<ImageCodec | undefined> {
     return undefined;
   }
 }
-import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol";
-import { addRedactAreas } from "../sanitize/redact";
+import { sanitizeJob } from "../sanitize/job.ts";
+import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol.ts";
 
 type WorkerScope = {
   onmessage: ((e: MessageEvent<SanitizeRequest>) => void) | null;
@@ -40,20 +39,15 @@ scope.onmessage = async (e) => {
   const req = e.data;
   if (!req || req.type !== "sanitize" || !(req.buffer instanceof ArrayBuffer)) return;
   try {
-    let input: Uint8Array = new Uint8Array(req.buffer);
-    // 自分で選んだ所があれば、先に墨消しの注釈として足す（仮のつなぎ。src/sanitize/redact.ts）
-    if (Array.isArray(req.areas) && req.areas.length) {
-      const added = await addRedactAreas(input, req.areas);
-      if (added.status === "refused") {
-        scope.postMessage({ type: "refused", id: req.id, message: added.message });
-        return;
-      }
-      input = added.bytes;
-    }
     const codec = await imageCodec();
-    const r = await sanitizePdf(input, codec ? { codec } : {});
-    if (r.status === "error") {
+    // 自分で選んだ所があれば片付けの redact、なければふつうの片付け（src/sanitize/job.ts）
+    const r = await sanitizeJob(new Uint8Array(req.buffer), req.areas, codec);
+    if (r.type === "refused") {
       scope.postMessage({ type: "refused", id: req.id, message: r.message });
+      return;
+    }
+    if (r.type === "redact_blocked") {
+      scope.postMessage({ type: "redact_blocked", id: req.id, removed: r.removed, notDone: r.notDone, leftovers: r.leftovers });
       return;
     }
     // 片付けた PDF は渡し切る（写しを作らない）。ほかの中身と共有していることがあるので、そのときだけ写す

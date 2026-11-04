@@ -6,29 +6,32 @@
 // - 「残っていません」は、読み直しで調べた型についてだけ言う（CLAUDE.md §11-5b）。
 
 import type { NotDoneItem, RemovedItem, SanitizePattern } from "../../sanitize/types.ts";
-import type { Rect } from "../inspect/report";
-import { CATALOG } from "./coverage";
-import type { ViewModel } from "./model";
+import type { Rect } from "../inspect/report.ts";
+import { CATALOG } from "./coverage.ts";
+import { CANDIDATE_PATTERNS } from "./picks.ts";
+import type { ViewModel } from "./model.ts";
 
-/** 片付けの型の名前（docs/glossary.md の言葉） */
-export const PATTERN_NAME: Record<SanitizePattern, string> = {
-  P1: "文書情報",
-  P2: "XMP メタデータ",
-  P5: "旧版の残存",
-  P6: "見せかけの黒塗り",
-  P7: "隠れたテキスト",
-  P8: "注釈・コメント",
-  P9: "添付ファイル",
-  P12: "スクリプト・外部動作",
+/**
+ * 型の名前（docs/glossary.md の言葉）。見た所・見なかった所の一覧（coverage.ts の CATALOG）と同じ名前を、1か所から引く。
+ * 片付けの型（P1・P2・P5〜P9・P12）だけでなく、読み直しで調べる型（P4・P10・P11 など）もここで引く
+ */
+export const PATTERN_NAME: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(CATALOG.filter((c) => /^P\d+$/.test(c.key)).map((c) => [c.key, c.name])),
+  P13: "個人情報らしい字",
 };
+/** 「名前（P10）」の形。名前の分からない型は、番号だけにする（「P10（P10）」のように番号を重ねない） */
+export const patternWithName = (p: string): string => (PATTERN_NAME[p] ? `${PATTERN_NAME[p]}（${p}）` : p);
+
 const PATTERN_ORDER: SanitizePattern[] = ["P6", "P7", "P5", "P1", "P2", "P8", "P9", "P12"];
-/** 黒塗りの候補として示すだけの型（片付けでは消さない）。読み直しの「残っている所」に数えない */
-const CANDIDATE_PATTERNS: string[] = ["P13"];
+/** 自分で黒塗りした所（片付けの redact が返す種類）。見せかけの黒塗りの片付けとは分けて並べる */
+const SELF_KINDS: ReadonlySet<RemovedItem["kind"]> = new Set(["redacted_text", "redacted_pixels", "redacted_annotation", "redacted_field", "redaction_box"]);
+export const SELF_GROUP_NAME = "自分で選んだ所の黒塗り";
 
 /** 1つの型の中で並べる行の上限。超えた分は数だけ出す */
 export const MAX_LINES_PER_GROUP = 30;
 
-export type RemovedGroup = { pattern: SanitizePattern; name: string; lines: string[]; total: number };
+/** self＝自分で選んだ所の黒塗り（片付けの redact）。pattern はどちらも片付けの型（自分で選んだ所は P6 の墨消し） */
+export type RemovedGroup = { pattern: SanitizePattern; name: string; self: boolean; lines: string[]; total: number };
 export type DoneMark = { page: number; rect: Rect; label: string };
 
 export type CleanView = {
@@ -61,17 +64,19 @@ export function buildCleanView(input: {
 }): CleanView {
   const { before, after, removed, notDone, decrypted } = input;
 
-  const groups = new Map<SanitizePattern, RemovedGroup>();
+  const groups = new Map<string, RemovedGroup>();
   for (const r of removed) {
-    const g = groups.get(r.pattern) ?? { pattern: r.pattern, name: PATTERN_NAME[r.pattern], lines: [], total: 0 };
+    const self = SELF_KINDS.has(r.kind);
+    const key = self ? "self" : r.pattern;
+    const g = groups.get(key) ?? { pattern: r.pattern, name: self ? SELF_GROUP_NAME : (PATTERN_NAME[r.pattern] ?? r.pattern), self, lines: [], total: 0 };
     g.total++;
     if (g.lines.length < MAX_LINES_PER_GROUP) g.lines.push(withPage(r.label, r.page));
-    groups.set(r.pattern, g);
+    groups.set(key, g);
   }
   for (const g of groups.values()) {
     if (g.total > g.lines.length) g.lines.push(`ほか ${g.total - g.lines.length} 件`);
   }
-  const removedGroups = PATTERN_ORDER.filter((p) => groups.has(p)).map((p) => groups.get(p)!);
+  const removedGroups = ["self", ...PATTERN_ORDER].filter((k) => groups.has(k)).map((k) => groups.get(k)!);
 
   const notDoneLines = notDone.map((n) => withPage(n.label, n.page));
   const doneMarks: DoneMark[] = removed
@@ -85,11 +90,11 @@ export function buildCleanView(input: {
   const checked = after
     ? [...new Set(after.groups.filter((g) => g.status === "ok" && !CANDIDATE_PATTERNS.includes(g.pattern)).map((g) => g.pattern))]
     : [];
-  const notChecked = removedGroups.map((g) => g.pattern).filter((p) => !checked.includes(p));
+  const notChecked = [...new Set(removedGroups.map((g) => g.pattern))].filter((p) => !checked.includes(p));
   let scope = checked.length
-    ? `読み直しで調べたのは ${checked.map((p) => `${PATTERN_NAME[p as SanitizePattern] ?? CATALOG.find((c) => c.key === p)?.name ?? p}（${p}）`).join("・")} です。`
+    ? `読み直しで調べたのは ${checked.map(patternWithName).join("・")} です。`
     : "読み直しでは、どの型も調べられませんでした。";
-  if (notChecked.length) scope += `${notChecked.join("・")} は片付けましたが、読み直しでは調べていません（調べるルールがまだありません）。`;
+  if (notChecked.length) scope += `${notChecked.map(patternWithName).join("・")} は片付けましたが、読み直しでは調べていません（調べるルールがまだありません）。`;
   // 調べた型の中でも、調べていない層があれば添える（決め打ちの中身は src/ui/scope.ts の1か所）
   if (after) scope += after.caveats.join("");
 
