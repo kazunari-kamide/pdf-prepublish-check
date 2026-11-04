@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P8（注釈・コメント）1.0.0 のテスト。
+// 検出ルール P8（注釈・コメント）1.1.0 のテスト。
 // 採点用の合成 PDF（proposals/ に作られる予定）がまだないので、テストの中で小さな PDF を作って確かめる。
 // 名前は架空のもの（山田太郎など）だけを使う。
 
@@ -27,7 +27,7 @@ describe("P8 注釈の作成者欄と内容", () => {
   it("作成者欄（/T）を見つけ、値は返さずに字数だけを返す", async () => {
     const r = await detectP8Annot(await makePdf([[{ Subtype: "Square", T: PDFString.of("yamada") }]]));
     expect(r.status).toBe("ok");
-    expect(r.findings).toEqual([{ pattern: "P8", field: "T", chars: 6, annotations: 1, pages: [1] }]);
+    expect(r.findings).toEqual([{ pattern: "P8", field: "T", hidden: false, chars: 6, annotations: 1, pages: [1] }]);
   });
 
   it("全注釈で同じ作成者なら、1件にまとめる（注釈の数とページを添える）", async () => {
@@ -38,7 +38,7 @@ describe("P8 注釈の作成者欄と内容", () => {
         [{ Subtype: "Highlight", T: text("山田太郎") }],
       ]),
     );
-    expect(r.findings).toEqual([{ pattern: "P8", field: "T", chars: 4, annotations: 3, pages: [1, 3] }]);
+    expect(r.findings).toEqual([{ pattern: "P8", field: "T", hidden: false, chars: 4, annotations: 3, pages: [1, 3] }]);
     expect(r.annotations).toBe(3);
   });
 
