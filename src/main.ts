@@ -20,6 +20,7 @@ import type { CoverageRow } from "./ui/coverage";
 import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
 import { orgSegments } from "./ui/org-words";
+import { buildRulesetView } from "./ui/ruleset";
 import { sampleFile } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex } from "./ui/process-report";
 
@@ -86,6 +87,7 @@ const ui = {
   noticeList: el<HTMLUListElement>("notice-list"),
   groups: el<HTMLDivElement>("groups"),
   props: el<HTMLDetailsElement>("props"),
+  ruleset: el<HTMLDetailsElement>("ruleset"),
   actions: el<HTMLDivElement>("actions"),
   sanitize: el<HTMLButtonElement>("sanitize"),
   sanitizeNote: el<HTMLParagraphElement>("sanitize-note"),
@@ -184,7 +186,7 @@ function applySaveGate(gate: SaveGate) {
 
 function clearResults() {
   for (const part of [ui.noticeList, ui.groups, ui.thumbs, ui.marks]) part.replaceChildren();
-  for (const part of [ui.notices, ui.actions, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props]) part.hidden = true;
+  for (const part of [ui.notices, ui.actions, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props, ui.ruleset]) part.hidden = true;
   ui.caption.textContent = "";
   delete ui.workspace.dataset.thumbs;
 }
@@ -564,6 +566,22 @@ function renderProperties(s: Session) {
   ui.props.hidden = false;
 }
 
+/** ルールの版・更新日・最近足した型（11/5 B の 10） */
+function renderRuleset(s: Session) {
+  const r = buildRulesetView(s.summary.rules);
+  const body = make("div", undefined, "ruleset-body");
+  if (r.recent.length) {
+    body.append(make("h4", "最近足した型"));
+    body.append(make("ul", undefined, "ruleset-list"));
+    body.lastElementChild!.append(...r.recent.map((t) => make("li", t)));
+  }
+  body.append(make("h4", "ルールごとの版"));
+  body.append(make("ul", undefined, "ruleset-list"));
+  body.lastElementChild!.append(...r.versions.map((t) => make("li", t)));
+  ui.ruleset.replaceChildren(make("summary", r.headline), body);
+  ui.ruleset.hidden = false;
+}
+
 // ---------------------------------------------------------------- 結果の全体
 
 /** 種類ごとの結果・お知らせ・ページを出す（片付ける前も、読み直したあとも同じ形） */
@@ -573,6 +591,7 @@ function renderInspection(s: Session) {
   ui.notices.hidden = v.notices.length === 0;
   renderGroups(s);
   renderProperties(s);
+  renderRuleset(s);
   ui.scopeNote.hidden = false;
 
   renderThumbs(s);

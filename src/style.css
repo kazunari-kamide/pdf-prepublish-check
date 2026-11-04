@@ -767,6 +767,30 @@ progress {
   }
 }
 
+/* ルールの版：結果の下に、閉じた形で控えめに */
+.ruleset {
+  margin-top: var(--space-3);
+  font-size: var(--text-small);
+}
+
+.ruleset summary {
+  min-height: var(--target-min);
+  padding-top: var(--space-2);
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.ruleset-body h4 {
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--text-small);
+}
+
+.ruleset-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  overflow-wrap: anywhere;
+}
+
 .items {
   list-style: none;
   margin: 0;
