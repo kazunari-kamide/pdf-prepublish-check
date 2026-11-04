@@ -2,7 +2,7 @@
 //
 // 検出ルール P6（見せかけの黒塗り）の文字の層（docs/prd.md §3）。
 // 字のあとに、その字を覆う濃い塗り・濃い画像・注釈を描いていれば、「黒い四角の下に字が残っている」とする。
-// 見ないもの（この版）：スキャン画像の画素が残っている型（画像の層。image/*）。
+// 見ないもの（この版）：スキャン画像の画素が残っている型（画像の層。image/*）。報告の checkedLayers にも、この区別を入れる（1.4.0 から）。
 
 import { loadPdf } from "../shared/load.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
@@ -12,7 +12,17 @@ import { IDENTITY, area, intersectionArea, type Rect } from "./geometry.ts";
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.3.1";
+export const RULE_VERSION = "1.4.0";
+
+/** P6 の層。text＝黒い四角の下に字が残っている型、image＝スキャン画像の画素が残っている型 */
+export type P6Layer = "text" | "image";
+
+/**
+ * この版の検出ルールが調べる層（1.4.0 から報告の checkedLayers に入れる）。
+ * 画面は、ここに "image" がない間、「画像の下の中身は、読み直しではまだ調べていません」と添える。
+ * 画像の層を見るようにしたら、ここに "image" を足す（画面の一言は、この値で外れる）。
+ */
+export const CHECKED_LAYERS: readonly P6Layer[] = ["text"];
 
 export type P6TextFinding = {
   pattern: "P6";
@@ -31,6 +41,11 @@ export type P6TextFinding = {
 export type P6TextReport = {
   rule: { id: string; version: string };
   status: "ok" | "error";
+  /**
+   * 調べた層（1.4.0 から）。status が ok のときは、この版が調べる層（CHECKED_LAYERS）。
+   * error のときは、何も調べていないので空。ここにない層の漏れは、「残っていない」とは言えない
+   */
+  checkedLayers: P6Layer[];
   error?: { code: "empty" | "unreadable" | "encrypted"; message: string };
   pages: number | null;
   findings: P6TextFinding[];
@@ -88,7 +103,7 @@ function mergeSameArea(items: Array<{ cover: Cover; chars: number; text: string 
 
 export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {}): Promise<P6TextReport> {
   const settings = { ...DEFAULT_SETTINGS, ...options.settings };
-  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], skippedPages: [], uncheckedImages: [] };
+  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, checkedLayers: [] as P6Layer[], findings: [], skippedPages: [], uncheckedImages: [] };
   if (bytes.length === 0) {
     return { ...base, status: "error", pages: null, error: { code: "empty", message: "ファイルが空です。" } };
   }
@@ -107,7 +122,7 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
   }
   const doc = loaded.doc;
 
-  const report: P6TextReport = { ...base, status: "ok", pages: 0, findings: [], skippedPages: [], uncheckedImages: [] };
+  const report: P6TextReport = { ...base, status: "ok", checkedLayers: [...CHECKED_LAYERS], pages: 0, findings: [], skippedPages: [], uncheckedImages: [] };
   if (loaded.decrypted) report.decrypted = loaded.decrypted;
   let pages;
   try {
