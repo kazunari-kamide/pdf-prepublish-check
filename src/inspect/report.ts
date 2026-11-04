@@ -9,8 +9,8 @@ export type Rect = [number, number, number, number];
 /** 深刻度（用語集 §3）。高・中・低の3段 */
 export type Severity = "high" | "medium" | "low";
 
-/** 漏洩パターンの番号（用語集 §1） */
-export type Pattern = "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "P7" | "P8" | "P9" | "P10" | "P11" | "P12";
+/** 漏洩パターンの番号（用語集 §1）。P13（見える文字の個人情報らしい字）は【仮】の番号（rules/pii） */
+export type Pattern = "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "P7" | "P8" | "P9" | "P10" | "P11" | "P12" | "P13";
 
 /** 見つけた所1つ */
 export type Item = {

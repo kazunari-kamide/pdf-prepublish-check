@@ -13,6 +13,7 @@ import { detectP6Text, type P6TextReport } from "../../rules/p6-text/index.ts";
 import { DEFAULT_SETTINGS as P6_SETTINGS } from "../../rules/p6-text/settings.ts";
 import { detectP7Hidden, type P7Reason, type P7Report } from "../../rules/p7-hidden/index.ts";
 import { detectP9Attach, type P9AttachReport, type P9Where } from "../../rules/p9-attach/index.ts";
+import { detectPii, type Basis as PiiBasis, type PiiReport, type PiiType } from "../../rules/pii/index.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report";
 
 export type RuleEntry = {
@@ -249,5 +250,57 @@ const p9 = defineRule<P9AttachReport>({
       : [],
 });
 
+// ---------------------------------------------------------------- P13【仮】 見える文字の個人情報らしい字
+
+const PII_TYPE: Record<PiiType, string> = {
+  name: "氏名",
+  address: "住所",
+  phone: "電話番号",
+  my_number: "マイナンバー",
+  bank_account: "口座番号",
+  birth_date: "生年月日",
+  email: "メールアドレス",
+  card_number: "カード番号",
+};
+const PII_BASIS: Record<PiiBasis, string> = {
+  label: "前後の語から",
+  column_header: "表の見出しから",
+  honorific: "「様」などの呼び方から",
+  pattern: "字の形から",
+  check_digit: "番号の検査用の数字が合うことから",
+};
+
+const pii = defineRule<PiiReport>({
+  id: "pii",
+  label: "個人情報らしい字",
+  pattern: "P13", // 【仮】の番号
+  detect: (b) => detectPii(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
+  // 黒塗りの候補として示すだけ（決めるのは利用者）。字の中身は出さず、型・場所・確からしさだけを出す
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P13",
+      severity: f.confidence === "high" ? "medium" : "low", // 【仮】
+      title: `${PII_TYPE[f.type] ?? "個人情報"}らしい字があります（黒塗りの候補）`,
+      why: "公開すると、本人が分かってしまうおそれがあります。黒塗りが要るかを確かめてください。",
+      detail: `確からしさ：${f.confidence === "high" ? "高" : "確認"}（${PII_BASIS[f.basis] ?? "字の形から"}）／${f.chars}字${f.vertical ? "／縦書き" : ""}`,
+      page: f.page,
+      rect: f.rect,
+    })),
+  notices: (r) => {
+    const out = skippedNotices(r.skippedPages.map((s) => ({ page: s.page, reason: s.reason === "unreadable_page" ? "unreadable_page" : "heavy" })));
+    if (r.unreadable.pages.length) {
+      out.push({
+        kind: "partial",
+        message: "このページには、中身を読み取れない字があります。その字の中の個人情報らしい字は探せていません。",
+        pages: r.unreadable.pages,
+      });
+    }
+    if (r.truncatedPages.length) {
+      out.push({ kind: "partial", message: "このページは字が多すぎるため、個人情報らしい字を途中までしか探していません。", pages: r.truncatedPages });
+    }
+    return out;
+  },
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, p5, p1, p9];
+export const RULES: RuleEntry[] = [p6, p7, p5, p1, p9, pii];

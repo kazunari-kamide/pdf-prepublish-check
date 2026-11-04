@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // Worker の中でする検査（src/inspect/inspect.ts）を、合成 PDF（fixtures/）で確かめる。
-// - 登録した5つのルールがすべて結果を返す
+// - 登録した6つのルールがすべて結果を返す
 // - 字の中身・欄の値・ファイル名が、画面に返す結果に入らない
 // - 暗号化をほどいたことを知らせる（調べなかった画像・省いたページのまとめ方は tests/ui-model.test.ts）
 
@@ -20,8 +20,8 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const pdf = (rel: string) => new Uint8Array(readFileSync(path.join(ROOT, "fixtures", rel)));
 
 describe("登録したルール", () => {
-  it("5つのルールが1か所に並んでいる", () => {
-    expect(RULES.map((r) => r.id).sort()).toEqual(["p1-info", "p5-revisions", "p6-text", "p7-hidden", "p9-attach"]);
+  it("6つのルールが1か所に並んでいる", () => {
+    expect(RULES.map((r) => r.id).sort()).toEqual(["p1-info", "p5-revisions", "p6-text", "p7-hidden", "p9-attach", "pii"]);
   });
 });
 
