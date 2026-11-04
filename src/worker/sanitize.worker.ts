@@ -4,7 +4,29 @@
 // 重い処理は画面とは別のところで動かし、上限を超えたら画面の側からこの Worker だけを止める（CLAUDE.md §5）。
 // ここから外へ通信しない。importScripts も使わない。
 
+// PDF.js は、npm の pdfjs-dist のファイルを手を加えずに配る（?url。docs/no-network.md の例外の形のまま。検査の Worker と同じ）
+import pdfjsUrl from "pdfjs-dist/build/pdf.min.mjs?url";
+import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { createPdfjsImageCodec, offscreenCanvasJpegEncoder, type PdfjsLike } from "../../sanitize/image-codec.ts";
 import { sanitizePdf } from "../../sanitize/index.ts";
+import type { ImageCodec } from "../../sanitize/types.ts";
+
+/**
+ * 覆いの下の JPEG の画像を塗って書き直す道具（11/5 B）。解くのは PDF.js、書くのは OffscreenCanvas（Worker の中でも使える）。
+ * CCITT・JBIG2 の部品（pdfjs-dist/wasm/）は、中に fetch を持つので渡さない（これまでどおり「片付けられなかった所」になる）。
+ * 読み込めなかったときは、道具なしで片付ける。
+ */
+async function imageCodec(): Promise<ImageCodec | undefined> {
+  try {
+    const [lib] = await Promise.all([
+      import(/* @vite-ignore */ pdfjsUrl) as Promise<PdfjsLike>,
+      import(/* @vite-ignore */ pdfjsWorkerUrl),
+    ]);
+    return createPdfjsImageCodec(lib, offscreenCanvasJpegEncoder);
+  } catch {
+    return undefined;
+  }
+}
 import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol";
 
 type WorkerScope = {
@@ -17,7 +39,8 @@ scope.onmessage = async (e) => {
   const req = e.data;
   if (!req || req.type !== "sanitize" || !(req.buffer instanceof ArrayBuffer)) return;
   try {
-    const r = await sanitizePdf(new Uint8Array(req.buffer));
+    const codec = await imageCodec();
+    const r = await sanitizePdf(new Uint8Array(req.buffer), codec ? { codec } : {});
     if (r.status === "error") {
       scope.postMessage({ type: "refused", id: req.id, message: r.message });
       return;
