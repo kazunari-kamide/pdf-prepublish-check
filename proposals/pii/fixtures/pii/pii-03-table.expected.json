@@ -1,0 +1,253 @@
+{
+  "file": "pii-03-table.pdf",
+  "description": "表：見出し（氏名・住所・電話番号・生年月日）の下の欄。見出しの行と記入例の行は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-03-table#1",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        60,
+        738.92,
+        100.5,
+        747.91
+      ],
+      "confidence": "high",
+      "chars": 4
+    },
+    {
+      "id": "pii-03-table#2",
+      "type": "address",
+      "page": 1,
+      "rect": [
+        150,
+        738.92,
+        298.5,
+        747.91
+      ],
+      "confidence": "high",
+      "chars": 18
+    },
+    {
+      "id": "pii-03-table#3",
+      "type": "phone",
+      "page": 1,
+      "rect": [
+        380,
+        738.92,
+        438.5,
+        747.91
+      ],
+      "confidence": "high",
+      "chars": 13
+    },
+    {
+      "id": "pii-03-table#4",
+      "type": "birth_date",
+      "page": 1,
+      "rect": [
+        490,
+        738.92,
+        553,
+        747.91
+      ],
+      "confidence": "high",
+      "chars": 9
+    },
+    {
+      "id": "pii-03-table#5",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        60,
+        718.92,
+        91.5,
+        727.91
+      ],
+      "confidence": "high",
+      "chars": 3
+    },
+    {
+      "id": "pii-03-table#6",
+      "type": "address",
+      "page": 1,
+      "rect": [
+        150,
+        718.92,
+        271.5,
+        727.91
+      ],
+      "confidence": "high",
+      "chars": 16
+    },
+    {
+      "id": "pii-03-table#7",
+      "type": "phone",
+      "page": 1,
+      "rect": [
+        380,
+        718.92,
+        438.5,
+        727.91
+      ],
+      "confidence": "high",
+      "chars": 13
+    },
+    {
+      "id": "pii-03-table#8",
+      "type": "birth_date",
+      "page": 1,
+      "rect": [
+        490,
+        718.92,
+        553,
+        727.91
+      ],
+      "confidence": "high",
+      "chars": 9
+    },
+    {
+      "id": "pii-03-table#9",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        60,
+        698.92,
+        100.5,
+        707.91
+      ],
+      "confidence": "high",
+      "chars": 4
+    },
+    {
+      "id": "pii-03-table#10",
+      "type": "address",
+      "page": 1,
+      "rect": [
+        150,
+        698.92,
+        271.5,
+        707.91
+      ],
+      "confidence": "high",
+      "chars": 15
+    },
+    {
+      "id": "pii-03-table#11",
+      "type": "phone",
+      "page": 1,
+      "rect": [
+        380,
+        698.92,
+        434,
+        707.91
+      ],
+      "confidence": "high",
+      "chars": 12
+    },
+    {
+      "id": "pii-03-table#12",
+      "type": "birth_date",
+      "page": 1,
+      "rect": [
+        490,
+        698.92,
+        548.5,
+        707.91
+      ],
+      "confidence": "high",
+      "chars": 10
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-03-table#n1",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        60,
+        758.92,
+        78,
+        767.91
+      ]
+    },
+    {
+      "id": "pii-03-table#n2",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        150,
+        758.92,
+        168,
+        767.91
+      ]
+    },
+    {
+      "id": "pii-03-table#n3",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        380,
+        758.92,
+        416,
+        767.91
+      ]
+    },
+    {
+      "id": "pii-03-table#n4",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        490,
+        758.92,
+        526,
+        767.91
+      ]
+    },
+    {
+      "id": "pii-03-table#n5",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        60,
+        678.92,
+        127.5,
+        687.91
+      ]
+    },
+    {
+      "id": "pii-03-table#n6",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        150,
+        678.92,
+        253.5,
+        687.91
+      ]
+    },
+    {
+      "id": "pii-03-table#n7",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        380,
+        678.92,
+        438.5,
+        687.91
+      ]
+    },
+    {
+      "id": "pii-03-table#n8",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        490,
+        678.92,
+        553,
+        687.91
+      ]
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "file": "pii-01-name-label.pdf",
+  "description": "前の語（氏名・フリガナ・申請者）のあとの氏名。担当の課・役職名・見出しだけの行は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-01-name-label#1",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        93,
+        718.68,
+        142.5,
+        729.67
+      ],
+      "confidence": "high",
+      "chars": 4
+    },
+    {
+      "id": "pii-01-name-label#2",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        115,
+        694.68,
+        197.5,
+        705.67
+      ],
+      "confidence": "high",
+      "chars": 7
+    },
+    {
+      "id": "pii-01-name-label#3",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        98.5,
+        670.68,
+        142.5,
+        681.67
+      ],
+      "confidence": "high",
+      "chars": 4
+    },
+    {
+      "id": "pii-01-name-label#4",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        87.5,
+        646.68,
+        126,
+        657.67
+      ],
+      "confidence": "check",
+      "chars": 3
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-01-name-label#n1",
+      "kind": "organization",
+      "page": 1,
+      "rect": [
+        93,
+        598.68,
+        126,
+        609.67
+      ]
+    },
+    {
+      "id": "pii-01-name-label#n2",
+      "kind": "role",
+      "page": 1,
+      "rect": [
+        60,
+        574.68,
+        82,
+        585.67
+      ]
+    },
+    {
+      "id": "pii-01-name-label#n3",
+      "kind": "organization",
+      "page": 1,
+      "rect": [
+        104,
+        550.68,
+        159,
+        561.67
+      ]
+    },
+    {
+      "id": "pii-01-name-label#n4",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        87.5,
+        526.68,
+        109.5,
+        537.67
+      ]
+    },
+    {
+      "id": "pii-01-name-label#n5",
+      "kind": "placeholder",
+      "page": 1,
+      "rect": [
+        93,
+        502.68,
+        126,
+        513.67
+      ]
+    },
+    {
+      "id": "pii-01-name-label#n6",
+      "kind": "placeholder",
+      "page": 1,
+      "rect": [
+        98.5,
+        478.68,
+        142.5,
+        489.67
+      ]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "file": "pii-11-sample-form.pdf",
+  "description": "様式の記入例：見本の名前・番号だけ（全部が対照）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "pii-11-sample-form#n1",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        87.5,
+        748.68,
+        137,
+        759.67
+      ]
+    },
+    {
+      "id": "pii-11-sample-form#n2",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        87.5,
+        724.68,
+        214,
+        735.67
+      ]
+    },
+    {
+      "id": "pii-11-sample-form#n3",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        87.5,
+        700.68,
+        159,
+        711.67
+      ]
+    },
+    {
+      "id": "pii-11-sample-form#n4",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        109.5,
+        676.68,
+        186.5,
+        687.67
+      ]
+    },
+    {
+      "id": "pii-11-sample-form#n5",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        98.5,
+        652.68,
+        186.5,
+        663.67
+      ]
+    },
+    {
+      "id": "pii-11-sample-form#n6",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        87.5,
+        628.68,
+        137,
+        639.67
+      ]
+    }
+  ]
+}

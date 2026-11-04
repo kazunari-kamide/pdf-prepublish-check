@@ -5,10 +5,11 @@
 
 import { WORKER_TIMEOUT_MS } from "../inspect/limits";
 import type { SanitizeOutcome, SanitizeRequest, SanitizeResponse } from "./protocol";
+import type { RedactArea } from "./redact";
 
 let nextId = 1;
 
-export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER_TIMEOUT_MS): Promise<SanitizeOutcome> {
+export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER_TIMEOUT_MS, areas: RedactArea[] = []): Promise<SanitizeOutcome> {
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
   const id = nextId++;
@@ -44,7 +45,7 @@ export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER
     worker.onerror = () => finish({ kind: "error", message: "片付けの Worker が止まりました。", elapsedMs: elapsed() });
     worker.onmessageerror = () => finish({ kind: "error", message: "片付けた結果を受け取れませんでした。", elapsedMs: elapsed() });
 
-    const req: SanitizeRequest = { type: "sanitize", id, buffer };
+    const req: SanitizeRequest = areas.length ? { type: "sanitize", id, buffer, areas } : { type: "sanitize", id, buffer };
     worker.postMessage(req, [buffer]);
   });
 }

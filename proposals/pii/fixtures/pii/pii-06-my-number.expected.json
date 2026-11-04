@@ -1,0 +1,79 @@
+{
+  "file": "pii-06-my-number.pdf",
+  "description": "マイナンバー：検査用の数字の合う 12 けた。法人番号・合わない 12 けた・日時の並び・見本は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-06-my-number#1",
+      "type": "my_number",
+      "page": 1,
+      "rect": [
+        115,
+        758.68,
+        192,
+        769.67
+      ],
+      "confidence": "high",
+      "chars": 12
+    },
+    {
+      "id": "pii-06-my-number#2",
+      "type": "my_number",
+      "page": 1,
+      "rect": [
+        87.5,
+        734.68,
+        164.5,
+        745.67
+      ],
+      "confidence": "check",
+      "chars": 14
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-06-my-number#n1",
+      "kind": "corporate_number",
+      "page": 1,
+      "rect": [
+        109.5,
+        686.68,
+        181,
+        697.67
+      ]
+    },
+    {
+      "id": "pii-06-my-number#n2",
+      "kind": "invalid_check_digit",
+      "page": 1,
+      "rect": [
+        109.5,
+        662.68,
+        175.5,
+        673.67
+      ]
+    },
+    {
+      "id": "pii-06-my-number#n3",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        109.5,
+        638.68,
+        175.5,
+        649.67
+      ]
+    },
+    {
+      "id": "pii-06-my-number#n4",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        164.5,
+        614.68,
+        241.5,
+        625.67
+      ]
+    }
+  ]
+}

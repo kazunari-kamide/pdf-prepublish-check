@@ -1,0 +1,68 @@
+{
+  "file": "pii-09-email.pdf",
+  "description": "メールアドレス：個人らしいもの。団体の窓口・見本のアドレスは対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-09-email#1",
+      "type": "email",
+      "page": 1,
+      "rect": [
+        98.5,
+        758.68,
+        263.5,
+        769.67
+      ],
+      "confidence": "check",
+      "chars": 30
+    },
+    {
+      "id": "pii-09-email#2",
+      "type": "email",
+      "page": 1,
+      "rect": [
+        131.5,
+        734.68,
+        269,
+        745.67
+      ],
+      "confidence": "high",
+      "chars": 25
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-09-email#n1",
+      "kind": "office_email",
+      "page": 1,
+      "rect": [
+        131.5,
+        686.68,
+        214,
+        697.67
+      ]
+    },
+    {
+      "id": "pii-09-email#n2",
+      "kind": "office_email",
+      "page": 1,
+      "rect": [
+        98.5,
+        662.68,
+        203,
+        673.67
+      ]
+    },
+    {
+      "id": "pii-09-email#n3",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        82,
+        638.68,
+        181,
+        649.67
+      ]
+    }
+  ]
+}
