@@ -21,7 +21,7 @@ import type { NotDoneItem, RemovedItem, SanitizeOptions, SanitizeResult } from "
 
 export type * from "./types.ts";
 
-export const SANITIZER_VERSION = "0.3.1";
+export const SANITIZER_VERSION = "0.4.0";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 const MAX_INPUT_BYTES = 512 * 1024 * 1024;
@@ -33,6 +33,7 @@ export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = 
     ...SETTINGS,
     ...(options.maxOperationsPerPage !== undefined ? { maxOperationsPerPage: options.maxOperationsPerPage } : {}),
     ...(options.maxImageBytes !== undefined ? { maxImageBytes: options.maxImageBytes } : {}),
+    ...(options.maxImagePixels !== undefined ? { maxImagePixels: options.maxImagePixels } : {}),
   };
 
   const loaded = await loadPdf(bytes);
@@ -60,15 +61,16 @@ export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = 
   // 2. ページの中身
   const visible = makeVisibility(ctx, doc.catalog);
   const redactAnnots = new Set<PDFObject>();
-  pages.forEach((page, index) => {
+  for (const [index, page] of pages.entries()) {
     const pageNo = index + 1;
     try {
-      const r = sanitizePageContent(ctx, page, pageNo, visible, settings);
+      const r = await sanitizePageContent(ctx, page, pageNo, visible, settings, options.codec, options.trace);
       removed.push(...r.removed);
       notDone.push(...r.notDone);
       for (const a of r.redactAnnots) redactAnnots.add(a);
     } catch (e) {
       const heavy = e instanceof TooManyOperations;
+      options.trace?.({ type: "page_error", page: pageNo, error: heavy ? "too_many_operations" : "unreadable_page" });
       notDone.push({
         pattern: "P6",
         reason: heavy ? "too_many_operations" : "unreadable_page",
@@ -78,7 +80,7 @@ export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = 
           : "このページの中身を読めなかったため、黒い四角の下の字・見えない字の片付けを省きました",
       });
     }
-  });
+  }
 
   // 3. 文書全体
   removed.push(...cleanAnnotations(doc, redactAnnots));
