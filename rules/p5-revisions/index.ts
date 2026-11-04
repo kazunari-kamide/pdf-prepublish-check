@@ -31,10 +31,13 @@ import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { decryptDefinitions, expandObjectStream, hasEncryptMarker, isMaskedObjStm, maskObjectStreams, unmaskObjectStream } from "./decrypt.ts";
 
 export const RULE_ID = "p5-revisions";
-export const RULE_VERSION = "1.1.0";
+export const RULE_VERSION = "1.2.1";
 
 export type P5Where = "superseded" | "free" | "unreferenced" | "orphan";
-export type P5Kind = "info" | "content" | "annotation" | "form_value" | "metadata" | "image" | "embedded_file";
+export type P5Kind = "info" | "content" | "annotation" | "form_value" | "metadata" | "image" | "embedded_file" | "dict_text";
+/** 字の中身を持たない構造の部品の種類（1.2.0）。font＝フォントの辞書・FontDescriptor、font_file＝フォントの本体（FontFile など）、
+ *  cmap＝文字の対応表（CMap・ToUnicode）、color_profile＝色の設定（ICC）、other＝ページ・ページの木などそのほかの骨組み */
+export type P5Part = "font" | "font_file" | "cmap" | "color_profile" | "other";
 export type P5NotCountedReason =
   | "structure"
   | "unreadable_stream"
@@ -55,7 +58,7 @@ export type P5Finding = {
   where: P5Where;
   /** その定義のある版（1 ＝ いちばん古い版。%%EOF で数える）。orphan は null */
   revision: number | null;
-  /** info・annotation・form_value のとき：残っている字の数（目安）。値そのものは返さない */
+  /** info・annotation・form_value・dict_text のとき：残っている字の数（目安）。値そのものは返さない */
   chars?: number;
 };
 
@@ -73,6 +76,11 @@ export type P5Report = {
   chainFallback: boolean;
   /** パスワードなしで開ける暗号化 PDF を、前の版も含めて復号して調べたときだけ（1.1.0 から） */
   decrypted?: EncryptionSummary & { failedObjects: number };
+  /**
+   * 片付けで消せる残り（1.2.0）。いまの版では使っていない、字の中身を持たない構造の部品（notCounted のうち reason が structure のもの）の数。
+   * 漏れ（findings）には数えない。画面では「低」で出し、片付けへ案内する。
+   */
+  cleanupOnly: { count: number; parts: Record<P5Part, number> };
 };
 
 // ---------------------------------------------------------------- 読み取り（pdf-lib の読み手に差し込みを入れる）
@@ -87,6 +95,7 @@ const K = {
   Subtype: N("Subtype"), Rect: N("Rect"), FT: N("FT"), T: N("T"), V: N("V"), Contents: N("Contents"), RC: N("RC"),
   Subj: N("Subj"), Annot: N("Annot"), Metadata: N("Metadata"), Image: N("Image"), EmbeddedFile: N("EmbeddedFile"),
   Filespec: N("Filespec"), Form: N("Form"), XRef: N("XRef"), ObjStm: N("ObjStm"), Off: N("Off"),
+  Font: N("Font"), FontDescriptor: N("FontDescriptor"), CMap: N("CMap"), ICCBased: N("ICCBased"),
 };
 const INFO_KEYS = ["Title", "Author", "Subject", "Keywords", "Creator", "Producer", "CreationDate", "ModDate"];
 const NOT_COUNTED_INFO = new Set(["Producer", "CreationDate", "ModDate", "Trapped"]);
@@ -285,9 +294,101 @@ export function hasTextOperators(content: string): boolean {
   return /(\)|>)\s*(Tj|'|")(?![A-Za-z0-9])|\]\s*TJ(?![A-Za-z0-9])/.test(content);
 }
 
-type Kinded = { counted: true; kind: P5Kind; chars?: number } | { counted: false; kind: string; reason: P5NotCountedReason } | null;
+type Kinded =
+  | { counted: true; kind: P5Kind; chars?: number }
+  | { counted: false; kind: string; reason: P5NotCountedReason; part?: P5Part }
+  | null;
 
-function classify(def: Def, infoNums: Set<number>, resolve: (o: PDFObject | undefined) => PDFObject | undefined): Kinded {
+const structure = (part: P5Part = "other"): Kinded => ({ counted: false, kind: "structure", reason: "structure", part });
+
+/**
+ * 構造の部品として指されている番号（1.2.0）。FontDescriptor の /FontFile・/FontFile2・/FontFile3・/CIDSet、
+ * フォントの /ToUnicode・/Encoding・/CIDToGIDMap、色空間の [/ICCBased n 0 R]。どの版の定義から指されていてもよい。
+ */
+function partRoles(defs: Def[]): Map<number, P5Part> {
+  const roles = new Map<number, P5Part>();
+  const mark = (v: PDFObject | undefined, part: P5Part) => {
+    if (v instanceof PDFRef && !roles.has(v.objectNumber)) roles.set(v.objectNumber, part);
+  };
+  const walk = (o: PDFObject | undefined, depth: number): void => {
+    if (o === undefined || depth > LIMITS.depth) return;
+    if (o instanceof PDFStream) return walk(o.dict, depth + 1);
+    if (o instanceof PDFArray) {
+      if (o.size() >= 2 && o.get(0) === K.ICCBased) mark(o.get(1), "color_profile");
+      for (let i = 0; i < o.size(); i++) walk(o.get(i), depth + 1);
+      return;
+    }
+    if (!(o instanceof PDFDict)) return;
+    const type = o.get(K.Type);
+    if (type === K.FontDescriptor) for (const k of ["FontFile", "FontFile2", "FontFile3", "CIDSet"]) mark(o.get(N(k)), "font_file");
+    if (type === K.Font) {
+      mark(o.get(N("ToUnicode")), "cmap");
+      mark(o.get(N("Encoding")), "cmap");
+      mark(o.get(N("CIDToGIDMap")), "font_file");
+    }
+    for (const [, v] of o.entries()) walk(v, depth + 1);
+  };
+  for (const d of defs) walk(d.obj, 0);
+  return roles;
+}
+
+const startsWith = (b: Uint8Array, s: string, at = 0) => {
+  if (b.length < at + s.length) return false;
+  for (let i = 0; i < s.length; i++) if (b[at + i] !== s.charCodeAt(i)) return false;
+  return true;
+};
+
+/** 中身の頭の印で、フォントの本体・色の設定（ICC）・文字の対応表（CMap）を見分ける（1.2.0） */
+export function partBySignature(b: Uint8Array): P5Part | null {
+  if (b.length >= 4 && b[0] === 0x00 && b[1] === 0x01 && b[2] === 0x00 && b[3] === 0x00) return "font_file"; // TrueType
+  if (startsWith(b, "true") || startsWith(b, "OTTO") || startsWith(b, "ttcf") || startsWith(b, "typ1")) return "font_file";
+  if (startsWith(b, "%!PS-AdobeFont") || startsWith(b, "%!FontType1")) return "font_file"; // Type 1
+  if (b.length >= 4 && b[0] === 0x01 && b[1] === 0x00 && b[2] === 0x04 && b[3]! >= 1 && b[3]! <= 4) return "font_file"; // CFF
+  if (startsWith(b, "acsp", 36)) return "color_profile"; // ICC
+  if (/\bbegincmap\b/.test(latin1.decode(b.subarray(0, 4096)))) return "cmap";
+  return null;
+}
+
+/** 字を描く命令が BT〜ET の中にある（ページの中身らしい）か。フォントの本体などのバイト列が、たまたま Tj などに見えるのを除くため */
+const TEXT_OBJECT = /(?:^|[\s\]>)])BT[\s/][\s\S]*?(?:\)|>|\])\s*(?:Tj|TJ|'|")(?![A-Za-z0-9])[\s\S]*?\sET(?![A-Za-z0-9])/;
+
+const FONT_FILE_SUBTYPES = new Set(["Type1C", "CIDFontType0C", "OpenType"]);
+/** dict_text で字の値を数えない辞書の /Type（構造の部品）。注釈・文書情報・欄・ファイル指定は、この前で見分けている */
+const STRUCTURE_TYPES = new Set([
+  "Catalog", "Pages", "Page", "Font", "FontDescriptor", "Encoding", "CMap", "ExtGState", "Pattern", "Shading", "XObject",
+  "Group", "Mask", "Halftone", "OCMD", "ObjStm", "XRef", "Metadata",
+]);
+/** dict_text で数えない鍵（構造の値・日付など） */
+const NOT_COUNTED_TEXT_KEYS = new Set(["Registry", "Ordering", "Lang", "ID", "Version", "M", ...NOT_COUNTED_INFO]);
+
+/** 辞書の中の文字列の値の字数（間接参照はたどらない。入れ子の辞書・配列は中まで見る）。字そのものは返さない */
+function stringChars(o: PDFObject, depth = 0): number {
+  if (depth > LIMITS.depth) return 0;
+  if (o instanceof PDFString || o instanceof PDFHexString) {
+    const t = visible(textOf(o));
+    return /^D:\d{4}/.test(t) ? 0 : [...t].length;
+  }
+  if (o instanceof PDFArray) {
+    let n = 0;
+    for (let i = 0; i < o.size(); i++) n += stringChars(o.get(i), depth + 1);
+    return n;
+  }
+  if (o instanceof PDFDict) {
+    if (o.get(N("Registry")) !== undefined && o.get(N("Ordering")) !== undefined) return 0; // CIDSystemInfo
+    let n = 0;
+    for (const [k, v] of o.entries()) if (!NOT_COUNTED_TEXT_KEYS.has(k.decodeText())) n += stringChars(v, depth + 1);
+    return n;
+  }
+  return 0;
+}
+
+function classify(
+  def: Def,
+  where: P5Where,
+  infoNums: Set<number>,
+  roles: Map<number, P5Part>,
+  resolve: (o: PDFObject | undefined) => PDFObject | undefined,
+): Kinded {
   const o = def.obj;
   if (o instanceof PDFStream) {
     const d = o.dict;
@@ -297,20 +398,33 @@ function classify(def: Def, infoNums: Set<number>, resolve: (o: PDFObject | unde
     if (type === K.EmbeddedFile) return { counted: true, kind: "embedded_file" };
     if (type === K.Metadata) return { counted: true, kind: "metadata" };
     if (subtype === K.Image) return { counted: true, kind: "image" };
+    if (type === K.CMap) return structure("cmap");
     if (type === undefined || subtype === K.Form) {
-      if (!(o instanceof PDFRawStream)) return { counted: false, kind: "structure", reason: "structure" };
+      // フォントの本体の印（1.2.0）：/Length1〜3、/Subtype /Type1C など
+      const fontKeys = ["Length1", "Length2", "Length3"].some((k) => d.get(N(k)) !== undefined);
+      if (type === undefined && (fontKeys || (subtype instanceof PDFName && FONT_FILE_SUBTYPES.has(subtype.decodeText())))) return structure("font_file");
+      if (!(o instanceof PDFRawStream)) return structure();
       if (o.contents.length > LIMITS.streamBytes) return { counted: false, kind: "content", reason: "unreadable_stream" };
-      let text: string;
+      let raw: Uint8Array;
       try {
-        text = latin1.decode(decodePDFRawStream(o).decode());
+        raw = decodePDFRawStream(o).decode();
       } catch {
         return { counted: false, kind: "content", reason: "unreadable_stream" };
       }
-      return hasTextOperators(text) ? { counted: true, kind: "content" } : { counted: false, kind: "structure", reason: "structure" };
+      const text = latin1.decode(raw);
+      if (subtype !== K.Form) {
+        // 字の中身を持たない構造の部品（1.2.0）。頭の印で見分ける。印がなくても、フォントなどから部品として指されていて、
+        // BT〜ET の中の字の命令がなければ部品とみなす
+        const sig = partBySignature(raw);
+        if (sig) return structure(sig);
+        const role = roles.get(def.num);
+        if (role && !TEXT_OBJECT.test(text)) return structure(role);
+      }
+      return hasTextOperators(text) ? { counted: true, kind: "content" } : structure();
     }
-    return { counted: false, kind: "structure", reason: "structure" };
+    return structure(roles.get(def.num) ?? "other");
   }
-  if (!(o instanceof PDFDict)) return { counted: false, kind: "structure", reason: "structure" };
+  if (!(o instanceof PDFDict)) return structure();
   const type = o.get(K.Type);
   if (type === K.Filespec) return { counted: false, kind: "filespec", reason: "filespec" };
 
@@ -342,7 +456,15 @@ function classify(def: Def, infoNums: Set<number>, resolve: (o: PDFObject | unde
     }
     return chars > 0 ? { counted: true, kind: "info", chars } : { counted: false, kind: "info", reason: "info_without_counted_keys" };
   }
-  return { counted: false, kind: "structure", reason: "structure" };
+  const part: P5Part = type === K.Font || type === K.FontDescriptor ? "font" : type === K.CMap ? "cmap" : "other";
+  // オブジェクトストリームの中の、どこからも指されていない辞書で、字の値を持つもの（1.2.0）。構造の部品は数えない
+  const typeName = type instanceof PDFName ? type.decodeText() : null;
+  const isolated = where === "unreferenced" || where === "orphan";
+  if (def.objstm !== null && isolated && part === "other" && (typeName === null || !STRUCTURE_TYPES.has(typeName))) {
+    const chars = stringChars(o);
+    if (chars > 0) return { counted: true, kind: "dict_text", chars };
+  }
+  return structure(part);
 }
 
 // ---------------------------------------------------------------- 暗号化（1.1.0）
@@ -387,6 +509,8 @@ async function decryptRevisions(defs: Def[], sections: Section[], newest: PDFDic
 
 // ---------------------------------------------------------------- 本体
 
+const emptyParts = (): Record<P5Part, number> => ({ font: 0, font_file: 0, cmap: 0, color_profile: 0, other: 0 });
+
 function revisionEnds(bytes: Uint8Array): number[] {
   const text = latin1.decode(bytes);
   const ends: number[] = [];
@@ -403,6 +527,7 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
     notCounted: [],
     summary: { previousInfo: 0, removedAttachment: 0 },
     chainFallback: false,
+    cleanupOnly: { count: 0, parts: emptyParts() },
   };
   if (bytes.length === 0) return { ...base, status: "error", error: { code: "empty", message: "ファイルが空です。" } };
 
@@ -438,13 +563,18 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
   // どれかの版の xref が指している定義の場所（番号 → 位置、またはオブジェクトストリームの番号）
   const pointedOffsets = new Set<string>();
   for (const group of ordered) {
+    // 混ぜた形（表＋/XRefStm。Word などの「ハイブリッド xref」）では、表で「使っていない（f）」とした番号を、
+    // xref ストリームの側が「使っている」と示す（PDF 1.7 §7.5.8.4）。同じ版の中では、使っている項目を先に採る（1.2.1 から）
+    const inGroup = new Map<number, XEntry>();
     for (const sec of group) {
       for (const e of sec.entries) {
         if (e.num === 0) continue;
-        if (!currentEntry.has(e.num)) currentEntry.set(e.num, e);
+        const prev = inGroup.get(e.num);
+        if (!prev || (prev.deleted && !e.deleted)) inGroup.set(e.num, e);
         if (!e.deleted) pointedOffsets.add(e.inObjStm ? `${e.num}@stm${e.offset}` : `${e.num}@${e.offset}`);
       }
     }
+    for (const [n, e] of inGroup) if (!currentEntry.has(n)) currentEntry.set(n, e);
   }
   const defKey = (d: Def) => (d.objstm !== null ? `${d.num}@stm${d.objstm}` : `${d.num}@${d.start}`);
   const isCurrentDef = (d: Def) => {
@@ -493,7 +623,16 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
     return i < 0 ? ends.length + 1 : i + 1;
   };
 
-  const report: P5Report = { ...base, revisions: ordered.length, chainFallback: fallback, findings: [], notCounted: [], summary: { previousInfo: 0, removedAttachment: 0 } };
+  const roles = partRoles(defs);
+  const report: P5Report = {
+    ...base,
+    revisions: ordered.length,
+    chainFallback: fallback,
+    findings: [],
+    notCounted: [],
+    summary: { previousInfo: 0, removedAttachment: 0 },
+    cleanupOnly: { count: 0, parts: emptyParts() },
+  };
   if (decrypted) report.decrypted = decrypted;
   for (const d of defs) {
     if (d.num === 0) continue;
@@ -505,7 +644,7 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
       where = "unreferenced";
     } else where = "superseded";
 
-    const k = classify(d, infoNums, resolve);
+    const k = classify(d, where, infoNums, roles, resolve);
     if (k === null) continue;
     if (k.counted) {
       if (k.kind === "embedded_file" && where === "unreferenced") {
@@ -519,6 +658,10 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
       if (k.kind === "embedded_file" && where === "free") report.summary.removedAttachment++;
     } else {
       report.notCounted.push({ object: d.num, kind: k.kind, where, reason: k.reason });
+      if (k.reason === "structure") {
+        report.cleanupOnly.count++;
+        report.cleanupOnly.parts[k.part ?? "other"]++;
+      }
     }
   }
   return report;

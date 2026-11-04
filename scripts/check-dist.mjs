@@ -5,6 +5,9 @@
 // - .htaccess（配信先で CSP をヘッダーで返す）があり、その CSP が <meta> と食い違っていないか
 // - HTML の中に、直接書いたスクリプトや style がないか（CSP で止まるため。入っていたら作りの誤り）
 // - 外のサイトから読み込んでいないか
+// - サイトのページ（記事・プライバシー。site.ts が作る）も含め、すべての HTML に同じ CSP の <meta> があり、
+//   直接書いたスクリプト・style がなく、外から読み込んでいないか（公式の URL を指す canonical のリンクだけは許す）
+// - 検索エンジンの確認のファイル（public/ の googleXXXX.html）は、中身が決まった1行のときだけ通す（src/site/search-console.ts）
 // - JavaScript（.js・.mjs）に、外と通信する仕組みが入っていないか（ライブラリが持ち込むこともあるため、ビルドのあとでも見る）
 //
 // 例外は1つだけ（2026-11-03 本人が決定。理由は docs/no-network.md）：
@@ -17,12 +20,14 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { OFFICIAL_ORIGIN } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 // 調べるフォルダは、テストのときだけ DIST_DIR で変えられる（tests/check-dist.test.ts）
 const DIST = process.env.DIST_DIR ? path.resolve(process.env.DIST_DIR) : path.join(ROOT, "dist");
 const problems = [];
 const allowed = [];
+const allowedHtml = [];
 
 function listFiles(dir) {
   const out = [];
@@ -70,12 +75,30 @@ if (htaccess !== null) {
   if (!/^\s*AddType application\/wasm \.wasm\s*$/m.test(htaccess)) problems.push(".htaccess に AddType application/wasm .wasm がありません");
 }
 
-const inlineScript =[...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter(
-  (m) => !/\bsrc=/.test(m[1]) || m[2].trim() !== "",
-);
-if (inlineScript.length) problems.push(`index.html に直接書いたスクリプトが ${inlineScript.length} か所あります`);
-if (/<style\b/.test(html) || /\sstyle="/.test(html)) problems.push("index.html に直接書いた style があります");
-if (/(src|href)="(https?:)?\/\//.test(html)) problems.push("index.html が外のサイトから読み込んでいます");
+// ---- すべての HTML（index.html と、サイトのページ）
+const indexCsp = meta ? decode(meta[1]) : null;
+// 公式の URL を指す canonical のリンクは、読み込みではないので許す（写したサイトでも、本物を指すように）
+const canonical = new RegExp(`<link rel="canonical" href="${OFFICIAL_ORIGIN.replace(/\./g, "\\.")}/[^"]*"`, "g");
+for (const f of files.filter((x) => x.endsWith(".html"))) {
+  const rel = path.relative(DIST, f).replace(/\\/g, "/");
+  const text = readFileSync(f, "utf8");
+  // 検索エンジンの確認のファイル：一番上にあり、名前が googleXXXX.html で、中身がその名前を書いた1行だけ
+  const g = rel.match(/^(google[0-9a-z]+\.html)$/);
+  if (g) {
+    if (text.trim() !== `google-site-verification: ${g[1]}`) problems.push(`${rel} は検索エンジンの確認のファイルの名前ですが、中身が決まった1行ではありません`);
+    else allowedHtml.push(`${rel}（検索エンジンの確認のファイル）`);
+    continue;
+  }
+  if (rel !== "index.html") {
+    const m = text.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/);
+    if (!m) problems.push(`${rel} に CSP の <meta> がありません`);
+    else if (indexCsp !== null && decode(m[1]) !== indexCsp) problems.push(`${rel} の CSP が、index.html の CSP と食い違っています`);
+  }
+  const inlineScript = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/\bsrc=/.test(m[1]) || m[2].trim() !== "");
+  if (inlineScript.length) problems.push(`${rel} に直接書いたスクリプトが ${inlineScript.length} か所あります`);
+  if (/<style\b/.test(text) || /\sstyle="/.test(text)) problems.push(`${rel} に直接書いた style があります`);
+  if (/(src|href)="(https?:)?\/\//.test(text.replace(canonical, ""))) problems.push(`${rel} が外のサイトから読み込んでいます`);
+}
 
 // ---- PDF.js の写しを見分ける：pdfjs-dist のファイルの SHA-256 と、版を、package-lock.json と照らす
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -123,9 +146,13 @@ if (allowed.length) {
   console.log("\n例外として許したファイル（PDF.js の写し。CSP に connect-src 'none' があるときだけ。docs/no-network.md）：");
   for (const a of allowed) console.log(`  - ${a}`);
 }
+if (allowedHtml.length) {
+  console.log("\nCSP の <meta> がなくても通した HTML：");
+  for (const a of allowedHtml) console.log(`  - ${a}`);
+}
 if (problems.length) {
   console.error("\n問題：");
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }
-console.log("\n問題は見つかりませんでした（CSP の <meta>、.htaccess、直接書いたスクリプト・style、外からの読み込み、通信の仕組み）。");
+console.log("\n問題は見つかりませんでした（すべての HTML の CSP の <meta>、.htaccess、直接書いたスクリプト・style、外からの読み込み、通信の仕組み）。");

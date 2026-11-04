@@ -16,6 +16,10 @@
 // - Chrome（または Edge）を headless で動かし、DevTools の決まり（CDP）で操作する。場所は CHROME_PATH で変えられる。
 // - 数えるもの：ページを開いてから閉じるまでの、すべての要求（CSP で止められた要求も数える）。
 //   同じサイト（127.0.0.1 の vite preview）と blob:・data: 以外への要求が1件でもあれば、失敗にする。
+// - 要求は「最初の表示」（PDF を入れる前）と「PDF を入れた後」に分けて数える。アクセス解析のスクリプトは入れていないので、
+//   どちらも外への要求は0件のはず（開いた回数は、配信先のサーバーの記録で数える。docs/no-network.md）。
+// - サイトのページ（記事の一覧・各記事・プライバシー。dist/ の HTML から拾う）も1つずつ開き、外への要求が0件で、
+//   CSP の違反・console のエラーがなく、200 で返ることを確かめる（--self-test のときは省く）。
 // - このスクリプト自身は、手元の Chrome と話すために通信を使う（検査器のコードではない。dist/ には入らない）。
 
 import { spawn } from "node:child_process";
@@ -95,6 +99,9 @@ try {
   cdp = await connect(version.webSocketDebuggerUrl);
   const results = [];
   for (const pdf of pdfs) results.push(await checkOne(cdp, pdf));
+  // サイトのページ（記事の一覧・各記事・プライバシー）も開き、外への要求が0件かを確かめる（点検のときは省く）
+  const pages = [];
+  if (!selfTest) for (const p of sitePagePaths()) pages.push(await checkPage(cdp, p));
 
   console.log(`\n画面：${appUrl}（${liveUrl ? "配信したサイト" : "vite preview。配信と同じヘッダー"}）`);
   console.log(`ブラウザ：${path.basename(chromePath)} ${version.Browser}`);
@@ -108,6 +115,8 @@ try {
       console.log(`  保存：${r.cleaned.saved}`);
     }
     console.log(`  要求：全部で ${r.all.length} 件。同じサイト ${r.same.length} 件、外 ${r.outside.length} 件、CSP で止められた ${r.blocked.length} 件`);
+    console.log(`    最初の表示：${r.first.all} 件（外 ${r.first.outside} 件・止められた ${r.first.blocked} 件）`);
+    console.log(`    PDF を入れた後：${r.after.all} 件（同じサイト ${r.after.same} 件・外 ${r.after.outside} 件・止められた ${r.after.blocked} 件）`);
     for (const u of r.same) console.log(`    同じサイト：${u}`);
     for (const u of r.outside) console.log(`    外：${u}`);
     for (const b of r.blocked) console.log(`    CSP で止められた：${b}`);
@@ -115,8 +124,23 @@ try {
     if (r.shot) console.log(`  スクリーンショット：${r.shot}`);
     if (r.cleanShot) console.log(`  スクリーンショット（片付けたあと）：${r.cleanShot}`);
   }
-  const outside = results.reduce((n, r) => n + r.outside.length, 0);
-  const blocked = results.reduce((n, r) => n + r.blocked.length, 0);
+  if (pages.length) {
+    console.log(`\n■ サイトのページ ${pages.length} 件`);
+    for (const p of pages) {
+      const bad = p.outside.length || p.blocked.length || p.errors.length || p.status !== 200;
+      console.log(`  ${bad ? "×" : "○"} ${p.path}：状態 ${p.status}・要求 ${p.all.length} 件（外 ${p.outside.length} 件・止められた ${p.blocked.length} 件）`);
+      for (const u of p.outside) console.log(`    外：${u}`);
+      for (const b of p.blocked) console.log(`    CSP で止められた：${b}`);
+      if (p.errors.length) console.log(`    console のエラー：${p.errors.join(" / ")}`);
+    }
+  }
+  const pageProblems = pages.filter((p) => p.outside.length || p.blocked.length || p.errors.length || p.status !== 200);
+  const outside = results.reduce((n, r) => n + r.outside.length, 0) + pages.reduce((n, p) => n + p.outside.length, 0);
+  const blocked = results.reduce((n, r) => n + r.blocked.length, 0) + pages.reduce((n, p) => n + p.blocked.length, 0);
+  const firstOutside = results.reduce((n, r) => n + r.first.outside, 0);
+  const afterOutside = results.reduce((n, r) => n + r.after.outside, 0);
+  console.log(`\n最初の表示：外への要求 ${firstOutside} 件（解析のスクリプトは入れていないので、0 のはず）`);
+  console.log(`PDF を入れた後：外への要求 ${afterOutside} 件`);
   const notSaved = results.filter((r) => r.cleaned && r.cleaned.ok === false);
   console.log(`\n合計：PDF ${results.length} 件、外への要求 ${outside} 件、CSP で止められた要求 ${blocked} 件`);
   if (selfTest) {
@@ -128,6 +152,9 @@ try {
     }
   } else if (outside > 0 || blocked > 0) {
     console.error("失敗：外への要求、または止められた要求がありました。");
+    exitCode = 1;
+  } else if (pageProblems.length) {
+    console.error(`失敗：サイトのページが開けないか、console にエラーが出ました（${pageProblems.map((p) => p.path).join("、")}）。`);
     exitCode = 1;
   } else if (notSaved.length) {
     console.error(`失敗：片付けた PDF を保存できませんでした（${notSaved.map((r) => r.name).join("、")}）。`);
@@ -222,6 +249,10 @@ async function checkOne(c, pdf) {
 
     await c.send("Page.navigate", { url: appUrl }, sessionId);
     for (let i = 0; i < 50 && (await evaluate("document.readyState")) !== "complete"; i++) await sleep(100);
+    await sleep(300); // 最初の表示のあとに遅れて出る要求も、最初の表示の分として数える
+    // ここまでが「最初の表示」。ここから後が「PDF を入れた後」
+    const firstAll = all.length;
+    const firstBlocked = blocked.length;
     const { root } = await c.send("DOM.getDocument", {}, sessionId);
     const { nodeId } = await c.send("DOM.querySelector", { nodeId: root.nodeId, selector: "#file" }, sessionId);
     await c.send("DOM.setFileInputFiles", { nodeId, files: [pdf] }, sessionId);
@@ -268,11 +299,69 @@ async function checkOne(c, pdf) {
       same: all.filter((u) => u.startsWith(origin + "/")).map((u) => u.slice(origin.length)),
       outside: all.filter((u) => !local(u)),
       blocked,
+      // 最初の表示（PDF を入れる前）と、PDF を入れた後に分けた数
+      first: { all: firstAll, outside: all.slice(0, firstAll).filter((u) => !local(u)).length, blocked: firstBlocked },
+      after: {
+        all: all.length - firstAll,
+        same: all.slice(firstAll).filter((u) => u.startsWith(origin + "/")).length,
+        outside: all.slice(firstAll).filter((u) => !local(u)).length,
+        blocked: blocked.length - firstBlocked,
+      },
       errors,
       shot: shot ? path.relative(ROOT, shot).replace(/\\/g, "/") : null,
       cleaned,
       cleanShot: cleanShot ? path.relative(ROOT, cleanShot).replace(/\\/g, "/") : null,
     };
+  } finally {
+    off();
+    await c.send("Target.closeTarget", { targetId }).catch(() => {});
+  }
+}
+
+// ---------------------------------------------------------------- サイトのページ
+
+/** dist/ の HTML から、サイトのページの場所を作る（index.html と、検索エンジンの確認のファイルは除く） */
+function sitePagePaths() {
+  const out = [];
+  if (!existsSync(path.join(ROOT, "dist"))) return out;
+  const walk = (dir, rel) => {
+    for (const name of readdirSync(dir, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${name.name}` : name.name;
+      if (name.isDirectory()) walk(path.join(dir, name.name), r);
+      else if (r.endsWith(".html") && r !== "index.html" && !/^google[0-9a-z]+\.html$/.test(r)) out.push(r.endsWith("/index.html") ? `/${r.slice(0, -"index.html".length)}` : `/${r}`);
+    }
+  };
+  walk(path.join(ROOT, "dist"), "");
+  return out.sort();
+}
+
+/** サイトのページを1つ開き、閉じるまでの要求を数える */
+async function checkPage(c, pagePath) {
+  const { targetId } = await c.send("Target.createTarget", { url: "about:blank" });
+  const { sessionId } = await c.send("Target.attachToTarget", { targetId, flatten: true });
+  const all = [];
+  const blocked = [];
+  const errors = [];
+  const off = c.on((m) => {
+    if (m.sessionId !== sessionId) return;
+    if (m.method === "Network.requestWillBeSent") all.push(m.params.request.url);
+    if (m.method === "Network.loadingFailed" && m.params.blockedReason) blocked.push(`${m.params.blockedReason}（${m.params.requestId}）`);
+    if (m.method === "Log.entryAdded" && m.params.entry.level === "error") errors.push(m.params.entry.text);
+    if (m.method === "Log.entryAdded" && /violates the following Content Security Policy/.test(m.params.entry.text)) {
+      blocked.push(`console の CSP 違反：${m.params.entry.text.slice(0, 160)}`);
+    }
+  });
+  try {
+    await c.send("Network.enable", {}, sessionId);
+    await c.send("Log.enable", {}, sessionId);
+    await c.send("Page.enable", {}, sessionId);
+    const evaluate = async (expr) => (await c.send("Runtime.evaluate", { expression: expr, returnByValue: true }, sessionId)).result.value;
+    await c.send("Page.navigate", { url: new URL(pagePath, appUrl).href }, sessionId);
+    for (let i = 0; i < 50 && (await evaluate("document.readyState")) !== "complete"; i++) await sleep(100);
+    await sleep(500);
+    const status = await evaluate("performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0");
+    const local = (u) => u.startsWith(origin + "/") || u.startsWith("blob:") || u.startsWith("data:") || u === "about:blank";
+    return { path: pagePath, status, all, outside: all.filter((u) => !local(u)), blocked, errors };
   } finally {
     off();
     await c.send("Target.closeTarget", { targetId }).catch(() => {});

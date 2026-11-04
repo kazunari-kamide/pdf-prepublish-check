@@ -3,6 +3,7 @@ import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import { cspForMeta, securityHeaders } from "./csp.ts";
 import { buildHtaccess } from "./htaccess.ts";
+import { sitePages } from "./site.ts";
 
 // ビルドした HTML にだけ CSP の <meta> を入れる。
 // 開発サーバーは更新の通知に WebSocket を使うので、開発中はかけない。
@@ -34,7 +35,8 @@ function htaccess(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [cspMeta(), htaccess()],
+  // sitePages：記事の一覧・各記事・プライバシーの説明のページ（src/site/）を dist/ に置く
+  plugins: [cspMeta(), htaccess(), sitePages()],
   build: {
     // 小さな資源を data: の形で JavaScript に埋め込まない（読み込み先を見えるままにする）
     assetsInlineLimit: 0,
