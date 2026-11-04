@@ -11,6 +11,7 @@
 
 import {
   PDFArray,
+  PDFBool,
   PDFContext,
   PDFDict,
   PDFName,
@@ -24,12 +25,28 @@ import {
 import { operations, type Op, type Tok } from "../shared/content-lexer.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { readFont, type FontInfo } from "../shared/fonts.ts";
+import { expectedTextOf } from "./remap.ts";
 import { loadPdf } from "../shared/load.ts";
+import { darkFractionOf, readImagePixels, type PixelRead } from "../p6-text/images.ts";
+import { DEFAULT_SETTINGS as P6_SETTINGS } from "../p6-text/settings.ts";
 
 export const RULE_ID = "p7-hidden";
-export const RULE_VERSION = "1.0.2";
+export const RULE_VERSION = "1.1.0";
 
-export type P7Reason = "hidden_layer" | "off_page" | "clipped" | "invisible" | "tiny" | "same_color" | "covered_light";
+export type P7Reason =
+  | "hidden_layer"
+  | "off_page"
+  | "clipped"
+  | "invisible"
+  | "tiny"
+  | "squashed"
+  | "same_color"
+  | "same_color_image"
+  | "covered_light"
+  | "covered_image"
+  | "hidden_codepoint"
+  | "remapped"
+  | "overdrawn";
 
 /** 判定の値。rubric/p7.json の thresholds と同じ値（rubric は採点する側なので読まず、ここに持つ） */
 export const DEFAULT_SETTINGS = {
@@ -47,6 +64,12 @@ export const DEFAULT_SETTINGS = {
   maxOperations: 3_000_000,
   /** 部品（Form XObject）の入れ子の上限 */
   maxFormDepth: 12,
+  /** 横の伸縮（字の横の長さ ÷ 縦の長さ）がこれ未満なら、横につぶれて見えない字（1.1.0 から。Tz 10 未満にあたる） */
+  squashedScaleBelow: 0.1,
+  /** 画像と同じ色の字（1.1.0 から）：字の箱の中の画素のうち、字の色との明るさの差が sameColorDeltaBelow 未満の点の割合の下限 */
+  sameColorImageFractionMin: 0.9,
+  /** 1行にまとめる字の間のすき間の上限（字の高さに対する割合。1.1.0 から） */
+  mergeGapMax: 1.0,
 };
 export type P7Settings = typeof DEFAULT_SETTINGS;
 
@@ -73,6 +96,8 @@ export type P7Report = {
   skippedPages: Array<{ page: number; reason: "too_many_operations" | "unreadable_page" }>;
   /** 見えないが P7 では数えなかった字の数。p6＝濃い覆いの下（P6 で数える）、ocrLayer＝画像と重なる見えない字（文字認識の層） */
   excluded: { p6: number; ocrLayer: number };
+  /** 文字認識の層（スキャン画像の上の見えない字）があるページ（1.1.0 から）。危険の発見には数えず、お知らせに使う */
+  ocrLayerPages: number[];
   decrypted?: EncryptionSummary & { failedObjects: number };
 };
 
@@ -188,11 +213,31 @@ type Glyph = {
   hidden: boolean;
   clip: Rect;
   mode: number;
-  alpha: number;
-  lum: number | null;
+  /** 描く色ごとの不透明さと明るさ。描き方 0・4＝塗り、1・5＝輪郭、2・6＝塗りと輪郭、3・7＝なし（1.1.0 から） */
+  paints: Array<{ alpha: number; lum: number | null }>;
+  /** 横の伸縮（字の横の長さ ÷ 縦の長さ。1.1.0 から） */
+  hScale: number;
+  /** 字の始まりの点と、字の進む向き（1行にまとめるため。1.1.0 から） */
+  origin: [number, number];
+  dir: [number, number];
+  /** 見た目の字（字形の名前から引けたときだけ。1.1.0 から） */
+  expected: string | null;
 };
 type Fill = { seq: number; box: Rect; polys: Array<Array<[number, number]>>; lum: number | null; alpha: number; normal: boolean; rectangular: boolean };
-type Img = { seq: number; box: Rect };
+type Img = {
+  seq: number;
+  box: Rect;
+  /** 画像の単位正方形をページに移す行列 */
+  m: M;
+  stream: PDFStream | null;
+  colorSpaces: PDFDict | undefined;
+  /** 型抜き（ImageMask）・やわらかい型抜き（SMask）・型抜き（Mask）を持つ画像。覆いにしない */
+  masked: boolean;
+  /** 置いたときの不透明さと重ね方 */
+  alpha: number;
+  normal: boolean;
+  fillLum: number | null;
+};
 
 type GState = {
   ctm: M;
@@ -205,6 +250,8 @@ type GState = {
   CA: number;
   normal: boolean;
   font: FontInfo | null;
+  /** 文字コード → 見た目の字（字の対応表の書き換えを見るため。比べられない書体は null。1.1.0 から） */
+  expect: ((code: number) => string | null) | null;
   size: number;
   tc: number;
   tw: number;
@@ -294,6 +341,7 @@ class PageScanner {
   private readonly visible: Visibility;
   private readonly settings: P7Settings;
   private readonly fontCache = new Map<PDFDict, FontInfo>();
+  private readonly expectCache = new Map<PDFDict, ((code: number) => string | null) | null>();
 
   constructor(ctx: PDFContext, visible: Visibility, settings: P7Settings) {
     this.ctx = ctx;
@@ -390,7 +438,13 @@ class PageScanner {
         const [tx, ty] = apply(trm, 0, f.ascent);
         const height = Math.hypot(tx - bx, ty - by);
         const isSpace = gl.isSpace;
-        const strokeMode = g.mode === 1 || g.mode === 5;
+        const fillPaint = { alpha: g.ca, lum: g.fill };
+        const strokePaint = { alpha: g.CA, lum: g.stroke };
+        const m = g.mode;
+        const paints = m === 0 || m === 4 ? [fillPaint] : m === 1 || m === 5 ? [strokePaint] : m === 2 || m === 6 ? [fillPaint, strokePaint] : [];
+        const xLen = Math.hypot(trm[0], trm[1]);
+        const yLen = Math.hypot(trm[2], trm[3]);
+        const origin = apply(trm, 0, 0);
         this.glyphs.push({
           seq: this.seq++,
           op: opNo,
@@ -398,11 +452,14 @@ class PageScanner {
           height,
           isSpace,
           text: gl.text,
+          expected: g.expect ? g.expect(gl.code) : null,
           hidden: isHidden(),
           clip: g.clip,
           mode: g.mode,
-          alpha: strokeMode ? g.CA : g.ca,
-          lum: strokeMode ? g.stroke : g.fill,
+          paints,
+          hScale: yLen > 0 ? xLen / yLen : 1,
+          origin,
+          dir: xLen > 0 ? [trm[0] / xLen, trm[1] / xLen] : [1, 0],
         });
         const adv = (w0 * g.size + g.tc + (gl.isWordSpace ? g.tw : 0)) * g.th;
         tm = mul([1, 0, 0, 1, adv, 0], tm);
@@ -517,7 +574,16 @@ class PageScanner {
               this.fontCache.set(fd, fi);
             }
             g.font = fi;
-          } else g.font = null;
+            let ex = this.expectCache.get(fd);
+            if (ex === undefined) {
+              ex = expectedTextOf(ctx, fd);
+              this.expectCache.set(fd, ex);
+            }
+            g.expect = ex;
+          } else {
+            g.font = null;
+            g.expect = null;
+          }
           g.size = num(args[1]);
           break;
         }
@@ -553,7 +619,8 @@ class PageScanner {
         }
         // 画像と部品
         case "BI":
-          this.images.push({ seq: this.seq++, box: boxOf([pt(0, 0), pt(1, 0), pt(0, 1), pt(1, 1)]) });
+          // 埋め込みの画像は画素を読まない（覆いにも、色の比べにも使わない。置いた箱だけ）
+          this.images.push({ seq: this.seq++, box: boxOf([pt(0, 0), pt(1, 0), pt(0, 1), pt(1, 1)]), m: g.ctm, stream: null, colorSpaces: undefined, masked: true, alpha: g.ca, normal: g.normal, fillLum: g.fill });
           break;
         case "Do": {
           const name = args[0]?.t === "name" ? args[0].v : "";
@@ -562,7 +629,10 @@ class PageScanner {
           if (!(xo instanceof PDFStream)) break;
           const st = nameOf(ctx, xo.dict.get(PDFName.of("Subtype")));
           if (st === "Image") {
-            this.images.push({ seq: this.seq++, box: boxOf([pt(0, 0), pt(1, 0), pt(0, 1), pt(1, 1)]) });
+            const isMask = xo.dict.lookup(PDFName.of("ImageMask"));
+            const masked = (isMask instanceof PDFBool && isMask.asBoolean()) || xo.dict.has(PDFName.of("SMask")) || xo.dict.has(PDFName.of("Mask"));
+            const colorSpaces = resources ? (dictOf(ctx, resources.get(PDFName.of("ColorSpace"))) ?? undefined) : undefined;
+            this.images.push({ seq: this.seq++, box: boxOf([pt(0, 0), pt(1, 0), pt(0, 1), pt(1, 1)]), m: g.ctm, stream: xo, colorSpaces, masked, alpha: g.ca, normal: g.normal, fillLum: g.fill });
           } else if (st === "Form" && xo instanceof PDFRawStream) {
             if (depth >= this.settings.maxFormDepth || forms.has(xo)) break;
             const fm = arrOf(ctx, xo.dict.get(PDFName.of("Matrix")));
@@ -610,11 +680,80 @@ class PageScanner {
   }
 }
 
+// ---------------------------------------------------------------- 画像の画素（1.1.0 から）
+
+function invert(m: M): M | null {
+  const det = m[0] * m[3] - m[1] * m[2];
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return null;
+  return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det];
+}
+
+/** 1辺に並べる点の数（字の箱の中を見る） */
+const SAMPLE_GRID = 7;
+
+/**
+ * 画像の画素を読む道具。同じ画像は1回だけ解く。解けない画像（JPEG など、このルールで解けない圧縮）は null。
+ * 解き方は P6 と同じ（rules/p6-text/images.ts）。上限も P6 と同じ値を使う
+ */
+class ImagePixels {
+  private readonly cache = new Map<PDFStream, PixelRead>();
+  private readonly ctx: PDFContext;
+  constructor(ctx: PDFContext) {
+    this.ctx = ctx;
+  }
+  private read(im: Img): Extract<PixelRead, { kind: "pixels" }> | null {
+    if (!im.stream) return null;
+    let r = this.cache.get(im.stream);
+    if (!r) {
+      try {
+        r = readImagePixels({
+          ctx: this.ctx,
+          stream: im.stream,
+          colorSpaces: im.colorSpaces,
+          fillLuminance: im.fillLum,
+          maxImageBytes: P6_SETTINGS.maxImageBytes,
+          maxImagePixels: P6_SETTINGS.maxImagePixels,
+        });
+      } catch {
+        r = { kind: "unknown", reason: "broken" };
+      }
+      this.cache.set(im.stream, r);
+    }
+    return r.kind === "pixels" ? r : null;
+  }
+  /** 字の箱の中に点を並べ、画像の上の点の明るさを返す。読めない画像は null */
+  lumsIn(im: Img, rect: Rect): number[] | null {
+    const r = this.read(im);
+    const inv = invert(im.m);
+    if (!r || !inv) return null;
+    const { reader } = r;
+    const out: number[] = [];
+    for (let i = 0; i < SAMPLE_GRID; i++) {
+      for (let j = 0; j < SAMPLE_GRID; j++) {
+        const x = rect[0] + ((i + 0.5) / SAMPLE_GRID) * (rect[2] - rect[0]);
+        const y = rect[1] + ((j + 0.5) / SAMPLE_GRID) * (rect[3] - rect[1]);
+        const [u, v] = apply(inv, x, y);
+        if (u < 0 || u > 1 || v < 0 || v > 1) continue;
+        const px = Math.min(reader.width - 1, Math.floor(u * reader.width));
+        const py = Math.min(reader.height - 1, Math.floor((1 - v) * reader.height));
+        const p = reader.at(px, py);
+        if (p.lum !== null && p.alpha >= 0.5) out.push(p.lum);
+      }
+    }
+    return out;
+  }
+  /** 画像全体のうち濃い画素の割合（P6 と同じ数え方）。読めない画像は null */
+  darkFraction(im: Img): number | null {
+    const r = this.read(im);
+    return r ? darkFractionOf(r.reader, P6_SETTINGS.darkLuminanceMax, P6_SETTINGS.opacityMin) : null;
+  }
+}
+
 // ---------------------------------------------------------------- 判定
 
 type Judged = { reason: P7Reason } | { excluded: "p6" | "ocr" } | null;
 
-function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], s: P7Settings): Judged {
+function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], pixels: ImagePixels, s: P7Settings): Judged {
   const a = area(gl.rect);
   const outside = (box: Rect) => (a > 0 ? 1 - interArea(gl.rect, box) / a : inRect(box, gl.rect[0], gl.rect[1]) ? 0 : 1);
   if (gl.hidden) return { reason: "hidden_layer" };
@@ -622,12 +761,15 @@ function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], s: P7Setting
   if (outside(gl.clip) >= s.outsideFraction) return { reason: "clipped" };
   const cx = (gl.rect[0] + gl.rect[2]) / 2;
   const cy = (gl.rect[1] + gl.rect[3]) / 2;
-  if (gl.mode === 3 || gl.mode === 7 || gl.alpha < s.invisibleAlphaBelow) {
+  // 描く色のうち、見えるもの（不透明さが下限以上）。描き方 2・6 は、塗りと輪郭のどちらかが見えれば見える字（1.1.0 から）
+  const shown = gl.paints.filter((p) => p.alpha >= s.invisibleAlphaBelow);
+  if (shown.length === 0) {
     // 画像と重なる見えない字は、描く順番に関係なく文字認識の層（PR #22 の返事の 4）
     if (images.some((im) => inRect(im.box, cx, cy))) return { excluded: "ocr" };
     return { reason: "invisible" };
   }
   if (gl.height < s.tinyHeightBelowPt) return { reason: "tiny" };
+  if (gl.hScale < s.squashedScaleBelow) return { reason: "squashed" };
   // 字のあとに重ねた、不透明で四角に近い塗り
   if (a > 0) {
     for (const f of fills) {
@@ -635,10 +777,17 @@ function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], s: P7Setting
       if (interArea(gl.rect, f.box) / a < s.coveredFractionMin) continue;
       return f.lum <= s.darkLuminanceMaxForP6 ? { excluded: "p6" } : { reason: "covered_light" };
     }
+    // 字のあとに重ねた、型抜きのない不透明な画像（1.1.0 から）。ほぼ全部が濃い画像は P6 で数える
+    for (const im of images) {
+      if (im.seq < gl.seq || im.masked || !im.normal || im.alpha < s.coverAlphaMin) continue;
+      if (interArea(gl.rect, im.box) / a < s.coveredFractionMin) continue;
+      const dark = pixels.darkFraction(im);
+      return dark !== null && dark >= P6_SETTINGS.darkImageFractionMin ? { excluded: "p6" } : { reason: "covered_image" };
+    }
   }
   // 下の色：字より前に描いた、いちばん上の不透明な塗りか画像。なければページの白
-  if (gl.lum === null) return null;
-  let under: { seq: number; lum: number | null } = { seq: -1, lum: 1 };
+  if (shown.some((p) => p.lum === null)) return null;
+  let under: { seq: number; lum: number | null; image?: Img } = { seq: -1, lum: 1 };
   for (const f of fills) {
     if (f.seq > gl.seq || f.seq < under.seq || !f.normal || f.alpha < s.coverAlphaMin) continue;
     if (!inRect(f.box, cx, cy) || !inShape(f.polys, cx, cy)) continue;
@@ -646,10 +795,128 @@ function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], s: P7Setting
   }
   for (const im of images) {
     if (im.seq > gl.seq || im.seq < under.seq || !inRect(im.box, cx, cy)) continue;
-    under = { seq: im.seq, lum: null }; // 画像の色は見ない（決められないので、same_color にしない）
+    under = { seq: im.seq, lum: null, image: im };
+  }
+  const close = (lum: number) => shown.every((p) => Math.abs(p.lum! - lum) < s.sameColorDeltaBelow);
+  if (under.image) {
+    // 画像の上の字：字の箱の中の画素を見る（1.1.0 から）。ほとんどの点が字の色と同じなら、画像と同じ色の字。
+    // 写真の上の白い説明文のように、字の色と違う点が多ければ読める字として返さない。読めない画像は判定しない
+    const im = under.image;
+    if (im.masked || !im.normal || im.alpha < s.coverAlphaMin) return null;
+    const lums = pixels.lumsIn(im, gl.rect);
+    if (!lums || lums.length < (SAMPLE_GRID * SAMPLE_GRID) / 2) return null;
+    const same = lums.filter((l) => close(l)).length;
+    return same / lums.length >= s.sameColorImageFractionMin ? { reason: "same_color_image" } : null;
   }
   if (under.lum === null) return null;
-  return Math.abs(gl.lum - under.lum) < s.sameColorDeltaBelow ? { reason: "same_color" } : null;
+  return close(under.lum) ? { reason: "same_color" } : null;
+}
+
+/** 前の字のすぐあとに、同じ行で続く字か（命令をまたいで1件にまとめるため。1.1.0 から） */
+function continuesLine(prev: Glyph, gl: Glyph, gapMax: number): boolean {
+  const h = Math.max(prev.height, gl.height);
+  if (!(h > 0)) return false;
+  if (prev.dir[0] * gl.dir[0] + prev.dir[1] * gl.dir[1] < 0.99) return false; // 同じ向き
+  const dx = gl.origin[0] - prev.origin[0];
+  const dy = gl.origin[1] - prev.origin[1];
+  const along = dx * prev.dir[0] + dy * prev.dir[1]; // 行の向きに沿った進み
+  const across = -dx * prev.dir[1] + dy * prev.dir[0]; // 行に直交するずれ
+  if (Math.abs(across) > h * 0.3) return false;
+  const pw = Math.abs((prev.rect[2] - prev.rect[0]) * prev.dir[0]) + Math.abs((prev.rect[3] - prev.rect[1]) * prev.dir[1]);
+  return along >= -h * 0.1 && along - pw <= h * gapMax;
+}
+
+// ---------------------------------------------------------------- 見える字の中の隠し（1.1.0 から。取りこぼし 26 項目の 15〜17）
+
+/**
+ * 見えない文字コード：幅 0 の字（U+200B〜200D・2060〜2064・FEFF・180E）、向きの制御（U+200E・200F・202A〜202E・2066〜2069・061C）、
+ * 書式の制御（U+206A〜206F）、タグ文字（U+E0000〜E007F）、C1 制御文字（U+0080〜009F）。
+ * 取り出される字は ToUnicode から来る（rules/shared/fonts.ts）。ToUnicode のない1バイトの字は ASCII だけなので、ここには当たらない。
+ * やわらかいハイフン（U+00AD）は、ふつうの組版でも入るので数えない
+ */
+const HIDDEN_CODEPOINT = /[\u0080-\u009F؜᠎​-‏‪-‮⁠-⁤⁦-⁯﻿]|[\u{E0000}-\u{E007F}]/gu;
+
+function hiddenCodepoints(text: string): number {
+  if (text === "") return 0;
+  return text.match(HIDDEN_CODEPOINT)?.length ?? 0;
+}
+
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+/**
+ * 字の対応表の書き換え：見た目の字（字形の名前から引いたもの）と、取り出される字（ToUnicode）が違う。
+ * 取り出される字に字か数字が入っているときだけ数える（対応表が空白や記号にずれただけのものは数えない）。
+ * 合字（fi など）・異体字（a.sc など）は、見た目の字を引く所で同じ字にそろえる（remap.ts）
+ */
+function isRemapped(gl: Glyph): boolean {
+  if (gl.expected === null || gl.text === "") return false;
+  const shown = gl.expected.normalize("NFKC");
+  const taken = gl.text.normalize("NFKC");
+  if (shown === taken) return false;
+  return LETTER_OR_DIGIT.test(taken);
+}
+
+/** 1字だけの字か数字（記号・アクセント・空白は重ね描きの比べに使わない） */
+const SINGLE_LETTER = /^[\p{L}\p{N}]$/u;
+
+/**
+ * 違う字の重ね描き：同じ所（始まりの点が字の高さの 15% 以内）に、同じ大きさ・同じ向きで、違う字（字か数字）が重なって描かれている。
+ * 先に描いた字を overdrawn にする（あとから描いた字が上に重なり、先の字は読みにくい）。
+ * 太字のための同じ字の2度描きは、同じ字なので数えない。ふりがなは大きさが違うので数えない。見えない字（ほかの理由が付いた字）は比べない
+ */
+function markOverdrawn(glyphs: Glyph[], judged: Judged[]): void {
+  const CELL = 2;
+  const buckets = new Map<string, number[]>();
+  const key = (x: number, y: number) => `${Math.round(x / CELL)},${Math.round(y / CELL)}`;
+  const letters: number[] = [];
+  glyphs.forEach((gl, i) => {
+    if (judged[i] !== null || gl.isSpace || !(gl.height > 0)) return;
+    const t = gl.text.normalize("NFKC");
+    if (!SINGLE_LETTER.test(t)) return;
+    letters.push(i);
+    const k = key(gl.origin[0], gl.origin[1]);
+    const list = buckets.get(k);
+    if (list) list.push(i);
+    else buckets.set(k, [i]);
+  });
+  const hit = new Set<number>();
+  for (const i of letters) {
+    const a = glyphs[i]!;
+    const ta = a.text.normalize("NFKC");
+    const bx = Math.round(a.origin[0] / CELL);
+    const by = Math.round(a.origin[1] / CELL);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const j of buckets.get(`${bx + dx},${by + dy}`) ?? []) {
+          if (j <= i) continue; // j はあとから描いた字
+          const b = glyphs[j]!;
+          if (b.text.normalize("NFKC") === ta) continue;
+          const h = Math.max(a.height, b.height);
+          if (Math.min(a.height, b.height) / h < 0.9) continue;
+          if (a.dir[0] * b.dir[0] + a.dir[1] * b.dir[1] < 0.99) continue;
+          if (Math.hypot(b.origin[0] - a.origin[0], b.origin[1] - a.origin[1]) > h * 0.15) continue;
+          hit.add(i);
+        }
+      }
+    }
+  }
+  for (const i of hit) judged[i] = { reason: "overdrawn" };
+}
+
+/** 箱が細すぎる（幅や高さが 1 ポイント未満）なら、画面で見えるように 1 ポイントまで広げる（1.1.0 から） */
+function padRect(r: Rect): Rect {
+  const out: Rect = [...r];
+  if (out[2] - out[0] < 1) {
+    const c = (out[0] + out[2]) / 2;
+    out[0] = c - 0.5;
+    out[2] = c + 0.5;
+  }
+  if (out[3] - out[1] < 1) {
+    const c = (out[1] + out[3]) / 2;
+    out[1] = c - 0.5;
+    out[3] = c + 0.5;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- 本体
@@ -663,6 +930,7 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
     findings: [],
     skippedPages: [],
     excluded: { p6: 0, ocrLayer: 0 },
+    ocrLayerPages: [],
   };
   if (bytes.length === 0) return { ...base, status: "error", error: { code: "empty", message: "ファイルが空です。" } };
   const loaded = await loadPdf(bytes);
@@ -681,7 +949,7 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
   } catch {
     return { ...base, status: "error", error: { code: "unreadable", message: "ページの並びを読めませんでした。" } };
   }
-  const report: P7Report = { ...base, pages: pages.length, findings: [], skippedPages: [], excluded: { p6: 0, ocrLayer: 0 } };
+  const report: P7Report = { ...base, pages: pages.length, findings: [], skippedPages: [], excluded: { p6: 0, ocrLayer: 0 }, ocrLayerPages: [] };
   if (loaded.decrypted) report.decrypted = loaded.decrypted;
   const visible = makeVisibility(ctx, doc.catalog);
 
@@ -694,41 +962,63 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
       const scanner = new PageScanner(ctx, visible, settings);
       const gs: GState = {
         ctm: IDENTITY, clip: [-Infinity, -Infinity, Infinity, Infinity], fillSpace: { kind: "gray", n: 1 }, strokeSpace: { kind: "gray", n: 1 },
-        fill: 0, stroke: 0, ca: 1, CA: 1, normal: true, font: null, size: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, mode: 0,
+        fill: 0, stroke: 0, ca: 1, CA: 1, normal: true, font: null, expect: null, size: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, mode: 0,
       };
       scanner.run(contentBytes(ctx, page.node.get(PDFName.of("Contents"))), page.node.Resources() ?? null, gs, false, 0, new Set());
 
-      // 1字ごとに理由を決め、同じ命令の中で同じ理由で続く字を1件にまとめる
-      let group: { op: number; reason: P7Reason; rect: Rect; chars: number; text: string } | null = null;
+      // 1字ごとに理由を決め、同じ理由で続く字を1件にまとめる。
+      // 同じ命令の中か、命令をまたいでも同じ行ですぐ隣に続く字（1.1.0 から。1字ずつ別の命令で置いた字を1件にする）
+      type Group = { op: number; reason: P7Reason; rect: Rect; chars: number; text: string; last: Glyph };
+      let group: Group | null = null;
+      const pixels = new ImagePixels(ctx);
       const flush = () => {
         if (group && group.chars > 0) {
-          const f: P7Finding = { pattern: "P7", page: pageNo, reason: group.reason, rect: group.rect, chars: group.chars };
+          const f: P7Finding = { pattern: "P7", page: pageNo, reason: group.reason, rect: padRect(group.rect), chars: group.chars };
           if (options.includeText) f.text = group.text;
           report.findings.push(f);
         }
         group = null;
       };
-      for (const gl of scanner.glyphs) {
-        const j = judge(gl, view, scanner.fills, scanner.images, settings);
+      // 見える字だけに当てる理由（1.1.0 から）：字の対応表の書き換え、見えない文字コード、違う字の重ね描き
+      const judged: Judged[] = scanner.glyphs.map((gl) => {
+        const j = judge(gl, view, scanner.fills, scanner.images, pixels, settings);
+        if (j !== null) return j;
+        if (isRemapped(gl)) return { reason: "remapped" };
+        if (hiddenCodepoints(gl.text) > 0) return { reason: "hidden_codepoint" };
+        return null;
+      });
+      markOverdrawn(scanner.glyphs, judged);
+
+      let ocrChars = 0;
+      scanner.glyphs.forEach((gl, i) => {
+        const j = judged[i]!;
         if (j === null || "excluded" in j) {
           if (j && !gl.isSpace) {
             if (j.excluded === "p6") report.excluded.p6++;
-            else report.excluded.ocrLayer++;
+            else {
+              report.excluded.ocrLayer++;
+              ocrChars++;
+            }
           }
           flush();
-          continue;
+          return;
         }
-        if (group && (group as { op: number }).op === gl.op && (group as { reason: P7Reason }).reason === j.reason) {
-          const g2 = group as { rect: Rect; chars: number; text: string };
-          g2.rect = union(g2.rect, gl.rect);
-          g2.text += gl.text;
-          if (!gl.isSpace) g2.chars++;
+        // 数える字の数：見えない文字コードは、その文字コードの数（全角の空白と同じに扱われる字もあるため）。ほかは空白を除いた字
+        const n = j.reason === "hidden_codepoint" ? hiddenCodepoints(gl.text) : gl.isSpace ? 0 : 1;
+        const g0 = group as Group | null;
+        if (g0 && g0.reason === j.reason && (g0.op === gl.op || continuesLine(g0.last, gl, settings.mergeGapMax))) {
+          g0.rect = union(g0.rect, gl.rect);
+          g0.text += gl.text;
+          g0.op = gl.op;
+          g0.last = gl;
+          g0.chars += n;
         } else {
           flush();
-          group = { op: gl.op, reason: j.reason, rect: gl.rect, chars: gl.isSpace ? 0 : 1, text: gl.text };
+          group = { op: gl.op, reason: j.reason, rect: gl.rect, chars: n, text: gl.text, last: gl };
         }
-      }
+      });
       flush();
+      if (ocrChars > 0) report.ocrLayerPages.push(pageNo);
     } catch (e) {
       report.skippedPages.push({ page: pageNo, reason: e instanceof TooManyOperations ? "too_many_operations" : "unreadable_page" });
     }
