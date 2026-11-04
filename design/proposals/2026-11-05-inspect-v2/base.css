@@ -1,0 +1,78 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* 案 D2・E2・F2 で共通の組み立て（帯・縮小したページ・大きなページ・押せる所・フォーカス・狭い幅）。値は tokens-v2.css の変数だけ。 */
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-base);
+  font: var(--text-base) / var(--leading) var(--font-body);
+  letter-spacing: var(--tracking);
+}
+h1, h2, h3 { font-family: var(--font-head); line-height: 1.4; letter-spacing: 0; }
+
+/* フォーカス：どの押せる所でも同じ形（WCAG 2.4.7・2.4.13 の考え方。DADS のボタンと同じ） */
+:focus-visible { outline: var(--focus-outline); outline-offset: var(--focus-offset); box-shadow: var(--focus-halo); }
+button, a { font: inherit; color: inherit; }
+
+/* 本文へ飛ぶリンク（キーボードで最初に止まる。2.4.1） */
+.skip { position: absolute; left: var(--space-4); top: -10rem; background: var(--color-focus); color: #000; padding: var(--space-2) var(--space-4); border-radius: var(--radius); z-index: 10; }
+.skip:focus { top: var(--space-2); }
+
+/* ---- 上：手順の帯 */
+.appbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); padding: var(--space-3) var(--space-5); background: var(--color-surface); border-bottom: 1px solid var(--color-line); }
+.brand { display: flex; align-items: center; gap: var(--space-2); font-weight: 700; font-size: var(--text-h2); margin: 0; }
+.seal { width: 1.9rem; height: 2.4rem; display: grid; place-items: center; border: var(--border-strong) solid var(--color-accent); border-radius: 10px 10px 6px 6px; color: var(--color-accent); font-size: var(--text-small); }
+.steps { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
+.steps li { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-min); padding: 0 var(--space-4); border-radius: var(--radius-full); background: var(--color-chip); font-size: var(--text-small); }
+.steps li .n { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: var(--radius-full); border: 1px solid var(--color-control-line); background: var(--color-surface); font-weight: 700; }
+.steps li[aria-current="step"] { background: var(--color-base); color: var(--color-on-dark); font-weight: 700; }
+.steps li[aria-current="step"] .n { background: var(--color-on-dark); color: var(--color-base); border-color: var(--color-on-dark); }
+.steps li.done .n { background: var(--color-ok); border-color: var(--color-ok); color: var(--color-on-dark); }
+.zero-send { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-small); color: var(--color-muted); }
+.zero-send::before { content: ""; width: 0.6rem; height: 0.6rem; border-radius: var(--radius-full); border: 2px solid var(--color-ok); }
+
+/* ---- 3つの欄 */
+.layout { display: grid; grid-template-columns: var(--width-thumbs) minmax(0, 1fr) var(--results-w, 28rem); gap: var(--space-4); padding: var(--space-4); min-height: calc(100vh - 4.5rem); }
+.thumbs { display: flex; flex-direction: column; gap: var(--space-3); }
+.thumbs h2, .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.thumb { position: relative; display: block; width: 100%; aspect-ratio: 210 / 297; min-height: var(--target-min); padding: 0; background: var(--color-surface); border: 1px solid var(--color-control-line); border-radius: var(--radius); cursor: pointer; }
+.thumb[aria-current="page"] { border: var(--border-mark) solid var(--color-base); }
+.thumb .pg { position: absolute; left: var(--space-2); bottom: var(--space-1); font-size: var(--text-small); }
+.thumb-count { position: absolute; top: var(--space-2); right: var(--space-2); min-width: 1.6rem; padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--color-accent); color: var(--color-on-dark); font-weight: 700; font-size: var(--text-small); }
+
+.stage { background: var(--color-sunken); border-radius: var(--radius-panel); padding: var(--space-5); display: grid; place-items: start center; }
+.sheet { position: relative; width: min(26rem, 100%); aspect-ratio: 210 / 297; background: var(--color-surface); border-radius: var(--radius-sheet); box-shadow: var(--shadow-sheet); }
+.ln { position: absolute; left: 10%; right: 10%; height: 0.4rem; border-radius: var(--radius-full); background: var(--color-sunken); }
+.mark { position: absolute; border: var(--border-mark) solid var(--color-accent); border-radius: 4px; background: var(--color-accent-wash); }
+.mark-no { position: absolute; left: calc(-1 * var(--border-mark)); bottom: calc(100% + 4px); min-width: 1.6rem; text-align: center; padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--color-accent); color: var(--color-on-dark); font-weight: 700; font-size: var(--text-small); }
+
+.results { background: var(--color-surface); border-radius: var(--radius-panel); box-shadow: var(--shadow-panel); padding: var(--space-5); align-self: start; }
+.results h1 { font-size: var(--text-h1); margin: 0; }
+.summary { margin: var(--space-1) 0 var(--space-5); color: var(--color-muted); font-size: var(--text-small); }
+.summary strong { color: var(--color-accent); font-size: var(--text-h2); }
+
+/* 深刻度の札：形（▲■●）と字で示す。色だけに頼らない（1.4.1） */
+.sev { align-self: start; display: inline-flex; align-items: center; gap: 0.2em; padding: 0 var(--space-2); border-radius: var(--radius-full); border: 1px solid currentColor; font-weight: 700; font-size: var(--text-small); white-space: nowrap; line-height: 1.6; }
+.sev.high { color: var(--color-accent); }
+.sev.mid { color: var(--color-base); }
+.zero { color: var(--color-ok); font-weight: 700; font-size: var(--text-small); }
+.zero::before { content: "✓ "; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 48px; padding: 0 var(--space-5); border: 0; border-radius: var(--radius); background: var(--color-base); color: var(--color-on-dark); font-weight: 700; cursor: pointer; }
+.btn.wide { width: 100%; min-height: 56px; }
+
+.notice { margin: var(--space-4) 0 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius); background: var(--color-chip); border-left: 4px solid var(--color-base); font-size: var(--text-small); }
+
+/* ---- 狭い幅（56rem 未満）：帯 → 結果 → 縮小（横に折り返す）→ ページ。320px でも横にはみ出さない（1.4.10） */
+@media (max-width: 56rem) {
+  .appbar { padding: var(--space-3) var(--space-4); }
+  .zero-send { margin-left: 0; }
+  .steps { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding: var(--space-3); }
+  .results { order: 1; padding: var(--space-4); }
+  .thumbs { order: 2; flex-direction: row; flex-wrap: wrap; }
+  .thumb { width: 4.5rem; }
+  .stage { order: 3; padding: var(--space-3); }
+}

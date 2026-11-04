@@ -36,8 +36,9 @@ body.site {
 }
 
 .site :focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 2px;
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-offset);
+  box-shadow: var(--focus-halo);
 }
 
 /* ---- 上の帯（検査のページの手順の帯と同じ墨の地） */
