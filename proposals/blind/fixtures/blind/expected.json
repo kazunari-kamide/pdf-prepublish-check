@@ -1,0 +1,4420 @@
+{
+  "note": "型の一覧の説明だけから作った期待値。検出ルールを動かす前に決めた（動かしてから合わせない）。中身はすべて架空。",
+  "types": [
+    {
+      "id": "T01",
+      "title": "文書情報の標準の欄（作成者・タイトルなど）",
+      "plan": "○"
+    },
+    {
+      "id": "T02",
+      "title": "文書情報の独自の欄（Company・Manager など）",
+      "plan": "○"
+    },
+    {
+      "id": "T03",
+      "title": "前の版にだけ残る文書情報",
+      "plan": "○"
+    },
+    {
+      "id": "T04",
+      "title": "Shift_JIS などで書かれた値を正しく読む",
+      "plan": "○"
+    },
+    {
+      "id": "T05",
+      "title": "文書情報と XMP の食い違い",
+      "plan": "○"
+    },
+    {
+      "id": "T06",
+      "title": "文書全体の XMP の人名・編集の履歴",
+      "plan": "○"
+    },
+    {
+      "id": "T07",
+      "title": "圧縮した XMP",
+      "plan": "○"
+    },
+    {
+      "id": "T08",
+      "title": "部品ごとの XMP（画像・部品の作成者）",
+      "plan": "○"
+    },
+    {
+      "id": "T09",
+      "title": "アプリの私的データ（PieceInfo）",
+      "plan": "○"
+    },
+    {
+      "id": "T10",
+      "title": "文書 ID で元のファイル・様式とつながる",
+      "plan": "外"
+    },
+    {
+      "id": "T11",
+      "title": "他組織名の混入（P3）",
+      "plan": "△"
+    },
+    {
+      "id": "T12",
+      "title": "文書情報・XMP の中のパス",
+      "plan": "○"
+    },
+    {
+      "id": "T13",
+      "title": "本文・注釈・リンク先の中のパス・サーバー名",
+      "plan": "○"
+    },
+    {
+      "id": "T14",
+      "title": "増分更新の前の版",
+      "plan": "○"
+    },
+    {
+      "id": "T15",
+      "title": "%%EOF の後の孤立したオブジェクト",
+      "plan": "○"
+    },
+    {
+      "id": "T16",
+      "title": "どこからも指されていない中身のストリーム",
+      "plan": "○"
+    },
+    {
+      "id": "T17",
+      "title": "ページの木から外したページ",
+      "plan": "○"
+    },
+    {
+      "id": "T18",
+      "title": "オブジェクトストリームの中の孤立した辞書",
+      "plan": "○"
+    },
+    {
+      "id": "T19",
+      "title": "資源にあるが描かれない部品（Form XObject）",
+      "plan": "○"
+    },
+    {
+      "id": "T20",
+      "title": "ページの縮小画像（/Thumb）に前のページが残る",
+      "plan": "○"
+    },
+    {
+      "id": "T21",
+      "title": "前の版にあって今ない字の中身を見せる",
+      "plan": "○"
+    },
+    {
+      "id": "T22",
+      "title": "前の版の中の個人情報の型を探す",
+      "plan": "○"
+    },
+    {
+      "id": "T23",
+      "title": "字の上の黒い四角",
+      "plan": "○"
+    },
+    {
+      "id": "T24",
+      "title": "濃い色・CMYK の黒の四角",
+      "plan": "○"
+    },
+    {
+      "id": "T25",
+      "title": "日本語（CID 書体）の字の上の黒い四角",
+      "plan": "○"
+    },
+    {
+      "id": "T26",
+      "title": "形を問わない覆い（楕円・回した四角・太い線）",
+      "plan": "○"
+    },
+    {
+      "id": "T27",
+      "title": "字の上に貼った黒い画像",
+      "plan": "○"
+    },
+    {
+      "id": "T28",
+      "title": "字の上の黒い四角の注釈（Square）",
+      "plan": "○"
+    },
+    {
+      "id": "T29",
+      "title": "字の上の未適用の墨消し注釈",
+      "plan": "○"
+    },
+    {
+      "id": "T30",
+      "title": "網掛け（帯が先・字と同じ色）",
+      "plan": "○"
+    },
+    {
+      "id": "T31",
+      "title": "字の上の白い四角",
+      "plan": "○"
+    },
+    {
+      "id": "T32",
+      "title": "中間の色の不透明な覆い（灰・赤・青）",
+      "plan": "○"
+    },
+    {
+      "id": "T33",
+      "title": "半透明の濃い覆い・黒い蛍光ペン",
+      "plan": "△"
+    },
+    {
+      "id": "T34",
+      "title": "白い四角の注釈",
+      "plan": "○"
+    },
+    {
+      "id": "T35",
+      "title": "行の一部だけ覆う四角",
+      "plan": "○"
+    },
+    {
+      "id": "T36",
+      "title": "部品（Form XObject）の中の字を覆う",
+      "plan": "○"
+    },
+    {
+      "id": "T37",
+      "title": "覆いの上に別の見える字を描いて隠す",
+      "plan": "○"
+    },
+    {
+      "id": "T38",
+      "title": "縦書きの字の上の黒い四角",
+      "plan": "○"
+    },
+    {
+      "id": "T39",
+      "title": "スキャン＋文字認識の層の上の黒い四角",
+      "plan": "○"
+    },
+    {
+      "id": "T40",
+      "title": "スキャン画像の上の黒い四角（文字の層なし）",
+      "plan": "○"
+    },
+    {
+      "id": "T41",
+      "title": "スキャン＋黒い四角の注釈",
+      "plan": "○"
+    },
+    {
+      "id": "T42",
+      "title": "スキャン＋未適用の墨消し注釈",
+      "plan": "○"
+    },
+    {
+      "id": "T43",
+      "title": "白い四角の下の画像",
+      "plan": "○"
+    },
+    {
+      "id": "T44",
+      "title": "字を描いたあと、明るい画像・写真で覆う",
+      "plan": "○"
+    },
+    {
+      "id": "T45",
+      "title": "白い紙に白い字",
+      "plan": "○"
+    },
+    {
+      "id": "T46",
+      "title": "地と同じ色の字",
+      "plan": "○"
+    },
+    {
+      "id": "T47",
+      "title": "ごく薄い色の字",
+      "plan": "○"
+    },
+    {
+      "id": "T48",
+      "title": "描画モード 3・7（描かない字）",
+      "plan": "○"
+    },
+    {
+      "id": "T49",
+      "title": "透明な字（不透明さ 0）",
+      "plan": "○"
+    },
+    {
+      "id": "T50",
+      "title": "極小の字（1pt 未満）",
+      "plan": "○"
+    },
+    {
+      "id": "T51",
+      "title": "文字行列で縮めた字",
+      "plan": "○"
+    },
+    {
+      "id": "T52",
+      "title": "横につぶれた字（横の伸縮 0%・1%）",
+      "plan": "○"
+    },
+    {
+      "id": "T53",
+      "title": "ページの外の字",
+      "plan": "○"
+    },
+    {
+      "id": "T54",
+      "title": "MediaBox の中・CropBox の外の字",
+      "plan": "○"
+    },
+    {
+      "id": "T55",
+      "title": "切り抜きの外の字",
+      "plan": "○"
+    },
+    {
+      "id": "T56",
+      "title": "非表示のレイヤーの字",
+      "plan": "○"
+    },
+    {
+      "id": "T57",
+      "title": "輪郭だけの白い字",
+      "plan": "○"
+    },
+    {
+      "id": "T58",
+      "title": "1文字ずつ別の命令で置いた白い字を1件にまとめる",
+      "plan": "○"
+    },
+    {
+      "id": "T59",
+      "title": "圧縮したストリーム・オブジェクトストリームの中の白い字",
+      "plan": "○"
+    },
+    {
+      "id": "T60",
+      "title": "違う字を同じ所に重ね描き",
+      "plan": "○"
+    },
+    {
+      "id": "T61",
+      "title": "画像の上の、画像と同じ色の字",
+      "plan": "○"
+    },
+    {
+      "id": "T62",
+      "title": "文字認識の層を知らせる",
+      "plan": "知"
+    },
+    {
+      "id": "T63",
+      "title": "しおりの題",
+      "plan": "○"
+    },
+    {
+      "id": "T64",
+      "title": "描いた字と違う /ActualText",
+      "plan": "○"
+    },
+    {
+      "id": "T65",
+      "title": "代わりの説明 /Alt",
+      "plan": "○"
+    },
+    {
+      "id": "T66",
+      "title": "フォームの説明（/TU・/TM）・構造要素の題（/T）・/E",
+      "plan": "△"
+    },
+    {
+      "id": "T67",
+      "title": "見えない文字コード（幅 0・タグ文字・向きの制御・C1 制御文字）",
+      "plan": "○"
+    },
+    {
+      "id": "T68",
+      "title": "字の対応表（ToUnicode）の書き換え",
+      "plan": "○"
+    },
+    {
+      "id": "T69",
+      "title": "書体の中に残った字形",
+      "plan": "○"
+    },
+    {
+      "id": "T70",
+      "title": "AI への隠れた指示文",
+      "plan": "○"
+    },
+    {
+      "id": "T71",
+      "title": "注釈の作成者名（/T）",
+      "plan": "○"
+    },
+    {
+      "id": "T72",
+      "title": "注釈の内容（/Contents・/RC・件名）",
+      "plan": "○"
+    },
+    {
+      "id": "T73",
+      "title": "隠しの印の注釈（Hidden・NoView）",
+      "plan": "○"
+    },
+    {
+      "id": "T74",
+      "title": "注釈の見た目（/AP）の中だけにある字",
+      "plan": "○"
+    },
+    {
+      "id": "T75",
+      "title": "添付ファイル（名前の木・注釈・/AF）",
+      "plan": "○"
+    },
+    {
+      "id": "T76",
+      "title": "どこからも指されていない添付",
+      "plan": "○"
+    },
+    {
+      "id": "T77",
+      "title": "添付の中身の検査",
+      "plan": "○"
+    },
+    {
+      "id": "T78",
+      "title": "PDF の中の写真の EXIF の位置情報",
+      "plan": "○"
+    },
+    {
+      "id": "T79",
+      "title": "写真の機種・撮影者・ソフト・撮影日時",
+      "plan": "○"
+    },
+    {
+      "id": "T80",
+      "title": "EXIF の古い縮小画像",
+      "plan": "○"
+    },
+    {
+      "id": "T81",
+      "title": "工事写真の電子小黒板",
+      "plan": "○"
+    },
+    {
+      "id": "T82",
+      "title": "ページの外に置いた画像",
+      "plan": "○"
+    },
+    {
+      "id": "T83",
+      "title": "切り抜きで大部分を隠した画像",
+      "plan": "○"
+    },
+    {
+      "id": "T84",
+      "title": "フォームの値",
+      "plan": "○"
+    },
+    {
+      "id": "T85",
+      "title": "ウィジェットの無い欄・隠したウィジェットの値",
+      "plan": "○"
+    },
+    {
+      "id": "T86",
+      "title": "XFA のフォーム",
+      "plan": "知"
+    },
+    {
+      "id": "T87",
+      "title": "文書の JavaScript",
+      "plan": "○"
+    },
+    {
+      "id": "T88",
+      "title": "開いたときの動作・/AA・外のプログラムの起動",
+      "plan": "○"
+    },
+    {
+      "id": "T89",
+      "title": "リンク（URL を開く動作）・フォームの送信先",
+      "plan": "△"
+    },
+    {
+      "id": "T90",
+      "title": "パスワードなしで開ける暗号化（ほどいて中まで調べる）",
+      "plan": "○"
+    },
+    {
+      "id": "T91",
+      "title": "パスワードが要る暗号化を「調べられない」と出す",
+      "plan": "○"
+    },
+    {
+      "id": "T92",
+      "title": "電子署名の署名者名を知らせる",
+      "plan": "○（知らせるだけ）"
+    },
+    {
+      "id": "T93",
+      "title": "埋め込みの検索用インデックス",
+      "plan": "外"
+    },
+    {
+      "id": "T94",
+      "title": "C2PA（来歴の情報）",
+      "plan": "知"
+    },
+    {
+      "id": "T95",
+      "title": "見える文字の中の個人情報",
+      "plan": "○"
+    },
+    {
+      "id": "T96",
+      "title": "画像の中の個人情報",
+      "plan": "外"
+    },
+    {
+      "id": "T97",
+      "title": "写真のファイル（JPEG・PNG・WebP）の EXIF",
+      "plan": "△（PDF でない）"
+    },
+    {
+      "id": "T98",
+      "title": "今の Office の変更履歴など",
+      "plan": "△（PDF でない）"
+    },
+    {
+      "id": "T99",
+      "title": "古い Office・一太郎・HWP",
+      "plan": "外"
+    },
+    {
+      "id": "F01",
+      "title": "Word の「ハイブリッド xref」を前の版と誤らない",
+      "plan": "○"
+    },
+    {
+      "id": "F02",
+      "title": "黒い帯の上の白い見出しを白い字と誤らない",
+      "plan": "○"
+    },
+    {
+      "id": "F03",
+      "title": "作成日などの数字をカード番号と誤らない",
+      "plan": "○"
+    },
+    {
+      "id": "F04",
+      "title": "使われていないフォントの部品を前の版と誤らない",
+      "plan": "○"
+    },
+    {
+      "id": "F05",
+      "title": "輪郭の見える、塗りが透明な字を見えない字と誤らない",
+      "plan": "○"
+    },
+    {
+      "id": "F06",
+      "title": "帯の下の字を帯の上に同じに描き直したものを誤らない",
+      "plan": "○"
+    },
+    {
+      "id": "F07",
+      "title": "太字の2度描き・合字・素直な ActualText を誤らない",
+      "plan": "○"
+    }
+  ],
+  "skipped": [
+    {
+      "id": "T10",
+      "why": "予定が「外」"
+    },
+    {
+      "id": "T93",
+      "why": "予定が「外」"
+    },
+    {
+      "id": "T96",
+      "why": "予定が「外」"
+    },
+    {
+      "id": "T99",
+      "why": "予定が「外」（PDF でもない）"
+    },
+    {
+      "id": "T97",
+      "why": "PDF でない（写真のファイル）。この集は PDF の型だけ"
+    },
+    {
+      "id": "T98",
+      "why": "PDF でない（Office のファイル）。この集は PDF の型だけ"
+    },
+    {
+      "id": "T21",
+      "why": "画面の機能（押したときだけ前の版の字を見せる）で、PDF の型ではない。RULES の結果には中身を入れない決まりなので、結果から合否を決められない。案：画面のテストで、T14 の PDF を入れて「見せる」を押したときだけ字の数が出ることを見る"
+    },
+    {
+      "id": "T81",
+      "why": "電子小黒板の情報が写真のどこに、どの形で入るか（EXIF の独自の欄か、XMP か、別の区画か）が説明だけでは決まらない。案：仕様の一次情報を本人が確かめ、その形の架空の値を JPEG に入れて T79 と同じ作りで足す"
+    }
+  ],
+  "cases": [
+    {
+      "id": "t01-a-author",
+      "type": "T01",
+      "kind": "leak",
+      "about": "Author に架空の個人名（ASCII）",
+      "file": "pdf/t01-a-author.pdf",
+      "expect": {
+        "patterns": [
+          "P1"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI01A"
+        ]
+      }
+    },
+    {
+      "id": "t01-b-utf16",
+      "type": "T01",
+      "kind": "leak",
+      "about": "Title・Subject・Keywords に、架空の名前を UTF-16 で",
+      "file": "pdf/t01-b-utf16.pdf",
+      "expect": {
+        "patterns": [
+          "P1"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI01B"
+        ]
+      }
+    },
+    {
+      "id": "t01-ctl-dates",
+      "type": "T01",
+      "kind": "control",
+      "about": "Info に日付だけ",
+      "file": "pdf/t01-ctl-dates.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t02-a-company",
+      "type": "T02",
+      "kind": "leak",
+      "about": "独自の欄 Company・Manager に架空の社名と人名",
+      "file": "pdf/t02-a-company.pdf",
+      "expect": {
+        "patterns": [
+          "P1"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI02A"
+        ]
+      }
+    },
+    {
+      "id": "t02-b-sourcefile",
+      "type": "T02",
+      "kind": "leak",
+      "about": "独自の欄 SourceModified・Owner に人名",
+      "file": "pdf/t02-b-sourcefile.pdf",
+      "expect": {
+        "patterns": [
+          "P1"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI02B"
+        ]
+      }
+    },
+    {
+      "id": "t02-ctl-trapped",
+      "type": "T02",
+      "kind": "control",
+      "about": "Info に日付と Trapped だけ",
+      "file": "pdf/t02-ctl-trapped.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t03-a-old-author",
+      "type": "T03",
+      "kind": "leak",
+      "about": "前の版の Info に作成者名。新しい版の Info では消した",
+      "file": "pdf/t03-a-old-author.pdf",
+      "expect": {
+        "patterns": [
+          "P1",
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI03A"
+        ]
+      }
+    },
+    {
+      "id": "t03-ctl-dates-only",
+      "type": "T03",
+      "kind": "control",
+      "about": "前の版も新しい版も Info は日付だけ（増分更新で ModDate を変えた）",
+      "file": "pdf/t03-ctl-dates-only.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t04-a-sjis-author",
+      "type": "T04",
+      "kind": "leak",
+      "about": "Author を Shift_JIS のバイト列のまま（16進）で",
+      "file": "pdf/t04-a-sjis-author.pdf",
+      "expect": {
+        "patterns": [
+          "P1"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI04A"
+        ]
+      }
+    },
+    {
+      "id": "t04-b-sjis-literal",
+      "type": "T04",
+      "kind": "leak",
+      "about": "Title を Shift_JIS のバイト列のまま（リテラル）で",
+      "file": "pdf/t04-b-sjis-literal.pdf",
+      "expect": {
+        "patterns": [
+          "P1"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI04B"
+        ]
+      }
+    },
+    {
+      "id": "t04-ctl-sjis-generic",
+      "type": "T04",
+      "kind": "control",
+      "about": "Subject に Shift_JIS で「会議」だけ（人名なし）",
+      "file": "pdf/t04-ctl-sjis-generic.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t05-a-creator-differs",
+      "type": "T05",
+      "kind": "leak",
+      "about": "Info の作成者は課の名前、XMP の dc:creator は個人名",
+      "file": "pdf/t05-a-creator-differs.pdf",
+      "expect": {
+        "patterns": [
+          "P2"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI05A"
+        ]
+      }
+    },
+    {
+      "id": "t05-b-title-differs",
+      "type": "T05",
+      "kind": "leak",
+      "about": "Info の題は新しく、XMP の dc:title に古い題（人名入り）",
+      "file": "pdf/t05-b-title-differs.pdf",
+      "expect": {
+        "patterns": [
+          "P2"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI05B"
+        ]
+      }
+    },
+    {
+      "id": "t05-ctl-agree",
+      "type": "T05",
+      "kind": "control",
+      "about": "Info と XMP の題が同じで、人名なし",
+      "file": "pdf/t05-ctl-agree.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t06-a-dc-creator",
+      "type": "T06",
+      "kind": "leak",
+      "about": "XMP の dc:creator に個人名",
+      "file": "pdf/t06-a-dc-creator.pdf",
+      "expect": {
+        "patterns": [
+          "P2"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI06A"
+        ]
+      }
+    },
+    {
+      "id": "t06-b-history",
+      "type": "T06",
+      "kind": "leak",
+      "about": "XMP の xmpMM:History に、編集した人の名前と保存の記録",
+      "file": "pdf/t06-b-history.pdf",
+      "expect": {
+        "patterns": [
+          "P2"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI06B"
+        ]
+      }
+    },
+    {
+      "id": "t06-ctl-tool-only",
+      "type": "T06",
+      "kind": "control",
+      "about": "XMP に作成ソフトと日付だけ",
+      "file": "pdf/t06-ctl-tool-only.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t07-a-flate-xmp",
+      "type": "T07",
+      "kind": "leak",
+      "about": "Flate で圧縮した XMP の dc:creator に個人名",
+      "file": "pdf/t07-a-flate-xmp.pdf",
+      "expect": {
+        "patterns": [
+          "P2"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI07A"
+        ]
+      }
+    },
+    {
+      "id": "t07-ctl-flate-tool",
+      "type": "T07",
+      "kind": "control",
+      "about": "Flate で圧縮した XMP に作成ソフトだけ",
+      "file": "pdf/t07-ctl-flate-tool.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t08-a-image-xmp",
+      "type": "T08",
+      "kind": "leak",
+      "about": "画像に付いた XMP の dc:creator に個人名",
+      "file": "pdf/t08-a-image-xmp.pdf",
+      "expect": {
+        "patterns": [
+          "P2"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI08A"
+        ]
+      }
+    },
+    {
+      "id": "t08-b-form-xmp",
+      "type": "T08",
+      "kind": "leak",
+      "about": "部品（Form XObject）に付いた XMP の履歴に、元のファイルのパス",
+      "file": "pdf/t08-b-form-xmp.pdf",
+      "expect": {
+        "patterns": [
+          "P2",
+          "P4"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "kakushi08b"
+        ]
+      }
+    },
+    {
+      "id": "t08-ctl-image-xmp-format",
+      "type": "T08",
+      "kind": "control",
+      "about": "画像に付いた XMP に、画像の形式と大きさだけ",
+      "file": "pdf/t08-ctl-image-xmp-format.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t09-a-page-pieceinfo",
+      "type": "T09",
+      "kind": "leak",
+      "about": "ページの /PieceInfo に、編集用データ（利用者名・パス入り）",
+      "file": "pdf/t09-a-page-pieceinfo.pdf",
+      "expect": {
+        "patterns": [
+          "P2",
+          "P4"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI09A"
+        ]
+      }
+    },
+    {
+      "id": "t09-b-catalog-pieceinfo",
+      "type": "T09",
+      "kind": "leak",
+      "about": "文書の /PieceInfo に、アプリの私的データ（人名入り）",
+      "file": "pdf/t09-b-catalog-pieceinfo.pdf",
+      "expect": {
+        "patterns": [
+          "P2",
+          "P4"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI09B"
+        ]
+      }
+    },
+    {
+      "id": "t09-ctl-pieceinfo-date",
+      "type": "T09",
+      "kind": "control",
+      "about": "ページの /PieceInfo に、日付だけ（私的データは空）",
+      "file": "pdf/t09-ctl-pieceinfo-date.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t11-a-other-org-title",
+      "type": "T11",
+      "kind": "leak",
+      "about": "Title に別の架空の団体名。本文は別の架空の団体",
+      "file": "pdf/t11-a-other-org-title.pdf",
+      "expect": {
+        "patterns": [
+          "P3"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI11A"
+        ]
+      }
+    },
+    {
+      "id": "t11-ctl-same-org",
+      "type": "T11",
+      "kind": "control",
+      "about": "Title と本文が同じ架空の団体名",
+      "file": "pdf/t11-ctl-same-org.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t12-a-path-in-title",
+      "type": "T12",
+      "kind": "leak",
+      "about": "Title に C:\\Users\\… のパス",
+      "file": "pdf/t12-a-path-in-title.pdf",
+      "expect": {
+        "patterns": [
+          "P4"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "kakushi12a"
+        ]
+      }
+    },
+    {
+      "id": "t12-b-unc-in-xmp",
+      "type": "T12",
+      "kind": "leak",
+      "about": "XMP の DerivedFrom に \\\\サーバー\\… のパス",
+      "file": "pdf/t12-b-unc-in-xmp.pdf",
+      "expect": {
+        "patterns": [
+          "P4"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "kakushi12b"
+        ]
+      }
+    },
+    {
+      "id": "t12-ctl-slashes",
+      "type": "T12",
+      "kind": "control",
+      "about": "Title に、パスでない記号（2026/2027・A:B・3\\4）",
+      "file": "pdf/t12-ctl-slashes.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t13-a-unc-in-body",
+      "type": "T13",
+      "kind": "leak",
+      "about": "本文の見える字に \\\\サーバー\\… のパス",
+      "file": "pdf/t13-a-unc-in-body.pdf",
+      "expect": {
+        "patterns": [
+          "P4"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t13-b-path-in-annot",
+      "type": "T13",
+      "kind": "leak",
+      "about": "付箋の注釈の中身に C:\\Users\\… のパス",
+      "file": "pdf/t13-b-path-in-annot.pdf",
+      "expect": {
+        "patterns": [
+          "P4"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "kakushi13b"
+        ]
+      }
+    },
+    {
+      "id": "t13-c-file-link",
+      "type": "T13",
+      "kind": "leak",
+      "about": "リンクの行き先が file:///C:/Users/…",
+      "file": "pdf/t13-c-file-link.pdf",
+      "expect": {
+        "patterns": [
+          "P4"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "kakushi13c"
+        ]
+      }
+    },
+    {
+      "id": "t13-ctl-web-link",
+      "type": "T13",
+      "kind": "control",
+      "about": "本文に「A/B」「C\\D」、リンクは https の公開の場所",
+      "file": "pdf/t13-ctl-web-link.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t14-a-incremental",
+      "type": "T14",
+      "kind": "leak",
+      "about": "増分更新で、ページの中身（金額と名前）を差し替えた。前の版が残る",
+      "file": "pdf/t14-a-incremental.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI14A"
+        ]
+      }
+    },
+    {
+      "id": "t14-b-incremental-xrefstm",
+      "type": "T14",
+      "kind": "leak",
+      "about": "xref ストリームの文書に、xref ストリームで増分更新（前の版が残る）",
+      "file": "pdf/t14-b-incremental-xrefstm.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI14B"
+        ]
+      }
+    },
+    {
+      "id": "t14-ctl-added-page",
+      "type": "T14",
+      "kind": "control",
+      "about": "増分更新でページを1枚足しただけ（前の版の中身は今の版にもある）",
+      "file": "pdf/t14-ctl-added-page.pdf",
+      "expect": {
+        "forbid": [
+          "P5",
+          "P6",
+          "P7",
+          "P1",
+          "P9"
+        ]
+      },
+      "residual": null
+    },
+    {
+      "id": "t15-a-after-eof",
+      "type": "T15",
+      "kind": "leak",
+      "about": "%%EOF のあとに、xref に載らないオブジェクト（古い字）",
+      "file": "pdf/t15-a-after-eof.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI15A"
+        ]
+      }
+    },
+    {
+      "id": "t15-ctl-trailing-space",
+      "type": "T15",
+      "kind": "control",
+      "about": "%%EOF のあとに、改行と空白だけ",
+      "file": "pdf/t15-ctl-trailing-space.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t16-a-orphan-stream",
+      "type": "T16",
+      "kind": "leak",
+      "about": "どこからも指されていない、字を描く中身のストリーム（xref には載る）",
+      "file": "pdf/t16-a-orphan-stream.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI16A"
+        ]
+      }
+    },
+    {
+      "id": "t16-b-orphan-flate",
+      "type": "T16",
+      "kind": "leak",
+      "about": "どこからも指されていない、Flate で圧縮した中身のストリーム",
+      "file": "pdf/t16-b-orphan-flate.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI16B"
+        ]
+      }
+    },
+    {
+      "id": "t16-ctl-free-entries",
+      "type": "T16",
+      "kind": "control",
+      "about": "xref に空き（f）の番号があるだけ",
+      "file": "pdf/t16-ctl-free-entries.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t17-a-detached-page",
+      "type": "T17",
+      "kind": "leak",
+      "about": "ページの木から外したページ（オブジェクトは残る）",
+      "file": "pdf/t17-a-detached-page.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI17A"
+        ]
+      }
+    },
+    {
+      "id": "t17-ctl-two-pages",
+      "type": "T17",
+      "kind": "control",
+      "about": "2ページとも木にある",
+      "file": "pdf/t17-ctl-two-pages.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t18-a-objstm-orphan",
+      "type": "T18",
+      "kind": "leak",
+      "about": "オブジェクトストリームの中に、どこからも指されていない辞書（古い字）",
+      "file": "pdf/t18-a-objstm-orphan.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI18A"
+        ]
+      }
+    },
+    {
+      "id": "t18-ctl-objstm-all-used",
+      "type": "T18",
+      "kind": "control",
+      "about": "オブジェクトストリームの中は、すべて指されている",
+      "file": "pdf/t18-ctl-objstm-all-used.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t19-a-unused-form",
+      "type": "T19",
+      "kind": "leak",
+      "about": "ページの資源にあるが Do で描かれない部品（字が入っている）",
+      "file": "pdf/t19-a-unused-form.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI19A"
+        ]
+      }
+    },
+    {
+      "id": "t19-ctl-used-form",
+      "type": "T19",
+      "kind": "control",
+      "about": "部品を Do で描いている",
+      "file": "pdf/t19-ctl-used-form.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t20-a-old-thumb",
+      "type": "T20",
+      "kind": "leak",
+      "about": "ページの縮小画像に、今のページにない字の模様（前のページ）",
+      "file": "pdf/t20-a-old-thumb.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "/Thumb"
+        ]
+      }
+    },
+    {
+      "id": "t20-ctl-same-thumb",
+      "type": "T20",
+      "kind": "control",
+      "about": "縮小画像が、今のページ（スキャンの画像）を縮めたもの",
+      "file": "pdf/t20-ctl-same-thumb.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t22-a-old-phone",
+      "type": "T22",
+      "kind": "leak",
+      "about": "前の版のページに電話番号と名前。新しい版では消した",
+      "file": "pdf/t22-a-old-phone.pdf",
+      "expect": {
+        "patterns": [
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI22A"
+        ]
+      }
+    },
+    {
+      "id": "t22-ctl-old-date-only",
+      "type": "T22",
+      "kind": "control",
+      "about": "前の版と今の版の違いは日付だけ（個人情報なし）。前の版があること（P5）は出てよい",
+      "file": "pdf/t22-ctl-old-date-only.pdf",
+      "expect": {
+        "forbid": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "P12"
+        ]
+      },
+      "residual": null
+    },
+    {
+      "id": "t23-a-black-rect",
+      "type": "T23",
+      "kind": "leak",
+      "about": "字の上に黒い四角（rg・re f）",
+      "file": "pdf/t23-a-black-rect.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI23A"
+        ]
+      }
+    },
+    {
+      "id": "t23-b-path-rect",
+      "type": "T23",
+      "kind": "leak",
+      "about": "字の上に黒い四角（m・l の道で描く）",
+      "file": "pdf/t23-b-path-rect.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI23B"
+        ]
+      }
+    },
+    {
+      "id": "t23-c-tj-kerning",
+      "type": "T23",
+      "kind": "leak",
+      "about": "TJ の字送りつきの字の上に黒い四角",
+      "file": "pdf/t23-c-tj-kerning.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI23C"
+        ]
+      }
+    },
+    {
+      "id": "t23-ctl-bar-apart",
+      "type": "T23",
+      "kind": "control",
+      "about": "黒い帯があるが、字とは離れている",
+      "file": "pdf/t23-ctl-bar-apart.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t24-a-cmyk-k",
+      "type": "T24",
+      "kind": "leak",
+      "about": "CMYK の黒（0 0 0 1 k）の四角",
+      "file": "pdf/t24-a-cmyk-k.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI24A"
+        ]
+      }
+    },
+    {
+      "id": "t24-b-dark-navy",
+      "type": "T24",
+      "kind": "leak",
+      "about": "ごく濃い紺（0.1 0.1 0.2 rg）の四角",
+      "file": "pdf/t24-b-dark-navy.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI24B"
+        ]
+      }
+    },
+    {
+      "id": "t24-c-rich-black",
+      "type": "T24",
+      "kind": "leak",
+      "about": "CMYK のリッチブラック（0.6 0.5 0.5 1 k）",
+      "file": "pdf/t24-c-rich-black.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI24C"
+        ]
+      }
+    },
+    {
+      "id": "t24-ctl-dark-adjacent",
+      "type": "T24",
+      "kind": "control",
+      "about": "濃い色の四角が、字のすぐ右（重ならない）",
+      "file": "pdf/t24-ctl-dark-adjacent.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t25-a-cid",
+      "type": "T25",
+      "kind": "leak",
+      "about": "日本語（CID 書体）の字の上に黒い四角",
+      "file": "pdf/t25-a-cid.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI25A"
+        ]
+      }
+    },
+    {
+      "id": "t25-b-cid-partial",
+      "type": "T25",
+      "kind": "leak",
+      "about": "日本語の字の並びの後ろ半分だけに黒い四角",
+      "file": "pdf/t25-b-cid-partial.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t25-ctl-cid-underline",
+      "type": "T25",
+      "kind": "control",
+      "about": "日本語の字の下に、細い黒い下線",
+      "file": "pdf/t25-ctl-cid-underline.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t26-a-ellipse",
+      "type": "T26",
+      "kind": "leak",
+      "about": "字の上に黒い楕円",
+      "file": "pdf/t26-a-ellipse.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI26A"
+        ]
+      }
+    },
+    {
+      "id": "t26-b-rotated",
+      "type": "T26",
+      "kind": "leak",
+      "about": "字の上に、cm で少し回した黒い四角",
+      "file": "pdf/t26-b-rotated.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI26B"
+        ]
+      }
+    },
+    {
+      "id": "t26-c-thick-line",
+      "type": "T26",
+      "kind": "leak",
+      "about": "字の上に、太さ 16 の黒い線",
+      "file": "pdf/t26-c-thick-line.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI26C"
+        ]
+      }
+    },
+    {
+      "id": "t26-ctl-frame",
+      "type": "T26",
+      "kind": "control",
+      "about": "字を、細い黒い枠（線 1、塗りなし）で囲む",
+      "file": "pdf/t26-ctl-frame.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t27-a-black-image",
+      "type": "T27",
+      "kind": "leak",
+      "about": "字の上に黒い画像（Flate）を貼る",
+      "file": "pdf/t27-a-black-image.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI27A"
+        ]
+      }
+    },
+    {
+      "id": "t27-b-black-jpeg",
+      "type": "T27",
+      "kind": "leak",
+      "about": "字の上に黒い画像（JPEG）を貼る",
+      "file": "pdf/t27-b-black-jpeg.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI27B"
+        ]
+      }
+    },
+    {
+      "id": "t27-ctl-image-beside",
+      "type": "T27",
+      "kind": "control",
+      "about": "黒い画像が、字の横（重ならない）",
+      "file": "pdf/t27-ctl-image-beside.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t28-a-square-ap",
+      "type": "T28",
+      "kind": "leak",
+      "about": "字の上に、黒く塗った Square の注釈（見た目あり）",
+      "file": "pdf/t28-a-square-ap.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI28A"
+        ]
+      }
+    },
+    {
+      "id": "t28-b-square-noap",
+      "type": "T28",
+      "kind": "leak",
+      "about": "字の上に、塗りの色が黒の Square の注釈（見た目なし）",
+      "file": "pdf/t28-b-square-noap.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI28B"
+        ]
+      }
+    },
+    {
+      "id": "t28-ctl-square-border",
+      "type": "T28",
+      "kind": "control",
+      "about": "字を、枠だけの Square の注釈で囲む（塗りなし）",
+      "file": "pdf/t28-ctl-square-border.pdf",
+      "expect": {
+        "forbid": [
+          "P6",
+          "P7",
+          "P5",
+          "P1"
+        ]
+      },
+      "residual": null
+    },
+    {
+      "id": "t29-a-redact-annot",
+      "type": "T29",
+      "kind": "leak",
+      "about": "字の上に、まだ適用していない墨消し注釈",
+      "file": "pdf/t29-a-redact-annot.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI29A"
+        ]
+      }
+    },
+    {
+      "id": "t29-ctl-redact-empty",
+      "type": "T29",
+      "kind": "control",
+      "about": "字のない所に、未適用の墨消し注釈",
+      "file": "pdf/t29-ctl-redact-empty.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t30-a-band-same-gray",
+      "type": "T30",
+      "kind": "leak",
+      "about": "濃い灰の帯を先に描き、その上に同じ灰の字",
+      "file": "pdf/t30-a-band-same-gray.pdf",
+      "expect": {
+        "patterns": [
+          "P6",
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI30A"
+        ]
+      }
+    },
+    {
+      "id": "t30-b-band-black",
+      "type": "T30",
+      "kind": "leak",
+      "about": "黒い帯を先に描き、その上に黒い字",
+      "file": "pdf/t30-b-band-black.pdf",
+      "expect": {
+        "patterns": [
+          "P6",
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI30B"
+        ]
+      }
+    },
+    {
+      "id": "t30-ctl-band-white-text",
+      "type": "T30",
+      "kind": "control",
+      "about": "濃い灰の帯の上に白い字（読める）",
+      "file": "pdf/t30-ctl-band-white-text.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t31-a-white-rect",
+      "type": "T31",
+      "kind": "leak",
+      "about": "字の上に白い四角（白で消したつもり）",
+      "file": "pdf/t31-a-white-rect.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI31A"
+        ]
+      }
+    },
+    {
+      "id": "t31-ctl-white-blank",
+      "type": "T31",
+      "kind": "control",
+      "about": "字のない所に白い四角",
+      "file": "pdf/t31-ctl-white-blank.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t32-a-gray",
+      "type": "T32",
+      "kind": "leak",
+      "about": "字の上に不透明な灰の四角",
+      "file": "pdf/t32-a-gray.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI32A"
+        ]
+      }
+    },
+    {
+      "id": "t32-b-red",
+      "type": "T32",
+      "kind": "leak",
+      "about": "字の上に不透明な赤の四角",
+      "file": "pdf/t32-b-red.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI32B"
+        ]
+      }
+    },
+    {
+      "id": "t32-c-blue",
+      "type": "T32",
+      "kind": "leak",
+      "about": "字の上に不透明な青の四角",
+      "file": "pdf/t32-c-blue.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI32C"
+        ]
+      }
+    },
+    {
+      "id": "t32-ctl-color-under",
+      "type": "T32",
+      "kind": "control",
+      "about": "色の四角を先に描き、その上に字（読める）",
+      "file": "pdf/t32-ctl-color-under.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t33-a-dark-alpha",
+      "type": "T33",
+      "kind": "leak",
+      "about": "字の上に、不透明さ 0.95 の黒い四角",
+      "file": "pdf/t33-a-dark-alpha.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI33A"
+        ]
+      }
+    },
+    {
+      "id": "t33-b-black-highlight",
+      "type": "T33",
+      "kind": "leak",
+      "about": "字の上に、黒い蛍光ペン（Highlight の注釈、色は黒）",
+      "file": "pdf/t33-b-black-highlight.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI33B"
+        ]
+      }
+    },
+    {
+      "id": "t33-ctl-yellow-alpha",
+      "type": "T33",
+      "kind": "control",
+      "about": "字の上に、不透明さ 0.35 の黄色の四角（読める）",
+      "file": "pdf/t33-ctl-yellow-alpha.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t34-a-white-square-annot",
+      "type": "T34",
+      "kind": "leak",
+      "about": "字の上に、白く塗った Square の注釈",
+      "file": "pdf/t34-a-white-square-annot.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI34A"
+        ]
+      }
+    },
+    {
+      "id": "t34-ctl-white-annot-blank",
+      "type": "T34",
+      "kind": "control",
+      "about": "字のない所に、白く塗った Square の注釈",
+      "file": "pdf/t34-ctl-white-annot-blank.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t35-a-middle-word",
+      "type": "T35",
+      "kind": "leak",
+      "about": "行の真ん中の1語だけを黒い四角で覆う",
+      "file": "pdf/t35-a-middle-word.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI35A"
+        ]
+      }
+    },
+    {
+      "id": "t35-b-half-chars",
+      "type": "T35",
+      "kind": "leak",
+      "about": "語の後ろ半分の字だけを覆う",
+      "file": "pdf/t35-b-half-chars.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t35-ctl-after-line",
+      "type": "T35",
+      "kind": "control",
+      "about": "行の終わりのすぐ後ろ（字のない所）に黒い四角",
+      "file": "pdf/t35-ctl-after-line.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t36-a-text-in-form",
+      "type": "T36",
+      "kind": "leak",
+      "about": "部品の中の字を、ページの黒い四角で覆う",
+      "file": "pdf/t36-a-text-in-form.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI36A"
+        ]
+      }
+    },
+    {
+      "id": "t36-b-cover-in-form",
+      "type": "T36",
+      "kind": "leak",
+      "about": "ページの字を、部品の中の黒い四角で覆う",
+      "file": "pdf/t36-b-cover-in-form.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI36B"
+        ]
+      }
+    },
+    {
+      "id": "t36-ctl-form-apart",
+      "type": "T36",
+      "kind": "control",
+      "about": "部品の中に字、黒い四角は離れた所",
+      "file": "pdf/t36-ctl-form-apart.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t37-a-white-then-text",
+      "type": "T37",
+      "kind": "leak",
+      "about": "隠したい字の上に白い四角、その上に別の見える字",
+      "file": "pdf/t37-a-white-then-text.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI37A"
+        ]
+      }
+    },
+    {
+      "id": "t37-b-black-then-label",
+      "type": "T37",
+      "kind": "leak",
+      "about": "黒い四角の上に、白い字で「REDACTED」",
+      "file": "pdf/t37-b-black-then-label.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI37B"
+        ]
+      }
+    },
+    {
+      "id": "t37-ctl-label-box",
+      "type": "T37",
+      "kind": "control",
+      "about": "白い札の上に字（札の下には何もない）",
+      "file": "pdf/t37-ctl-label-box.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t38-a-vertical",
+      "type": "T38",
+      "kind": "leak",
+      "about": "縦書き（Identity-V）の日本語の字の上に黒い四角",
+      "file": "pdf/t38-a-vertical.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI38A"
+        ]
+      }
+    },
+    {
+      "id": "t38-ctl-vertical-beside",
+      "type": "T38",
+      "kind": "control",
+      "about": "縦書きの字の横に黒い四角（重ならない）",
+      "file": "pdf/t38-ctl-vertical-beside.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t39-a-scan-ocr-cover",
+      "type": "T39",
+      "kind": "leak",
+      "about": "スキャン画像＋見えない文字認識の層、その上に黒い四角",
+      "file": "pdf/t39-a-scan-ocr-cover.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI39A"
+        ],
+        "image": {
+          "w": 400,
+          "h": 200,
+          "region": {
+            "x": 40,
+            "y": 60,
+            "w": 150,
+            "h": 30
+          }
+        }
+      }
+    },
+    {
+      "id": "t39-b-scan-ocr-cover-form",
+      "type": "T39",
+      "kind": "leak",
+      "about": "スキャン＋文字認識の層、覆いは部品の中の黒い四角",
+      "file": "pdf/t39-b-scan-ocr-cover-form.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI39B"
+        ],
+        "image": {
+          "w": 400,
+          "h": 200,
+          "region": {
+            "x": 40,
+            "y": 60,
+            "w": 150,
+            "h": 30
+          }
+        }
+      }
+    },
+    {
+      "id": "t39-ctl-scan-ocr-beside",
+      "type": "T39",
+      "kind": "control",
+      "about": "スキャン＋文字認識の層。黒い四角は画像の外",
+      "file": "pdf/t39-ctl-scan-ocr-beside.pdf",
+      "expect": {
+        "forbid": [
+          "P6"
+        ]
+      },
+      "residual": null
+    },
+    {
+      "id": "t40-a-scan-cover",
+      "type": "T40",
+      "kind": "leak",
+      "about": "スキャン画像の上に黒い四角（文字の層なし）",
+      "file": "pdf/t40-a-scan-cover.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "image": {
+          "w": 400,
+          "h": 200,
+          "region": {
+            "x": 40,
+            "y": 60,
+            "w": 150,
+            "h": 30
+          }
+        }
+      }
+    },
+    {
+      "id": "t40-ctl-scan-burned",
+      "type": "T40",
+      "kind": "control",
+      "about": "スキャン画像の覆う所が、画素ごと黒く塗ってある（正しい墨消し）＋黒い四角",
+      "file": "pdf/t40-ctl-scan-burned.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t41-a-scan-square",
+      "type": "T41",
+      "kind": "leak",
+      "about": "スキャン画像の上に、黒い Square の注釈",
+      "file": "pdf/t41-a-scan-square.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "image": {
+          "w": 400,
+          "h": 200,
+          "region": {
+            "x": 40,
+            "y": 60,
+            "w": 150,
+            "h": 30
+          }
+        }
+      }
+    },
+    {
+      "id": "t41-ctl-scan-burned-square",
+      "type": "T41",
+      "kind": "control",
+      "about": "画素ごと黒く塗ったスキャン＋その上の黒い Square の注釈",
+      "file": "pdf/t41-ctl-scan-burned-square.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t42-a-scan-redact",
+      "type": "T42",
+      "kind": "leak",
+      "about": "スキャン画像の上に、未適用の墨消し注釈",
+      "file": "pdf/t42-a-scan-redact.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "image": {
+          "w": 400,
+          "h": 200,
+          "region": {
+            "x": 40,
+            "y": 60,
+            "w": 150,
+            "h": 30
+          }
+        }
+      }
+    },
+    {
+      "id": "t42-ctl-scan-applied",
+      "type": "T42",
+      "kind": "control",
+      "about": "墨消しを適用したあと（画素は黒、黒い四角をページに描いた）",
+      "file": "pdf/t42-ctl-scan-applied.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t43-a-image-white-rect",
+      "type": "T43",
+      "kind": "leak",
+      "about": "画像（字の模様あり）の上に白い四角",
+      "file": "pdf/t43-a-image-white-rect.pdf",
+      "expect": {
+        "patterns": [
+          "P6"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "image": {
+          "w": 400,
+          "h": 200,
+          "region": {
+            "x": 40,
+            "y": 60,
+            "w": 150,
+            "h": 30
+          }
+        }
+      }
+    },
+    {
+      "id": "t43-ctl-white-margin",
+      "type": "T43",
+      "kind": "control",
+      "about": "画像の外（余白）に白い四角",
+      "file": "pdf/t43-ctl-white-margin.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t44-a-photo-over-text",
+      "type": "T44",
+      "kind": "leak",
+      "about": "字を描いたあと、明るい写真（JPEG）をその上に置く",
+      "file": "pdf/t44-a-photo-over-text.pdf",
+      "expect": {
+        "patterns": [
+          "P6",
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI44A"
+        ]
+      }
+    },
+    {
+      "id": "t44-b-light-gray-image",
+      "type": "T44",
+      "kind": "leak",
+      "about": "字を描いたあと、明るい灰の画像（Flate）で覆う",
+      "file": "pdf/t44-b-light-gray-image.pdf",
+      "expect": {
+        "patterns": [
+          "P6",
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI44B"
+        ]
+      }
+    },
+    {
+      "id": "t44-ctl-caption-on-photo",
+      "type": "T44",
+      "kind": "control",
+      "about": "写真を置いたあと、その上に見える字（説明）",
+      "file": "pdf/t44-ctl-caption-on-photo.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t45-a-white-gray",
+      "type": "T45",
+      "kind": "leak",
+      "about": "白い紙に白い字（1 g）",
+      "file": "pdf/t45-a-white-gray.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI45A"
+        ]
+      }
+    },
+    {
+      "id": "t45-b-white-cmyk",
+      "type": "T45",
+      "kind": "leak",
+      "about": "白い紙に白い字（0 0 0 0 k）",
+      "file": "pdf/t45-b-white-cmyk.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI45B"
+        ]
+      }
+    },
+    {
+      "id": "t45-ctl-white-on-band",
+      "type": "T45",
+      "kind": "control",
+      "about": "黒い帯の上の白い字（読める）",
+      "file": "pdf/t45-ctl-white-on-band.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t46-a-blue-on-blue",
+      "type": "T46",
+      "kind": "leak",
+      "about": "青い四角の上に、同じ青の字",
+      "file": "pdf/t46-a-blue-on-blue.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI46A"
+        ]
+      }
+    },
+    {
+      "id": "t46-ctl-yellow-on-blue",
+      "type": "T46",
+      "kind": "control",
+      "about": "青い四角の上に、黄色の字（読める）",
+      "file": "pdf/t46-ctl-yellow-on-blue.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t47-a-very-light-gray",
+      "type": "T47",
+      "kind": "leak",
+      "about": "ごく薄い灰の字（0.97 g）",
+      "file": "pdf/t47-a-very-light-gray.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI47A"
+        ]
+      }
+    },
+    {
+      "id": "t47-b-very-light-rgb",
+      "type": "T47",
+      "kind": "leak",
+      "about": "ごく薄い色の字（0.96 0.97 0.98 rg）",
+      "file": "pdf/t47-b-very-light-rgb.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI47B"
+        ]
+      }
+    },
+    {
+      "id": "t47-ctl-gray-footer",
+      "type": "T47",
+      "kind": "control",
+      "about": "薄めの灰（0.6 g）の字（読める注記）",
+      "file": "pdf/t47-ctl-gray-footer.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t48-a-tr3",
+      "type": "T48",
+      "kind": "leak",
+      "about": "描画モード 3（描かない）の字。画像の上ではない",
+      "file": "pdf/t48-a-tr3.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI48A"
+        ]
+      }
+    },
+    {
+      "id": "t48-b-tr7",
+      "type": "T48",
+      "kind": "leak",
+      "about": "描画モード 7（切り抜きに足すだけ）の字",
+      "file": "pdf/t48-b-tr7.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI48B"
+        ]
+      }
+    },
+    {
+      "id": "t48-ctl-tr2",
+      "type": "T48",
+      "kind": "control",
+      "about": "描画モード 2（塗りと線）の字（読める）",
+      "file": "pdf/t48-ctl-tr2.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t49-a-alpha0",
+      "type": "T49",
+      "kind": "leak",
+      "about": "不透明さ 0 の字",
+      "file": "pdf/t49-a-alpha0.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI49A"
+        ]
+      }
+    },
+    {
+      "id": "t49-b-alpha002",
+      "type": "T49",
+      "kind": "leak",
+      "about": "不透明さ 0.02 の字",
+      "file": "pdf/t49-b-alpha002.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI49B"
+        ]
+      }
+    },
+    {
+      "id": "t49-ctl-alpha05",
+      "type": "T49",
+      "kind": "control",
+      "about": "不透明さ 0.5 の字（読める）",
+      "file": "pdf/t49-ctl-alpha05.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t50-a-size05",
+      "type": "T50",
+      "kind": "leak",
+      "about": "大きさ 0.5pt の字",
+      "file": "pdf/t50-a-size05.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI50A"
+        ]
+      }
+    },
+    {
+      "id": "t50-b-size01",
+      "type": "T50",
+      "kind": "leak",
+      "about": "大きさ 0.1pt の字",
+      "file": "pdf/t50-b-size01.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI50B"
+        ]
+      }
+    },
+    {
+      "id": "t50-ctl-size4",
+      "type": "T50",
+      "kind": "control",
+      "about": "大きさ 4pt の字（細かい注記）",
+      "file": "pdf/t50-ctl-size4.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t51-a-tm-shrink",
+      "type": "T51",
+      "kind": "leak",
+      "about": "Tf は 12、Tm で 0.01 倍に縮めた字",
+      "file": "pdf/t51-a-tm-shrink.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI51A"
+        ]
+      }
+    },
+    {
+      "id": "t51-b-cm-shrink",
+      "type": "T51",
+      "kind": "leak",
+      "about": "cm で 0.02 倍に縮めた所に置いた字",
+      "file": "pdf/t51-b-cm-shrink.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI51B"
+        ]
+      }
+    },
+    {
+      "id": "t51-ctl-tm-large",
+      "type": "T51",
+      "kind": "control",
+      "about": "Tm で 2 倍に広げた字（大きな見出し）",
+      "file": "pdf/t51-ctl-tm-large.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t52-a-tz0",
+      "type": "T52",
+      "kind": "leak",
+      "about": "横の伸縮 0%（Tz 0）の字",
+      "file": "pdf/t52-a-tz0.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI52A"
+        ]
+      }
+    },
+    {
+      "id": "t52-b-tz1",
+      "type": "T52",
+      "kind": "leak",
+      "about": "横の伸縮 1%（Tz 1）の字",
+      "file": "pdf/t52-b-tz1.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI52B"
+        ]
+      }
+    },
+    {
+      "id": "t52-ctl-tz80",
+      "type": "T52",
+      "kind": "control",
+      "about": "横の伸縮 80%（長体）の字",
+      "file": "pdf/t52-ctl-tz80.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t53-a-left-out",
+      "type": "T53",
+      "kind": "leak",
+      "about": "ページの左の外（x = -500）の字",
+      "file": "pdf/t53-a-left-out.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI53A"
+        ]
+      }
+    },
+    {
+      "id": "t53-b-top-out",
+      "type": "T53",
+      "kind": "leak",
+      "about": "ページの上の外（y = 2000）の字",
+      "file": "pdf/t53-b-top-out.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI53B"
+        ]
+      }
+    },
+    {
+      "id": "t53-ctl-near-edge",
+      "type": "T53",
+      "kind": "control",
+      "about": "ページの端のすぐ内側の字",
+      "file": "pdf/t53-ctl-near-edge.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t54-a-outside-crop",
+      "type": "T54",
+      "kind": "leak",
+      "about": "MediaBox の中、CropBox の外の字",
+      "file": "pdf/t54-a-outside-crop.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI54A"
+        ]
+      }
+    },
+    {
+      "id": "t54-ctl-inside-crop",
+      "type": "T54",
+      "kind": "control",
+      "about": "CropBox のすぐ内側の字",
+      "file": "pdf/t54-ctl-inside-crop.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t55-a-outside-clip",
+      "type": "T55",
+      "kind": "leak",
+      "about": "切り抜き（W n）の外に置いた字",
+      "file": "pdf/t55-a-outside-clip.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI55A"
+        ]
+      }
+    },
+    {
+      "id": "t55-ctl-inside-clip",
+      "type": "T55",
+      "kind": "control",
+      "about": "切り抜きの内側の字",
+      "file": "pdf/t55-ctl-inside-clip.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t56-a-ocg-off",
+      "type": "T56",
+      "kind": "leak",
+      "about": "最初から表示しないレイヤーの字",
+      "file": "pdf/t56-a-ocg-off.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI56A"
+        ]
+      }
+    },
+    {
+      "id": "t56-ctl-ocg-on",
+      "type": "T56",
+      "kind": "control",
+      "about": "表示するレイヤーの字",
+      "file": "pdf/t56-ctl-ocg-on.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t57-a-white-outline",
+      "type": "T57",
+      "kind": "leak",
+      "about": "輪郭だけ（Tr 1）の白い字",
+      "file": "pdf/t57-a-white-outline.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI57A"
+        ]
+      }
+    },
+    {
+      "id": "t57-ctl-black-outline",
+      "type": "T57",
+      "kind": "control",
+      "about": "輪郭だけ（Tr 1）の黒い字（読める）",
+      "file": "pdf/t57-ctl-black-outline.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t58-a-white-per-char",
+      "type": "T58",
+      "kind": "leak",
+      "about": "1文字ずつ別の BT・ET で置いた白い字（1件にまとめてほしい）",
+      "file": "pdf/t58-a-white-per-char.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1,
+        "maxItems": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t58-ctl-black-per-char",
+      "type": "T58",
+      "kind": "control",
+      "about": "1文字ずつ別の命令で置いた黒い字（読める）",
+      "file": "pdf/t58-ctl-black-per-char.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t59-a-flate-white",
+      "type": "T59",
+      "kind": "leak",
+      "about": "Flate で圧縮したページの中身に白い字",
+      "file": "pdf/t59-a-flate-white.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI59A"
+        ]
+      }
+    },
+    {
+      "id": "t59-b-objstm-white",
+      "type": "T59",
+      "kind": "leak",
+      "about": "オブジェクトストリームと xref ストリームの文書、圧縮した中身に白い字",
+      "file": "pdf/t59-b-objstm-white.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI59B"
+        ]
+      }
+    },
+    {
+      "id": "t59-ctl-flate-normal",
+      "type": "T59",
+      "kind": "control",
+      "about": "Flate で圧縮した普通の黒い字",
+      "file": "pdf/t59-ctl-flate-normal.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t60-a-overprint",
+      "type": "T60",
+      "kind": "leak",
+      "about": "同じ所に違う字を2つ重ねて描く",
+      "file": "pdf/t60-a-overprint.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI60A"
+        ]
+      }
+    },
+    {
+      "id": "t60-ctl-bold-double",
+      "type": "T60",
+      "kind": "control",
+      "about": "同じ字を 0.3pt ずらして2度描く（太字）",
+      "file": "pdf/t60-ctl-bold-double.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t61-a-same-color-on-image",
+      "type": "T61",
+      "kind": "leak",
+      "about": "青い画像の上に、画像と同じ青の字",
+      "file": "pdf/t61-a-same-color-on-image.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI61A"
+        ]
+      }
+    },
+    {
+      "id": "t61-ctl-white-on-image",
+      "type": "T61",
+      "kind": "control",
+      "about": "青い画像の上に白い字（読める）",
+      "file": "pdf/t61-ctl-white-on-image.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t62-n-ocr-layer",
+      "type": "T62",
+      "kind": "notice",
+      "about": "スキャン画像の上に、見えない文字認識の層（知らせてほしい）",
+      "file": "pdf/t62-n-ocr-layer.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any"
+      },
+      "residual": null
+    },
+    {
+      "id": "t62-ctl-plain-text",
+      "type": "T62",
+      "kind": "control",
+      "about": "画像なしの普通の字だけ",
+      "file": "pdf/t62-ctl-plain-text.pdf",
+      "expect": {
+        "forbid": null,
+        "forbidNotice": true
+      },
+      "residual": null
+    },
+    {
+      "id": "t63-a-outline-name",
+      "type": "T63",
+      "kind": "leak",
+      "about": "しおりの題に、本文にない名前と電話番号",
+      "file": "pdf/t63-a-outline-name.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI63A"
+        ]
+      }
+    },
+    {
+      "id": "t63-ctl-outline-headings",
+      "type": "T63",
+      "kind": "control",
+      "about": "しおりの題が、本文の見出しと同じ",
+      "file": "pdf/t63-ctl-outline-headings.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t64-a-actualtext-differs",
+      "type": "T64",
+      "kind": "leak",
+      "about": "見える字と違う /ActualText",
+      "file": "pdf/t64-a-actualtext-differs.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI64A"
+        ]
+      }
+    },
+    {
+      "id": "t64-ctl-actualtext-same",
+      "type": "T64",
+      "kind": "control",
+      "about": "見える字と同じ /ActualText",
+      "file": "pdf/t64-ctl-actualtext-same.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t65-a-alt-name",
+      "type": "T65",
+      "kind": "leak",
+      "about": "図の代わりの説明 /Alt に、本文にない名前と住所",
+      "file": "pdf/t65-a-alt-name.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI65A"
+        ]
+      }
+    },
+    {
+      "id": "t65-ctl-alt-caption",
+      "type": "T65",
+      "kind": "control",
+      "about": "/Alt が、図の見える説明と同じ",
+      "file": "pdf/t65-ctl-alt-caption.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t66-a-tooltip",
+      "type": "T66",
+      "kind": "leak",
+      "about": "フォームの欄の説明（/TU）に、架空の個人名",
+      "file": "pdf/t66-a-tooltip.pdf",
+      "expect": {
+        "patterns": [
+          "P7",
+          "P11"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI66A"
+        ]
+      }
+    },
+    {
+      "id": "t66-b-struct-t-e",
+      "type": "T66",
+      "kind": "leak",
+      "about": "構造要素の題（/T）と略語の展開（/E）に、架空の個人名",
+      "file": "pdf/t66-b-struct-t-e.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI66B"
+        ]
+      }
+    },
+    {
+      "id": "t66-ctl-tooltip-generic",
+      "type": "T66",
+      "kind": "control",
+      "about": "欄の説明が「Enter your name」",
+      "file": "pdf/t66-ctl-tooltip-generic.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t67-a-zero-width-tag",
+      "type": "T67",
+      "kind": "leak",
+      "about": "見える字の間に、幅 0 の字とタグ文字（U+E0000 台）",
+      "file": "pdf/t67-a-zero-width-tag.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t67-b-bidi",
+      "type": "T67",
+      "kind": "leak",
+      "about": "向きの制御（U+202E）で字の並びを逆に見せる",
+      "file": "pdf/t67-b-bidi.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t67-c-c1-control",
+      "type": "T67",
+      "kind": "leak",
+      "about": "字の中に C1 制御文字（U+0085・U+009B）",
+      "file": "pdf/t67-c-c1-control.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t67-ctl-ideographic-space",
+      "type": "T67",
+      "kind": "control",
+      "about": "全角の空白（U+3000）と普通の日本語",
+      "file": "pdf/t67-ctl-ideographic-space.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t68-a-tounicode-swap",
+      "type": "T68",
+      "kind": "leak",
+      "about": "見える字は「Approved」、ToUnicode では別の字（目印）",
+      "file": "pdf/t68-a-tounicode-swap.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t68-ctl-tounicode-same",
+      "type": "T68",
+      "kind": "control",
+      "about": "ToUnicode が、見える字と同じ",
+      "file": "pdf/t68-ctl-tounicode-same.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t69-a-unused-glyphs",
+      "type": "T69",
+      "kind": "leak",
+      "about": "黒い四角の下の字は消したが、書体（Type3）にその字の字形が残る",
+      "file": "pdf/t69-a-unused-glyphs.pdf",
+      "expect": {
+        "patterns": [
+          "P6",
+          "P7",
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": null
+    },
+    {
+      "id": "t69-ctl-used-glyphs",
+      "type": "T69",
+      "kind": "control",
+      "about": "書体（Type3）の字形が、すべてページで使われている",
+      "file": "pdf/t69-ctl-used-glyphs.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t70-a-white-prompt",
+      "type": "T70",
+      "kind": "leak",
+      "about": "白い小さな字で、AI への隠れた指示文",
+      "file": "pdf/t70-a-white-prompt.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI70A"
+        ]
+      }
+    },
+    {
+      "id": "t70-b-tr3-prompt",
+      "type": "T70",
+      "kind": "leak",
+      "about": "描かない字（Tr 3）で、AI への隠れた指示文",
+      "file": "pdf/t70-b-tr3-prompt.pdf",
+      "expect": {
+        "patterns": [
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI70B"
+        ]
+      }
+    },
+    {
+      "id": "t70-ctl-visible-instructions",
+      "type": "T70",
+      "kind": "control",
+      "about": "見える字で「instructions」を含む普通の説明",
+      "file": "pdf/t70-ctl-visible-instructions.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t71-a-annot-author",
+      "type": "T71",
+      "kind": "leak",
+      "about": "付箋の注釈の作成者名（/T）に、架空の個人名",
+      "file": "pdf/t71-a-annot-author.pdf",
+      "expect": {
+        "patterns": [
+          "P8"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI71A"
+        ]
+      }
+    },
+    {
+      "id": "t71-ctl-link-only",
+      "type": "T71",
+      "kind": "control",
+      "about": "ページの中を指すリンクの注釈だけ（作成者名なし）",
+      "file": "pdf/t71-ctl-link-only.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t72-a-contents",
+      "type": "T72",
+      "kind": "leak",
+      "about": "付箋の注釈の中身（/Contents）に、校閲のコメント",
+      "file": "pdf/t72-a-contents.pdf",
+      "expect": {
+        "patterns": [
+          "P8"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI72A"
+        ]
+      }
+    },
+    {
+      "id": "t72-b-rc-subj",
+      "type": "T72",
+      "kind": "leak",
+      "about": "FreeText の注釈の /RC（リッチテキスト）と件名（/Subj）",
+      "file": "pdf/t72-b-rc-subj.pdf",
+      "expect": {
+        "patterns": [
+          "P8"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI72B"
+        ]
+      }
+    },
+    {
+      "id": "t72-ctl-link-only",
+      "type": "T72",
+      "kind": "control",
+      "about": "リンクの注釈だけ",
+      "file": "pdf/t72-ctl-link-only.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t73-a-hidden-flag",
+      "type": "T73",
+      "kind": "leak",
+      "about": "隠し（Hidden、/F 2）の印の付箋の注釈",
+      "file": "pdf/t73-a-hidden-flag.pdf",
+      "expect": {
+        "patterns": [
+          "P8"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI73A"
+        ]
+      }
+    },
+    {
+      "id": "t73-b-noview-flag",
+      "type": "T73",
+      "kind": "leak",
+      "about": "NoView（/F 32）の印の FreeText の注釈",
+      "file": "pdf/t73-b-noview-flag.pdf",
+      "expect": {
+        "patterns": [
+          "P8"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI73B"
+        ]
+      }
+    },
+    {
+      "id": "t73-ctl-print-link",
+      "type": "T73",
+      "kind": "control",
+      "about": "印刷する印（/F 4）のリンクの注釈だけ",
+      "file": "pdf/t73-ctl-print-link.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t74-a-ap-text",
+      "type": "T74",
+      "kind": "leak",
+      "about": "スタンプの注釈の見た目（/AP）の中だけに字（/Contents なし）",
+      "file": "pdf/t74-a-ap-text.pdf",
+      "expect": {
+        "patterns": [
+          "P8",
+          "P7"
+        ],
+        "level": "any",
+        "page": 1
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI74A"
+        ]
+      }
+    },
+    {
+      "id": "t74-ctl-ap-shapes",
+      "type": "T74",
+      "kind": "control",
+      "about": "スタンプの注釈の見た目が、図形だけ",
+      "file": "pdf/t74-ctl-ap-shapes.pdf",
+      "expect": {
+        "forbid": [
+          "P7",
+          "P6",
+          "P5"
+        ]
+      },
+      "residual": null
+    },
+    {
+      "id": "t75-a-names-tree",
+      "type": "T75",
+      "kind": "leak",
+      "about": "名前の木（/EmbeddedFiles）の添付ファイル",
+      "file": "pdf/t75-a-names-tree.pdf",
+      "expect": {
+        "patterns": [
+          "P9"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI75A"
+        ]
+      }
+    },
+    {
+      "id": "t75-b-annot",
+      "type": "T75",
+      "kind": "leak",
+      "about": "添付ファイルの注釈（FileAttachment）",
+      "file": "pdf/t75-b-annot.pdf",
+      "expect": {
+        "patterns": [
+          "P9"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI75B"
+        ]
+      }
+    },
+    {
+      "id": "t75-c-af",
+      "type": "T75",
+      "kind": "leak",
+      "about": "文書の /AF（関連ファイル）だけで指す添付",
+      "file": "pdf/t75-c-af.pdf",
+      "expect": {
+        "patterns": [
+          "P9"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI75C"
+        ]
+      }
+    },
+    {
+      "id": "t75-ctl-dests-only",
+      "type": "T75",
+      "kind": "control",
+      "about": "名前の木はあるが、名前つきの行き先（/Dests）だけ",
+      "file": "pdf/t75-ctl-dests-only.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t76-a-orphan-attachment",
+      "type": "T76",
+      "kind": "leak",
+      "about": "どこからも指されていない添付ファイル（Filespec と中身）",
+      "file": "pdf/t76-a-orphan-attachment.pdf",
+      "expect": {
+        "patterns": [
+          "P9",
+          "P5"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI76A"
+        ]
+      }
+    },
+    {
+      "id": "t76-ctl-orphan-null",
+      "type": "T76",
+      "kind": "control",
+      "about": "どこからも指されていない null のオブジェクトだけ",
+      "file": "pdf/t76-ctl-orphan-null.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t77-a-attached-pdf",
+      "type": "T77",
+      "kind": "leak",
+      "about": "添付の PDF の中に、作成者名と白い字",
+      "file": "pdf/t77-a-attached-pdf.pdf",
+      "expect": {
+        "patterns": [
+          "P1",
+          "P7"
+        ],
+        "level": "any",
+        "also": [
+          "P9"
+        ]
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI77A"
+        ]
+      }
+    },
+    {
+      "id": "t77-b-attached-text",
+      "type": "T77",
+      "kind": "leak",
+      "about": "添付の文字のファイルに、架空の名前と電話番号",
+      "file": "pdf/t77-b-attached-text.pdf",
+      "expect": {
+        "patterns": [
+          "P9"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI77B"
+        ]
+      }
+    },
+    {
+      "id": "t77-ctl-attached-clean-pdf",
+      "type": "T77",
+      "kind": "control",
+      "about": "添付の PDF の中は、隠しなし（添付そのものは出てよい）",
+      "file": "pdf/t77-ctl-attached-clean-pdf.pdf",
+      "expect": {
+        "forbid": [
+          "P1",
+          "P7",
+          "P6",
+          "P5"
+        ]
+      },
+      "residual": null
+    },
+    {
+      "id": "t78-a-gps",
+      "type": "T78",
+      "kind": "leak",
+      "about": "PDF の中の写真（JPEG）の EXIF に位置情報",
+      "file": "pdf/t78-a-gps.pdf",
+      "expect": {
+        "patterns": [
+          "P10"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "Exif\u0000\u0000"
+        ]
+      }
+    },
+    {
+      "id": "t78-ctl-no-exif",
+      "type": "T78",
+      "kind": "control",
+      "about": "EXIF のない写真",
+      "file": "pdf/t78-ctl-no-exif.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t79-a-camera",
+      "type": "T79",
+      "kind": "leak",
+      "about": "写真の EXIF に機種・撮影者・ソフト・撮影日時",
+      "file": "pdf/t79-a-camera.pdf",
+      "expect": {
+        "patterns": [
+          "P10"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI79A"
+        ]
+      }
+    },
+    {
+      "id": "t79-ctl-orientation-only",
+      "type": "T79",
+      "kind": "control",
+      "about": "写真の EXIF に向きと解像度だけ",
+      "file": "pdf/t79-ctl-orientation-only.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t80-a-exif-thumb",
+      "type": "T80",
+      "kind": "leak",
+      "about": "写真の EXIF に、切る前・塗る前の縮小画像",
+      "file": "pdf/t80-a-exif-thumb.pdf",
+      "expect": {
+        "patterns": [
+          "P10"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "Exif\u0000\u0000"
+        ]
+      }
+    },
+    {
+      "id": "t80-ctl-exif-no-thumb",
+      "type": "T80",
+      "kind": "control",
+      "about": "写真の EXIF に縮小画像なし（向きだけ）",
+      "file": "pdf/t80-ctl-exif-no-thumb.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t82-a-image-off-page",
+      "type": "T82",
+      "kind": "leak",
+      "about": "ページの外（右）に置いた画像",
+      "file": "pdf/t82-a-image-off-page.pdf",
+      "expect": {
+        "patterns": [
+          "P7",
+          "P10",
+          "P5",
+          "P6"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "image": {
+          "w": 400,
+          "h": 200,
+          "region": {
+            "x": 40,
+            "y": 60,
+            "w": 150,
+            "h": 30
+          }
+        }
+      }
+    },
+    {
+      "id": "t82-ctl-image-on-page",
+      "type": "T82",
+      "kind": "control",
+      "about": "ページの中に置いた画像",
+      "file": "pdf/t82-ctl-image-on-page.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t83-a-clip-most",
+      "type": "T83",
+      "kind": "leak",
+      "about": "切り抜きで、画像の大部分（字の模様の所）を隠した",
+      "file": "pdf/t83-a-clip-most.pdf",
+      "expect": {
+        "patterns": [
+          "P7",
+          "P10",
+          "P5",
+          "P6"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "image": {
+          "w": 400,
+          "h": 200,
+          "region": {
+            "x": 40,
+            "y": 60,
+            "w": 150,
+            "h": 30
+          }
+        }
+      }
+    },
+    {
+      "id": "t83-ctl-clip-margin",
+      "type": "T83",
+      "kind": "control",
+      "about": "切り抜きで、画像のふちを少し落としただけ",
+      "file": "pdf/t83-ctl-clip-margin.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t84-a-field-value",
+      "type": "T84",
+      "kind": "leak",
+      "about": "フォームの欄に値（架空の名前）が入ったまま",
+      "file": "pdf/t84-a-field-value.pdf",
+      "expect": {
+        "patterns": [
+          "P11"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI84A"
+        ]
+      }
+    },
+    {
+      "id": "t84-ctl-field-empty",
+      "type": "T84",
+      "kind": "control",
+      "about": "フォームの欄が空",
+      "file": "pdf/t84-ctl-field-empty.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t85-a-no-widget",
+      "type": "T85",
+      "kind": "leak",
+      "about": "ウィジェットの無い欄（ページに出ない）に値",
+      "file": "pdf/t85-a-no-widget.pdf",
+      "expect": {
+        "patterns": [
+          "P11"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI85A"
+        ]
+      }
+    },
+    {
+      "id": "t85-b-hidden-widget",
+      "type": "T85",
+      "kind": "leak",
+      "about": "隠した（/F 2）ウィジェットの欄に値",
+      "file": "pdf/t85-b-hidden-widget.pdf",
+      "expect": {
+        "patterns": [
+          "P11"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI85B"
+        ]
+      }
+    },
+    {
+      "id": "t85-ctl-hidden-empty",
+      "type": "T85",
+      "kind": "control",
+      "about": "隠したウィジェットの欄が空",
+      "file": "pdf/t85-ctl-hidden-empty.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t86-n-xfa",
+      "type": "T86",
+      "kind": "notice",
+      "about": "AcroForm に XFA のフォーム（中に架空の名前）",
+      "file": "pdf/t86-n-xfa.pdf",
+      "expect": {
+        "patterns": [
+          "P11"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI86A"
+        ]
+      }
+    },
+    {
+      "id": "t86-ctl-acroform-only",
+      "type": "T86",
+      "kind": "control",
+      "about": "XFA のない AcroForm（欄は空）",
+      "file": "pdf/t86-ctl-acroform-only.pdf",
+      "expect": {
+        "forbid": null,
+        "forbidNotice": true
+      },
+      "residual": null
+    },
+    {
+      "id": "t87-a-doc-js",
+      "type": "T87",
+      "kind": "leak",
+      "about": "名前の木の文書の JavaScript",
+      "file": "pdf/t87-a-doc-js.pdf",
+      "expect": {
+        "patterns": [
+          "P12"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI87A"
+        ]
+      }
+    },
+    {
+      "id": "t87-ctl-goto-open",
+      "type": "T87",
+      "kind": "control",
+      "about": "開いたときの動作が、1ページめへの移動（GoTo）だけ",
+      "file": "pdf/t87-ctl-goto-open.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t88-a-launch",
+      "type": "T88",
+      "kind": "leak",
+      "about": "開いたときの動作で、外のプログラムを起動（Launch）",
+      "file": "pdf/t88-a-launch.pdf",
+      "expect": {
+        "patterns": [
+          "P12"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI88A"
+        ]
+      }
+    },
+    {
+      "id": "t88-b-page-aa-js",
+      "type": "T88",
+      "kind": "leak",
+      "about": "ページを開いたとき（/AA /O）の JavaScript",
+      "file": "pdf/t88-b-page-aa-js.pdf",
+      "expect": {
+        "patterns": [
+          "P12"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI88B"
+        ]
+      }
+    },
+    {
+      "id": "t88-c-openaction-js",
+      "type": "T88",
+      "kind": "leak",
+      "about": "開いたときの動作（/OpenAction）の JavaScript",
+      "file": "pdf/t88-c-openaction-js.pdf",
+      "expect": {
+        "patterns": [
+          "P12"
+        ],
+        "level": "check"
+      },
+      "residual": {
+        "markers": [
+          "kakushi88c"
+        ]
+      }
+    },
+    {
+      "id": "t88-ctl-goto",
+      "type": "T88",
+      "kind": "control",
+      "about": "開いたときの動作が GoTo だけ",
+      "file": "pdf/t88-ctl-goto.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t89-a-uri",
+      "type": "T89",
+      "kind": "leak",
+      "about": "URL を開くリンク（外の場所）",
+      "file": "pdf/t89-a-uri.pdf",
+      "expect": {
+        "patterns": [
+          "P12"
+        ],
+        "level": "check"
+      },
+      "residual": null
+    },
+    {
+      "id": "t89-b-submit",
+      "type": "T89",
+      "kind": "leak",
+      "about": "フォームの送信先（SubmitForm）",
+      "file": "pdf/t89-b-submit.pdf",
+      "expect": {
+        "patterns": [
+          "P12",
+          "P11"
+        ],
+        "level": "check"
+      },
+      "residual": null
+    },
+    {
+      "id": "t89-ctl-goto-link",
+      "type": "T89",
+      "kind": "control",
+      "about": "ページの中への移動のリンクだけ",
+      "file": "pdf/t89-ctl-goto-link.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t90-a-empty-pw",
+      "type": "T90",
+      "kind": "leak",
+      "about": "パスワードなしで開ける暗号化（RC4 128bit）。中に作成者名と白い字",
+      "file": "pdf/t90-a-empty-pw.pdf",
+      "expect": {
+        "patterns": [
+          "P1",
+          "P7"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI90A"
+        ]
+      }
+    },
+    {
+      "id": "t90-ctl-empty-pw-clean",
+      "type": "T90",
+      "kind": "control",
+      "about": "パスワードなしで開ける暗号化。中に隠しなし（お知らせは出てよい）",
+      "file": "pdf/t90-ctl-empty-pw-clean.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "t91-u-user-pw",
+      "type": "T91",
+      "kind": "unchecked",
+      "about": "開くのにパスワードが要る暗号化（「調べられない」と出てほしい）",
+      "file": "pdf/t91-u-user-pw.pdf",
+      "expect": {},
+      "residual": null
+    },
+    {
+      "id": "t91-ctl-plain",
+      "type": "T91",
+      "kind": "control",
+      "about": "暗号化していない普通の文書",
+      "file": "pdf/t91-ctl-plain.pdf",
+      "expect": {
+        "forbid": null,
+        "forbidNotice": true
+      },
+      "residual": null
+    },
+    {
+      "id": "t92-n-signature",
+      "type": "T92",
+      "kind": "notice",
+      "about": "電子署名の欄に、署名者名（/Name）",
+      "file": "pdf/t92-n-signature.pdf",
+      "expect": {
+        "patterns": [
+          "P1",
+          "P11"
+        ],
+        "level": "any"
+      },
+      "residual": {
+        "markers": [
+          "KAKUSHI92A"
+        ]
+      }
+    },
+    {
+      "id": "t92-ctl-empty-sig-field",
+      "type": "T92",
+      "kind": "control",
+      "about": "署名していない、空の署名の欄",
+      "file": "pdf/t92-ctl-empty-sig-field.pdf",
+      "expect": {
+        "forbid": null,
+        "forbidNotice": true
+      },
+      "residual": null
+    },
+    {
+      "id": "t94-n-c2pa",
+      "type": "T94",
+      "kind": "notice",
+      "about": "C2PA の来歴の情報（関連ファイル /AF、C2PA_Manifest）",
+      "file": "pdf/t94-n-c2pa.pdf",
+      "expect": {
+        "patterns": [
+          "P2",
+          "P9"
+        ],
+        "level": "any"
+      },
+      "residual": null
+    },
+    {
+      "id": "t94-ctl-no-c2pa",
+      "type": "T94",
+      "kind": "control",
+      "about": "来歴の情報なし",
+      "file": "pdf/t94-ctl-no-c2pa.pdf",
+      "expect": {
+        "forbid": null,
+        "forbidNotice": true
+      },
+      "residual": null
+    },
+    {
+      "id": "t95-a-name-phone",
+      "type": "T95",
+      "kind": "leak",
+      "about": "見える字に、日本語の氏名と携帯電話の番号",
+      "file": "pdf/t95-a-name-phone.pdf",
+      "expect": {
+        "patterns": null,
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t95-b-mynumber",
+      "type": "T95",
+      "kind": "leak",
+      "about": "見える字に、架空の個人番号（12桁）",
+      "file": "pdf/t95-b-mynumber.pdf",
+      "expect": {
+        "patterns": null,
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t95-c-email",
+      "type": "T95",
+      "kind": "leak",
+      "about": "見える字に、個人のメールアドレス",
+      "file": "pdf/t95-c-email.pdf",
+      "expect": {
+        "patterns": null,
+        "level": "any",
+        "page": 1
+      },
+      "residual": null
+    },
+    {
+      "id": "t95-ctl-doc-number",
+      "type": "T95",
+      "kind": "control",
+      "about": "見える字に、文書番号と日付と課の名前だけ",
+      "file": "pdf/t95-ctl-doc-number.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f01-ctl-hybrid",
+      "type": "F01",
+      "kind": "control",
+      "about": "普通の xref 表と /XRefStm の両方を持つ（Word の形）。版は1つ",
+      "file": "pdf/f01-ctl-hybrid.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f02-ctl-white-heading",
+      "type": "F02",
+      "kind": "control",
+      "about": "黒い帯の上の白い見出し",
+      "file": "pdf/f02-ctl-white-heading.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f02-ctl-white-heading-cmyk",
+      "type": "F02",
+      "kind": "control",
+      "about": "CMYK の濃い帯の上の白い見出し（0 0 0 0 k）",
+      "file": "pdf/f02-ctl-white-heading-cmyk.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f03-ctl-dates-numbers",
+      "type": "F03",
+      "kind": "control",
+      "about": "作成日・文書番号の数字の並び（16桁・14桁）",
+      "file": "pdf/f03-ctl-dates-numbers.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f04-ctl-burned-scan-unused-font",
+      "type": "F04",
+      "kind": "control",
+      "about": "正しく墨消ししたスキャン。使われていない書体の部品が残る",
+      "file": "pdf/f04-ctl-burned-scan-unused-font.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f05-ctl-stroke-visible-fill-clear",
+      "type": "F05",
+      "kind": "control",
+      "about": "輪郭は見える（線は不透明）、塗りだけ透明（ca 0）の字",
+      "file": "pdf/f05-ctl-stroke-visible-fill-clear.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f06-ctl-redraw-on-band",
+      "type": "F06",
+      "kind": "control",
+      "about": "字を描き、帯で覆い、その上に同じ字を同じ所に描き直す",
+      "file": "pdf/f06-ctl-redraw-on-band.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f07-ctl-bold-double",
+      "type": "F07",
+      "kind": "control",
+      "about": "太字のための2度描き（0.4pt ずらし）",
+      "file": "pdf/f07-ctl-bold-double.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f07-ctl-ligature",
+      "type": "F07",
+      "kind": "control",
+      "about": "合字（fi）を1字で描き、ActualText で fi と書く",
+      "file": "pdf/f07-ctl-ligature.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    },
+    {
+      "id": "f07-ctl-plain-actualtext",
+      "type": "F07",
+      "kind": "control",
+      "about": "見える字と同じ ActualText（数字の読み）",
+      "file": "pdf/f07-ctl-plain-actualtext.pdf",
+      "expect": {
+        "forbid": null
+      },
+      "residual": null
+    }
+  ]
+}

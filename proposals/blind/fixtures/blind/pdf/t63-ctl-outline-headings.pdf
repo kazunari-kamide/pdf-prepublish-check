@@ -1,0 +1,49 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /Outlines 6 0 R /PageMode /UseOutlines >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<<  /Length 225 >>
+stream
+BT /F1 16 Tf 72 790 Td (Fictional sample report) Tj ET
+BT /F1 11 Tf 72 770 Td (This file was made for testing. All names are fictional.) Tj ET
+BT /F1 14 Tf 72 700 Td (Chapter 1) Tj ET
+BT /F1 14 Tf 72 600 Td (Chapter 2) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]  /Resources << /Font << /F1 3 0 R    >>  >> /Contents 4 0 R   >>
+endobj
+6 0 obj
+<< /Type /Outlines /First 7 0 R /Last 8 0 R /Count 2 >>
+endobj
+7 0 obj
+<< /Title (Chapter 1) /Parent 6 0 R  /Next 8 0 R /Dest [5 0 R /XYZ 0 800 0] >>
+endobj
+8 0 obj
+<< /Title (Chapter 2) /Parent 6 0 R /Prev 7 0 R  /Dest [5 0 R /XYZ 0 800 0] >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000015 00000 n 
+0000000103 00000 n 
+0000000160 00000 n 
+0000000257 00000 n 
+0000000534 00000 n 
+0000000667 00000 n 
+0000000738 00000 n 
+0000000832 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R  /ID [<4B41534F55424C494E44303030303031> <4B41534F55424C494E44303030303031>] >>
+startxref
+926
+%%EOF
