@@ -19,6 +19,8 @@ import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, t
 import type { CoverageRow } from "./ui/coverage";
 import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { sampleFile } from "./ui/sample";
+import { beforeAfterCounts, buildProcessReport, sha256Hex } from "./ui/process-report";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -37,6 +39,8 @@ const ui = {
   input: el<HTMLInputElement>("file"),
   drop: el<HTMLLabelElement>("drop"),
   workspace: el<HTMLElement>("workspace"),
+  sample: el<HTMLButtonElement>("sample"),
+  sampleRow: el<HTMLParagraphElement>("sample-row"),
   stepPick: el<HTMLLIElement>("step-pick"),
   stepPickNote: el<HTMLSpanElement>("step-pick-note"),
   stepCheck: el<HTMLLIElement>("step-check"),
@@ -65,6 +69,9 @@ const ui = {
   download: el<HTMLAnchorElement>("download"),
   downloadNote: el<HTMLParagraphElement>("download-note"),
   saveNote: el<HTMLParagraphElement>("save-note"),
+  beforeAfter: el<HTMLDivElement>("before-after"),
+  beforeAfterList: el<HTMLUListElement>("before-after-list"),
+  reportDownload: el<HTMLAnchorElement>("report-download"),
   saveConfirm: el<HTMLLabelElement>("save-confirm"),
   saveConfirmBox: el<HTMLInputElement>("save-confirm-box"),
   notDone: el<HTMLDivElement>("not-done"),
@@ -95,6 +102,9 @@ type Session = {
   fileName: string;
   /** 片付けに渡す元の PDF（片付けを始めたら渡し切って null にする） */
   original: Uint8Array | null;
+  /** 元の PDF の SHA-256（処理の報告書に載せる） */
+  sha256: string | null;
+  byteLength: number;
   pdf: PdfView | null;
   pdfProblem: "password" | "unreadable" | null;
   summary: InspectSummary;
@@ -113,6 +123,7 @@ let session: Session | null = null;
 let downloadUrl: string | null = null;
 /** 片付けた PDF（保存する中身）。保存のリンクは、読み直しが通ったあとでだけ、ここから作る */
 let cleanedBlob: Blob | null = null;
+let reportUrl: string | null = null;
 
 function setStatus(text: string, tone: "neutral" | "ok" | "problem" = "neutral") {
   ui.status.textContent = text;
@@ -134,6 +145,10 @@ function setStep(li: HTMLLIElement, state: "todo" | "now" | "done") {
 
 function releaseDownload() {
   lockDownload();
+  if (reportUrl) URL.revokeObjectURL(reportUrl);
+  reportUrl = null;
+  ui.reportDownload.removeAttribute("href");
+  ui.reportDownload.hidden = true;
   cleanedBlob = null;
   ui.saveConfirm.hidden = true;
   ui.saveConfirmBox.checked = false;
@@ -526,7 +541,7 @@ function fail(text: string) {
 
 function makeSession(
   summary: InspectSummary,
-  base: Pick<Session, "generation" | "phase" | "fileName" | "original" | "pdf" | "pdfProblem">,
+  base: Pick<Session, "generation" | "phase" | "fileName" | "original" | "sha256" | "byteLength" | "pdf" | "pdfProblem">,
   done: DoneMark[] = [],
 ): Session {
   const view = buildView(summary);
@@ -545,7 +560,7 @@ function makeSession(
   };
 }
 
-function renderOutcome(outcome: InspectOutcome, base: Pick<Session, "generation" | "fileName" | "original" | "pdf" | "pdfProblem">) {
+function renderOutcome(outcome: InspectOutcome, base: Pick<Session, "generation" | "fileName" | "original" | "sha256" | "byteLength" | "pdf" | "pdfProblem">) {
   const seconds = `${(outcome.elapsedMs / 1000).toFixed(1)} 秒`;
   if (outcome.kind === "timeout") return fail("時間がかかりすぎたため、検査を止めました。画面はそのまま使えます。");
   if (outcome.kind === "error") return fail(outcome.message);
@@ -567,6 +582,7 @@ async function handle(file: File) {
   void old?.pdf?.close();
   reset();
   ui.workspace.dataset.state = "working";
+  ui.sampleRow.hidden = true;
   setStep(ui.stepPick, "done");
   ui.stepPickNote.textContent = "置きました";
   setStep(ui.stepCheck, "now");
@@ -582,6 +598,7 @@ async function handle(file: File) {
     // 検査の Worker には元を渡し切るので、絵を描く側と片付けに渡す側には写しを持つ
     const forPicture = new Uint8Array(buffer.slice(0));
     const original = new Uint8Array(buffer.slice(0));
+    const sha256 = await sha256Hex(original).catch(() => null);
     const opening = PdfView.open(forPicture).catch(() => ({ ok: false as const, reason: "unreadable" as const }));
     const outcome = await inspectInWorker(buffer, (p) => {
       ui.progress.max = p.total;
@@ -599,6 +616,8 @@ async function handle(file: File) {
       generation: gen,
       fileName: file.name,
       original,
+      sha256,
+      byteLength: original.byteLength,
       pdf: opened.ok ? opened.view : null,
       pdfProblem: opened.ok ? null : opened.reason,
     });
@@ -671,6 +690,20 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.fileFacts.textContent = `片付けた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`;
 }
 
+/** 型ごとの、片付ける前と読み直したあとの数（11/5 B の 6） */
+function renderBeforeAfter(before: ViewModel, after: ViewModel | null) {
+  const rows = beforeAfterCounts(before.coverage, after?.coverage ?? null);
+  ui.beforeAfterList.replaceChildren(
+    ...rows.map((r) => {
+      const li = make("li");
+      if (r.after) li.dataset.left = "true";
+      li.append(make("span", `${r.name}（${r.key}）`, "ba-name"), make("span", `${r.before} → ${r.after === null ? "読み直せなかった" : r.after}`, "ba-count"));
+      return li;
+    }),
+  );
+  ui.beforeAfter.hidden = rows.length === 0;
+}
+
 async function runSanitize() {
   const s = session;
   if (!s || busy || s.phase !== "before" || !s.original) return;
@@ -701,6 +734,7 @@ async function runSanitize() {
     // 保存のリンク（Blob の URL）は、ここでは作らない。読み直しが通ったあと（renderCleaned の saveGate）でだけ作る
     const name = cleanedFileName(s.fileName);
     const byteLength = out.bytes.byteLength;
+    const afterSha = await sha256Hex(out.bytes).catch(() => null);
     releaseDownload();
     cleanedBlob = new Blob([out.bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" });
     const opening = PdfView.open(out.bytes.slice()).catch(() => ({ ok: false as const, reason: "unreadable" as const }));
@@ -730,7 +764,7 @@ async function runSanitize() {
       clearResults();
       session = makeSession(
         afterSummary,
-        { generation: gen, phase: "after", fileName: name, original: null, pdf: opened.ok ? opened.view : null, pdfProblem: opened.ok ? null : opened.reason },
+        { generation: gen, phase: "after", fileName: name, original: null, sha256: afterSha, byteLength, pdf: opened.ok ? opened.view : null, pdfProblem: opened.ok ? null : opened.reason },
         clean.doneMarks,
       );
       renderInspection(session);
@@ -738,6 +772,22 @@ async function runSanitize() {
       void opened.view.close();
     }
     renderCleaned(clean, file);
+    const afterView = afterSummary ? buildView(afterSummary) : null;
+    renderBeforeAfter(s.view, afterView);
+    if (s.sha256 && afterSha) {
+      const text = buildProcessReport({
+        date: new Date().toLocaleDateString("sv-SE"), // YYYY-MM-DD（利用者のパソコンの日付）
+        before: { sha256: s.sha256, bytes: s.byteLength, coverage: s.view.coverage },
+        after: { sha256: afterSha, bytes: byteLength, pages: out.pages, coverage: afterView?.coverage ?? null },
+        removed: out.removed,
+        notDone: out.notDone,
+        verdict: clean.headline,
+        rules: (afterSummary ?? s.summary).rules.filter((r) => r.ruleVersion).map((r) => `${r.ruleId}@${r.ruleVersion}`),
+      });
+      reportUrl = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+      ui.reportDownload.href = reportUrl;
+      ui.reportDownload.hidden = false;
+    }
   } catch {
     if (gen === generation) cleanFailed("片付けの途中で問題が起きました。");
   } finally {
@@ -753,6 +803,11 @@ ui.saveConfirmBox.addEventListener("change", () => {
 // 押せない形のときは、押しても何もしない（href がないので、もともと保存は起きない。念のため止める）
 ui.download.addEventListener("click", (e) => {
   if (ui.download.getAttribute("aria-disabled") === "true") e.preventDefault();
+});
+
+ui.sample.addEventListener("click", () => {
+  const file = sampleFile();
+  if (file) void handle(file);
 });
 
 ui.input.addEventListener("change", () => {

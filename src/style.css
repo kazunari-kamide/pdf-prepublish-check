@@ -346,6 +346,35 @@ button {
   display: none;
 }
 
+/* 見本の PDF で試す：置き場の下に、枠だけのボタン */
+.sample {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-small);
+}
+
+.sample-button {
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sample-button:hover {
+  background: var(--color-chip);
+}
+
+.sample-note {
+  color: var(--color-muted);
+}
+
 .filebar {
   display: flex;
   flex-wrap: wrap;
@@ -880,6 +909,70 @@ progress {
   margin: var(--space-1) 0 var(--space-3);
   font-size: var(--text-small);
   overflow-wrap: anywhere;
+}
+
+/* 型ごとの数（片付ける前 → 読み直したあと）。残っている型は紅の字と「▲」 */
+.before-after {
+  margin: var(--space-3) 0;
+}
+
+.before-after h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-small);
+}
+
+.before-after ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-small);
+}
+
+.before-after li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.ba-count {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.before-after li[data-left] .ba-count {
+  color: var(--color-accent);
+}
+
+.before-after li[data-left] .ba-count::before {
+  content: "▲ ";
+}
+
+/* 処理の報告書：保存のボタンより控えめな、枠だけのボタン */
+.report-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-min);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.report-download:hover {
+  text-decoration: underline;
+}
+
+.report-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  color: var(--color-muted);
 }
 
 .not-done {

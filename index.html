@@ -46,6 +46,10 @@
           <span class="drop-note">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
           <input id="file" type="file" accept="application/pdf,.pdf" />
         </label>
+        <p class="sample" id="sample-row">
+          <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
+          <span class="sample-note">架空の申請書です（黒い四角の下に、架空の名前が残っています）。</span>
+        </p>
 
         <div class="filebar" id="filebar" hidden>
           <span class="filebar-name" id="file-name"></span>
@@ -91,12 +95,18 @@
             <h4>▲ 片付けられなかった所</h4>
             <ul id="not-done-list"></ul>
           </div>
+          <div id="before-after" class="before-after" hidden>
+            <h4>型ごとの数（片付ける前 → 読み直したあと）</h4>
+            <ul id="before-after-list"></ul>
+          </div>
           <details id="removed" class="removed" open>
             <summary id="removed-title">取り除いたもの</summary>
             <div id="removed-groups"></div>
           </details>
           <ul id="clean-notes" class="clean-notes" hidden></ul>
           <p id="clean-scope" class="clean-scope"></p>
+          <a id="report-download" class="report-download" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
+          <p class="report-note">前後の SHA-256・消した所と字数・調べた範囲を、文字だけで残します。字の中身とファイル名は載せません。</p>
         </section>
 
         <div id="notices" class="notices" hidden>
