@@ -9,6 +9,7 @@
     <!-- アイコンを取りに行かせない（/favicon.ico への要求をなくす） -->
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/site/links.css" />
   </head>
   <body>
     <a class="skip" href="#results">結果へ移る</a>
@@ -133,6 +134,13 @@
         <p class="font-note">書体：Noto Sans JP（© 2014-2021 Adobe。字を絞って同梱。<a id="font-license" href="#">SIL Open Font License 1.1</a>）</p>
       </aside>
     </main>
+
+    <!-- サイトの部分（持ち場 G）：記事・プライバシーの説明へのリンク。ページの中身は src/site/、ビルドは site.ts -->
+    <footer class="site-links" aria-label="サイトの案内">
+      <a href="/articles/">記事の一覧（黒塗りの下の文字・作成者の名前など、12 の型と手順）</a>
+      <a href="/privacy.html">プライバシーについて</a>
+      <p>このサイトは、開いた回数などを、配信先のサーバーの記録だけで数えます。PDF の中身やファイルの名前は、どこにも送りません。</p>
+    </footer>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

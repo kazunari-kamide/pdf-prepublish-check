@@ -1,0 +1,105 @@
+{
+  "file": "pii-08-birth-date.pdf",
+  "description": "生年月日：前の語・「生まれ」「生」のつく日付（和暦・漢数字も）。作成日・施行日・会議の日時は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-08-birth-date#1",
+      "type": "birth_date",
+      "page": 1,
+      "rect": [
+        115,
+        758.68,
+        192,
+        769.67
+      ],
+      "confidence": "high",
+      "chars": 9
+    },
+    {
+      "id": "pii-08-birth-date#2",
+      "type": "birth_date",
+      "page": 1,
+      "rect": [
+        60,
+        734.68,
+        170,
+        745.67
+      ],
+      "confidence": "high",
+      "chars": 10
+    },
+    {
+      "id": "pii-08-birth-date#3",
+      "type": "birth_date",
+      "page": 1,
+      "rect": [
+        60,
+        710.68,
+        126,
+        721.67
+      ],
+      "confidence": "high",
+      "chars": 9
+    },
+    {
+      "id": "pii-08-birth-date#4",
+      "type": "birth_date",
+      "page": 1,
+      "rect": [
+        98.5,
+        686.68,
+        142.5,
+        697.67
+      ],
+      "confidence": "high",
+      "chars": 8
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-08-birth-date#n1",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        104,
+        638.68,
+        181,
+        649.67
+      ]
+    },
+    {
+      "id": "pii-08-birth-date#n2",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        98.5,
+        614.68,
+        164.5,
+        625.67
+      ]
+    },
+    {
+      "id": "pii-08-birth-date#n3",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        120.5,
+        590.68,
+        203,
+        601.67
+      ]
+    },
+    {
+      "id": "pii-08-birth-date#n4",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        82,
+        566.68,
+        142.5,
+        577.67
+      ]
+    }
+  ]
+}

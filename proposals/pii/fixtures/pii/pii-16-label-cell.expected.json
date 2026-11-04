@@ -1,0 +1,72 @@
+{
+  "file": "pii-16-label-cell.pdf",
+  "description": "表：左の欄に見出し、右の欄（大きくあけた所）に値。見出しだけの行は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-16-label-cell#1",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        200,
+        758.68,
+        249.5,
+        769.67
+      ],
+      "confidence": "high",
+      "chars": 4
+    },
+    {
+      "id": "pii-16-label-cell#2",
+      "type": "address",
+      "page": 1,
+      "rect": [
+        200,
+        734.68,
+        381.5,
+        745.67
+      ],
+      "confidence": "high",
+      "chars": 18
+    },
+    {
+      "id": "pii-16-label-cell#3",
+      "type": "phone",
+      "page": 1,
+      "rect": [
+        200,
+        710.68,
+        271.5,
+        721.67
+      ],
+      "confidence": "high",
+      "chars": 13
+    },
+    {
+      "id": "pii-16-label-cell#4",
+      "type": "birth_date",
+      "page": 1,
+      "rect": [
+        200,
+        686.68,
+        277,
+        697.67
+      ],
+      "confidence": "high",
+      "chars": 9
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-16-label-cell#n1",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        200,
+        662.68,
+        244,
+        673.67
+      ]
+    }
+  ]
+}

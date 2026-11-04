@@ -9,6 +9,9 @@ import { securityHeaders } from "./csp.ts";
 /** 公式のドメイン（CLAUDE.md §11-6）。www つきや http で来たら、ここへ 301 で送る */
 export const OFFICIAL_HOST = "omamoripdf.com";
 
+/** 公式のサイトの場所（末尾の / なし）。サイトのページの canonical・sitemap.xml に使う（site.ts） */
+export const OFFICIAL_ORIGIN = `https://${OFFICIAL_HOST}`;
+
 export function buildHtaccess(): string {
   const headers = Object.entries(securityHeaders).map(([k, v]) => {
     if (v.includes('"')) throw new Error(`${k} の値に " が入っています（.htaccess に書けません）`);

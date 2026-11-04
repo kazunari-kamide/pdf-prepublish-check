@@ -34,9 +34,9 @@ describe("見た所・見なかった所", () => {
     expect(p3.reasons[0]).toMatch(/この版では調べていません/);
   });
 
-  it("いまの一覧（RULES）で、P3 と個人情報のほかは、どの型にもルールがある", () => {
+  it("いまの一覧（RULES）で、P3 のほかは、どの型にもルールがある（個人情報は P13【仮】の pii）", () => {
     const missing = CATALOG.filter((c) => !RULES.some((r) => c.match({ ...rule({}), ruleId: r.id, pattern: r.pattern, label: r.label })));
-    expect(missing.map((c) => c.key)).toEqual(["P3", "個人情報"]);
+    expect(missing.map((c) => c.key)).toEqual(["P3"]);
   });
 
   it("省いたページ・読み解けなかった画像は「一部だけ」とし、ページ番号を添える", () => {

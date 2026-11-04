@@ -1,0 +1,195 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * サイトのページ（記事の一覧・各記事・プライバシー）の見た目。値は design/tokens.css の変数だけを使う（決まりは design/README.md）。
+ * ビルドの時に site.ts が、tokens.css とこのファイルをつないで、1つの CSS（assets/site-<ハッシュ>.css）にする。
+ * 書体は外から読み込まない（CLAUDE.md §2-1）。
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading);
+  color: var(--color-base);
+  background: var(--color-paper);
+}
+
+body.site {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.site h1,
+.site h2 {
+  font-family: var(--font-head);
+  line-height: 1.35;
+}
+
+.site a {
+  color: var(--color-base);
+  text-underline-offset: 0.2em;
+}
+
+.site :focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-offset);
+  box-shadow: var(--focus-halo);
+}
+
+/* ---- 上の帯（検査のページの手順の帯と同じ墨の地） */
+.site-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3) var(--space-6);
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-base);
+  color: var(--color-on-dark);
+}
+
+.site-band a {
+  color: var(--color-on-dark);
+}
+
+.site-brand {
+  font-family: var(--font-head);
+  font-size: var(--text-h1);
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+/* ---- 本文。読みやすい幅にし、左に寄せる（中央寄せのカードにしない。CLAUDE.md §6） */
+.site-main {
+  flex: 1;
+  width: 100%;
+  max-width: 46rem;
+  padding: var(--space-6) var(--space-5);
+  margin-left: max(0px, calc((100vw - 70rem) / 2));
+}
+
+.site-main h1 {
+  font-size: var(--text-h1);
+  margin: 0 0 var(--space-3);
+}
+
+.site-kicker {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.site-lead {
+  margin: 0 0 var(--space-6);
+  padding-left: var(--space-4);
+  border-left: var(--border-strong) solid var(--color-base);
+}
+
+.site-section {
+  margin: 0 0 var(--space-6);
+}
+
+.site-section h2 {
+  font-size: var(--text-h2);
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.site-section p,
+.site-section ul,
+.site-section ol {
+  margin: 0 0 var(--space-3);
+}
+
+.site-section li {
+  margin-bottom: var(--space-2);
+}
+
+.site-steps {
+  padding-left: var(--space-6);
+}
+
+.site-note {
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+/* ---- 記事の一覧 */
+.site-list {
+  list-style: none;
+  padding: 0;
+}
+
+.site-list li {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.site-list a {
+  font-weight: bold;
+}
+
+.site-list p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.site-tag {
+  display: inline-block;
+  min-width: 2.6em;
+  margin-right: var(--space-2);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-base);
+  font-size: var(--text-small);
+  text-align: center;
+}
+
+/* ---- 検査のページへのつなぎ */
+.site-cta {
+  margin: var(--space-6) 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-left: var(--border-mark) solid var(--color-accent);
+}
+
+.site-cta p {
+  margin: 0 0 var(--space-2);
+}
+
+.site .site-cta-link {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-base);
+  color: var(--color-on-dark);
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.site-back {
+  margin-top: var(--space-5);
+}
+
+/* ---- 下の帯 */
+.site-foot {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-line);
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.site-foot p {
+  margin: 0;
+}
