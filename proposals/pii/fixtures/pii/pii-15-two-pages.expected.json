@@ -1,0 +1,46 @@
+{
+  "file": "pii-15-two-pages.pdf",
+  "description": "2ページ目にだけ氏名と携帯電話。1ページ目は個人情報なし",
+  "pages": 2,
+  "leaks": [
+    {
+      "id": "pii-15-two-pages#1",
+      "type": "name",
+      "page": 2,
+      "rect": [
+        93,
+        758.68,
+        131.5,
+        769.67
+      ],
+      "confidence": "high",
+      "chars": 3
+    },
+    {
+      "id": "pii-15-two-pages#2",
+      "type": "phone",
+      "page": 2,
+      "rect": [
+        87.5,
+        734.68,
+        159,
+        745.67
+      ],
+      "confidence": "high",
+      "chars": 13
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-15-two-pages#n1",
+      "kind": "heading",
+      "page": 1,
+      "rect": [
+        60,
+        758.68,
+        93,
+        769.67
+      ]
+    }
+  ]
+}

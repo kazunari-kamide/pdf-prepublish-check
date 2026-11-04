@@ -21,6 +21,7 @@ const SHORT: Record<string, string> = {
   "文書情報と XMP の食い違い": "食い違い",
   ページの縮小画像: "縮小画像",
   書体に残った字形: "字形",
+  個人情報らしい字: "個人情報", // P13【仮】
 };
 
 export const FUDA_MAX = 4;

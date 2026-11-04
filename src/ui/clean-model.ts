@@ -22,6 +22,8 @@ export const PATTERN_NAME: Record<SanitizePattern, string> = {
   P12: "スクリプト・外部動作",
 };
 const PATTERN_ORDER: SanitizePattern[] = ["P6", "P7", "P5", "P1", "P2", "P8", "P9", "P12"];
+/** 黒塗りの候補として示すだけの型（片付けでは消さない）。読み直しの「残っている所」に数えない */
+const CANDIDATE_PATTERNS: string[] = ["P13"];
 
 /** 1つの型の中で並べる行の上限。超えた分は数だけ出す */
 export const MAX_LINES_PER_GROUP = 30;
@@ -80,7 +82,9 @@ export function buildCleanView(input: {
   if (decrypted) notes.push("パスワードなしで開ける暗号化がかかっていたので、外して書き出しました。");
 
   // 読み直しで調べた型と、片付けたが読み直しでは調べていない型
-  const checked = after ? [...new Set(after.groups.filter((g) => g.status === "ok").map((g) => g.pattern))] : [];
+  const checked = after
+    ? [...new Set(after.groups.filter((g) => g.status === "ok" && !CANDIDATE_PATTERNS.includes(g.pattern)).map((g) => g.pattern))]
+    : [];
   const notChecked = removedGroups.map((g) => g.pattern).filter((p) => !checked.includes(p));
   let scope = checked.length
     ? `読み直しで調べたのは ${checked.map((p) => `${PATTERN_NAME[p as SanitizePattern] ?? CATALOG.find((c) => c.key === p)?.name ?? p}（${p}）`).join("・")} です。`
@@ -89,7 +93,11 @@ export function buildCleanView(input: {
   // 調べた型の中でも、調べていない層があれば添える（決め打ちの中身は src/ui/scope.ts の1か所）
   if (after) scope += after.caveats.join("");
 
-  const left = after ? after.rows.length : null;
+  // 黒塗りの候補（P13【仮】、見える文字の個人情報らしい字）は、片付けでは消さない（黒塗りにするかは利用者が決める）ので、
+  // 「残っている所」に数えない（2026-11-04 人が決めた）。候補の行だけが残り、ほかに知らせることがなければ「全部緑」にする
+  const candidateRows = after ? after.groups.filter((g) => CANDIDATE_PATTERNS.includes(g.pattern)).reduce((s, g) => s + g.rows.length, 0) : 0;
+  const left = after ? after.rows.length - candidateRows : null;
+  const afterClean = after ? after.clean || (left === 0 && after.unchecked.length === 0 && after.notices.length === 0) : false;
   let verdict: CleanView["verdict"];
   let headline: string;
   if (left === null) {
@@ -98,7 +106,7 @@ export function buildCleanView(input: {
   } else if (left > 0) {
     verdict = "left";
     headline = `読み直したところ、まだ ${left} か所残っています。`;
-  } else if (notDone.length > 0 || !after!.clean) {
+  } else if (notDone.length > 0 || !afterClean) {
     verdict = "unsure";
     headline = "読み直したところ、残っている所は 0 件でしたが、片付けられなかった所か、調べられなかった所があります。「全部消えた」ではありません。";
   } else {

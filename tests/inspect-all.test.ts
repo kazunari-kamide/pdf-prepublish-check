@@ -36,6 +36,7 @@ describe("登録したルール", () => {
       "p7-hidden",
       "p8-annot",
       "p9-attach",
+      "pii",
       "props-diff",
     ]);
   });

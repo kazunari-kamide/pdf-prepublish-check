@@ -1,0 +1,125 @@
+{
+  "file": "pii-05-phone.pdf",
+  "description": "電話番号：携帯・自宅（全角の数字も）。団体の代表電話・FAX・フリーダイヤル・日付・時刻は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-05-phone#1",
+      "type": "phone",
+      "page": 1,
+      "rect": [
+        93,
+        758.68,
+        236,
+        769.67
+      ],
+      "confidence": "high",
+      "chars": 13
+    },
+    {
+      "id": "pii-05-phone#2",
+      "type": "phone",
+      "page": 1,
+      "rect": [
+        109.5,
+        734.68,
+        175.5,
+        745.67
+      ],
+      "confidence": "high",
+      "chars": 12
+    },
+    {
+      "id": "pii-05-phone#3",
+      "type": "phone",
+      "page": 1,
+      "rect": [
+        120.5,
+        710.68,
+        192,
+        721.67
+      ],
+      "confidence": "high",
+      "chars": 13
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-05-phone#n1",
+      "kind": "office_phone",
+      "page": 1,
+      "rect": [
+        109.5,
+        662.68,
+        175.5,
+        673.67
+      ]
+    },
+    {
+      "id": "pii-05-phone#n2",
+      "kind": "office_phone",
+      "page": 1,
+      "rect": [
+        82,
+        638.68,
+        148,
+        649.67
+      ]
+    },
+    {
+      "id": "pii-05-phone#n3",
+      "kind": "office_phone",
+      "page": 1,
+      "rect": [
+        170,
+        614.68,
+        236,
+        625.67
+      ]
+    },
+    {
+      "id": "pii-05-phone#n4",
+      "kind": "free_dial",
+      "page": 1,
+      "rect": [
+        142.5,
+        590.68,
+        208.5,
+        601.67
+      ]
+    },
+    {
+      "id": "pii-05-phone#n5",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        98.5,
+        566.68,
+        153.5,
+        577.67
+      ]
+    },
+    {
+      "id": "pii-05-phone#n6",
+      "kind": "time",
+      "page": 1,
+      "rect": [
+        109.5,
+        542.68,
+        170,
+        553.67
+      ]
+    },
+    {
+      "id": "pii-05-phone#n7",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        109.5,
+        518.68,
+        164.5,
+        529.67
+      ]
+    }
+  ]
+}

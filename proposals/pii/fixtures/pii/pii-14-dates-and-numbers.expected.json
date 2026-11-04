@@ -1,0 +1,85 @@
+{
+  "file": "pii-14-dates-and-numbers.pdf",
+  "description": "日付などの数字の並び（F03）：カード番号・電話番号・マイナンバーと誤らないこと（全部が対照）",
+  "pages": 1,
+  "leaks": [],
+  "negatives": [
+    {
+      "id": "pii-14-dates-and-numbers#n1",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        98.5,
+        758.68,
+        142.5,
+        769.67
+      ]
+    },
+    {
+      "id": "pii-14-dates-and-numbers#n2",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        87.5,
+        734.68,
+        175.5,
+        745.67
+      ]
+    },
+    {
+      "id": "pii-14-dates-and-numbers#n3",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        109.5,
+        710.68,
+        175.5,
+        721.67
+      ]
+    },
+    {
+      "id": "pii-14-dates-and-numbers#n4",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        76.5,
+        686.68,
+        115,
+        697.67
+      ]
+    },
+    {
+      "id": "pii-14-dates-and-numbers#n5",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        87.5,
+        662.68,
+        208.5,
+        673.67
+      ]
+    },
+    {
+      "id": "pii-14-dates-and-numbers#n6",
+      "kind": "count",
+      "page": 1,
+      "rect": [
+        87.5,
+        638.68,
+        120.5,
+        649.67
+      ]
+    },
+    {
+      "id": "pii-14-dates-and-numbers#n7",
+      "kind": "drawing_number",
+      "page": 1,
+      "rect": [
+        87.5,
+        614.68,
+        153.5,
+        625.67
+      ]
+    }
+  ]
+}
