@@ -7,6 +7,19 @@
 
 @import "../design/tokens.css";
 
+/*
+ * 同梱の書体：Noto Sans JP を、Shift_JIS の字と画面の記号だけ、太さ 400〜700 に絞ったもの（SIL OFL 1.1）。
+ * 作り方は design/fonts/README.md（npm run fonts:build。npm run fonts:check で1バイトも違わないことを確かめる）。
+ * 自分のサイトから読む（font-src 'self'）。読み終わるまでは、端末の書体で出す（font-display: swap）。
+ */
+@font-face {
+  font-family: "Noto Sans JP Omamori";
+  src: url("./assets/fonts/NotoSansJP-subset.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -859,6 +872,13 @@ progress {
   background: var(--color-surface);
   color: var(--color-base);
   font-size: var(--text-small);
+}
+
+/* 書体のライセンスの一言：結果の欄のいちばん下に、小さく */
+.font-note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-small);
+  color: var(--color-muted);
 }
 
 .items {

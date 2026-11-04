@@ -35,7 +35,8 @@
 
   /* ---- 文字：見出しも本文もゴシック（2026-11-05 本人が承認。見出しは太字で分ける）。いまは端末の書体 */
   --font-head: var(--font-body);
-  --font-body: "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Meiryo", "Noto Sans JP", sans-serif;
+  /* 同梱の Noto Sans JP（字を絞ったもの。src/style.css の @font-face）を先に。ない字は端末の書体で出す */
+  --font-body: "Noto Sans JP Omamori", "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
   --text-base: 18px; /* 本文。役所の職員が読むので大きめ */
   --text-small: 0.9rem;
   --text-h1: 1.6rem;

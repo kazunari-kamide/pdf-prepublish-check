@@ -9,12 +9,14 @@
 // - ファイルから取り出した文字や、ファイル名は、HTML として解釈させない（textContent だけを使う。CLAUDE.md §11-3）。
 // - 字の中身は出さない。数と場所だけ（検査の Worker も片付けの Worker も、そもそも返さない）。
 
+// 同梱の書体のライセンス（SIL OFL 1.1）。書体と一緒に配る（design/fonts/README.md）
+import fontLicenseUrl from "./assets/fonts/OFL.txt?url";
 import type { InspectOutcome } from "./inspect/protocol";
 import type { PageBox, InspectSummary } from "./inspect/report";
 import { inspectInWorker } from "./inspect/run";
 import { fromFraction, toFraction, viewSize } from "./inspect/view";
 import { PdfView, RenderTimeout } from "./render/pdf-view";
-import { MAX_REDACT_AREAS, type RedactArea } from "./sanitize/redact";
+import { MAX_REDACT_AREAS, type RedactArea } from "./sanitize/areas";
 import { sanitizeInWorker } from "./sanitize/run";
 import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
@@ -1022,6 +1024,8 @@ ui.saveConfirmBox.addEventListener("change", () => {
 ui.download.addEventListener("click", (e) => {
   if (ui.download.getAttribute("aria-disabled") === "true") e.preventDefault();
 });
+
+el<HTMLAnchorElement>("font-license").href = fontLicenseUrl;
 
 ui.sample.addEventListener("click", () => {
   const file = sampleFile();
