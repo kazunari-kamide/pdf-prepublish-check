@@ -349,6 +349,43 @@ describe("読み直しの確かめそのもの（見せかけの黒塗りを渡�
   });
 });
 
+describe("黒塗りの候補（P13【仮】）は、読み直しの残りに数えない", () => {
+  it("作品の検査の P13 の行と、P13 を調べられなかったことは残りにしない（ほかの型の行は残りにする）", async () => {
+    const { rulesCheck } = await import("../sanitize/redact-check.ts");
+    const item = (pattern: string) => ({ pattern, page: 1, rect: [0, 0, 10, 10] as [number, number, number, number] });
+    const check = rulesCheck(async () => ({
+      rules: [
+        { ruleId: "pii", pattern: "P13", status: "ok", items: [item("P13"), item("P13")] },
+        { ruleId: "pii-err", pattern: "P13", status: "error", items: [] },
+        { ruleId: "p6-text", pattern: "P6", status: "ok", items: [item("P6")] },
+      ],
+    }));
+    const left = await check.run(new Uint8Array(), []);
+    expect(left.map((l) => `${l.kind}:${l.pattern}`)).toEqual(["rule_item:P6"]);
+  });
+
+  it("選んだ所の外に個人情報らしい字があっても、選んだ所を消せば保存できる", async () => {
+    const bytes = await buildPdf(() => ({
+      pages: [{ content: NAME_LINE() + latinAt(72, 120, "TEL 080-0627-3915") }],
+    }));
+    const { inspectAll } = await import("../src/inspect/inspect.ts");
+    const before = await inspectAll(bytes);
+    expect(before.rules.find((r) => r.pattern === "P13")?.items.length ?? 0).toBeGreaterThan(0);
+
+    const r = await redact(bytes, [NAME_AREA], { checks: allChecks });
+    expect(r.status).toBe("ok");
+    if (r.status !== "ok") return;
+    expect((await textOf(r.bytes))[0]).toContain("TEL 080-0627-3915");
+  });
+
+  it("選んだ所の中の字は、P13 を外しても場所ごとの確かめで見る", async () => {
+    const { checkAreas } = await import("../sanitize/redact-check.ts");
+    const bytes = await buildPdf(() => ({ pages: [{ content: latinAt(72, 120, "TEL 080-0627-3915") }] }));
+    const left = await checkAreas(bytes, [{ page: 1, rect: [95, 115, 170, 135] }]);
+    expect(left.find((l) => l.kind === "text")?.count ?? 0).toBeGreaterThan(0);
+  });
+});
+
 describe("型抜きの画像（/Mask に画像を指定したもの）", () => {
   it("塗らない型抜きの画像が選んだ所に掛かるときは、確かめられないので保存させない", async () => {
     const bytes = await buildPdf((doc) => {

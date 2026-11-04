@@ -111,7 +111,13 @@ type InspectLike = {
 };
 
 /**
- * 作品の検査（全部のルール）を、読み直しの確かめにする。見つかった所は 1 件ずつ残りにする。調べられなかったルールも残りにする（確かめられないため）。
+ * 黒塗りの候補として示すだけの型。残りではないので、読み直しの「全部のルール」から外す（画面の片付けの読み直し src/ui/clean-model.ts と同じ扱い）。
+ * P13【仮】（見える文字の個人情報らしい字）：選んだ場所の中に字が残っていないかは、場所ごとの確かめ（checkAreas）で見る
+ */
+export const CANDIDATE_PATTERNS: readonly string[] = ["P13"];
+
+/**
+ * 作品の検査（全部のルール。黒塗りの候補の型を除く）を、読み直しの確かめにする。見つかった所は 1 件ずつ残りにする。調べられなかったルールも残りにする（確かめられないため）。
  * 画面：rulesCheck((b) => inspectAll(b)) のように、src/inspect/inspect.ts の inspectAll を渡す
  */
 export function rulesCheck(inspect: (bytes: Uint8Array) => Promise<InspectLike>): RedactCheck {
@@ -121,11 +127,13 @@ export function rulesCheck(inspect: (bytes: Uint8Array) => Promise<InspectLike>)
       const r = await inspect(bytes);
       const out: RedactLeftover[] = [];
       for (const rule of r.rules) {
+        if (CANDIDATE_PATTERNS.includes(rule.pattern)) continue;
         if (rule.status === "error") {
           out.push({ check: "rules", kind: "rule_error", pattern: rule.pattern, count: 1, label: `検査（${rule.pattern}）を最後まで調べられなかったため、残りがないと確かめられませんでした` });
           continue;
         }
         for (const it of rule.items) {
+          if (CANDIDATE_PATTERNS.includes(it.pattern)) continue;
           out.push({
             check: "rules", kind: "rule_item", pattern: it.pattern, count: 1, label: `読み直しの検査で、${it.pattern} の残りが見つかりました`,
             ...(it.page !== null ? { page: it.page } : {}), ...(it.rect ? { rect: it.rect } : {}),
