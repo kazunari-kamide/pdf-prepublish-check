@@ -77,7 +77,7 @@ describe("docx", () => {
 
   it("コメント（書いた人の数だけ。名前は返さない）", async () => {
     const r = await inspectFormat(docx({ comments: [{ author: FAKE_NAME, text: "check" }, { author: FAKE_NAME, text: "ok" }, { author: "Kasou Jiro", text: "?" }] }));
-    expect(find(r, "office.comments")!.detail).toBe("3 件（書いた人 2 人）");
+    expect(find(r, "office.comments")!.detail).toBe("3 件・書いた人 2 人");
     noLeak(r, "Kasou Jiro");
   });
 
@@ -151,7 +151,7 @@ describe("xlsx", () => {
 
   it("コメント・外のブック・共有ブックの変更履歴", async () => {
     const r = await inspectFormat(xlsx({ comments: 2, externalLink: "file:///C:/Users/kasou-taro/Desktop/budget.xlsx", revisions: true }));
-    expect(find(r, "office.comments")!.detail).toBe("2 件（書いた人 1 人）");
+    expect(find(r, "office.comments")!.detail).toBe("2 件・書いた人 1 人");
     expect(find(r, "office.external_link")!.detail).toBe("外のブック 1／使った人のフォルダを含むもの 1");
     expect(find(r, "office.tracked_changes")!.severity).toBe("high");
     noLeak(r, "budget");
@@ -200,7 +200,7 @@ describe("pptx", () => {
 
   it("コメントと、グループにした図形は調べていないと知らせる", async () => {
     const r = await inspectFormat(pptx({ comments: 3, slides: [{ shapes: [], group: true }] }));
-    expect(find(r, "office.comments")!.detail).toBe("3 件（書いた人 1 人）");
+    expect(find(r, "office.comments")!.detail).toBe("3 件・書いた人 1 人");
     expect(r.notices.map((n) => n.kind)).toEqual(["partial"]);
   });
 });

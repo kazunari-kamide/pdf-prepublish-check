@@ -559,7 +559,7 @@ function commentFinding(ctx: Ctx, n: number, authors: number) {
     severity: "medium",
     title: "コメントが残っています",
     why: "受け取った人が、やり取りの中身と、書いた人の名前を読めます。",
-    detail: `${n} 件${authors ? `（書いた人 ${authors} 人）` : ""}`,
+    detail: `${n} 件${authors ? `・書いた人 ${authors} 人` : ""}`,
   });
 }
 
@@ -881,8 +881,8 @@ async function pptx(ctx: Ctx) {
       }
     }
   }
-  if (hiddenSlides.length) add(ctx, { type: "office.hidden_slide", severity: "medium", title: "表示しないスライドがあります", why: "スライドショーでは出ませんが、ファイルを開けば誰でも見られます。", detail: `${hiddenSlides.length} 枚`, page: hiddenSlides[0]!, where: places(hiddenSlides.map((n) => `${n} 枚目のスライド`)) });
-  if (covers.length) add(ctx, { type: "office.cover_shape", severity: "high", title: "字のある図形の上に、濃い色の図形を重ねています", why: "上の図形を動かすか消すと、下の字が読めます。", detail: `${covers.length} か所（下の図形の字 最大 ${coverChars}字）`, where: places(covers) });
+  if (hiddenSlides.length) add(ctx, { type: "office.hidden_slide", severity: "medium", title: "表示しないスライドがあります", why: "スライドショーでは出ませんが、ファイルを開けば誰でも見られます。", detail: `${hiddenSlides.length} 枚`, where: places(hiddenSlides.map((n) => `${n} 枚目のスライド`)) });
+  if (covers.length) add(ctx, { type: "office.cover_shape", severity: "high", title: "字のある図形の上に、濃い色の図形を重ねています", why: "上の図形を動かすか消すと、下の字が読めます。", detail: `${covers.length} か所・下の図形の字 最大 ${coverChars}字`, where: places(covers) });
   if (sameChars) add(ctx, { type: "office.fake_redaction", severity: "high", title: "字と同じ色で塗った図形があります（見せかけの黒塗り）", why: "字は残っているので、選んでコピーするか、塗りの色を変えると読めます。", detail: `${sameChars}字`, where: places(sameAt) });
   if (offChars) add(ctx, { type: "office.off_slide_text", severity: "high", title: "スライドの外に置いた字があります", why: "スライドショーや印刷では見えませんが、編集の画面やコピーで読めます。", detail: `${offChars}字`, where: places(offAt) });
   if (groups) ctx.notices.push({ kind: "partial", message: `グループにした図形（${groups} 個）の中は、重ねた図形・同じ色の字を調べていません。`, unchecked: true });
