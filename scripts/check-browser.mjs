@@ -20,10 +20,16 @@
 //   どちらも外への要求は0件のはず（開いた回数は、配信先のサーバーの記録で数える。docs/no-network.md）。
 // - サイトのページ（記事の一覧・各記事・プライバシー。dist/ の HTML から拾う）も1つずつ開き、外への要求が0件で、
 //   CSP の違反・console のエラーがなく、200 で返ることを確かめる（--self-test のときは省く）。
+// - 待ち時間とやり直し（CI や重いページで、たまに落ちていたため）：
+//   - Chrome の DevTools：待ち受けの番号は Chrome に選ばせ、最大 60 秒待つ。つながらなければ、Chrome を立て直して 3 回までやり直す。
+//   - 保存：Chrome の保存の知らせ（completed）と大きさがそろうまで、最大 60 秒待つ。だめなら 3 回まで押し直す。
+//     それでも保存できなければ、その PDF をページから開き直して、3 回までやり直す。
+//   - やり直す前の回の要求も、すべて合計に入れる。外への要求・止められた要求が出た回は、やり直さずに失敗にする。
+//     途中で例外になった回もやり直さない（数え損ねないため）。
 // - このスクリプト自身は、手元の Chrome と話すために通信を使う（検査器のコードではない。dist/ には入らない）。
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { preview } from "vite";
@@ -78,27 +84,54 @@ const server = liveUrl ? null : await preview({ root: ROOT, logLevel: "silent", 
 const appUrl = liveUrl ?? server.resolvedUrls.local[0];
 const origin = new URL(appUrl).origin;
 
-const profile = mkdtempSync(path.join(tmpdir(), "omamori-chrome-"));
-const downloads = path.join(profile, "downloads");
-mkdirSync(downloads);
-const debugPort = 9300 + Math.floor(Math.random() * 500);
-const chrome = spawn(chromePath, ["--headless=new", `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-background-networking", "--disable-component-update", "--disable-sync", "about:blank"], { stdio: "ignore" });
+// 立ち上げのやり直しと、待つ時間（配信の直後の CI は遅いことがあるため、長めにとる）
+const LAUNCH_TRIES = 3;
+const LAUNCH_WAIT_MS = 60_000;
+// 1つの PDF の確かめを、保存に失敗したときにやり直す回数。やり直す前の回の要求も、すべて数えに入れる
+const PDF_TRIES = 3;
+const SAVE_TRIES = 3;
+const SAVE_WAIT_MS = 60_000;
 
+const profiles = [];
+let chrome = null;
+let downloads = null;
 let cdp = null;
 let exitCode = 0;
 try {
   let version = null;
-  for (let i = 0; i < 75 && !version; i++) {
+  const launchErrors = [];
+  for (let t = 1; t <= LAUNCH_TRIES && !cdp; t++) {
     try {
-      version = await (await fetch(`http://127.0.0.1:${debugPort}/json/version`)).json();
-    } catch {
-      await sleep(200);
+      ({ version, cdp } = await launch());
+    } catch (e) {
+      launchErrors.push(`${t} 回目：${e instanceof Error ? e.message : e}`);
+      chrome?.kill();
+      chrome = null;
+      if (t < LAUNCH_TRIES) {
+        console.error(`Chrome の DevTools につながりませんでした（${t} 回目）。立ち上げ直します。`);
+        await sleep(2000);
+      }
     }
   }
-  if (!version) throw new Error("Chrome の DevTools につながりませんでした");
-  cdp = await connect(version.webSocketDebuggerUrl);
+  if (!cdp) throw new Error(`Chrome の DevTools につながりませんでした（${LAUNCH_TRIES} 回。${launchErrors.join(" / ")}）`);
   const results = [];
-  for (const pdf of pdfs) results.push(await checkOne(cdp, pdf));
+  // やり直す前の回の結果。ここに外への要求・止められた要求があっても失敗にする（数え方を弱めない）
+  const discarded = [];
+  for (const pdf of pdfs) {
+    for (let t = 1; t <= PDF_TRIES; t++) {
+      // 途中で例外になった回はやり直さない（その回の要求を数え損ねるため。失敗のまま止める）
+      const r = await checkOne(cdp, pdf);
+      // やり直すのは「保存できなかった」ときだけ。外への要求・止められた要求があったときは、やり直さずに失敗として残す
+      const retry = r.cleaned && r.cleaned.ok === false && !r.outside.length && !r.blocked.length && t < PDF_TRIES;
+      if (!retry) {
+        r.tries = t;
+        results.push(r);
+        break;
+      }
+      console.error(`${r.name}：片付けた PDF を保存できませんでした（${r.cleaned.saved}）。開き直してやり直します（${t + 1} 回目）。`);
+      discarded.push(r);
+    }
+  }
   // サイトのページ（記事の一覧・各記事・プライバシー）も開き、外への要求が0件かを確かめる（点検のときは省く）
   const pages = [];
   if (!selfTest) for (const p of sitePagePaths()) pages.push(await checkPage(cdp, p));
@@ -112,7 +145,8 @@ try {
     if (r.cleaned) {
       console.log(`  片付け：${r.cleaned.status}`);
       if (r.cleaned.count) console.log(`  読み直し：${r.cleaned.count}`);
-      console.log(`  保存：${r.cleaned.saved}`);
+      console.log(`  保存：${r.cleaned.saved}${r.cleaned.saveTries > 1 ? `（${r.cleaned.saveTries} 回目で保存）` : ""}`);
+      if (r.tries > 1) console.log(`  やり直し：${r.tries} 回目で通った`);
     }
     console.log(`  要求：全部で ${r.all.length} 件。同じサイト ${r.same.length} 件、外 ${r.outside.length} 件、CSP で止められた ${r.blocked.length} 件`);
     console.log(`    最初の表示：${r.first.all} 件（外 ${r.first.outside} 件・止められた ${r.first.blocked} 件）`);
@@ -135,10 +169,16 @@ try {
     }
   }
   const pageProblems = pages.filter((p) => p.outside.length || p.blocked.length || p.errors.length || p.status !== 200);
-  const outside = results.reduce((n, r) => n + r.outside.length, 0) + pages.reduce((n, p) => n + p.outside.length, 0);
-  const blocked = results.reduce((n, r) => n + r.blocked.length, 0) + pages.reduce((n, p) => n + p.blocked.length, 0);
-  const firstOutside = results.reduce((n, r) => n + r.first.outside, 0);
-  const afterOutside = results.reduce((n, r) => n + r.after.outside, 0);
+  for (const r of discarded) {
+    for (const u of r.outside) console.log(`  （やり直す前の回）${r.name} 外：${u}`);
+    for (const b of r.blocked) console.log(`  （やり直す前の回）${r.name} CSP で止められた：${b}`);
+  }
+  if (discarded.length) console.log(`\nやり直した回：${discarded.length} 回（${discarded.map((r) => r.name).join("、")}）。その回の要求も合計に入れています。`);
+  const tried = [...results, ...discarded];
+  const outside = tried.reduce((n, r) => n + r.outside.length, 0) + pages.reduce((n, p) => n + p.outside.length, 0);
+  const blocked = tried.reduce((n, r) => n + r.blocked.length, 0) + pages.reduce((n, p) => n + p.blocked.length, 0);
+  const firstOutside = tried.reduce((n, r) => n + r.first.outside, 0);
+  const afterOutside = tried.reduce((n, r) => n + r.after.outside, 0);
   console.log(`\n最初の表示：外への要求 ${firstOutside} 件（解析のスクリプトは入れていないので、0 のはず）`);
   console.log(`PDF を入れた後：外への要求 ${afterOutside} 件`);
   const notSaved = results.filter((r) => r.cleaned && r.cleaned.ok === false);
@@ -167,20 +207,54 @@ try {
   exitCode = 1;
 } finally {
   cdp?.close();
-  chrome.kill();
+  chrome?.kill();
   await server?.close();
   await sleep(300);
-  rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  for (const p of profiles) rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
 process.exit(exitCode);
 
 // ---------------------------------------------------------------- CDP
 
+/**
+ * Chrome を立ち上げて、DevTools につなぐ。待ち受けの番号は Chrome に選ばせ（--remote-debugging-port=0）、
+ * Chrome が書く DevToolsActivePort から読む（決めた番号だと、ほかのものとぶつかることがあるため）
+ */
+async function launch() {
+  const profile = mkdtempSync(path.join(tmpdir(), "omamori-chrome-"));
+  profiles.push(profile);
+  downloads = path.join(profile, "downloads");
+  mkdirSync(downloads);
+  let exited = null;
+  chrome = spawn(chromePath, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-background-networking", "--disable-component-update", "--disable-sync", "about:blank"], { stdio: "ignore" });
+  chrome.once("exit", (code) => (exited = code ?? "signal"));
+  chrome.once("error", (e) => (exited = e.message));
+  const portFile = path.join(profile, "DevToolsActivePort");
+  const until = Date.now() + LAUNCH_WAIT_MS;
+  let version = null;
+  let last = "DevToolsActivePort ができませんでした";
+  while (!version && Date.now() < until) {
+    if (exited !== null) throw new Error(`Chrome が止まりました（${exited}）`);
+    await sleep(250);
+    if (!existsSync(portFile)) continue;
+    const port = readFileSync(portFile, "utf8").split(/\r?\n/)[0].trim();
+    if (!/^\d+$/.test(port)) continue;
+    try {
+      version = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(5000) })).json();
+    } catch (e) {
+      last = `127.0.0.1:${port} から答えがありませんでした（${e?.cause?.code ?? e?.name ?? e}）`;
+    }
+  }
+  if (!version) throw new Error(`${LAUNCH_WAIT_MS / 1000} 秒待ちました。${last}`);
+  return { version, cdp: await connect(version.webSocketDebuggerUrl) };
+}
+
 async function connect(url) {
   const ws = new WebSocket(url);
   await new Promise((res, rej) => {
-    ws.addEventListener("open", res, { once: true });
-    ws.addEventListener("error", rej, { once: true });
+    const timer = setTimeout(() => rej(new Error("DevTools の WebSocket が開きませんでした")), 15_000);
+    ws.addEventListener("open", () => (clearTimeout(timer), res()), { once: true });
+    ws.addEventListener("error", () => (clearTimeout(timer), rej(new Error("DevTools の WebSocket につながりませんでした"))), { once: true });
   });
   let seq = 0;
   const pending = new Map();
@@ -248,7 +322,8 @@ async function checkOne(c, pdf) {
     const evaluate = async (expr) => (await c.send("Runtime.evaluate", { expression: expr, returnByValue: true }, sessionId)).result.value;
 
     await c.send("Page.navigate", { url: appUrl }, sessionId);
-    for (let i = 0; i < 50 && (await evaluate("document.readyState")) !== "complete"; i++) await sleep(100);
+    // 本番（--url）は遠いので、読み込みを最大 30 秒待つ
+    for (let i = 0; i < 300 &&(await evaluate("document.readyState")) !== "complete"; i++) await sleep(100);
     await sleep(300); // 最初の表示のあとに遅れて出る要求も、最初の表示の分として数える
     // ここまでが「最初の表示」。ここから後が「PDF を入れた後」
     const firstAll = all.length;
@@ -357,7 +432,7 @@ async function checkPage(c, pagePath) {
     await c.send("Page.enable", {}, sessionId);
     const evaluate = async (expr) => (await c.send("Runtime.evaluate", { expression: expr, returnByValue: true }, sessionId)).result.value;
     await c.send("Page.navigate", { url: new URL(pagePath, appUrl).href }, sessionId);
-    for (let i = 0; i < 50 && (await evaluate("document.readyState")) !== "complete"; i++) await sleep(100);
+    for (let i = 0; i < 300 &&(await evaluate("document.readyState")) !== "complete"; i++) await sleep(100);
     await sleep(500);
     const status = await evaluate("performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0");
     const local = (u) => u.startsWith(origin + "/") || u.startsWith("blob:") || u.startsWith("data:") || u === "about:blank";
@@ -387,24 +462,41 @@ async function pressSanitize(c, sessionId, evaluate, pdf) {
   }
   await evaluate("document.getElementById('sanitize').click(); void 0");
   const working = "(() => { const s = document.getElementById('status').textContent; return s.startsWith('片付けています') || s.startsWith('片付けた PDF を、最初から'); })()";
-  for (let i = 0; i < 400 && (await evaluate(working)); i++) await sleep(200);
+  // 重いページ（h01）は、片付けと読み直しに時間がかかる。最大 180 秒待つ
+  for (let i = 0; i < 900 && (await evaluate(working)); i++) await sleep(200);
   const status = await evaluate("document.getElementById('status').textContent");
   if (!(await evaluate("!document.getElementById('clean').hidden"))) return { pressed: true, status, count: null, saved: "保存のボタンが出ませんでした", ok: false };
   const count = await evaluate("document.getElementById('clean-count').textContent");
   const name = await evaluate("document.getElementById('download').download");
 
-  // 保存：ブラウザの保存先を一時フォルダにし、保存のボタンを押す
-  const target = path.join(downloads, path.basename(pdf, ".pdf"));
-  mkdirSync(target, { recursive: true });
-  await c.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: target });
-  await evaluate("document.getElementById('download').click(); void 0");
+  // 保存：ブラウザの保存先を、押すたびに新しい一時フォルダにし、保存のボタンを押す。
+  // ファイルが見えただけでは、書き終わっていないことがある（大きい PDF で、書きかけのファイルを読むと落ちる）。
+  // そこで Chrome の保存の知らせ（Browser.downloadProgress の completed）を待ち、大きさが合うことを確かめてから読む
   let file = null;
-  for (let i = 0; i < 100 && !file; i++) {
-    await sleep(100);
-    const done = readdirSync(target).filter((f) => !f.endsWith(".crdownload"));
-    if (done.length) file = path.join(target, done[0]);
+  let why = "";
+  let saveTries = 0;
+  for (let t = 1; t <= SAVE_TRIES && !file; t++) {
+    saveTries = t;
+    const target = mkdtempSync(path.join(downloads, `${path.basename(pdf, ".pdf")}-`));
+    await c.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: target, eventsEnabled: true });
+    const got = await waitDownload(c, () => evaluate("document.getElementById('download').click(); void 0"));
+    if (got.state !== "completed") {
+      why = got.state === "canceled" ? "保存が取り消されました" : `${SAVE_WAIT_MS / 1000} 秒待っても、保存が終わりませんでした`;
+    } else {
+      // 知らせのあと、名前を付け替え終わるまで少し待つ
+      for (let i = 0; i < 50 && !file; i++) {
+        const done = readdirSync(target).filter((f) => !f.endsWith(".crdownload")).map((f) => path.join(target, f));
+        file = done.find((f) => statSync(f).size === got.bytes) ?? null;
+        if (!file) await sleep(100);
+      }
+      if (!file) why = `保存の知らせ（${got.bytes} バイト）と、ファイルの大きさが合いませんでした`;
+    }
+    if (!file && t < SAVE_TRIES) {
+      console.error(`${path.basename(pdf)}：${why}。保存を押し直します（${t + 1} 回目）。`);
+      await sleep(1000);
+    }
   }
-  if (!file) return { pressed: true, status, count, saved: "保存されませんでした", ok: false };
+  if (!file) return { pressed: true, status, count, saved: `保存されませんでした（${SAVE_TRIES} 回。${why}）`, ok: false, saveTries };
   const bytes = readFileSync(file);
   const isPdf = bytes.subarray(0, 5).toString("latin1") === "%PDF-";
   const sameName = path.basename(file) === name;
@@ -414,5 +506,26 @@ async function pressSanitize(c, sessionId, evaluate, pdf) {
     count,
     saved: `${sameName ? `「${name}」` : `名前が違う（${path.basename(file)}）`}・${bytes.length} バイト・${isPdf ? "%PDF- で始まる" : "PDF ではない"}`,
     ok: isPdf && sameName,
+    saveTries,
   };
+}
+
+/** click() で保存を始め、Chrome の保存の知らせで、終わる（completed）か取り消される（canceled）まで待つ */
+function waitDownload(c, click) {
+  return new Promise((resolve) => {
+    let guid = null;
+    const finish = (v) => {
+      clearTimeout(timer);
+      off();
+      resolve(v);
+    };
+    const timer = setTimeout(() => finish({ state: "timeout", bytes: 0 }), SAVE_WAIT_MS);
+    const off = c.on((m) => {
+      if (m.method === "Browser.downloadWillBegin" && guid === null) guid = m.params.guid;
+      if (m.method === "Browser.downloadProgress" && m.params.guid === guid && m.params.state !== "inProgress") {
+        finish({ state: m.params.state, bytes: m.params.receivedBytes });
+      }
+    });
+    click().catch(() => finish({ state: "canceled", bytes: 0 }));
+  });
 }
