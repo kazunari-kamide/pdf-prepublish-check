@@ -5,7 +5,7 @@
 
 import type { NotDoneItem, RemovedItem } from "../../sanitize/types.ts";
 
-import type { RedactArea } from "./redact";
+import type { RedactArea } from "./areas";
 
 /** areas＝利用者が自分で選んだ黒塗りの所（11/5 B の 9。なければ、ふつうの片付けだけ） */
 export type SanitizeRequest = { type: "sanitize"; id: number; buffer: ArrayBuffer; areas?: RedactArea[] };

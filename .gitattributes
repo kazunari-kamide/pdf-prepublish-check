@@ -6,3 +6,8 @@
 # JSON と Markdown は、改行を LF に固める（作り直しのたびに CRLF と LF の差が出ないように）
 *.json text eol=lf
 *.md text eol=lf
+
+# 同梱の書体と、そのライセンス文・出どころの記録は、配布物と1バイトも違わない形で入れる（SHA-256 を確かめるため。design/fonts/README.md）
+*.woff2 binary
+design/fonts/source/** -text
+src/assets/fonts/** -text

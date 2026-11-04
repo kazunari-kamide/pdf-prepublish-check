@@ -30,6 +30,8 @@
     "check:sanitized": "node sanitize/check/cli.ts",
     "check:browser": "node scripts/check-browser.mjs",
     "check:live": "node scripts/check-live.mjs",
+    "fonts:build": "node design/fonts/build.mjs",
+    "fonts:check": "node design/fonts/build.mjs --check",
     "eval:blind": "node eval/blind/run.ts",
     "cli": "node cli/omamori.ts",
     "eval:redact": "vitest run tests/redact-eval.test.ts --silent=false"
@@ -40,6 +42,7 @@
     "@types/node": "24.19.2",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "6.4.299",
+    "subset-font": "2.9.0",
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "vitest": "5.0.5"
