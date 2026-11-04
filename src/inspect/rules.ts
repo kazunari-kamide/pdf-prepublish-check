@@ -8,7 +8,7 @@
 // - 深刻度は【仮】。P6 の「高」だけが docs/prd.md §3-5 で決まっている。ほかは PR の「決めてほしいこと」に書く。
 
 import { detectP1Info, type P1InfoReport } from "../../rules/p1-info/index.ts";
-import { detectP5Revisions, type P5Kind, type P5Report } from "../../rules/p5-revisions/index.ts";
+import { detectP5Revisions, type P5Kind, type P5Part, type P5Report } from "../../rules/p5-revisions/index.ts";
 import { detectP6Text, type P6TextReport } from "../../rules/p6-text/index.ts";
 import { DEFAULT_SETTINGS as P6_SETTINGS } from "../../rules/p6-text/settings.ts";
 import { detectP7Hidden, type P7Reason, type P7Report } from "../../rules/p7-hidden/index.ts";
@@ -130,6 +130,31 @@ const P7_REASON: Record<P7Reason, string> = {
   tiny: "小さすぎて見えない字",
   same_color: "背景と同じ色の字",
   covered_light: "白っぽい図形の下に隠れた字",
+  squashed: "横につぶれて見えない字",
+  same_color_image: "画像と同じ色の字",
+  covered_image: "あとから重ねた画像の下に隠れた字",
+  hidden_codepoint: "見えない文字コード",
+  remapped: "見た目と取り出される字が違う字",
+  overdrawn: "同じ所に重ねて描いた、違う字",
+};
+
+/** 見える字の中の隠し（検出ルール 1.1.0 から）は、見出しと理由を分ける。文言・深刻度は【仮】 */
+const P7_VISIBLE_KIND: Partial<Record<P7Reason, { title: string; why: string; severity: "high" | "medium" }>> = {
+  hidden_codepoint: {
+    title: "見えない文字コードが入っています",
+    why: "画面には出ませんが、コピーや検索、AI に読ませたときに、見えない印や指示として取り出されます。",
+    severity: "medium",
+  },
+  remapped: {
+    title: "見た目と、コピーで取り出される字が違います",
+    why: "画面で読める字とは別の字が、検索やコピーで取り出されます。",
+    severity: "high",
+  },
+  overdrawn: {
+    title: "同じ所に、違う字が重ねて描かれています",
+    why: "上に重なった字しか読めませんが、下の字も検索やコピーで取り出せます。",
+    severity: "high",
+  },
 };
 
 const p7 = defineRule<P7Report>({
@@ -140,15 +165,18 @@ const p7 = defineRule<P7Report>({
   // P7 の既定の値（rules/p7-hidden）は検出ルールの担当の範囲なので変えず、画面から呼ぶときだけ上書きする。
   detect: (b) => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
   items: (r) =>
-    r.findings.map((f) => ({
-      pattern: "P7",
-      severity: "high", // 【仮】
-      title: "見えない字が残っています",
-      why: "画面では見えませんが、検索やコピーで取り出せます。",
-      detail: `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
-      page: f.page,
-      rect: f.rect,
-    })),
+    r.findings.map((f) => {
+      const v = P7_VISIBLE_KIND[f.reason];
+      return {
+        pattern: "P7",
+        severity: v?.severity ?? "high", // 【仮】
+        title: v?.title ?? "見えない字が残っています",
+        why: v?.why ?? "画面では見えませんが、検索やコピーで取り出せます。",
+        detail: `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
+        page: f.page,
+        rect: f.rect,
+      };
+    }),
   notices: (r) => skippedNotices(r.skippedPages),
 });
 
@@ -190,6 +218,16 @@ const P5_KIND: Record<P5Kind, string> = {
   metadata: "埋め込まれた作成の記録",
   image: "画像",
   embedded_file: "添付ファイル",
+  dict_text: "字の入った情報",
+};
+
+/** 字の中身を持たない構造の部品の呼び名（検出ルール 1.2.0 の cleanupOnly.parts） */
+const P5_PART: Record<P5Part, string> = {
+  font: "フォントの設定",
+  font_file: "フォントの本体",
+  cmap: "文字の対応表",
+  color_profile: "色の設定",
+  other: "そのほかの部品",
 };
 
 const p5 = defineRule<P5Report>({
@@ -197,8 +235,8 @@ const p5 = defineRule<P5Report>({
   label: "旧版の残存",
   pattern: "P5",
   detect: (b) => detectP5Revisions(b),
-  items: (r) =>
-    r.findings.map((f) => ({
+  items: (r) => {
+    const items: Item[] = r.findings.map((f) => ({
       pattern: "P5",
       severity: "high", // 【仮】
       title: `修正する前の版の「${P5_KIND[f.kind] ?? "中身"}」が、ファイルの中に残っています`,
@@ -208,7 +246,23 @@ const p5 = defineRule<P5Report>({
         .join("／"),
       page: null,
       rect: null,
-    })),
+    }));
+    // 字の中身を持たない構造の部品だけの残り（1.2.0）。漏れとは分けて「低」で1行だけ出し、片付けへ案内する
+    const c = r.cleanupOnly;
+    if (c && c.count > 0) {
+      const parts = (Object.keys(P5_PART) as P5Part[]).filter((p) => c.parts[p] > 0).map((p) => `${P5_PART[p]} ${c.parts[p]}個`);
+      items.push({
+        pattern: "P5",
+        severity: "low", // 【仮】
+        title: "使われていない部品が、ファイルの中に残っています（片付けで消せる残り）",
+        why: "調べた範囲では字の中身は見つかりませんでしたが、作った道具や使った字の手がかりになることがあるので、「片付ける」で消せます。",
+        detail: parts.join("／"),
+        page: null,
+        rect: null,
+      });
+    }
+    return items;
+  },
 });
 
 // ---------------------------------------------------------------- P9 添付ファイル
