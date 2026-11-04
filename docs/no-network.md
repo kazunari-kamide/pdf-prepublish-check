@@ -3,12 +3,21 @@
 
 検査器は、利用者の PDF をブラウザの外に出さない（CLAUDE.md §2-1）。この約束を、次の4つの層で確かめる。どれか1つで「送れないことの保証」になるわけではない（CLAUDE.md §11-4）。
 
+## 通信の決まり（2026-11-05 本人が決定。依頼 G の案 1）
+
+- **ブラウザから外への要求は、最初の表示でも、PDF を入れた後でも 0 件。** アクセス解析のスクリプト・広告・外の書体は入れない。Cookie も使わない。
+- 開いた回数・参照元などは、配信先のサーバーがふつうに残す記録（アクセスログ）で数える。ページには何も足さない。サーバーの記録に残るのは、ページやファイルを渡したときの IP アドレス・参照元・ブラウザの種類・時刻・求められた場所（URL）だけ。PDF の中身・ファイル名・画面の操作は、サーバーに届かないので残らない（利用者向けの説明は `/privacy.html`。中身は `src/site/privacy.ts`）。
+- PDF を入れた後にも、同じサイトへの要求はある（検査の Worker・PDF.js のファイルを読み込むため）。中身は配信しているファイルの読み込みだけで、PDF は入らない。層 4 は、この数も「PDF を入れた後」として分けて出す。
+- 捨てた案：Cloudflare Web Analytics のスクリプトを入れる。読み込みの時とページを離れる時に送るため、PDF を入れた後にも送られる。スクリプトの版を固定できず（SRI が使えない）、`connect-src 'none'`（PDF.js の例外の条件）も崩れる。
+- 検索エンジンの確認（Google Search Console）は、トップページの `<meta>` か、`public/` に置く確認のファイルで行う（`src/site/search-console.ts`）。検索エンジンがサイトを読みに来たときに見るだけで、ブラウザからの通信は増えない。
+- SNS などに貼るリンクに付ける `utm_source` は、ページのスクリプトでは読まない。サーバーの記録に残る URL の一部として数えるだけ（書き方は README）。
+
 | 層 | 何を見るか | どこで |
 |---|---|---|
 | 1. 自分たちのコード | `src/`・`rules/`・`index.html` に、`fetch`・`XMLHttpRequest`・`WebSocket`・`sendBeacon`・外の URL・`innerHTML`・`eval` がないこと | `tests/no-network.test.ts`（`npm test`） |
-| 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` に `connect-src 'none'` があること | `scripts/check-dist.mjs`（`npm run build` の最後） |
+| 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` に `connect-src 'none'` があること。サイトのページ（記事・プライバシー）を含む、すべての HTML に同じ CSP があり、スクリプトを直接書かず、外から読み込まないこと（公式の URL を指す canonical だけは許す） | `scripts/check-dist.mjs`（`npm run build` の最後） |
 | 3. CSP | ページ全体の読み込み先と送り先を絞る（`connect-src 'none'`、`img-src 'self' data: blob:` など） | `csp.ts` |
-| 4. 本物のブラウザ | 合成 PDF を入れて、ページを開いてから閉じるまでの要求を数え、外への要求が0件であること | `scripts/check-browser.mjs`（`npm run check:browser`） |
+| 4. 本物のブラウザ | 合成 PDF を入れて、ページを開いてから閉じるまでの要求を「最初の表示」と「PDF を入れた後」に分けて数え、どちらも外への要求が0件であること。サイトのページも1つずつ開き、外への要求が0件であること | `scripts/check-browser.mjs`（`npm run check:browser`） |
 
 ## PDF.js の例外（2026-11-03 本人が決定。PR #31 の返事 2）
 
@@ -32,6 +41,8 @@
 
 - Chrome（または Edge）を headless で動かし、DevTools の決まり（CDP）で、ページと、その中で作られた Worker（検査の Worker・片付けの Worker・PDF.js の Worker）の要求を数える。
 - 既定では、検査のあとに「片付ける」を押し、読み直し（片付けた PDF の検査）が終わるまで待ち、「片付けた PDF を保存する」を押す。その間の要求も数える。保存は `blob:` の URL を `a[download]` で開くだけで、通信ではない。保存された PDF が `%PDF-` で始まり、名前が画面のとおりかも確かめる（`--no-sanitize` で押さない）。
+- 要求は「最初の表示」（ページを開いて読み込みが終わるまで）と「PDF を入れた後」に分けて出す。どちらも、外への要求は0件のはず（解析のスクリプトを入れていないため）。
+- サイトのページ（`dist/` の HTML から拾う。記事の一覧・各記事・プライバシー）も1つずつ開き、200 で返り、外への要求・CSP の違反・console のエラーがないことを確かめる。
 - 同じサイト（`vite preview`）・`blob:`・`data:` 以外への要求が1件でもあれば失敗。CSP に止められた要求（要求になる前に止まり、console にだけ出るものも）も1件でもあれば失敗。
 - `npm run check:browser -- --self-test` で、わざと外へ要求を出し、数える仕組みが捕まえられることを確かめる（捕まえられなければ失敗）。
 - 入れる PDF は `fixtures/` の合成 PDF だけ。

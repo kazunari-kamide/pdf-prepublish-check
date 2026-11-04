@@ -107,3 +107,56 @@ describe("check-dist の .htaccess（docs/deploy.md）", () => {
     expect(r.out).toContain("AddType text/javascript .mjs がありません");
   });
 });
+
+describe("check-dist のサイトのページ（site.ts）", () => {
+  const page = (csp: string, extra = "") =>
+    `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}">${extra}<link rel="stylesheet" href="/assets/site.css"></head><body></body></html>`;
+
+  function withPages(pages: Record<string, string>): string {
+    const dir = fakeDist(CSP_OK, {});
+    for (const [name, text] of Object.entries(pages)) {
+      mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+      writeFileSync(path.join(dir, name), text);
+    }
+    return dir;
+  }
+
+  it("同じ CSP と、公式の URL を指す canonical なら通す", () => {
+    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a.html">') }));
+    expect(r.out).not.toContain("問題：");
+    expect(r.code).toBe(0);
+  });
+
+  it("CSP の <meta> がないページは止める", () => {
+    const r = run(withPages({ "articles/a.html": "<!doctype html><html><head></head><body></body></html>" }));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("articles/a.html に CSP の <meta> がありません");
+  });
+
+  it("CSP が index.html と違うページは止める", () => {
+    const r = run(withPages({ "privacy.html": page(CSP_OPEN) }));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("privacy.html の CSP が、index.html の CSP と食い違っています");
+  });
+
+  it("ほかのサイトを指す canonical や、外のスクリプトは止める", () => {
+    const r = run(
+      withPages({
+        "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://example.invalid/a.html">'),
+        "articles/b.html": page(CSP_OK, '<script src="https://example.invalid/x.js"></script>'),
+      }),
+    );
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("articles/a.html が外のサイトから読み込んでいます");
+    expect(r.out).toContain("articles/b.html が外のサイトから読み込んでいます");
+  });
+
+  it("検索エンジンの確認のファイルは、決まった1行のときだけ通す", () => {
+    const good = run(withPages({ "google0123abcd.html": "google-site-verification: google0123abcd.html\n" }));
+    expect(good.code).toBe(0);
+    expect(good.out).toContain("google0123abcd.html（検索エンジンの確認のファイル）");
+    const bad = run(withPages({ "google0123abcd.html": "google-site-verification: google0123abcd.html\n<script>x</script>" }));
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("中身が決まった1行ではありません");
+  });
+});

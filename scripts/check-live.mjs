@@ -7,6 +7,8 @@
 //
 // 確かめること（1つでも合わなければ失敗）：
 // - トップページが 200 で返り、csp.ts のヘッダー（CSP・nosniff・no-referrer など）が、同じ値で1つずつ付いている
+// - サイトのページ（記事の一覧・記事1つ・プライバシー）も 200 で返り、同じヘッダーが付いている
+// - トップページが、外のサイトからスクリプトを読み込んでいない（アクセス解析のスクリプトは入れない。docs/no-network.md）
 // - .mjs が text/javascript、.wasm が application/wasm で返る（dist/ に .wasm がなければ、省いたと表示する）
 // - dist/ のファイルが、本番のものと1バイトも違わない（.htaccess は外から読めないこと）
 // - http:// で来たら https:// へ 301
@@ -71,6 +73,35 @@ if (top) {
     if (got === null) problems.push(`ヘッダー ${name} がありません`);
     else if (got !== want) problems.push(`ヘッダー ${name} の値が違います（二重に付いている場合も、ここで止まります）\n      本番：${got}\n      期待：${want}`);
     else ok.push(`ヘッダー ${name}`);
+  }
+}
+
+// ---- サイトのページ（記事の一覧・プライバシー。site.ts が作る）にも、同じヘッダーが付いている
+// 記事は1つだけ見る（どれも同じ .htaccess のもとで返るため）
+for (const page of ["articles/", "privacy.html", files.find((f) => /^articles\/(?!index\.html$).+\.html$/.test(f))].filter(Boolean)) {
+  try {
+    const r = await get(new URL(page, base));
+    if (r.status !== 200) {
+      problems.push(`${page} が ${r.status} を返しました（200 のはず）`);
+      continue;
+    }
+    const bad = Object.entries(securityHeaders).filter(([name, want]) => r.headers.get(name) !== want).map(([name]) => name);
+    if (bad.length) problems.push(`${page} のヘッダーが違います（${bad.join("・")}）`);
+    else ok.push(`${page} のヘッダー`);
+  } catch (e) {
+    problems.push(`${page} を確かめられませんでした（${e?.message ?? e}）`);
+  }
+}
+
+// ---- アクセス解析のスクリプトを入れていない（開いた回数は、サーバーの記録で数える。docs/no-network.md）
+// 本番のトップページの HTML が dist/ と1バイトも違わないことは下で確かめる。ここでは、外から読み込むスクリプトがないことを見る
+if (top) {
+  try {
+    const html = await (await get(base)).text();
+    if (/<script\b[^>]*\bsrc="(https?:)?\/\//.test(html)) problems.push("トップページが、外のサイトからスクリプトを読み込んでいます");
+    else ok.push("トップページに、外から読み込むスクリプトがない");
+  } catch (e) {
+    problems.push(`トップページの中身を確かめられませんでした（${e?.message ?? e}）`);
   }
 }
 
