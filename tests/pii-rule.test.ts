@@ -142,6 +142,9 @@ describe("1行の判定：見つけるもの", () => {
     expect(types("住所 架空県みどり市あおば町1丁目2番3号")).toEqual(["address:架空県みどり市あおば町1丁目2番3号:high"]);
     expect(types("普通 5091736")).toEqual(["bank_account:5091736:high"]);
     expect(types("個人のメール ritsu@kakuu.test")).toEqual(["email:ritsu@kakuu.test:high"]);
+    // 例示用のドメインでも、記入例の印がなければ候補にする（確からしさは「確認」まで。0.1.1）
+    expect(types("Mail: hinata.kasumi@example.jp")).toEqual(["email:hinata.kasumi@example.jp:check"]);
+    expect(types("個人のメール hinata@example.com")).toEqual(["email:hinata@example.com:check"]);
     expect(types("カード 4980 0213 7765 4324")).toEqual(["card_number:4980 0213 7765 4324:high"]);
   });
 });
@@ -162,6 +165,7 @@ describe("1行の判定：誤検知しないもの（対照）", () => {
     none("住所 〇〇県〇〇市〇〇町1-2-3");
     none("記入例 電話 090-0481-2337");
     none("sample@example.com");
+    none("記入例 kogure.minato@example.jp");
     none("電話 000-0000-0000");
   });
   it("団体の代表電話・FAX・問い合わせ先・所在地", () => {
