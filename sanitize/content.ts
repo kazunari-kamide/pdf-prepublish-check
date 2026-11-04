@@ -173,6 +173,8 @@ type GState = {
   blend: string;
   lw: number;
   font: FontInfo | null;
+  /** 縦書きの書体（WMode 1）のときの縦の寸法（字形の単位 1/1000）。横書きは null */
+  vert: Vertical | null;
   size: number;
   tc: number;
   tw: number;
@@ -183,6 +185,9 @@ type GState = {
 };
 
 const INF_RECT: Rect = [-Infinity, -Infinity, Infinity, Infinity];
+
+/** 縦書きの寸法：vy は字の原点から字の上端までの縦のずれ、w1 は縦の送り（どちらも 1/1000。既定は DW2 の [880 -1000]） */
+type Vertical = { vy: number; w1: number };
 
 function intersect(a: Rect, b: Rect): Rect {
   return [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])];
@@ -332,6 +337,27 @@ const isAxisRect = (poly: Point[]) => {
   return poly.length === 4 && Math.abs(Math.abs(signedPolygonArea(poly)) - area(b)) <= 1e-6 * Math.max(1, area(b));
 };
 
+/**
+ * 書体が縦書き（WMode 1）か。Type0 の書体で、/Encoding が「-V」で終わる名前（Identity-V など）か、CMap の /WMode が 1 のもの。
+ * 縦の寸法は子の書体の /DW2 から読む（/W2 の字ごとの寸法は読まない。限界は README）
+ */
+function verticalOf(ctx: PDFContext, ref: PDFObject): Vertical | null {
+  const font = dictOf(ctx, ref);
+  if (!font || nameOf(ctx, font.get(PDFName.of("Subtype"))) !== "Type0") return null;
+  const enc = ctx.lookup(font.get(PDFName.of("Encoding")));
+  let wmode = 0;
+  if (enc instanceof PDFName) wmode = /-V$/.test(enc.decodeText()) ? 1 : 0;
+  else if (enc instanceof PDFStream) {
+    const wm = enc.dict.lookup(PDFName.of("WMode"));
+    wmode = wm instanceof PDFNumber ? wm.asNumber() : 0;
+  }
+  if (wmode !== 1) return null;
+  const kids = ctx.lookup(font.get(PDFName.of("DescendantFonts")));
+  const cid = kids instanceof PDFArray ? dictOf(ctx, kids.get(0)) : undefined;
+  const dw2 = cid ? numsOf(ctx, cid.get(PDFName.of("DW2"))) : null;
+  return dw2 && dw2.length >= 2 ? { vy: dw2[0]!, w1: dw2[1]! } : { vy: 880, w1: -1000 };
+}
+
 // ---------------------------------------------------------------- 読む
 
 class Walker {
@@ -353,6 +379,7 @@ class Walker {
   readonly imageUses: ImageUse[] = [];
   readonly inlineImages: Array<{ seq: number; box: Rect }> = [];
   private readonly fontCache = new Map<PDFObject, FontInfo>();
+  private readonly vertCache = new Map<PDFObject, Vertical | null>();
   private readonly ctx: PDFContext;
   private readonly visible: Visibility;
   private readonly s: ContentSettings;
@@ -373,7 +400,7 @@ class Walker {
   initial(ctm: Matrix): GState {
     return {
       ctm, clip: INF_RECT, fillN: 1, strokeN: 1, fill: 0, stroke: 0, ca: 1, CA: 1, normal: true, blend: "Normal", lw: 1,
-      font: null, size: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, mode: 0,
+      font: null, vert: null, size: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, mode: 0,
     };
   }
 
@@ -496,11 +523,18 @@ class Walker {
         const seq = ++this.seq;
         const trm = multiply([g.size * g.th, 0, 0, g.size, 0, g.rise], multiply(tm, g.ctm));
         const ws = gl.isWordSpace ? g.tw : 0;
-        const adv = (gl.width * g.size + g.tc + ws) * g.th;
+        const vert = g.vert;
+        // 縦書き：字の原点は字の上の真ん中。字形は (-幅/2, -vy) から横書きと同じ形で描く。送りは下へ（w1。横の拡大はかけない）
+        const step = vert ? (vert.w1 / 1000) * g.size + g.tc + ws : gl.width * g.size + g.tc + ws;
+        const adv = vert ? step : step * g.th;
         if (!annotation && isFiniteMatrix(trm)) {
-          const corners: Point[] = [apply(trm, 0, f.descent), apply(trm, gl.width, f.descent), apply(trm, 0, f.ascent), apply(trm, gl.width, f.ascent)];
-          const [bx, by] = apply(trm, 0, f.descent);
-          const [tx, ty] = apply(trm, 0, f.ascent);
+          const x0 = vert ? -gl.width / 2 : 0;
+          const y0 = vert ? -vert.vy / 1000 : 0;
+          const corners: Point[] = [
+            apply(trm, x0, y0 + f.descent), apply(trm, x0 + gl.width, y0 + f.descent), apply(trm, x0, y0 + f.ascent), apply(trm, x0 + gl.width, y0 + f.ascent),
+          ];
+          const [bx, by] = apply(trm, x0, y0 + f.descent);
+          const [tx, ty] = apply(trm, x0, y0 + f.ascent);
           const strokeMode = g.mode === 1 || g.mode === 5;
           const glyph: Glyph = {
             seq, rect: boundsOf(corners), height: Math.hypot(tx - bx, ty - by), isSpace: gl.isSpace,
@@ -511,10 +545,10 @@ class Walker {
           slots.push({
             g: glyph,
             bytes: sliceable ? bytes.subarray(k * width, (k + 1) * width) : null,
-            adj: g.size !== 0 ? (-(gl.width * g.size + g.tc + ws) * 1000) / g.size : null,
+            adj: g.size !== 0 ? (-step * 1000) / g.size : null,
           });
         }
-        tm = multiply([1, 0, 0, 1, adv, 0], tm);
+        tm = multiply(vert ? [1, 0, 0, 1, 0, adv] : [1, 0, 0, 1, adv, 0], tm);
       });
       if (textOp) textOp.elems.set(elem, slots);
     };
@@ -663,7 +697,16 @@ class Walker {
               this.fontCache.set(ref, fi);
             }
             g.font = fi;
-          } else g.font = null;
+            let v = this.vertCache.get(ref);
+            if (v === undefined) {
+              v = verticalOf(ctx, ref);
+              this.vertCache.set(ref, v);
+            }
+            g.vert = v;
+          } else {
+            g.font = null;
+            g.vert = null;
+          }
           g.size = num(args[1]);
           break;
         }
@@ -711,7 +754,7 @@ class Walker {
           const arr = args[0]?.t === "arr" ? args[0].v : [];
           arr.forEach((el, k) => {
             if (el.t === "str") showText(el.v, k);
-            else if (el.t === "num") tm = multiply([1, 0, 0, 1, (-el.v / 1000) * g.size * g.th, 0], tm);
+            else if (el.t === "num") tm = multiply(g.vert ? [1, 0, 0, 1, 0, (-el.v / 1000) * g.size] : [1, 0, 0, 1, (-el.v / 1000) * g.size * g.th, 0], tm);
           });
           break;
         }
@@ -1139,7 +1182,10 @@ export type PageOutcome = { removed: RemovedItem[]; notDone: NotDoneItem[]; reda
 const RECT_ROUND = (r: Rect): Rect => r.map((v) => Math.round(v * 100) / 100) as Rect;
 
 /** 1ページを片付ける。書き換えたときは、ページの /Contents・/Resources を差し替える */
-export async function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: number, visible: Visibility, s: ContentSettings, codec?: ImageCodec, trace?: (e: SanitizeTraceEvent) => void): Promise<PageOutcome> {
+export async function sanitizePageContent(
+  ctx: PDFContext, page: PDFPage, pageNo: number, visible: Visibility, s: ContentSettings, codec?: ImageCodec, trace?: (e: SanitizeTraceEvent) => void,
+  userAreas: Rect[] = [],
+): Promise<PageOutcome> {
   const removed: RemovedItem[] = [];
   const notDone: NotDoneItem[] = [];
   const mb = page.getMediaBox();
@@ -1154,6 +1200,9 @@ export async function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo
   const w = new Walker(ctx, visible, s, pageNo);
   w.run(root, w.initial(IDENTITY), false, 0, new Set(), false);
   const { redactRects, redactAnnots } = scanAnnotations(ctx, page, w, visible, s);
+  // 利用者が選んだ場所（redact.ts）：ページのいちばん上に描いた濃い覆いとして入れる（下の字・画素を消し、最後に黒い四角を描く）
+  const userCovers: SanCover[] = userAreas.map((rect) => ({ seq: ++w.seq, rect, kind: "user" }));
+  w.covers.push(...userCovers);
 
   const bySeq = (a: { seq: number }, b: { seq: number }) => a.seq - b.seq;
   const coverIndex = new RectIndex(w.covers);
@@ -1161,6 +1210,12 @@ export async function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo
   // P6：字
   for (const gl of w.glyphs) {
     if (area(gl.rect) <= 0) continue;
+    // 選んだ場所は、字の箱が少しでも掛かれば消す（字の一部だけを残す切り方はしない）
+    const user = userCovers.find((c) => intersectionArea(gl.rect, c.rect) > 0);
+    if (user) {
+      gl.remove = { pattern: "P6", cover: user };
+      continue;
+    }
     for (const c of coverIndex.query(gl.rect, bySeq)) {
       if (c.seq <= gl.seq || intersectionArea(gl.rect, c.rect) <= 0) continue;
       if (coveredFraction(c, gl.rect) >= s.coveredFractionMin) {
@@ -1196,7 +1251,7 @@ export async function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo
   }
   // P6：画像の画素（黒い覆いと、白などの明るい覆い）
   const burned = new Map<ImageUse, PDFRef>();
-  const burnedReport: Array<{ rect: Rect; pixels: number; tone: "dark" | "light" }> = [];
+  const burnedReport: Array<{ rect: Rect; pixels: number; tone: "dark" | "light"; user: boolean }> = [];
   const lightIndex = new RectIndex(w.lightCovers);
   const limits: BurnLimits = { maxBytes: s.maxImageBytes, maxPixels: s.maxImagePixels, jpegQuality: s.jpegQuality, ...(codec ? { codec } : {}) };
   for (const u of w.imageUses) {
@@ -1230,12 +1285,30 @@ export async function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo
       continue;
     }
     if (r.pixels === 0) continue;
+    // 選んだ場所の下の画像に透明の型（/SMask）があれば、その所を不透明にする（型そのものに、字や署名の形が残るため）
+    const userOver = over.filter((c) => c.kind === "user");
+    if (userOver.length) {
+      const sm = r.stream.dict.get(PDFName.of("SMask"));
+      const smask = sm instanceof PDFRef ? ctx.lookup(sm) : sm;
+      if (smask instanceof PDFStream) {
+        const m = await burnImage(ctx, smask, undefined, u.ctm, userOver.map((c) => ({ ...c, tone: "light" as const })), limits);
+        if (m.ok && m.pixels > 0) r.stream.dict.set(PDFName.of("SMask"), ctx.register(m.stream));
+        else if (!m.ok) {
+          for (const c of userOver) {
+            notDone.push({
+              pattern: "P6", reason: "unsupported_image", page: pageNo, rect: RECT_ROUND(intersect(c.rect, u.box)),
+              label: "選んだ所の画像の透明の型（形の情報）を塗りつぶせませんでした。形が残っているかもしれません",
+            });
+          }
+        }
+      }
+    }
     burned.set(u, ctx.register(r.stream));
     // 報告の箱は、覆いごとに「覆いの箱と画像の箱の重なり」（ページの座標）。画面で、塗った所に枠を描けるようにする。
     // 覆いが複数あるときに全部を1つの箱にまとめると、画像全体の箱に近くなり、塗っていない所まで枠に入るため
     over.forEach((c, k) => {
       const n = r.perCover[k] ?? 0;
-      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n, tone: c.tone === "light" ? "light" : "dark" });
+      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n, tone: c.tone === "light" ? "light" : "dark", user: c.kind === "user" });
     });
   }
   // 画像の上の明るい不透明な塗りのうち、覆いにしなかったもの：塗らないが、黙って残さない（片付けられなかった所にする）
@@ -1308,9 +1381,17 @@ export async function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo
     });
   }
   for (const [c, e] of p6) {
+    if (c.kind === "user") {
+      removed.push({ pattern: "P6", kind: "redacted_text", page: pageNo, rect: RECT_ROUND(c.rect), count: e.chars, label: `選んだ所の字（${e.chars} 字）を消しました` });
+      continue;
+    }
     removed.push({ pattern: "P6", kind: "covered_text", page: pageNo, rect: RECT_ROUND(c.rect), count: e.chars, label: `黒い四角の下に残っていた字（${e.chars} 字）` });
   }
   for (const b of burnedReport) {
+    if (b.user) {
+      removed.push({ pattern: "P6", kind: "redacted_pixels", page: pageNo, rect: b.rect, count: b.pixels, label: `選んだ所の画像の中身（${b.pixels} 画素を黒く塗りました）` });
+      continue;
+    }
     removed.push({
       pattern: "P6", kind: "covered_pixels", page: pageNo, rect: b.rect, count: b.pixels,
       label: b.tone === "light" ? `白い四角の下に残っていた画像の中身（${b.pixels} 画素を白く塗りました）` : `黒い四角の下に残っていた画像の中身（${b.pixels} 画素を黒く塗りました）`,
@@ -1328,8 +1409,31 @@ export async function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo
   if (blocked.some((n) => n.actualText.size)) {
     notDone.push({ pattern: "P7", reason: "inline_image", page: pageNo, label: "ページに直接埋め込んだ画像があるため、ページの中に書かれた字の読み替え（/ActualText）を消せませんでした" });
   }
-  if (redactRects.length) applyRedactionBoxes(ctx, page, redactRects);
+  const boxes = [...redactRects, ...userAreas];
+  if (boxes.length) applyRedactionBoxes(ctx, page, boxes);
   return { removed, notDone, redactAnnots };
+}
+
+/** 読み直しの確かめ（redact-check.ts）に使う、ページの字の箱と画像。片付けと同じ読み方で、片付けた PDF を最初から読む */
+export type PageForCheck = {
+  glyphs: Array<{ rect: Rect; isSpace: boolean }>;
+  images: Array<{ box: Rect; ctm: Matrix; stream: PDFStream; res: PDFDict | undefined }>;
+  inlineImages: Rect[];
+};
+
+export function readPageForCheck(ctx: PDFContext, page: PDFPage, visible: Visibility, s: ContentSettings): PageForCheck {
+  const root: CNode = {
+    data: contentData(ctx, page.node.get(PDFName.of("Contents"))),
+    res: dictOf(ctx, page.node.get(PDFName.of("Resources"))) ?? page.node.Resources(),
+    hasInline: false, forms: new Map(), textOps: new Map(), images: new Map(), actualText: new Set(),
+  };
+  const w = new Walker(ctx, visible, s, 0);
+  w.run(root, w.initial(IDENTITY), false, 0, new Set(), false);
+  return {
+    glyphs: w.glyphs.map((g) => ({ rect: g.rect, isSpace: g.isSpace })),
+    images: w.imageUses.map((u) => ({ box: u.box, ctm: u.ctm, stream: u.stream, res: u.res })),
+    inlineImages: w.inlineImages.map((i) => i.box),
+  };
 }
 
 /** 墨消しの箱を、ページの中身の最後に黒い四角として描き込む（元の中身は q … Q で包み、行列などの影響を切る） */
