@@ -1,0 +1,36 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * 案 D2・E2・F2 だけで使う、決まりへの足し案（まだ決まりではない）。design/tokens.css を上書き・追加する。
+ * 選ばれたら、design/tokens.css と design/README.md に移してから画面に当てる（CLAUDE.md §6）。
+ * 値の出典：デジタル庁デザインシステム（DADS）の「角の形状」「タイポグラフィ」「ボタン」と、
+ * digital-go-jp/design-tokens・design-system-example-components-html（どちらも MIT）。値だけを参考にし、コードは写していない。
+ */
+@import url("../../tokens.css");
+
+:root {
+  /* ---- 角の丸め（いまの決まりは 0。DADS の 8・12・16px にそろえる） */
+  --radius: 8px; /* ボタン・項目・札 */
+  --radius-panel: 12px; /* 欄・説明の囲み */
+  --radius-sheet: 4px; /* PDF のページ（紙なので、ほぼ角のまま） */
+  --radius-full: 999px; /* 手順の帯の丸い札・件数の札 */
+
+  /* ---- 文字：見出しもゴシックにする（いまの決まりは明朝。変えるなら本人の承認が要る） */
+  --font-head: var(--font-body);
+  --tracking: 0.02em; /* DADS：26px 以下の字は 2% */
+
+  /* ---- 押せる所 */
+  --target-min: 44px; /* DADS のボタンの押せる大きさ。WCAG 2.2 の 2.5.8（24px）より大きい */
+  --color-control-line: #8a857c; /* 押せる所の枠。白の上で 3.67:1（1.4.11 の 3:1 以上） */
+
+  /* ---- フォーカス（DADS のボタンと同じ形：黒の 4px の線＋黄の 2px の縁）。黄は状態の色（2色の決まりの外） */
+  --color-focus: #ffd43d; /* 墨の上で 10.06:1、黒の字の下地で 14.74:1 */
+  --focus-outline: 4px solid #000000;
+  --focus-offset: 2px;
+  --focus-halo: 0 0 0 2px var(--color-focus);
+
+  /* ---- 浮かせ方（影は1段だけ。重ねない） */
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 8%), 0 2px 8px rgb(0 0 0 / 6%);
+  --shadow-sheet: 0 2px 10px rgb(0 0 0 / 12%);
+
+  --color-chip: #f4f2ee; /* 札の下地。補足の字が 6.82:1 */
+}

@@ -23,6 +23,7 @@
     "eval:pii": "node eval/pii.ts",
     "eval:pii-count": "node eval/pii-count.ts",
     "eval:sanitize": "node eval/sanitize.ts",
+    "eval:new": "node eval/new-rules.ts",
     "check:sanitized": "node sanitize/check/cli.ts",
     "check:browser": "node scripts/check-browser.mjs",
     "check:live": "node scripts/check-live.mjs"

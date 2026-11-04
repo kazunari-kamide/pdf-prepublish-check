@@ -11,23 +11,24 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <a class="skip" href="#results">結果へ移る</a>
     <header class="band">
-      <h1 class="brand">お守りPDF</h1>
+      <h1 class="brand"><span class="seal" aria-hidden="true">守</span>お守りPDF</h1>
       <ol class="steps" aria-label="手順">
-        <li id="step-pick" data-state="now">
-          <span class="step-name">1 選ぶ</span>
+        <li id="step-pick" data-state="now" aria-current="step">
+          <span class="step-no" aria-hidden="true">1</span><span class="step-name"><span class="visually-hidden">1 </span>選ぶ</span>
           <span class="step-note" id="step-pick-note">PDF を置く</span>
         </li>
         <li id="step-check" data-state="todo">
-          <span class="step-name">2 確かめる</span>
+          <span class="step-no" aria-hidden="true">2</span><span class="step-name"><span class="visually-hidden">2 </span>確かめる</span>
           <span class="step-note" id="step-check-note">まだです</span>
         </li>
         <li id="step-clean" data-state="todo">
-          <span class="step-name">3 片付ける</span>
+          <span class="step-no" aria-hidden="true">3</span><span class="step-name"><span class="visually-hidden">3 </span>片付ける</span>
           <span class="step-note" id="step-clean-note">まだです</span>
         </li>
         <li id="step-verify" data-state="todo">
-          <span class="step-name">4 読み直す</span>
+          <span class="step-no" aria-hidden="true">4</span><span class="step-name"><span class="visually-hidden">4 </span>読み直す</span>
           <span class="step-note" id="step-verify-note">全部 緑になれば完了</span>
         </li>
       </ol>
@@ -62,7 +63,7 @@
         <p class="render-note" id="render-note" hidden></p>
       </section>
 
-      <aside class="results" aria-labelledby="result-title">
+      <aside class="results" id="results" tabindex="-1" aria-labelledby="result-title">
         <h2 id="result-title">種類ごとの結果</h2>
         <p id="status" role="status" aria-live="polite">まだ PDF を選んでいません。</p>
         <progress id="progress" max="1" value="0" hidden></progress>

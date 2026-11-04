@@ -28,7 +28,8 @@ export type Item = {
 };
 
 /** 知らせること（漏れではないが、利用者に伝えること） */
-export type NoticeKind = "decrypted" | "unchecked_images" | "skipped_pages" | "partial";
+/** info＝漏れとは言い切れず、知らせるだけのもの（XFA のフォーム・C2PA の来歴など。11/5 D） */
+export type NoticeKind = "decrypted" | "unchecked_images" | "skipped_pages" | "partial" | "info";
 /** reason は省いたページのときだけ。heavy＝図形が多すぎる（ページの絵も描かない）、unreadable＝読めなかった */
 export type Notice = { kind: NoticeKind; message: string; pages: number[]; reason?: "heavy" | "unreadable" };
 
