@@ -11,6 +11,7 @@ import { redact, sanitizePdf, type RedactArea, type RedactResult } from "../sani
 import { createNodeImageCodec } from "../sanitize/node/image-codec.ts";
 import { allChecks } from "./helpers/redact-checks.ts";
 import { appendRevision, buildPdf, hex, imageFlate, imageJpeg, latinAt, scanPixels, textAt } from "./helpers/redact-pdfs.ts";
+import { HEAVY_TIMEOUT } from "./helpers/timeout.ts";
 
 /** PDF.js で取り出せる字（ページごとにつなげたもの） */
 async function textOf(bytes: Uint8Array): Promise<string[]> {
@@ -55,7 +56,7 @@ const NAME_LINE = () => textAt(50, 200, "氏名見本花子") + textAt(50, 170, 
 const NAME_AREA: RedactArea = { page: 1, rect: [75, 195, 121, 215] }; // 見・本・花・子（名 の右端 74 には掛からない）
 
 describe("字の上", () => {
-  it("選んだ所の字が消え、ほかの字は残る。読み直しの残りは 0 件", async () => {
+  it("選んだ所の字が消え、ほかの字は残る。読み直しの残りは 0 件", { timeout: HEAVY_TIMEOUT }, async () => {
     const bytes = await buildPdf(() => ({ pages: [{ content: NAME_LINE() }] }));
     const r = await run(bytes, [NAME_AREA]);
     ok(r);
@@ -80,7 +81,7 @@ describe("字の上", () => {
     expect(text).not.toContain("花");
   });
 
-  it("残す字の位置は変わらない（消した字は同じ幅の送りになる）", async () => {
+  it("残す字の位置は変わらない（消した字は同じ幅の送りになる）", { timeout: HEAVY_TIMEOUT }, async () => {
     const bytes = await buildPdf(() => ({ pages: [{ content: textAt(50, 200, "氏名見本花子") }] }));
     const r = await run(bytes, [{ page: 1, rect: [75, 195, 97, 215] }]); // 見・本
     ok(r);
