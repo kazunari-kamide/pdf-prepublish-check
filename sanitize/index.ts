@@ -21,7 +21,7 @@ import type { NotDoneItem, RemovedItem, SanitizeOptions, SanitizeResult } from "
 
 export type * from "./types.ts";
 
-export const SANITIZER_VERSION = "0.3.0";
+export const SANITIZER_VERSION = "0.3.1";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 const MAX_INPUT_BYTES = 512 * 1024 * 1024;

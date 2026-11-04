@@ -1076,7 +1076,12 @@ export function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: numb
     }
     if (r.pixels === 0) continue;
     burned.set(u, ctx.register(r.stream));
-    burnedReport.push({ rect: RECT_ROUND(rect), pixels: r.pixels });
+    // 報告の箱は、覆いごとに「覆いの箱と画像の箱の重なり」（ページの座標）。画面で、塗った所に枠を描けるようにする。
+    // 覆いが複数あるときに全部を1つの箱にまとめると、画像全体の箱に近くなり、塗っていない所まで枠に入るため
+    over.forEach((c, k) => {
+      const n = r.perCover[k] ?? 0;
+      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n });
+    });
   }
   for (const im of w.inlineImages) {
     const over = w.covers.filter((c) => c.seq > im.seq && intersectionArea(c.rect, im.box) > 0);

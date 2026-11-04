@@ -26,7 +26,8 @@ import type { SanCover } from "./geometry.ts";
 import { coverContains } from "./geometry.ts";
 
 export type BurnResult =
-  | { ok: true; stream: PDFRawStream; pixels: number }
+  /** perCover：覆いごとに塗った画素の数（covers と同じ並び。2つの覆いに入る画素は、先の覆いで数える） */
+  | { ok: true; stream: PDFRawStream; pixels: number; perCover: number[] }
   | { ok: false; reason: "unsupported_filter" | "unsupported_color" | "too_large" | "broken" };
 
 const DECODABLE = new Set(["FlateDecode", "Fl", "LZWDecode", "LZW", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85", "RunLengthDecode", "RL"]);
@@ -250,12 +251,15 @@ export function burnImage(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDi
   // 捨てた案：四隅がすべて覆いの中にある画素だけを塗る。見た目は変わらないが、ふちの画素のインクが残り、
   // 合成 PDF（fixtures/p6）で検証器の残りが 5 件になった（2026-11-04 測定）。
   let pixels = 0;
+  const perCover = covers.map(() => 0);
   for (let y = 0; y < height; y++) {
     const v = 1 - (y + 0.5) / height; // 画像の1行目は、単位の正方形の上端
     const row = y * rowLen;
     for (let x = 0; x < width; x++) {
       const [px, py] = apply(ctm, (x + 0.5) / width, v);
-      if (!covers.some((c) => coverContains(c, px, py))) continue;
+      const k = covers.findIndex((c) => coverContains(c, px, py));
+      if (k < 0) continue;
+      perCover[k]!++;
       for (let c = 0; c < comps; c++) writeSample(data, row, x * comps + c, bpc, fill[c]!);
       pixels++;
     }
@@ -269,5 +273,5 @@ export function burnImage(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDi
   }
   const out = ctx.flateStream(data, {});
   for (const [k, v] of Object.entries(entries)) out.dict.set(PDFName.of(k), v);
-  return { ok: true, stream: out, pixels };
+  return { ok: true, stream: out, pixels, perCover };
 }

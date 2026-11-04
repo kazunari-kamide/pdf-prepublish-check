@@ -167,6 +167,22 @@ describe("P6：黒い四角の下の字", () => {
     for (let y = 0; y < 10; y++) {
       for (let x = 0; x < 10; x++) expect(data[y * 10 + x]).toBe(x < 5 ? 0 : 180);
     }
+    // 報告の箱は、画像全体ではなく、塗った所（覆いの箱と画像の箱の重なり）
+    expect(burned?.rect).toEqual([50, 50, 100, 150]);
+  });
+
+  it("1つの画像に覆いが2つあれば、塗った所の箱を覆いごとに返す（ページの座標）", async () => {
+    // 10×10 の画像を (50,50)–(150,150) に置き、左上と右下に黒い四角を重ねる。右下の四角は画像からはみ出す
+    const pixels = new Uint8Array(100).fill(180);
+    const pdf = await makePdf("q 100 0 0 100 50 50 cm /Im1 Do Q 0 g 50 120 30 30 re f 120 30 50 50 re f", {
+      xobjects: (doc) => ({ Im1: doc.context.register(doc.context.flateStream(pixels, { Type: "XObject", Subtype: "Image", Width: 10, Height: 10, ColorSpace: "DeviceGray", BitsPerComponent: 8 })) }),
+    });
+    const r = ok(await sanitizePdf(pdf));
+    const burned = r.removed.filter((x) => x.kind === "covered_pixels");
+    expect(burned.map((x) => ({ rect: x.rect, count: x.count, page: x.page }))).toEqual([
+      { rect: [50, 120, 80, 150], count: 9, page: 1 },
+      { rect: [120, 50, 150, 80], count: 9, page: 1 },
+    ]);
   });
 
   it("JPEG の画像の上の覆いは塗れないので、片付けられなかった所として返す", async () => {
