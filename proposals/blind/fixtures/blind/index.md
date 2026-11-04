@@ -14,10 +14,10 @@
 | T03 | `pdf/t03-ctl-dates-only.pdf` | 対照 | 前の版も新しい版も Info は日付だけ（増分更新で ModDate を変えた） | 出てはいけない：すべて |
 | T04 | `pdf/t04-a-sjis-author.pdf` | 隠しあり | Author を Shift_JIS のバイト列のまま（16進）で | P1 |
 | T04 | `pdf/t04-b-sjis-literal.pdf` | 隠しあり | Title を Shift_JIS のバイト列のまま（リテラル）で | P1 |
-| T04 | `pdf/t04-ctl-sjis-generic.pdf` | 対照 | Subject に Shift_JIS で「会議」だけ（人名なし） | 出てはいけない：すべて |
+| T04 | `pdf/t04-ctl-sjis-generic.pdf` | 対照 | Subject に Shift_JIS で「会議」だけ（人名なし）。題を P1 として出すのはよい | 出てはいけない：P2・P3・P4・P5・P6・P7・P8・P9・P10・P11・P12・P13 |
 | T05 | `pdf/t05-a-creator-differs.pdf` | 隠しあり | Info の作成者は課の名前、XMP の dc:creator は個人名 | P2 |
 | T05 | `pdf/t05-b-title-differs.pdf` | 隠しあり | Info の題は新しく、XMP の dc:title に古い題（人名入り） | P2 |
-| T05 | `pdf/t05-ctl-agree.pdf` | 対照 | Info と XMP の題が同じで、人名なし | 出てはいけない：すべて |
+| T05 | `pdf/t05-ctl-agree.pdf` | 対照 | Info と XMP の題が同じで、人名なし。題を P1 として出すのはよい | 出てはいけない：P2・P3・P4・P5・P6・P7・P8・P9・P10・P11・P12・P13 |
 | T06 | `pdf/t06-a-dc-creator.pdf` | 隠しあり | XMP の dc:creator に個人名 | P2 |
 | T06 | `pdf/t06-b-history.pdf` | 隠しあり | XMP の xmpMM:History に、編集した人の名前と保存の記録 | P2 |
 | T06 | `pdf/t06-ctl-tool-only.pdf` | 対照 | XMP に作成ソフトと日付だけ | 出てはいけない：すべて |
@@ -30,10 +30,10 @@
 | T09 | `pdf/t09-b-catalog-pieceinfo.pdf` | 隠しあり | 文書の /PieceInfo に、アプリの私的データ（人名入り） | P2・P4 |
 | T09 | `pdf/t09-ctl-pieceinfo-date.pdf` | 対照 | ページの /PieceInfo に、日付だけ（私的データは空） | 出てはいけない：すべて |
 | T11 | `pdf/t11-a-other-org-title.pdf` | 隠しあり | Title に別の架空の団体名。本文は別の架空の団体 | P3（確認） |
-| T11 | `pdf/t11-ctl-same-org.pdf` | 対照 | Title と本文が同じ架空の団体名 | 出てはいけない：すべて |
+| T11 | `pdf/t11-ctl-same-org.pdf` | 対照 | Title と本文が同じ架空の団体名。題を P1 として出すのはよい | 出てはいけない：P2・P3・P4・P5・P6・P7・P8・P9・P10・P11・P12・P13 |
 | T12 | `pdf/t12-a-path-in-title.pdf` | 隠しあり | Title に C:\Users\… のパス | P4 |
 | T12 | `pdf/t12-b-unc-in-xmp.pdf` | 隠しあり | XMP の DerivedFrom に \\サーバー\… のパス | P4 |
-| T12 | `pdf/t12-ctl-slashes.pdf` | 対照 | Title に、パスでない記号（2026/2027・A:B・3\4） | 出てはいけない：すべて |
+| T12 | `pdf/t12-ctl-slashes.pdf` | 対照 | Title に、パスでない記号（2026/2027・A:B・3\4）。題を P1 として出すのはよい | 出てはいけない：P2・P3・P4・P5・P6・P7・P8・P9・P10・P11・P12・P13 |
 | T13 | `pdf/t13-a-unc-in-body.pdf` | 隠しあり | 本文の見える字に \\サーバー\… のパス | P4 |
 | T13 | `pdf/t13-b-path-in-annot.pdf` | 隠しあり | 付箋の注釈の中身に C:\Users\… のパス | P4 |
 | T13 | `pdf/t13-c-file-link.pdf` | 隠しあり | リンクの行き先が file:///C:/Users/… | P4 |
