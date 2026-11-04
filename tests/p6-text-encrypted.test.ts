@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { PDFDocument, PDFString, StandardFonts, rgb } from "pdf-lib";
-import { detectP6Text } from "../rules/p6-text/index.ts";
+import { detectP6Text, type P6TextFinding } from "../rules/p6-text/index.ts";
 import { detectP1Info } from "../rules/p1-info/index.ts";
 import { loadPdf } from "../rules/shared/load.ts";
 import { md5, rc4 } from "../rules/shared/primitives.ts";
@@ -39,7 +39,7 @@ describe("パスワードなしで開ける暗号化 PDF は、復号して中�
         const r = await detectP6Text(makeEncryptedPdf({ method, objectStream }));
         expect(r.status).toBe("ok");
         expect(r.findings).toHaveLength(1);
-        expect(r.findings[0]!.chars).toBe(10);
+        expect((r.findings[0] as P6TextFinding).chars).toBe(10);
         expect(r.findings[0]!.rect).toEqual([15, 95, 135, 115]);
         expect(r.decrypted?.failedObjects).toBe(0);
       });
@@ -53,7 +53,7 @@ describe("パスワードなしで開ける暗号化 PDF は、復号して中�
 
   it("復号した中身の字は、暗号化していない同じ PDF と同じ（includeText で確かめる）", async () => {
     const r = await detectP6Text(makeEncryptedPdf({ method: "aes256r6", objectStream: true }), { includeText: true });
-    expect(r.findings[0]!.text).toBe("Taro Yamada");
+    expect((r.findings[0] as P6TextFinding).text).toBe("Taro Yamada");
   });
 });
 

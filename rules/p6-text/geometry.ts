@@ -130,3 +130,47 @@ export function clipPolygonToRect(points: Point[], r: Rect): Point[] {
 export function rectsOverlap(a: Rect, b: Rect): boolean {
   return a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 }
+
+/** 2つの箱の重なり。重ならなければ null（1.6.0 から） */
+export function intersectRect(a: Rect, b: Rect): Rect | null {
+  const r: Rect = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])];
+  return r[0] < r[2] && r[1] < r[3] ? r : null;
+}
+
+/** 点が多角形の中か（巻き数。0 でなければ中） */
+export function winding(poly: Point[], x: number, y: number): number {
+  let w = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [x0, y0] = poly[i]!;
+    const [x1, y1] = poly[(i + 1) % poly.length]!;
+    if (y0 <= y) {
+      if (y1 > y && (x1 - x0) * (y - y0) - (x - x0) * (y1 - y0) > 0) w++;
+    } else if (y1 <= y && (x1 - x0) * (y - y0) - (x - x0) * (y1 - y0) < 0) w--;
+  }
+  return w;
+}
+
+/** 点が、部分の集まり（塗りの決まりつき）の中か */
+export function insideParts(parts: Point[][], rule: "nonzero" | "evenodd", x: number, y: number): boolean {
+  if (rule === "nonzero") return parts.reduce((s, p) => s + winding(p, x, y), 0) !== 0;
+  return parts.reduce((s, p) => s + (winding(p, x, y) !== 0 ? 1 : 0), 0) % 2 === 1;
+}
+
+/** 凸包（左回り。点が3つ未満、または一直線なら、そのまま返す） */
+export function convexHull(points: Point[]): Point[] {
+  const pts = [...points].sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  if (pts.length < 3) return pts;
+  const cross = (o: Point, a: Point, b: Point) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: Point[] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: Point[] = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i]!;
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}

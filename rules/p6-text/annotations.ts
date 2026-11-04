@@ -115,10 +115,13 @@ export function scanAnnotations(ctx: PDFContext, annots: PDFArray | undefined, s
       continue;
     }
 
-    if (subtype === "Square") {
+    // 見た目のない四角・多角形の注釈は、中の色（/IC）で見る。濃い色は字の層と画像の層、
+    // 白っぽい色は画像の層だけの覆いになる（1.5.0 から。addCover が色の向きで分ける）。
+    // 多角形は、注釈の箱（/Rect）で近似する（1.5.0 から）
+    if (subtype === "Square" || subtype === "Polygon") {
       const ic = numbers(ctx, annot.get(PDFName.of("IC")));
       const lum = ic && ic.length > 0 ? luminanceOf(ic, ic.length) : null;
-      if (lum !== null && lum <= settings.darkLuminanceMax) scanner.addCover(rect, "annotation", "fill", lum);
+      if (lum !== null) scanner.addCover(rect, "annotation", "fill", lum);
     }
   }
 }

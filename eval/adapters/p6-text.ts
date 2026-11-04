@@ -16,7 +16,8 @@ export function adaptP6Text(report: P6TextReport): VerifierShapedReport {
       cover: f.cover,
       page: f.page,
       rect: f.rect,
-      remaining: { chars: f.chars },
+      // 画像の層（1.5.0 から）は、残っている字数を持たない
+      remaining: f.layer === "text" ? { chars: f.chars } : {},
     })),
     skipped_pages: report.skippedPages.map((s) => ({ page: s.page, reason: s.reason })),
   };

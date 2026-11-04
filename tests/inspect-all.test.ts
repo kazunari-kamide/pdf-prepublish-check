@@ -66,12 +66,12 @@ describe("検査の結果", () => {
 
 describe("中身を画面に返さない", () => {
   const cases: Array<[string, (b: Uint8Array) => Promise<string[]>]> = [
-    ["p6/p6-t01-rect-over-name.pdf", async (b) => (await detectP6Text(b, { includeText: true })).findings.map((f) => f.text ?? "")],
-    ["p6/p6-t02-partial-string.pdf", async (b) => (await detectP6Text(b, { includeText: true })).findings.map((f) => f.text ?? "")],
+    ["p6/p6-t01-rect-over-name.pdf", async (b) => (await detectP6Text(b, { includeText: true })).findings.map((f) => ("text" in f ? f.text : undefined) ?? "")],
+    ["p6/p6-t02-partial-string.pdf", async (b) => (await detectP6Text(b, { includeText: true })).findings.map((f) => ("text" in f ? f.text : undefined) ?? "")],
     ["p1/p1-02-all-standard.pdf", async (b) => (await detectP1Info(b, { includeValues: true })).findings.map((f) => f.value ?? "")],
     ["p1/p1-03-custom-keys.pdf", async (b) => (await detectP1Info(b, { includeValues: true })).findings.map((f) => f.value ?? "")],
     ["p9/p9-01-names-xlsx.pdf", async (b) => (await detectP9Attach(b, { includeNames: true })).findings.map((f) => f.name ?? "")],
-    ["p7/p7-01-white-text.pdf", async (b) => (await detectP7Hidden(b, { includeText: true })).findings.map((f) => f.text ?? "")],
+    ["p7/p7-01-white-text.pdf", async (b) => (await detectP7Hidden(b, { includeText: true })).findings.map((f) => ("text" in f ? f.text : undefined) ?? "")],
   ];
   for (const [file, secrets] of cases) {
     it(file, async () => {
