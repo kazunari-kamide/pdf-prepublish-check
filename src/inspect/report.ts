@@ -25,6 +25,11 @@ export type Item = {
   /** ページの上の場所があるときだけ */
   page: number | null;
   rect: Rect | null;
+  /**
+   * 確からしさ。check＝ルールが「確かめてください」とした所（P6 の confidence: check・画像を解けなかった所など）。
+   * 画面では、断定しない言葉で出す。省いたときは、ふつうの見つけた所
+   */
+  confidence?: "check";
 };
 
 /** 知らせること（漏れではないが、利用者に伝えること） */

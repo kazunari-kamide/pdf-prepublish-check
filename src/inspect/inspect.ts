@@ -5,12 +5,13 @@
 
 import { readPageBoxes } from "./pages";
 import type { InspectSummary, RuleResult } from "./report";
-import { RULES, type RuleEntry } from "./rules";
+import { RULES, type RuleEntry, type RunContext } from "./rules";
 
 export async function inspectAll(
   bytes: Uint8Array,
   onProgress: (done: number, total: number, label: string) => void = () => {},
   rules: RuleEntry[] = RULES,
+  ctx: RunContext = {},
 ): Promise<InspectSummary> {
   const results: RuleResult[] = [];
   const total = rules.length + 1;
@@ -24,7 +25,7 @@ export async function inspectAll(
   for (const [i, rule] of rules.entries()) {
     onProgress(i + 1, total, rule.label);
     try {
-      results.push(await rule.run(bytes));
+      results.push(await rule.run(bytes, ctx));
     } catch {
       // 例外の中身（ファイルの中身を含むことがある）は画面に出さない
       results.push({
