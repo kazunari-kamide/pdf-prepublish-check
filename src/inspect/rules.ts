@@ -24,13 +24,17 @@ import { detectAltText, type AltKind, type AltReport } from "../../rules/alt-tex
 import { detectInfoXmpDiff, type DiffReport } from "../../rules/props/index.ts";
 import { detectExtras, type ExtrasReport } from "../../rules/extras/index.ts";
 import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/index.ts";
+import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report";
+
+/** ルールに渡す道具。imageDecoder＝pdf-lib で解けない画像（JPEG など）を解く道具（Worker が PDF.js で作る） */
+export type RunContext = { imageDecoder?: ExternalImageDecoder };
 
 export type RuleEntry = {
   id: string;
   label: string;
   pattern: Pattern;
-  run(bytes: Uint8Array): Promise<RuleResult>;
+  run(bytes: Uint8Array, ctx?: RunContext): Promise<RuleResult>;
 };
 
 /** どのルールの報告にもある部分 */
@@ -46,7 +50,7 @@ function defineRule<R extends BaseReport>(meta: {
   id: string;
   label: string;
   pattern: Pattern;
-  detect(bytes: Uint8Array): Promise<R>;
+  detect(bytes: Uint8Array, ctx: RunContext): Promise<R>;
   items(report: R): Item[];
   notices?(report: R): Notice[];
 }): RuleEntry {
@@ -54,8 +58,8 @@ function defineRule<R extends BaseReport>(meta: {
     id: meta.id,
     label: meta.label,
     pattern: meta.pattern,
-    async run(bytes) {
-      const report = await meta.detect(bytes);
+    async run(bytes, ctx = {}) {
+      const report = await meta.detect(bytes, ctx);
       const base = { ruleId: report.rule.id, ruleVersion: report.rule.version, label: meta.label, pattern: meta.pattern };
       if (report.status === "error") {
         return { ...base, status: "error", message: report.error?.message ?? "調べられませんでした。", items: [], notices: [] };
@@ -69,7 +73,7 @@ function defineRule<R extends BaseReport>(meta: {
 
 const DECRYPTED: Notice = {
   kind: "decrypted",
-  message: "パスワードなしで開ける暗号化がかかっていたので、ほどいて調べました。",
+  message: "パスワードなしで開ける暗号化がかかっていたので、外して調べました。",
   pages: [],
 };
 
@@ -93,43 +97,86 @@ const p6 = defineRule<P6TextReport>({
   id: "p6-text",
   label: "見せかけの黒塗り",
   pattern: "P6",
-  detect: (b) => detectP6Text(b),
-  items: (r) =>
-    r.findings.map((f) =>
-      f.layer === "text"
-        ? {
-            pattern: "P6",
-            severity: "high",
-            title: "黒い四角の下に、字が残っています",
-            why: "上から重ねただけなので、下の字を選んでコピーできます。",
-            detail: `覆っているもの：${P6_COVER[f.cover] ?? "図形"}／残っている字：${f.chars}字`,
-            page: f.page,
-            rect: f.rect,
-          }
-        : {
-            // 画像の層（検出ルール 1.5.0 から）。文言は仮。画面の担当が見直す
-            pattern: "P6",
-            severity: "high",
-            title: f.tone === "light" ? "白い四角の下に、画像の中身が残っています" : "黒い四角の下に、画像の中身が残っています",
-            why: "画像の上に重ねただけなので、四角を外したり画像を取り出したりすると、下に写っているものが見えます。",
-            detail: `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`,
-            page: f.page,
-            rect: f.rect,
-          },
-    ),
+  detect: (b, ctx) => detectP6Text(b, ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}),
+  items: (r) => r.findings.map(p6Item),
   notices: (r) => {
     const out = skippedNotices(r.skippedPages);
-    const pages = [...new Set(r.uncheckedImages.map((u) => u.page))];
-    if (pages.length) {
+    // 画像を解けなかった理由ごとに分けて知らせる（大きすぎる・読めない形式）
+    const large = [...new Set(r.uncheckedImages.filter((u) => u.reason === "too_large").map((u) => u.page))];
+    const other = [...new Set(r.uncheckedImages.filter((u) => u.reason !== "too_large").map((u) => u.page))];
+    if (large.length) {
       out.push({
         kind: "unchecked_images",
-        message: "このページの画像は調べていません（画像の形式を読めなかったため）。黒く塗った画像があっても、ここでは見つけられません。",
-        pages,
+        message: "このページの画像は、大きすぎるため調べていません。黒く塗った画像や、画像の上の黒い四角があっても、ここでは見つけられません。",
+        pages: large,
+      });
+    }
+    if (other.length) {
+      out.push({
+        kind: "unchecked_images",
+        message: "このページの画像は、この版では読み解けない形式のため調べていません。黒く塗った画像や、画像の上の黒い四角があっても、ここでは見つけられません。",
+        pages: other,
       });
     }
     return out;
   },
 });
+
+/** P6 の1件を画面の形にする。confidence: check は、断定しない言葉で出す（「確かめてください」） */
+export function p6Item(f: P6TextReport["findings"][number]): Item {
+  const cover = `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`;
+  const base = { pattern: "P6" as const, severity: "high" as const, page: f.page, rect: f.rect };
+  const check = f.confidence === "check" ? { confidence: "check" as const } : {};
+  if (f.layer === "text") {
+    return f.confidence === "check"
+      ? {
+          ...base,
+          ...check,
+          title: "黒い四角の下に、字が残っているかもしれません",
+          why: "見出しの帯や番号の札のような形にも見えるため、言い切れません。黒塗りのつもりなら、下の字を選んでコピーできてしまいます。確かめてください。",
+          detail: `${cover}／重なっている字：${f.chars}字`,
+        }
+      : {
+          ...base,
+          title: "黒い四角の下に、字が残っています",
+          why: "上から重ねただけなので、下の字を選んでコピーできます。",
+          detail: `${cover}／残っている字：${f.chars}字`,
+        };
+  }
+  const box = f.tone === "light" ? "白い四角" : "黒い四角";
+  if (f.reason === "under_unreadable") {
+    return {
+      ...base,
+      ...check,
+      title: `${box}の下の画像を、読み解けませんでした`,
+      why: "画像の上に重ねただけなら、下に写っているものが残っています。この版では画像の形式を読めないため、言い切れません。確かめてください。",
+      detail: cover,
+    };
+  }
+  if (f.reason === "under_later_paint") {
+    return {
+      ...base,
+      ...check,
+      title: `${box}の下に、画像の中身が残っているかもしれません`,
+      why: "四角の上に細い線などが重なっていて、下を十分に測れませんでした。確かめてください。",
+      detail: cover,
+    };
+  }
+  return f.confidence === "check"
+    ? {
+        ...base,
+        ...check,
+        title: `${box}の下に、画像の中身が残っているかもしれません`,
+        why: "下の画像が写真のように色や濃淡の多いものなので、言い切れません。上に重ねただけなら、四角を外すと見えます。確かめてください。",
+        detail: cover,
+      }
+    : {
+        ...base,
+        title: `${box}の下に、画像の中身が残っています`,
+        why: "画像の上に重ねただけなので、四角を外したり画像を取り出したりすると、下に写っているものが見えます。",
+        detail: cover,
+      };
+}
 
 // ---------------------------------------------------------------- P7 隠れたテキスト
 
@@ -267,12 +314,12 @@ const p9 = defineRule<P9WithInner>({
   id: "p9-attach",
   label: "添付ファイル",
   pattern: "P9",
-  async detect(b) {
+  async detect(b, ctx) {
     const report = await detectP9Attach(b);
     if (report.status !== "ok" || report.findings.length === 0) return { ...report, inner: [] };
     // 添付が PDF なら、ほかの検出ルール（この一覧の P9 以外）で中も調べる。中の添付は inspectAttachments が入れ子でたどる
     const detectors: InnerDetector[] = RULES.filter((r) => r.id !== "p9-attach").map((r) => async (bytes) => {
-      const res = await r.run(bytes);
+      const res = await r.run(bytes, ctx);
       if (res.status === "error") throw new Error("inner rule error");
       return res.items;
     });

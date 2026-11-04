@@ -346,6 +346,35 @@ button {
   display: none;
 }
 
+/* 見本の PDF で試す：置き場の下に、枠だけのボタン */
+.sample {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-small);
+}
+
+.sample-button {
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sample-button:hover {
+  background: var(--color-chip);
+}
+
+.sample-note {
+  color: var(--color-muted);
+}
+
 .filebar {
   display: flex;
   flex-wrap: wrap;
@@ -569,12 +598,8 @@ progress {
   color: var(--color-on-dark);
 }
 
-.group[data-status="none"] .fuda {
-  background: var(--color-ok-tint);
-  color: var(--color-ok);
-}
-
-.group[data-status="error"] .fuda {
+/* 見た所・見なかった所：札は墨の字に札の地（緑にしない。「調べた」は「すべて大丈夫」ではないため） */
+.group[data-status="scope"] .fuda {
   background: var(--color-chip);
   color: var(--color-base);
 }
@@ -609,24 +634,21 @@ progress {
   text-align: center;
 }
 
-.group[data-status="error"] .group-count {
-  color: var(--color-muted);
-  font-weight: 400;
-}
 
 .group-message {
   margin: var(--space-1) 0 0;
   font-size: var(--text-small);
 }
 
-.none-list {
+/* 見た所・見なかった所の一覧：型ごとに1行。状態は印（✓▲◐－○）と字で示す */
+.coverage-list {
   list-style: none;
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   font-size: var(--text-small);
 }
 
-.none-list li {
+.coverage-list li {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
@@ -634,26 +656,209 @@ progress {
   padding: var(--space-1) 0;
 }
 
-.none-list li + li {
+.coverage-list li + li {
   border-top: 1px solid var(--color-line);
 }
 
-.group[data-status="none"] .group-count {
-  color: var(--color-ok);
+.coverage-state {
+  white-space: nowrap;
   font-weight: 700;
 }
 
-.group[data-status="none"] .group-count::before {
-  content: "✓ ";
+.coverage-list li[data-state="checked"]:not([data-found]) .coverage-state {
+  color: var(--color-ok);
 }
 
-/* 調べられなかった種類：「✓」も緑も付けない（「問題なし」に見せない） */
-.group[data-status="error"] .group-count::before {
-  content: "－ ";
+.coverage-list li[data-found] .coverage-state {
+  color: var(--color-accent);
 }
 
-.none-list .group-message {
+.coverage-list li[data-state="failed"] .coverage-state,
+.coverage-list li[data-state="not_in_version"] .coverage-state {
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.coverage-reason {
   flex-basis: 100%;
+  color: var(--color-muted);
+}
+
+/* プロパティの一覧：値を出してよいのは、ここだけ。団体名らしい語は、紅の下線と薄い紅の地（色だけにしない） */
+.props {
+  margin-top: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.props summary {
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.props-body {
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: var(--text-small);
+}
+
+.props-body h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--text-small);
+}
+
+.props-note {
+  margin: var(--space-1) 0;
+  color: var(--color-muted);
+}
+
+.prop-list {
+  margin: 0;
+}
+
+.prop-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 38%) minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.prop-row dt {
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.prop-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.prop-org {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.prop-cut {
+  color: var(--color-muted);
+}
+
+.props-go {
+  min-height: var(--target-min);
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 30rem) {
+  .prop-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+/* ルールの版：結果の下に、閉じた形で控えめに */
+.ruleset {
+  margin-top: var(--space-3);
+  font-size: var(--text-small);
+}
+
+.ruleset summary {
+  min-height: var(--target-min);
+  padding-top: var(--space-2);
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.ruleset-body h4 {
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--text-small);
+}
+
+.ruleset-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  overflow-wrap: anywhere;
+}
+
+/* 自分で黒塗りする所：墨の点線の枠と「選N」の札（見つかった所の紅の枠と、色と線の形で分ける） */
+.mark.mark-pick {
+  border: var(--border-mark) dashed var(--color-base);
+  background: rgb(43 42 40 / 18%);
+  cursor: default;
+}
+
+.mark.mark-pick .mark-no {
+  background: var(--color-base);
+}
+
+.sheet[data-picking="true"] {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.sheet[data-picking="true"] .mark {
+  pointer-events: none;
+}
+
+.pick-tools {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+.actions .pick-toggle {
+  width: auto;
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-size: var(--text-small);
+}
+
+.actions .pick-toggle[aria-pressed="true"] {
+  border: var(--border-strong) solid var(--color-base);
+  background: var(--color-chip);
+}
+
+.pick-help {
+  color: var(--color-muted);
+}
+
+.picks ul {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  font-size: var(--text-small);
+}
+
+.picks li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
+}
+
+.actions .pick-remove {
+  width: auto;
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-line);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-size: var(--text-small);
 }
 
 .items {
@@ -713,6 +918,16 @@ progress {
 
 .item-sev.sev-high {
   color: var(--color-accent);
+}
+
+/* 確かめてほしい所：「？ 確かめる」の札は点線（言い切らない形）。項目の枠も点線 */
+.item-sev.sev-check {
+  border-style: dashed;
+  color: var(--color-base);
+}
+
+.item[data-check] {
+  border-style: dashed;
 }
 
 .item-page {
@@ -822,14 +1037,119 @@ progress {
   border-color: var(--color-base);
 }
 
-.download:hover {
+.download[href]:hover {
   text-decoration: underline;
+}
+
+/* 読み直しが通るまで押せない形（href がない）。押せるボタンと見分けられるよう、地と字の色を変え、斜線の印も付ける。
+   残っている所があるときの墨の地より優先する */
+.download[aria-disabled="true"],
+.clean .download[aria-disabled="true"] {
+  border-color: var(--color-control-line);
+  background: var(--color-chip);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+.download[aria-disabled="true"]::before {
+  content: "⊘ ";
+}
+
+.save-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.save-note[data-gate="blocked"] {
+  color: var(--color-accent);
+}
+
+.save-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  margin-top: var(--space-1);
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.save-confirm input {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  accent-color: var(--color-base);
 }
 
 .download-note {
   margin: var(--space-1) 0 var(--space-3);
   font-size: var(--text-small);
   overflow-wrap: anywhere;
+}
+
+/* 型ごとの数（片付ける前 → 読み直したあと）。残っている型は紅の字と「▲」 */
+.before-after {
+  margin: var(--space-3) 0;
+}
+
+.before-after h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-small);
+}
+
+.before-after ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-small);
+}
+
+.before-after li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.ba-count {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.before-after li[data-left] .ba-count {
+  color: var(--color-accent);
+}
+
+.before-after li[data-left] .ba-count::before {
+  content: "▲ ";
+}
+
+/* 処理の報告書：保存のボタンより控えめな、枠だけのボタン */
+.report-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-min);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.report-download:hover {
+  text-decoration: underline;
+}
+
+.report-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  color: var(--color-muted);
 }
 
 .not-done {
