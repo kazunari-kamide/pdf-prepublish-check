@@ -30,7 +30,7 @@ import {
   type PDFFont,
   type PDFPage,
 } from "pdf-lib";
-import { detectP6Text } from "../rules/p6-text/index.ts";
+import { detectP6Text, type P6TextFinding } from "../rules/p6-text/index.ts";
 import { adaptP6Text } from "../eval/adapters/p6-text.ts";
 import { matchFile, type Expected } from "../eval/match.ts";
 
@@ -47,7 +47,7 @@ describe("四角でない覆い", () => {
   it("楕円で覆った字を見つけ、覆いの箱は楕円の外枠", async () => {
     const r = await detectP6Text(await makePdf((p) => p.drawEllipse({ x: 52, y: 104, xScale: 50, yScale: 14, color: rgb(0, 0, 0) })));
     expect(r.findings).toHaveLength(1);
-    expect(r.findings[0]!.chars).toBe(10);
+    expect((r.findings[0] as P6TextFinding).chars).toBe(10);
     const [x0, y0, x1, y1] = r.findings[0]!.rect;
     expect([x0, y0, x1, y1].map(Math.round)).toEqual([2, 90, 102, 118]);
   });

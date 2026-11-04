@@ -15,6 +15,10 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { detectP6Text } from "../rules/p6-text/index.ts";
+import { createNodeImageDecoder } from "./image-decoder.ts";
+
+// pdf-lib で解けない圧縮の画像（JPEG・CCITT・JBIG2）は、PDF.js で解く（P6 1.5.0 から）
+const imageDecoder = createNodeImageDecoder();
 import { adaptP6Text } from "./adapters/p6-text.ts";
 import { checkExpectedError, describeExpectedErrors, type ExpectedErrorResult } from "./expected-error.ts";
 import { matchFile, type Expected, type FileMatch, type MatchRule, type VerifierShapedReport } from "./match.ts";
@@ -89,7 +93,7 @@ async function main() {
         : { status: "error", items: [], skipped_pages: [] };
     } else {
       const bytes = new Uint8Array(readFileSync(path.join(FIXTURES, expected.file)));
-      const raw = await detectP6Text(bytes);
+      const raw = await detectP6Text(bytes, { imageDecoder });
       uncheckedImages += raw.uncheckedImages.length;
       report = adaptP6Text(raw);
     }

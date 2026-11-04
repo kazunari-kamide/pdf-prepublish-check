@@ -84,15 +84,28 @@ const p6 = defineRule<P6TextReport>({
   pattern: "P6",
   detect: (b) => detectP6Text(b),
   items: (r) =>
-    r.findings.map((f) => ({
-      pattern: "P6",
-      severity: "high",
-      title: "黒い四角の下に、字が残っています",
-      why: "上から重ねただけなので、下の字を選んでコピーできます。",
-      detail: `覆っているもの：${P6_COVER[f.cover] ?? "図形"}／残っている字：${f.chars}字`,
-      page: f.page,
-      rect: f.rect,
-    })),
+    r.findings.map((f) =>
+      f.layer === "text"
+        ? {
+            pattern: "P6",
+            severity: "high",
+            title: "黒い四角の下に、字が残っています",
+            why: "上から重ねただけなので、下の字を選んでコピーできます。",
+            detail: `覆っているもの：${P6_COVER[f.cover] ?? "図形"}／残っている字：${f.chars}字`,
+            page: f.page,
+            rect: f.rect,
+          }
+        : {
+            // 画像の層（検出ルール 1.5.0 から）。文言は仮。画面の担当が見直す
+            pattern: "P6",
+            severity: "high",
+            title: f.tone === "light" ? "白い四角の下に、画像の中身が残っています" : "黒い四角の下に、画像の中身が残っています",
+            why: "画像の上に重ねただけなので、四角を外したり画像を取り出したりすると、下に写っているものが見えます。",
+            detail: `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`,
+            page: f.page,
+            rect: f.rect,
+          },
+    ),
   notices: (r) => {
     const out = skippedNotices(r.skippedPages);
     const pages = [...new Set(r.uncheckedImages.map((u) => u.page))];

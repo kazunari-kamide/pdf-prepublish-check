@@ -16,7 +16,7 @@ import {
   type PDFPage,
   type PDFRef,
 } from "pdf-lib";
-import { detectP6Text } from "../rules/p6-text/index.ts";
+import { detectP6Text, type P6TextFinding } from "../rules/p6-text/index.ts";
 
 type Ctx = { doc: PDFDocument; page: PDFPage };
 
@@ -59,7 +59,7 @@ describe("濃い画像で覆った字（text/image）", () => {
     const r = await detectP6Text(pdf);
     expect(r.findings).toHaveLength(1);
     expect(r.findings[0]!.cover).toBe("image");
-    expect(r.findings[0]!.chars).toBe(10);
+    expect((r.findings[0] as P6TextFinding).chars).toBe(10);
   });
 
   it("黒い画像のあとに字を描いたら、見つけない", async () => {
