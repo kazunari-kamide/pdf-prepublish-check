@@ -16,7 +16,8 @@ import { toFraction, viewSize } from "./inspect/view";
 import { PdfView, RenderTimeout } from "./render/pdf-view";
 import { sanitizeInWorker } from "./sanitize/run";
 import { buildCleanView, cleanedFileName, type CleanView, type DoneMark } from "./ui/clean-model";
-import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { FUDA_ERROR, FUDA_NONE, fudaLabel } from "./ui/fuda";
+import { buildView, type Group, type PageMarks, type Row, type ViewModel } from "./ui/model";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -120,6 +121,9 @@ function formatBytes(n: number): string {
 
 function setStep(li: HTMLLIElement, state: "todo" | "now" | "done") {
   li.dataset.state = state;
+  // いまの段を、読み上げでも伝える（色と形だけにしない）
+  if (state === "now") li.setAttribute("aria-current", "step");
+  else li.removeAttribute("aria-current");
 }
 
 function releaseDownload() {
@@ -156,38 +160,84 @@ function reset() {
 
 const SEVERITY_MARK: Record<Row["severity"], string> = { high: "▲", medium: "■", low: "●" };
 
+/** 種類ごとの囲み：左に札（飾り。読み上げでは見出しを読む）、右に見出しと項目（案 E2。design/README.md） */
+function groupBox(fuda: string, kind: "found" | "none" | "error"): { box: HTMLElement; body: HTMLDivElement } {
+  const box = make("section", undefined, "group");
+  box.dataset.status = kind;
+  const tag = make("span", fuda, "fuda");
+  tag.setAttribute("aria-hidden", "true");
+  const body = make("div", undefined, "group-body");
+  box.append(tag, body);
+  return { box, body };
+}
+
 function renderGroups(s: Session) {
+  const none: Group[] = [];
+  const errors: Group[] = [];
   for (const g of s.view.groups) {
-    const box = make("section", undefined, "group");
-    box.dataset.status = g.status === "error" ? "error" : g.rows.length ? "found" : "none";
+    if (g.status === "error") {
+      errors.push(g);
+      continue;
+    }
+    if (!g.rows.length) {
+      none.push(g);
+      continue;
+    }
+    const { box, body } = groupBox(fudaLabel(g.label, g.pattern), "found");
     const head = make("h3", undefined, "group-head");
     head.append(make("span", `${g.label}（${g.pattern}）`, "group-name"));
-    const none = s.phase === "after" ? "残っていません" : "見つかりませんでした";
-    const count = g.status === "error" ? "調べられませんでした" : g.rows.length ? `${g.rows.length} 件` : none;
-    head.append(make("span", count, "group-count"));
-    box.append(head);
-    if (g.message) box.append(make("p", g.message, "group-message"));
-    if (g.rows.length) {
-      const list = make("ol", undefined, "items");
-      for (const r of g.rows) {
-        const li = make("li");
-        const btn = make("button", undefined, "item");
-        btn.type = "button";
-        btn.id = `item-${r.no}`;
-        btn.dataset.severity = r.severity;
-        const top = make("span", undefined, "item-top");
-        top.append(
-          make("span", String(r.no), "item-no"),
-          make("span", `${SEVERITY_MARK[r.severity]} ${r.severityLabel}`, `item-sev sev-${r.severity}`),
-          make("span", r.page !== null ? `ページ ${r.page}` : "ファイル全体", "item-page"),
-        );
-        btn.append(top, make("span", r.title, "item-title"), make("span", r.why, "item-why"), make("span", r.detail, "item-detail"));
-        btn.addEventListener("click", () => void select(r));
-        li.append(btn);
-        list.append(li);
-      }
-      box.append(list);
+    head.append(make("span", `${g.rows.length} 件`, "group-count"));
+    body.append(head);
+    if (g.message) body.append(make("p", g.message, "group-message"));
+    const list = make("ol", undefined, "items");
+    for (const r of g.rows) {
+      const li = make("li");
+      const btn = make("button", undefined, "item");
+      btn.type = "button";
+      btn.id = `item-${r.no}`;
+      btn.dataset.severity = r.severity;
+      const top = make("span", undefined, "item-top");
+      top.append(
+        make("span", String(r.no), "item-no"),
+        make("span", `${SEVERITY_MARK[r.severity]} ${r.severityLabel}`, `item-sev sev-${r.severity}`),
+        make("span", r.page !== null ? `ページ ${r.page}` : "ファイル全体", "item-page"),
+      );
+      btn.append(top, make("span", r.title, "item-title"), make("span", r.why, "item-why"), make("span", r.detail, "item-detail"));
+      btn.addEventListener("click", () => void select(r));
+      li.append(btn);
+      list.append(li);
     }
+    body.append(list);
+    ui.groups.append(box);
+  }
+  // 調べられなかった種類は、1つの囲みにまとめる（隠さない。理由がみな同じなら、理由は1回だけ出す）
+  if (errors.length) {
+    const { box, body } = groupBox(FUDA_ERROR, "error");
+    body.append(make("h3", "調べられなかった種類", "group-head"));
+    const reasons = new Set(errors.map((g) => g.message ?? ""));
+    const shared = reasons.size === 1 ? [...reasons][0] : null;
+    if (shared) body.append(make("p", shared, "group-message"));
+    const list = make("ul", undefined, "none-list");
+    for (const g of errors) {
+      const li = make("li");
+      li.append(make("span", `${g.label}（${g.pattern}）`, "group-name"), make("span", "調べられませんでした", "group-count"));
+      if (!shared && g.message) li.append(make("span", g.message, "group-message"));
+      list.append(li);
+    }
+    body.append(list);
+    ui.groups.append(box);
+  }
+  if (none.length) {
+    const word = s.phase === "after" ? "残っていません" : "見つかりませんでした";
+    const { box, body } = groupBox(FUDA_NONE, "none");
+    body.append(make("h3", s.phase === "after" ? "残っていない種類" : "見つからなかった種類", "group-head"));
+    const list = make("ul", undefined, "none-list");
+    for (const g of none) {
+      const li = make("li");
+      li.append(make("span", `${g.label}（${g.pattern}）`, "group-name"), make("span", word, "group-count"));
+      list.append(li);
+    }
+    body.append(list);
     ui.groups.append(box);
   }
 }

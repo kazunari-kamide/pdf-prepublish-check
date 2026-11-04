@@ -17,13 +17,14 @@ import {
   PDFRef,
   PDFStream,
   PDFString,
+  decodePDFRawStream,
   type PDFObject,
 } from "pdf-lib";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { loadPdf } from "../shared/load.ts";
 
 export const RULE_ID = "p9-attach";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 export type P9Where = "names" | "annotation" | "af" | "unreferenced";
 const ORDER: P9Where[] = ["names", "annotation", "af", "unreferenced"];
@@ -50,6 +51,11 @@ export type P9AttachFinding = {
   subtype: string | null;
   /** includeNames のときだけ。ファイル名そのもの。記録やログには使わない */
   name?: string;
+  /**
+   * includeContents のときだけ（1.1.0）。中身を展開したバイト列。中の PDF・文字のファイルを調べるため（rules/p9-attach/inner.ts）。
+   * 大きすぎる（MAX_CONTENT_BYTES を超える）・展開できないときは null。画面・記録には出さない
+   */
+  contents?: Uint8Array | null;
 };
 
 export type P9AttachReport = {
@@ -66,7 +72,10 @@ export type P9AttachReport = {
   decrypted?: EncryptionSummary & { failedObjects: number };
 };
 
-export type DetectOptions = { includeNames?: boolean };
+export type DetectOptions = { includeNames?: boolean; includeContents?: boolean };
+
+/** includeContents で展開する中身の大きさの上限（バイト）【仮の値】 */
+export const MAX_CONTENT_BYTES = 32 * 1024 * 1024;
 
 const N = (s: string) => PDFName.of(s);
 const K = {
@@ -249,6 +258,19 @@ function subtypeOf(stream: PDFObject | undefined): string | null {
   return s instanceof PDFName ? s.decodeText() : null;
 }
 
+/** 中身を展開する。大きすぎる・展開できないときは null */
+function contentsOf(stream: PDFObject | undefined): Uint8Array | null {
+  if (!(stream instanceof PDFStream)) return null;
+  try {
+    const raw = stream instanceof PDFRawStream ? stream.contents : stream.getContents();
+    if (raw.length > MAX_CONTENT_BYTES) return null;
+    const out = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : raw;
+    return out.length > MAX_CONTENT_BYTES ? null : out;
+  } catch {
+    return null;
+  }
+}
+
 export async function detectP9Attach(bytes: Uint8Array, options: DetectOptions = {}): Promise<P9AttachReport> {
   const base = { rule: { id: RULE_ID, version: RULE_VERSION }, pages: null, findings: [], externalRefs: 0, limits: [] };
   if (bytes.length === 0) return { ...base, status: "error", error: { code: "empty", message: "ファイルが空です。" } };
@@ -319,6 +341,7 @@ export async function detectP9Attach(bytes: Uint8Array, options: DetectOptions =
     const page = content.places.get(where);
     if (page !== undefined) f.page = page;
     if (options.includeNames && content.name) f.name = content.name;
+    if (options.includeContents) f.contents = contentsOf(stream);
     report.findings.push(f);
   }
   report.findings.sort((a, b) => ORDER.indexOf(a.where) - ORDER.indexOf(b.where) || a.object - b.object);

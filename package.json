@@ -24,6 +24,7 @@
     "eval:p5": "node eval/p5.ts",
     "eval:p7": "node eval/p7.ts",
     "eval:sanitize": "node eval/sanitize.ts",
+    "eval:new": "node eval/new-rules.ts",
     "check:sanitized": "node sanitize/check/cli.ts",
     "check:browser": "node scripts/check-browser.mjs",
     "check:live": "node scripts/check-live.mjs",

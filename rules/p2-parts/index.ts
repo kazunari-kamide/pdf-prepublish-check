@@ -124,10 +124,10 @@ export function userFolderOf(path: string): string | null {
   return m ? m[1]!.trim() : null;
 }
 
-type Classified = { counted: true; chars: number } | { counted: false; reason: "generic" | "account" | "software" | "no_user_folder" };
+export type Classified = { counted: true; chars: number } | { counted: false; reason: "generic" | "account" | "software" | "no_user_folder" };
 
 /** 人名・ユーザー名らしい値か。決まり文句・ソフト名・数字の入ったアカウント（端末名など）は数えない */
-function classifyName(value: string): Classified {
+export function classifyName(value: string): Classified {
   const v = value.trim();
   if (GENERIC_NAMES.has(v.toLowerCase())) return { counted: false, reason: "generic" };
   if (SOFTWARE.test(v) || /^(uuid|xmp\.(did|iid))[:.]/i.test(v)) return { counted: false, reason: "software" };
@@ -135,7 +135,7 @@ function classifyName(value: string): Classified {
   return { counted: true, chars: [...v].length };
 }
 
-function classifyPath(value: string): Classified {
+export function classifyPath(value: string): Classified {
   const user = userFolderOf(value);
   if (user === null) return { counted: false, reason: "no_user_folder" };
   return classifyName(user);
