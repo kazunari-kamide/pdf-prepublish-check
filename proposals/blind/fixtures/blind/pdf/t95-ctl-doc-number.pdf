@@ -1,0 +1,91 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R  >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<<  /Length 307 >>
+stream
+BT /F1 16 Tf 72 790 Td (Fictional sample report) Tj ET
+BT /F1 11 Tf 72 770 Td (This file was made for testing. All names are fictional.) Tj ET
+BT /F2 12 Tf 72 700 Td <000100020003000400050006000700080009000A000B000A000C000D000E000E000B000F000D000B000B000B000E00040010001100120013000E000E0014000F0015> Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]  /Resources << /Font << /F1 3 0 R /F2 9 0 R   >>  >> /Contents 4 0 R   >>
+endobj
+6 0 obj
+<<  /Length 619 >>
+stream
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /Adobe-Identity-UCS def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+21 beginbfchar
+<0001> <4F01>
+<0002> <753B>
+<0003> <8AB2>
+<0004> <3000>
+<0005> <6587>
+<0006> <66F8>
+<0007> <756A>
+<0008> <53F7>
+<0009> <0020>
+<000A> <0032>
+<000B> <0030>
+<000C> <0036>
+<000D> <002D>
+<000E> <0031>
+<000F> <0034>
+<0010> <4EE4>
+<0011> <548C>
+<0012> <0038>
+<0013> <5E74>
+<0014> <6708>
+<0015> <65E5>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end
+
+endstream
+endobj
+7 0 obj
+<< /Type /FontDescriptor /FontName /KasouMincho /Flags 6 /FontBBox [0 -120 1000 880] /ItalicAngle 0 /Ascent 880 /Descent -120 /CapHeight 700 /StemV 80 >>
+endobj
+8 0 obj
+<< /Type /Font /Subtype /CIDFontType2 /BaseFont /KasouMincho /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor 7 0 R /DW 1000 /CIDToGIDMap /Identity >>
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /KasouMincho /Encoding /Identity-H /DescendantFonts [8 0 R] /ToUnicode 6 0 R >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000015 00000 n 
+0000000065 00000 n 
+0000000122 00000 n 
+0000000219 00000 n 
+0000000578 00000 n 
+0000000720 00000 n 
+0000001391 00000 n 
+0000001560 00000 n 
+0000001767 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R  /ID [<4B41534F55424C494E44303030303031> <4B41534F55424C494E44303030303031>] >>
+startxref
+1903
+%%EOF

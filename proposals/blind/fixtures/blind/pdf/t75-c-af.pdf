@@ -1,0 +1,46 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /AF [7 0 R] >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<<  /Length 143 >>
+stream
+BT /F1 16 Tf 72 790 Td (Fictional sample report) Tj ET
+BT /F1 11 Tf 72 770 Td (This file was made for testing. All names are fictional.) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]  /Resources << /Font << /F1 3 0 R    >>  >> /Contents 4 0 R   >>
+endobj
+6 0 obj
+<< /Type /EmbeddedFile /Subtype /text#2Fplain /Params << /Size 17 >> /Length 17 >>
+stream
+Source KAKUSHI75C
+endstream
+endobj
+7 0 obj
+<< /Type /Filespec /F (source.txt) /UF <FEFF0073006F0075007200630065002E007400780074> /EF << /F 6 0 R >> /AFRelationship /Source >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000076 00000 n 
+0000000133 00000 n 
+0000000230 00000 n 
+0000000425 00000 n 
+0000000558 00000 n 
+0000000691 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R  /ID [<4B41534F55424C494E44303030303031> <4B41534F55424C494E44303030303031>] >>
+startxref
+838
+%%EOF

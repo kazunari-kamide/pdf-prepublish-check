@@ -1,0 +1,49 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R  >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<<  /Length 287 >>
+stream
+BT /F1 16 Tf 72 790 Td (Fictional sample report) Tj ET
+BT /F1 11 Tf 72 770 Td (This file was made for testing. All names are fictional.) Tj ET
+BT /F1 12 Tf 72 700 Td (Name:) Tj ET
+BT /F1 12 Tf 120 700 Td (KAKUSHI28A) Tj ET
+BT /F1 12 Tf 72 660 Td (Section: Example planning office) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]  /Resources << /Font << /F1 3 0 R    >>  >> /Contents 4 0 R /Annots [6 0 R]  >>
+endobj
+6 0 obj
+<< /Type /Annot /Subtype /Square /Rect [116 694 212 714] /IC [0 0 0] /C [0 0 0] /F 4 /BS << /W 0 >> /AP << /N 7 0 R >> >>
+endobj
+7 0 obj
+<< /Type /XObject /Subtype /Form /BBox [0 0 96 20] /Length 18 >>
+stream
+0 g 0 0 96 20 re f
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000065 00000 n 
+0000000122 00000 n 
+0000000219 00000 n 
+0000000558 00000 n 
+0000000706 00000 n 
+0000000843 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R  /ID [<4B41534F55424C494E44303030303031> <4B41534F55424C494E44303030303031>] >>
+startxref
+959
+%%EOF
