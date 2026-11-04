@@ -94,8 +94,21 @@ describe("中身を画面に返さない", () => {
       const bytes = pdf(file);
       const words = (await secrets(bytes)).map((s) => s.trim()).filter((s) => s.length >= 2);
       expect(words.length).toBeGreaterThan(0);
-      const out = JSON.stringify(buildView(await inspectAll(bytes))) + JSON.stringify(await inspectAll(bytes));
+      // プロパティの一覧（properties）だけは、値を画面に出してよい例外（11/5 B の 8）。それ以外の所には入れない
+      const { properties: _props, ...rest } = await inspectAll(bytes);
+      const out = JSON.stringify(buildView(await inspectAll(bytes))) + JSON.stringify(rest);
       for (const w of words) expect(out).not.toContain(w);
     });
   }
+});
+
+describe("プロパティの一覧だけは値を持つ（11/5 B の 8 の例外）", () => {
+  it("文書情報の値は properties にだけ入り、画面の形（buildView）には入らない", async () => {
+    const bytes = pdf("p1/p1-02-all-standard.pdf");
+    const values = (await detectP1Info(bytes, { includeValues: true })).findings.map((f) => (f.value ?? "").trim()).filter((v) => v.length >= 2);
+    const s = await inspectAll(bytes);
+    const listed = JSON.stringify(s.properties);
+    for (const v of values) expect(listed).toContain(JSON.stringify(v).slice(1, -1));
+    expect(JSON.stringify(buildView(s))).not.toContain(values[0]!);
+  });
 });
