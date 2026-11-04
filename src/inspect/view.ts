@@ -41,3 +41,32 @@ export function toFraction(box: PageBox, rect: Rect): Fraction | null {
       return { left: y0, top: 1 - x1, width: y1 - y0, height: x1 - x0 };
   }
 }
+
+/** toFraction の逆：画面での割合の箱を、ページの既定の座標の箱に戻す（自分で黒塗りする所を決めるため。11/5 B の 9） */
+export function fromFraction(box: PageBox, f: Fraction): Rect {
+  const [vx0, vy0, vx1, vy1] = box.view;
+  const w = vx1 - vx0;
+  const h = vy1 - vy0;
+  const c = (n: number) => Math.min(1, Math.max(0, n));
+  const l = c(f.left);
+  const t = c(f.top);
+  const r = c(f.left + f.width);
+  const b = c(f.top + f.height);
+  // 回す前の割合（x0・x1 は左から、y0・y1 は上から）に戻す
+  let x0: number, x1: number, y0: number, y1: number;
+  switch (box.rotate) {
+    case 0:
+      [x0, x1, y0, y1] = [l, r, t, b];
+      break;
+    case 90:
+      [x0, x1, y0, y1] = [t, b, 1 - r, 1 - l];
+      break;
+    case 180:
+      [x0, x1, y0, y1] = [1 - r, 1 - l, 1 - b, 1 - t];
+      break;
+    case 270:
+      [x0, x1, y0, y1] = [1 - b, 1 - t, l, r];
+      break;
+  }
+  return [vx0 + x0 * w, vy1 - y1 * h, vx0 + x1 * w, vy1 - y0 * h];
+}

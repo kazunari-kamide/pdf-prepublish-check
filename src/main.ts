@@ -12,8 +12,9 @@
 import type { InspectOutcome } from "./inspect/protocol";
 import type { PageBox, InspectSummary } from "./inspect/report";
 import { inspectInWorker } from "./inspect/run";
-import { toFraction, viewSize } from "./inspect/view";
+import { fromFraction, toFraction, viewSize } from "./inspect/view";
 import { PdfView, RenderTimeout } from "./render/pdf-view";
+import { MAX_REDACT_AREAS, type RedactArea } from "./sanitize/redact";
 import { sanitizeInWorker } from "./sanitize/run";
 import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
@@ -91,6 +92,12 @@ const ui = {
   actions: el<HTMLDivElement>("actions"),
   sanitize: el<HTMLButtonElement>("sanitize"),
   sanitizeNote: el<HTMLParagraphElement>("sanitize-note"),
+  pickTools: el<HTMLDivElement>("pick-tools"),
+  pickToggle: el<HTMLButtonElement>("pick-toggle"),
+  pickHelp: el<HTMLParagraphElement>("pick-help"),
+  picks: el<HTMLDivElement>("picks"),
+  pickCount: el<HTMLParagraphElement>("pick-count"),
+  pickList: el<HTMLUListElement>("pick-list"),
   scopeNote: el<HTMLParagraphElement>("scope-note"),
 };
 
@@ -193,6 +200,8 @@ function clearResults() {
 
 function reset() {
   clearResults();
+  clearPicks();
+  ui.pickTools.hidden = true;
   releaseDownload();
   for (const part of [ui.notDoneList, ui.removedGroups, ui.cleanNotes]) part.replaceChildren();
   ui.clean.hidden = true;
@@ -403,6 +412,7 @@ function placeMarks(s: Session, page: number) {
     if (s.selected === m.no) mark.classList.add("is-selected");
     placeAt(mark, f);
     mark.addEventListener("click", () => {
+      if (picking) return; // 選んでいる間は、枠を押しても動かない（ドラッグを邪魔しない）
       const item = document.getElementById(`item-${m.no}`);
       item?.scrollIntoView({ block: "nearest" });
       item?.focus();
@@ -410,6 +420,7 @@ function placeMarks(s: Session, page: number) {
     });
     ui.marks.append(mark);
   }
+  placePicks(s, page);
 }
 
 function markSelected(no: number | null) {
@@ -624,6 +635,8 @@ function renderSummary(s: Session) {
     : v.rows.length
     ? "見つかった所を取り除いた PDF を、新しく作ります。元の PDF は変えません。"
     : "見つかった所はありませんが、XMP メタデータ・注釈のコメント・JavaScript なども取り除いた PDF を作れます。元の PDF は変えません。";
+  // 自分で黒塗りする所を選ぶ：片付けられて、ページの絵と形があるときだけ
+  ui.pickTools.hidden = ui.sanitize.disabled || !s.pdf || s.summary.pagesUnreadable;
   setStep(ui.stepClean, v.rows.length ? "now" : "todo");
   ui.stepCleanNote.textContent = "押すと始めます";
 
@@ -732,6 +745,106 @@ async function handle(file: File) {
   }
 }
 
+// ---------------------------------------------------------------- 自分で黒塗りする所を選ぶ（11/5 B の 9）
+
+/** 選んだ所（片付ける前の PDF のページの座標）。片付けるときに、片付けの Worker へ渡す */
+let picks: RedactArea[] = [];
+let picking = false;
+
+function setPicking(on: boolean) {
+  picking = on;
+  ui.pickToggle.setAttribute("aria-pressed", String(on));
+  ui.pickToggle.textContent = on ? "選び終える" : "自分で黒塗りする所を選ぶ";
+  ui.sheet.dataset.picking = String(on);
+  ui.pickHelp.hidden = !on;
+}
+
+function renderPicks() {
+  const s = session;
+  ui.pickList.replaceChildren(
+    ...picks.map((p, i) => {
+      const li = make("li");
+      const rm = make("button", "外す", "pick-remove");
+      rm.type = "button";
+      rm.setAttribute("aria-label", `選んだ所 ${i + 1}（ページ ${p.page}）を外す`);
+      rm.addEventListener("click", () => {
+        picks.splice(i, 1);
+        renderPicks();
+        if (session) placeMarks(session, session.current);
+      });
+      li.append(make("span", `選んだ所 ${i + 1}：ページ ${p.page}`), rm);
+      return li;
+    }),
+  );
+  ui.picks.hidden = picks.length === 0;
+  ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「片付ける」を押すと、見つかった所といっしょに黒塗りします。下の字は消します）`;
+  if (s && s.phase === "before" && !ui.sanitize.disabled) {
+    ui.sanitize.textContent = picks.length ? `片付ける（選んだ ${picks.length} か所も黒塗り）` : "片付ける";
+  }
+}
+
+function clearPicks() {
+  picks = [];
+  setPicking(false);
+  renderPicks();
+  ui.sanitize.textContent = "片付ける";
+}
+
+/** ページの上に、選んだ所（墨の点線の枠）を描く */
+function placePicks(s: Session, page: number) {
+  const box = s.boxes.get(page);
+  if (!box || s.phase !== "before") return;
+  picks.forEach((p, i) => {
+    if (p.page !== page) return;
+    const f = toFraction(box, p.rect);
+    if (!f) return;
+    const e = make("div", undefined, "mark mark-pick");
+    e.setAttribute("role", "img");
+    e.setAttribute("aria-label", `自分で選んだ所 ${i + 1}`);
+    e.append(make("span", `選${i + 1}`, "mark-no"));
+    placeAt(e, f);
+    ui.marks.append(e);
+  });
+}
+
+// ページの上をドラッグして選ぶ（ポインター。マウス・指・ペン）
+let dragStart: { x: number; y: number } | null = null;
+let dragEl: HTMLDivElement | null = null;
+function sheetPoint(e: PointerEvent) {
+  const r = ui.sheet.getBoundingClientRect();
+  return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+}
+function dragFraction(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
+}
+ui.sheet.addEventListener("pointerdown", (e) => {
+  if (!picking || !session || session.phase !== "before") return;
+  e.preventDefault();
+  ui.sheet.setPointerCapture(e.pointerId);
+  dragStart = sheetPoint(e);
+  dragEl = make("div", undefined, "mark mark-pick is-drawing");
+  ui.marks.append(dragEl);
+});
+ui.sheet.addEventListener("pointermove", (e) => {
+  if (!dragStart || !dragEl) return;
+  placeAt(dragEl, dragFraction(dragStart, sheetPoint(e)));
+});
+ui.sheet.addEventListener("pointerup", (e) => {
+  if (!dragStart || !session) return;
+  const f = dragFraction(dragStart, sheetPoint(e));
+  dragStart = null;
+  dragEl?.remove();
+  dragEl = null;
+  const box = session.boxes.get(session.current);
+  // 小さすぎる所（ただのクリック）は選ばない
+  if (!box || f.width < 0.005 || f.height < 0.005) return;
+  if (picks.length >= MAX_REDACT_AREAS) return;
+  picks.push({ page: session.current, rect: fromFraction(box, f) });
+  renderPicks();
+  placeMarks(session, session.current);
+});
+ui.pickToggle.addEventListener("click", () => setPicking(!picking));
+
 // ---------------------------------------------------------------- 3 片付ける → 4 読み直す
 
 function cleanFailed(text: string) {
@@ -820,7 +933,10 @@ async function runSanitize() {
   ui.progress.removeAttribute("value"); // どこまで進んだか分からないので、動いていることだけを示す
   ui.progress.hidden = false;
   try {
-    const out = await sanitizeInWorker(original.buffer as ArrayBuffer);
+    const areas = picks.slice();
+    setPicking(false);
+    ui.pickTools.hidden = true;
+    const out = await sanitizeInWorker(original.buffer as ArrayBuffer, undefined, areas);
     if (gen !== generation) return;
     if (out.kind === "timeout") return cleanFailed("時間がかかりすぎたため、片付けを止めました。画面はそのまま使えます。");
     if (out.kind !== "done") return cleanFailed(out.message);

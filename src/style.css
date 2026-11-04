@@ -791,6 +791,76 @@ progress {
   overflow-wrap: anywhere;
 }
 
+/* 自分で黒塗りする所：墨の点線の枠と「選N」の札（見つかった所の紅の枠と、色と線の形で分ける） */
+.mark.mark-pick {
+  border: var(--border-mark) dashed var(--color-base);
+  background: rgb(43 42 40 / 18%);
+  cursor: default;
+}
+
+.mark.mark-pick .mark-no {
+  background: var(--color-base);
+}
+
+.sheet[data-picking="true"] {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.sheet[data-picking="true"] .mark {
+  pointer-events: none;
+}
+
+.pick-tools {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+.actions .pick-toggle {
+  width: auto;
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-size: var(--text-small);
+}
+
+.actions .pick-toggle[aria-pressed="true"] {
+  border: var(--border-strong) solid var(--color-base);
+  background: var(--color-chip);
+}
+
+.pick-help {
+  color: var(--color-muted);
+}
+
+.picks ul {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  font-size: var(--text-small);
+}
+
+.picks li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-line);
+}
+
+.actions .pick-remove {
+  width: auto;
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-line);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-size: var(--text-small);
+}
+
 .items {
   list-style: none;
   margin: 0;

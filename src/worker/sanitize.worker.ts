@@ -28,6 +28,7 @@ async function imageCodec(): Promise<ImageCodec | undefined> {
   }
 }
 import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol";
+import { addRedactAreas } from "../sanitize/redact";
 
 type WorkerScope = {
   onmessage: ((e: MessageEvent<SanitizeRequest>) => void) | null;
@@ -39,8 +40,18 @@ scope.onmessage = async (e) => {
   const req = e.data;
   if (!req || req.type !== "sanitize" || !(req.buffer instanceof ArrayBuffer)) return;
   try {
+    let input: Uint8Array = new Uint8Array(req.buffer);
+    // 自分で選んだ所があれば、先に墨消しの注釈として足す（仮のつなぎ。src/sanitize/redact.ts）
+    if (Array.isArray(req.areas) && req.areas.length) {
+      const added = await addRedactAreas(input, req.areas);
+      if (added.status === "refused") {
+        scope.postMessage({ type: "refused", id: req.id, message: added.message });
+        return;
+      }
+      input = added.bytes;
+    }
     const codec = await imageCodec();
-    const r = await sanitizePdf(new Uint8Array(req.buffer), codec ? { codec } : {});
+    const r = await sanitizePdf(input, codec ? { codec } : {});
     if (r.status === "error") {
       scope.postMessage({ type: "refused", id: req.id, message: r.message });
       return;
