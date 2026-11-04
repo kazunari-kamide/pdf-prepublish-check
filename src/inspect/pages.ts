@@ -4,7 +4,7 @@
 // 読み込みは検出ルールと同じ入口（rules/shared/load.ts）を使い、暗号化の扱いもそろえる。
 
 import { loadPdf } from "../../rules/shared/load.ts";
-import type { PageBox, Rect } from "./report";
+import type { PageBox, Rect } from "./report.ts";
 
 /** 画面に描くページの数の上限。超えた分は描かない（一覧には出る） */
 export const MAX_DRAWN_PAGES = 2000;

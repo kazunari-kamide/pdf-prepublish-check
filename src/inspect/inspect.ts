@@ -3,10 +3,10 @@
 // 1つのファイルを、登録したすべての検出ルール（rules.ts）にかける。Worker から呼ぶ。
 // 1つのルールが例外で止まっても、ほかのルールは続ける（止まったルールは「調べられなかった」と返す）。
 
-import { readPageBoxes } from "./pages";
-import { readProperties } from "./properties";
-import type { InspectSummary, RuleResult } from "./report";
-import { RULES, type RuleEntry, type RunContext } from "./rules";
+import { readPageBoxes } from "./pages.ts";
+import { readProperties } from "./properties.ts";
+import type { InspectSummary, RuleResult } from "./report.ts";
+import { RULES, type RuleEntry, type RunContext } from "./rules.ts";
 
 export async function inspectAll(
   bytes: Uint8Array,
