@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { PDFDocument, StandardFonts, rgb, grayscale } from "pdf-lib";
-import { detectP6Text } from "../rules/p6-text/index.ts";
+import { detectP6Text, type P6TextFinding } from "../rules/p6-text/index.ts";
 import { bytesArg, operations } from "../rules/shared/content-lexer.ts";
 import { luminanceOf } from "../rules/p6-text/page.ts";
 
@@ -59,8 +59,8 @@ describe("黒い四角の下の字", () => {
     const r = await detectP6Text(pdf);
     expect(r.status).toBe("ok");
     expect(r.findings).toHaveLength(1);
-    expect(r.findings[0]!.chars).toBe(10); // 空白は数えない
-    expect(r.findings[0]!.text).toBeUndefined(); // 既定では字の中身を返さない
+    expect((r.findings[0] as P6TextFinding).chars).toBe(10); // 空白は数えない
+    expect((r.findings[0] as P6TextFinding).text).toBeUndefined(); // 既定では字の中身を返さない
   });
 
   it("黒い四角のあとに字を描いたら（黒地に白い字）、見つけない", async () => {
@@ -102,7 +102,7 @@ describe("黒い四角の下の字", () => {
     });
     const r = await detectP6Text(pdf);
     expect(r.findings).toHaveLength(1);
-    expect(r.findings[0]!.chars).toBe(4);
+    expect((r.findings[0] as P6TextFinding).chars).toBe(4);
   });
 
   it("includeText を付けたときだけ、覆われた字を返す", async () => {
@@ -111,7 +111,7 @@ describe("黒い四角の下の字", () => {
       page.drawRectangle({ x: 15, y: 95, width: 60, height: 20, color: rgb(0, 0, 0) });
     });
     const r = await detectP6Text(pdf, { includeText: true });
-    expect(r.findings[0]!.text).toBe("Taro");
+    expect((r.findings[0] as P6TextFinding).text).toBe("Taro");
   });
 });
 

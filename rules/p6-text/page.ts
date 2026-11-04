@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 1ページの命令を順に追い、次の2つを集める（docs/prd.md §3）。
-// - 覆い：濃い色の塗り（四角に近い図形）と、濃い色の太い直線。描いた順番つき
+// 1ページの命令を順に追い、次の3つを集める（docs/prd.md §3）。
+// - 覆い：濃い色の塗り・濃い色の太い線・濃い画像。画像の上なら白い不透明な塗りも（1.5.0 から）。描いた順番つき
 // - 字：1字ごとの箱。描いた順番つき
+// - 画像を置いた所（1.5.0 から。画像の層を調べるため）。描いた順番つき
 // 図形を全部組み立てない。必要なものだけを拾う（CLAUDE.md §5）。
 
 import {
@@ -35,7 +36,7 @@ import {
 import { readFont, type FontInfo } from "../shared/fonts.ts";
 import { arrArg, bytesArg, nameArg, numArg, operations, type Tok } from "../shared/content-lexer.ts";
 import type { P6TextSettings } from "./settings.ts";
-import { measureImageDarkness } from "./images.ts";
+import { measureImageDarkness, probeImagePixels } from "./images.ts";
 
 /** 覆っているものの種類（rubric/p6.md §1 の内訳の「覆っているもの」） */
 export type CoverKind = "fill" | "image" | "annotation";
@@ -44,6 +45,11 @@ export type Cover = {
   rect: Rect;
   kind: CoverKind;
   how: "fill" | "stroke" | "image" | "redact";
+  /**
+   * 覆いの色の向き（1.5.0 から）。dark＝濃い（明るさ darkLuminanceMax 以下）、light＝白っぽい（lightLuminanceMin 以上）。
+   * 字の層は dark だけを覆いとする。light は、画像の上に置いたものだけを集め、画像の層でだけ使う
+   */
+  tone: "dark" | "light";
   /** 塗りの明るさ。画像は濃い画素の割合ではなく、1 − 割合（小さいほど濃い）。墨消しの注釈は 0 */
   luminance: number;
   /**
@@ -51,6 +57,8 @@ export type Cover = {
    * parts の面積を足し合わせて、字の箱が隠れる割合を出す（coverageOf）。
    */
   shape?: CoverShape;
+  /** 切り抜き（W）の外枠の箱（ページの座標）。この外は見えない。ないときは切り抜きなし（1.6.0 から） */
+  clip?: Rect;
 };
 export type CoverShape = { parts: Point[][]; rule: "nonzero" | "evenodd" };
 
@@ -121,8 +129,63 @@ function segmentQuad(p0: Point, p1: Point, half: number): Point[] | null {
   ];
 }
 export type UncheckedImage = { reason: "unsupported_filter" | "too_large" | "unsupported_color" | "broken" };
-export type GlyphBox = { seq: number; rect: Rect; isSpace: boolean; text: string };
-export type PageScan = { covers: Cover[]; glyphs: GlyphBox[]; operations: number; uncheckedImages: UncheckedImage[] };
+export type GlyphBox = {
+  seq: number;
+  rect: Rect;
+  isSpace: boolean;
+  text: string;
+  clip?: Rect;
+  /** フォントの番号（ページの中で、読んだ順）と字の番号（1.7.0 から。中身の読めない字を比べるため） */
+  fontId?: number;
+  code?: number;
+  /** 回したり傾けたりして描いた字か（1.8.0 から。測るときだけ使う） */
+  rotated?: boolean;
+};
+/**
+ * 濃い覆いのあとに、その上に描いた字の形の塗り（曲線を含む、濃くない色の塗り）の真ん中（1.8.0 から）。
+ * アウトライン化した白抜きの字を見分けるため。濃い覆いに重なるものだけを持つ
+ */
+export type LaterMark = { seq: number; cx: number; cy: number };
+/** 画像を置いた所（1.5.0 から）。ctm は単位の正方形を、ページの座標に移す行列 */
+export type ImagePlacement = {
+  seq: number;
+  rect: Rect;
+  ctm: Matrix;
+  stream: PDFStream;
+  colorSpaces: PDFDict | undefined;
+  /** 型抜き（ImageMask）のときに塗る色の明るさ */
+  fillLuminance: number | null;
+  /** 置いた形（回した画像など）。ないときは rect の箱そのもの */
+  shape?: CoverShape;
+  /** このルールで解けない圧縮の画像なら、uncheckedImages の何番目か（あとで PDF.js で確かめるため） */
+  pendingUnchecked?: number;
+  /**
+   * 濃い画像（字の上に貼った黒い画像など）かを確かめる必要があるか（1.9.0 から）。
+   * 先に描いた字か画像に重なるときだけ true。false の画像は、画像の層で覆いの下になったときにだけ解く
+   */
+  needDark: boolean;
+  /** 濃い画像だったときに、覆いとして数える種類（注釈の見た目の中なら annotation） */
+  coverKind: CoverKind;
+  /** 切り抜き（W）の外枠の箱（1.6.0 から） */
+  clip?: Rect;
+};
+export type PageScan = {
+  covers: Cover[];
+  glyphs: GlyphBox[];
+  operations: number;
+  uncheckedImages: UncheckedImage[];
+  /** 画像を置いた所（1.5.0 から） */
+  images: ImagePlacement[];
+  /** 濃い覆いの上に描いた、字の形の塗り（1.8.0 から） */
+  marks: LaterMark[];
+  /**
+   * 白い覆いの上に、あとから不透明に描いた塗り・線の形（1.10.0 から）。色・太さを問わない。
+   * 集めた数が上限（maxOverPaintPerPage）を超えたページは null（使わず、1.9.0 までの測り方に戻す）
+   */
+  overPaint: OverPaint[] | null;
+};
+/** 白い覆いの上に描いたものの形。after 以下の順番（seq）の覆いより、あとに描いた */
+export type OverPaint = { after: number; rect: Rect; parts: Point[][]; clip?: Rect };
 
 export class TooManyOperations extends Error {}
 /** 先に描いた字に重なる濃い塗りが多すぎる（1.3.0 から） */
@@ -146,9 +209,18 @@ type GState = {
   hScale: number;
   leading: number;
   rise: number;
+  /** 切り抜き（W・部品の BBox）の外枠の箱（ページの座標）。null は切り抜きなし（1.6.0 から）。形は持たず、箱で近似する */
+  clip: Rect | null;
 };
 
 const MAX_FORM_DEPTH = 12;
+
+/** 切り抜きを、箱 r でさらに狭める。重ならなければ、何も見えない（幅 0 の箱） */
+function narrowClip(clip: Rect | null, r: Rect): Rect {
+  if (!clip) return r;
+  const out: Rect = [Math.max(clip[0], r[0]), Math.max(clip[1], r[1]), Math.min(clip[2], r[2]), Math.min(clip[3], r[3])];
+  return out[0] < out[2] && out[1] < out[3] ? out : [out[0], out[1], out[0], out[1]];
+}
 
 function cloneState(s: GState): GState {
   return { ...s, fill: { ...s.fill }, stroke: { ...s.stroke } };
@@ -221,8 +293,10 @@ function componentsOfSpace(ctx: PDFContext, resources: PDFDict | undefined, name
 export type PageScanner = {
   /** ページの命令の列（または注釈の見た目）を読む。coverKind は、そこで見つけた塗りを何の覆いとして数えるか */
   run(data: Uint8Array, res: PDFDict | undefined, ctm: Matrix, coverKind: CoverKind): void;
-  /** 命令を読まずに覆いを足す（未適用の墨消し注釈など）。いま読んだものより上に重なる */
+  /** 命令を読まずに覆いを足す（未適用の墨消し注釈など）。いま読んだものより上に重なる。濃くも白っぽくもない色なら足さない */
   addCover(rect: Rect, kind: CoverKind, how: Cover["how"], luminance: number): void;
+  /** 描いた順番（seq）の決まった覆いを、あとから足す（PDF.js で解いた画像が濃かったとき。1.5.0 から） */
+  addLateCover(cover: Cover): void;
   result(): PageScan;
 };
 
@@ -272,15 +346,67 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     }
     return false;
   };
+  // 画像を置いた所。覆いの下に画像があるかを見るため（1.5.0 から）
+  const images: ImagePlacement[] = [];
+  const overlapsEarlierImage = (r: Rect): boolean => images.some((im) => rectsOverlap(im.rect, r));
+  // 濃い覆いは、先に描いた字か画像に重なるものだけ。白っぽい覆いは、先に描いた画像に重なるものだけ（字の層では使わない）
+  // 濃い覆いの位置の索引（マス目）。覆いの上に描いた字の形の塗りを探すため（1.8.0 から）
+  const darkGrid = new Map<number, Rect[]>();
+  const darkWide: Rect[] = [];
+  const indexDark = (r: Rect) => {
+    const c = cellsOf(r);
+    if (!Number.isFinite(c.n) || c.n > 256) {
+      darkWide.push(r);
+      return;
+    }
+    for (let cx = c.x0; cx <= c.x1; cx++) {
+      for (let cy = c.y0; cy <= c.y1; cy++) {
+        const k = cellKey(cx, cy);
+        const list = darkGrid.get(k);
+        if (list) list.push(r);
+        else darkGrid.set(k, [r]);
+      }
+    }
+  };
+  const onDarkCover = (x: number, y: number): boolean => {
+    const inside = (r: Rect) => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3];
+    if (darkWide.some(inside)) return true;
+    return (darkGrid.get(cellKey(Math.floor(x / CELL), Math.floor(y / CELL))) ?? []).some(inside);
+  };
+  const marks: LaterMark[] = [];
+  const MAX_MARKS = 200_000;
+  // 白い覆いの箱と、その上にあとから描いたものの形（1.10.0 から）
+  const lightRects: Rect[] = [];
+  const overPaint: OverPaint[] = [];
+  let overPaintOverflow = false;
+  const addOverPaint = (after: number, parts: Point[][], clip: Rect | null) => {
+    if (overPaintOverflow) return;
+    const rect = boundsOf(parts.flat());
+    if (!lightRects.some((l) => rectsOverlap(l, rect))) return;
+    if (overPaint.length >= settings.maxOverPaintPerPage) {
+      overPaintOverflow = true;
+      overPaint.length = 0;
+      return;
+    }
+    overPaint.push({ after, rect, parts, ...(clip ? { clip } : {}) });
+  };
   const pushCover = (c: Cover) => {
-    if (!overlapsAnyGlyph(c.rect)) return;
+    if (c.tone === "dark" ? !overlapsAnyGlyph(c.rect) && !overlapsEarlierImage(c.rect) : !overlapsEarlierImage(c.rect)) return;
     if (covers.length >= settings.maxCoversPerPage) throw new TooManyCovers();
     covers.push(c);
+    if (c.tone === "dark") indexDark(c.rect);
+    else lightRects.push(c.rect);
   };
   const uncheckedImages: UncheckedImage[] = [];
   let seq = 0;
   let opCount = 0;
   const fontCache = new Map<PDFObject, FontInfo>();
+  const fontIds = new Map<FontInfo, number>();
+  const fontIdOf = (f: FontInfo) => {
+    let id = fontIds.get(f);
+    if (id === undefined) fontIds.set(f, (id = fontIds.size + 1));
+    return id;
+  };
 
   const run = (
     data: Uint8Array,
@@ -298,6 +424,17 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     // 字の行列
     let tm: Matrix = IDENTITY;
     let tlm: Matrix = IDENTITY;
+    // 次に道を閉じる命令（塗り・線・n）で、切り抜きにする（W・W*）
+    let pendingClip = false;
+    const clipOpt = (): { clip?: Rect } => (gs.clip ? { clip: gs.clip } : {});
+    const takeClip = () => {
+      if (!pendingClip) return;
+      pendingClip = false;
+      if (!isFiniteMatrix(gs.ctm)) return;
+      const pts = subpaths.flatMap((sp) => sp.points.map(([x, y]) => apply(gs.ctm, x, y)));
+      if (pts.length === 0) return;
+      gs.clip = narrowClip(gs.clip, boundsOf(pts));
+    };
 
     const startSub = (x: number, y: number) => {
       current = { points: [[x, y]], curved: false, closed: false };
@@ -307,18 +444,67 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     // 1.3.0 から：四角らしさで選ばず、塗った形そのもの（曲線は直線に分けたもの）を覆いとして持つ。
     // 字が隠れる割合は、形と字の箱の重なった面積で測る（coverageOf）。
     const paint = (doFill: boolean, doStroke: boolean, rule: "nonzero" | "evenodd" = "nonzero") => {
-      if (!isFiniteMatrix(gs.ctm)) return;
+      if (!isFiniteMatrix(gs.ctm)) {
+        pendingClip = false;
+        subpaths = [];
+        current = null;
+        return;
+      }
       const devs = subpaths.filter((sp) => sp.points.length >= 2).map((sp) => ({ sp, dev: sp.points.map(([x, y]) => apply(gs.ctm, x, y)) }));
+      // 白い覆いの上に不透明に描いたものの形（1.10.0 から。色・太さを問わない）。この塗り自身の覆いより前の覆いだけに効くよう、
+      // いまの順番（paintStart）を持たせる。線は、端の丸み・角を含めるよう、両端を太さの半分だけ延ばす
+      const paintStart = seq;
+      if (lightRects.length > 0 && !overPaintOverflow) {
+        const clip = gs.clip;
+        if (doFill && gs.fill.luminance !== null && gs.fillAlpha >= settings.opacityMin) {
+          for (const { dev } of devs) if (dev.length >= 3 && area(boundsOf(dev)) > 0) addOverPaint(paintStart, [dev], clip);
+        }
+        if (doStroke && gs.stroke.luminance !== null && gs.strokeAlpha >= settings.opacityMin) {
+          const half = (gs.lineWidth * scaleOf(gs.ctm)) / 2;
+          if (half > 0) {
+            for (const { sp, dev } of devs) {
+              const pts = sp.closed ? [...dev, dev[0]!] : dev;
+              for (let k = 0; k + 1 < pts.length; k++) {
+                const a = pts[k]!;
+                const b = pts[k + 1]!;
+                const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                if (!(len > 0)) continue;
+                const ex = ((b[0] - a[0]) / len) * half;
+                const ey = ((b[1] - a[1]) / len) * half;
+                const q = segmentQuad([a[0] - ex, a[1] - ey], [b[0] + ex, b[1] + ey], half);
+                if (q) addOverPaint(paintStart, [q], clip);
+              }
+            }
+          }
+        }
+      }
       if (doFill) {
         const lum = gs.fill.luminance;
-        if (lum !== null && lum <= settings.darkLuminanceMax && gs.fillAlpha >= settings.opacityMin) {
+        // 濃い塗り（字の層・画像の層）と、白っぽい不透明な塗り（画像の層だけ。1.5.0 から）
+        const tone: Cover["tone"] | null =
+          lum === null ? null : lum <= settings.darkLuminanceMax ? "dark" : lum >= settings.lightLuminanceMin && images.length > 0 ? "light" : null;
+        if (lum !== null && tone && gs.fillAlpha >= settings.opacityMin) {
           const parts = devs.map((d) => d.dev).filter((d) => d.length >= 3 && area(boundsOf(d)) > 0);
           for (const group of groupOverlapping(parts)) {
             const box = boundsOf(group.flat());
             // 縦横の四角1つなら、形を持たずに箱で測る（これまでと同じ結果になる）
             const plainRect = group.length === 1 && group[0]!.length === 4 && Math.abs(Math.abs(signedPolygonArea(group[0]!)) - area(box)) <= 1e-6 * Math.max(1, area(box));
-            pushCover({ seq: ++seq, rect: box, kind: coverKind, how: "fill", luminance: lum, ...(plainRect ? {} : { shape: { parts: group, rule } }) });
+            pushCover({ seq: ++seq, rect: box, kind: coverKind, how: "fill", tone, luminance: lum, ...(plainRect ? {} : { shape: { parts: group, rule } }), ...clipOpt() });
           }
+        }
+      }
+      // 濃い覆いの上の、字の形の塗り（白抜きの字をアウトライン化したもの）の真ん中を持つ（1.8.0 から）
+      if (doFill && (darkWide.length > 0 || darkGrid.size > 0) && marks.length < MAX_MARKS) {
+        const lum = gs.fill.luminance;
+        if (lum !== null && lum > settings.darkLuminanceMax && gs.fillAlpha >= settings.opacityMin) {
+          for (const { sp, dev } of devs) {
+            if (!sp.curved || dev.length < 3 || marks.length >= MAX_MARKS) continue;
+            const b = boundsOf(dev);
+            const cx = (b[0] + b[2]) / 2;
+            const cy = (b[1] + b[3]) / 2;
+            if (onDarkCover(cx, cy)) marks.push({ seq: seq + 1, cx, cy });
+          }
+          if (marks.length > 0) seq++; // 覆いより後に描いたことが分かるよう、順番を進める
         }
       }
       if (doStroke) {
@@ -335,18 +521,19 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
             }
             if (sp.curved) {
               // 曲線は、分けた直線をまとめて1つの覆いにする
-              if (quads.length) pushCover({ seq: ++seq, rect: boundsOf(quads.flat()), kind: coverKind, how: "stroke", luminance: lum, shape: { parts: quads, rule: "nonzero" } });
+              if (quads.length) pushCover({ seq: ++seq, rect: boundsOf(quads.flat()), kind: coverKind, how: "stroke", tone: "dark", luminance: lum, shape: { parts: quads, rule: "nonzero" }, ...clipOpt() });
             } else {
               // 直線は、1本ずつ別の覆いにする（これまでと同じ。縦横の線は箱そのもの）
               for (const q of quads) {
                 const box = boundsOf(q);
                 const axis = Math.abs(Math.abs(signedPolygonArea(q)) - area(box)) <= 1e-6 * Math.max(1, area(box));
-                pushCover({ seq: ++seq, rect: box, kind: coverKind, how: "stroke", luminance: lum, ...(axis ? {} : { shape: { parts: [q], rule: "nonzero" } }) });
+                pushCover({ seq: ++seq, rect: box, kind: coverKind, how: "stroke", tone: "dark", luminance: lum, ...(axis ? {} : { shape: { parts: [q], rule: "nonzero" } }), ...clipOpt() });
               }
             }
           }
         }
       }
+      takeClip(); // 切り抜きは、塗ったあとに効く
       subpaths = [];
       current = null;
     };
@@ -362,22 +549,45 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
       // 回したり傾けたりして置いた画像は、置いた形（平行四辺形）を覆いの形にする（1.3.0 から）
       const imageShape: CoverShape | undefined =
         Math.abs(Math.abs(signedPolygonArea(dev)) - boxArea) <= 1e-6 * Math.max(1, boxArea) ? undefined : { parts: [dev], rule: "nonzero" };
-      const m = measureImageDarkness({
+      const colorSpaces = imgRes?.lookupMaybe(PDFName.of("ColorSpace"), PDFDict);
+      const input = {
         ctx,
         stream: img,
-        colorSpaces: imgRes?.lookupMaybe(PDFName.of("ColorSpace"), PDFDict),
+        colorSpaces,
         fillLuminance: gs.fill.luminance,
         darkLuminanceMax: settings.darkLuminanceMax,
         opacityMin: settings.opacityMin,
         maxImageBytes: settings.maxImageBytes,
-      });
-      if (m.kind === "unknown") {
+        maxImagePixels: settings.maxImagePixels,
+      };
+      // 1.9.0 から：濃い画像かを確かめるのは、先に描いた字か画像に重なるときだけ（覆いになりうるのは、それだけ）。
+      // ほかの画像は、ここでは解かない（読めそうかだけを、解かずに確かめる）。スキャンした PDF の多くのページで、画像を解かずに済む
+      const needDark = overlapsAnyGlyph(box) || overlapsEarlierImage(box);
+      const probe = probeImagePixels(input);
+      const m = probe.kind === "unknown" ? probe : needDark ? measureImageDarkness(input) : null;
+      const mySeq = ++seq;
+      const kind: CoverKind = coverKind === "annotation" ? "annotation" : "image";
+      if (m && m.kind === "measured" && m.darkFraction >= settings.darkImageFractionMin) {
+        pushCover({ seq: mySeq, rect: box, kind, how: "image", tone: "dark", luminance: 1 - m.darkFraction, ...(imageShape ? { shape: imageShape } : {}), ...clipOpt() });
+      }
+      if (images.length >= settings.maxImagesPerPage) throw new TooManyCovers();
+      const placement: ImagePlacement = {
+        seq: mySeq,
+        rect: box,
+        ctm: gs.ctm,
+        stream: img,
+        colorSpaces,
+        fillLuminance: gs.fill.luminance,
+        coverKind: kind,
+        needDark,
+        ...(imageShape ? { shape: imageShape } : {}),
+        ...clipOpt(),
+      };
+      if (m && m.kind === "unknown") {
         uncheckedImages.push({ reason: m.reason });
-        return;
+        if (m.reason === "unsupported_filter") placement.pendingUnchecked = uncheckedImages.length - 1;
       }
-      if (m.darkFraction >= settings.darkImageFractionMin) {
-        pushCover({ seq: ++seq, rect: box, kind: coverKind === "annotation" ? "annotation" : "image", how: "image", luminance: 1 - m.darkFraction, ...(imageShape ? { shape: imageShape } : {}) });
-      }
+      images.push(placement);
     };
 
     const showText = (bytes: Uint8Array) => {
@@ -395,7 +605,16 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
             apply(trm, g.width, font.ascent),
             apply(trm, 0, font.ascent),
           ];
-          addGlyph({ seq: ++seq, rect: boundsOf(corners), isSpace: g.isSpace, text: g.text });
+          addGlyph({
+            seq: ++seq,
+            rect: boundsOf(corners),
+            isSpace: g.isSpace,
+            text: g.text,
+            fontId: fontIdOf(font),
+            code: g.code,
+            ...(Math.abs(trm[1]) > 1e-9 || Math.abs(trm[2]) > 1e-9 ? { rotated: true } : {}),
+            ...clipOpt(),
+          });
         }
         const tx = (g.width * gs.fontSize + gs.charSpacing + (g.isWordSpace ? gs.wordSpacing : 0)) * gs.hScale;
         tm = multiply([1, 0, 0, 1, tx, 0], tm);
@@ -549,7 +768,12 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           if (current) (current as { closed: boolean }).closed = true;
           paint(true, true, op === "b*" ? "evenodd" : "nonzero");
           break;
+        case "W":
+        case "W*":
+          pendingClip = true;
+          break;
         case "n":
+          takeClip();
           subpaths = [];
           current = null;
           break;
@@ -672,6 +896,18 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           const data2 = obj instanceof PDFRawStream ? decodePDFRawStream(obj).decode() : obj.getContents();
           const inner = cloneState(gs);
           inner.ctm = multiply(m, gs.ctm);
+          // 部品の BBox の外は描かれない（1.6.0 から。切り抜きとして扱う）
+          const bboxObj = obj.dict.lookup(PDFName.of("BBox"));
+          if (bboxObj instanceof PDFArray && bboxObj.size() === 4 && isFiniteMatrix(inner.ctm)) {
+            const b = bboxObj.asArray().map((o) => ctx.lookup(o));
+            if (b.every((v) => v instanceof PDFNumber)) {
+              const [bx0, by0, bx1, by1] = b.map((v) => (v as PDFNumber).asNumber()) as [number, number, number, number];
+              if ([bx0, by0, bx1, by1].every(Number.isFinite)) {
+                const corners: Point[] = [apply(inner.ctm, bx0, by0), apply(inner.ctm, bx1, by0), apply(inner.ctm, bx1, by1), apply(inner.ctm, bx0, by1)];
+                inner.clip = narrowClip(inner.clip, boundsOf(corners));
+              }
+            }
+          }
           const nextSeen = new Set(seen);
           nextSeen.add(ref);
           run(data2, subRes, inner, depth + 1, nextSeen, coverKind);
@@ -699,16 +935,21 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     hScale: 1,
     leading: 0,
     rise: 0,
+    clip: null,
   };
   return {
     run(data, res, ctm, coverKind) {
       run(data, res, { ...cloneState(initial), ctm }, 0, new Set(), coverKind);
     },
     addCover(rect, kind, how, luminance) {
-      pushCover({ seq: ++seq, rect, kind, how, luminance });
+      const tone = luminance <= settings.darkLuminanceMax ? "dark" : luminance >= settings.lightLuminanceMin ? "light" : null;
+      if (tone) pushCover({ seq: ++seq, rect, kind, how, tone, luminance });
+    },
+    addLateCover(cover) {
+      pushCover(cover);
     },
     result() {
-      return { covers, glyphs, operations: opCount, uncheckedImages };
+      return { covers, glyphs, operations: opCount, uncheckedImages, images, marks, overPaint: overPaintOverflow ? null : overPaint };
     },
   };
 }
