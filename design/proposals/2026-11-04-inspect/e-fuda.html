@@ -1,0 +1,108 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- 検査の画面の案 E「お守りの札」。動かない見本。数字・項目は架空のもの。色・文字・余白は design/tokens.css の変数だけを使う。 -->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>案E お守りの札 — お守りPDF</title>
+    <link rel="stylesheet" href="../../tokens.css" />
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--color-paper); color: var(--color-base); font: var(--text-base) / var(--leading) var(--font-body); }
+      .steps { display: flex; align-items: center; background: var(--color-base); color: var(--color-on-dark); padding: 0 var(--space-5); }
+      .brand { display: flex; align-items: center; gap: var(--space-3); font: 700 var(--text-h2) var(--font-head); padding: var(--space-3) var(--space-5) var(--space-3) 0; }
+      .seal { width: 1.8rem; height: 2.3rem; border: var(--border-strong) solid var(--color-on-dark); display: grid; place-items: center; font-size: var(--text-small); }
+      .steps ol { display: flex; list-style: none; margin: 0; padding: 0; gap: var(--space-2); }
+      .steps li { padding: var(--space-1) var(--space-4); border: 1px solid var(--color-muted); font-size: var(--text-small); }
+      .steps li.now { background: var(--color-on-dark); color: var(--color-base); font-weight: 700; border-color: var(--color-on-dark); }
+      .zero-send { margin-left: auto; border: 1px solid var(--color-on-dark); padding: var(--space-1) var(--space-3); font-size: var(--text-small); }
+      main { display: grid; grid-template-columns: var(--width-thumbs) minmax(0, 1fr) 30rem; min-height: calc(100vh - 3.6rem); }
+      .thumbs { background: var(--color-sunken); padding: var(--space-4); display: grid; gap: var(--space-4); align-content: start; }
+      .thumb { background: var(--color-surface); aspect-ratio: 210 / 297; border: 1px solid var(--color-line); position: relative; font-size: var(--text-small); }
+      .thumb.on { outline: var(--border-strong) solid var(--color-base); outline-offset: 2px; }
+      .thumb b { position: absolute; bottom: var(--space-1); left: var(--space-2); font-weight: 400; color: var(--color-muted); }
+      .thumb-count { position: absolute; top: var(--space-1); right: var(--space-1); background: var(--color-accent); color: var(--color-on-dark); font-weight: 700; padding: 0 var(--space-2); }
+      .stage { background: var(--color-sunken); padding: var(--space-5); display: grid; place-items: start center; }
+      .sheet { width: 26rem; aspect-ratio: 210 / 297; background: var(--color-surface); box-shadow: var(--shadow-sheet); position: relative; }
+      .ln { position: absolute; left: 10%; right: 10%; height: 0.4rem; background: var(--color-sunken); }
+      .mark { position: absolute; border: var(--border-mark) solid var(--color-accent); background: var(--color-accent-wash); }
+      .mark-no { position: absolute; left: calc(-1 * var(--border-mark)); bottom: 100%; background: var(--color-accent); color: var(--color-on-dark); font-weight: 700; font-size: var(--text-small); padding: 0 var(--space-2); }
+      .results { padding: var(--space-5); border-left: 1px solid var(--color-line); }
+      .results > h1 { font: 700 var(--text-h1) var(--font-head); margin: 0 0 var(--space-4); }
+      /* お守りの札：左に縦書きの種類名の札、右に中身 */
+      .group { display: grid; grid-template-columns: 2.6rem 1fr; margin-bottom: var(--space-4); border: 1px solid var(--color-line); background: var(--color-surface); }
+      .fuda { writing-mode: vertical-rl; font: 700 var(--text-small) var(--font-head); letter-spacing: 0.15em; background: var(--color-accent); color: var(--color-on-dark); padding: var(--space-3) 0; display: grid; place-items: center; }
+      .group.zero .fuda { background: var(--color-surface); color: var(--color-ok); border-right: var(--border-strong) solid var(--color-ok); }
+      .body { padding: var(--space-2) var(--space-3); }
+      .body h2 { font: 700 var(--text-base) var(--font-head); margin: 0; display: flex; justify-content: space-between; }
+      .body h2 span { color: var(--color-accent); font-family: var(--font-body); }
+      .group.zero h2 span { color: var(--color-ok); font-weight: 400; font-size: var(--text-small); }
+      .item { display: grid; grid-template-columns: 1.8rem 3.4rem 1fr; gap: var(--space-2); padding: var(--space-2) 0 0; font-size: var(--text-small); border-top: 1px solid var(--color-line); margin-top: var(--space-2); }
+      .item .no { font-weight: 700; }
+      .item .sev { font-weight: 700; color: var(--color-accent); }
+      .item .sev.mid { color: var(--color-base); }
+      .item small { display: block; color: var(--color-muted); }
+      .item.is-selected { outline: var(--border-strong) solid var(--color-accent); outline-offset: 2px; }
+      .actions button { width: 100%; font: 700 var(--text-base) var(--font-body); padding: var(--space-3); background: var(--color-base); color: var(--color-on-dark); border: 0; border-radius: var(--radius); margin-bottom: var(--space-4); }
+      .notice { border-left: 4px solid var(--color-base); padding: var(--space-2) var(--space-3); font-size: var(--text-small); background: var(--color-surface); }
+    </style>
+  </head>
+  <body>
+    <header class="steps">
+      <div class="brand"><span class="seal">守</span>お守りPDF</div>
+      <ol>
+        <li>1 選ぶ 済</li>
+        <li class="now">2 確かめる</li>
+        <li>3 片付ける</li>
+        <li>4 読み直す</li>
+      </ol>
+      <div class="zero-send">送信しない作り・このパソコンの中だけで確かめます</div>
+    </header>
+    <main>
+      <nav class="thumbs" aria-label="ページ">
+        <div class="thumb"><b>1</b></div>
+        <div class="thumb on"><span class="thumb-count">1</span><b>2</b></div>
+        <div class="thumb"><b>3</b></div>
+      </nav>
+      <section class="stage" aria-label="ページ 2">
+        <div class="sheet">
+          <div class="ln" style="top: 10%"></div><div class="ln" style="top: 14%"></div><div class="ln" style="top: 18%"></div>
+          <div class="ln" style="top: 22%; right: 45%"></div>
+          <div class="mark" style="left: 10%; top: 21%; width: 30%; height: 4.5%"><span class="mark-no">1</span></div>
+          <div class="ln" style="top: 30%"></div><div class="ln" style="top: 34%"></div><div class="ln" style="top: 38%; right: 30%"></div>
+        </div>
+      </section>
+      <section class="results">
+        <h1>お守りの種類ごとの結果</h1>
+        <div class="actions"><button type="button">3 か所を片付ける</button></div>
+        <div class="group">
+          <div class="fuda">黒塗り</div>
+          <div class="body">
+            <h2>見せかけの黒塗り（P6）<span>1 件</span></h2>
+            <div class="item is-selected"><span class="no">1</span><span class="sev">▲ 高</span><span>ページ 2：黒い四角の下に字が残っています（10字）<small>上に重ねただけなので、下の字をコピーできます。</small></span></div>
+          </div>
+        </div>
+        <div class="group">
+          <div class="fuda">前の版</div>
+          <div class="body">
+            <h2>前の版の残り（P5）<span>1 件</span></h2>
+            <div class="item"><span class="no">2</span><span class="sev">▲ 高</span><span>直す前の版の中身が残っています<small>見た目は新しくても、前の中身を取り出せます。</small></span></div>
+          </div>
+        </div>
+        <div class="group">
+          <div class="fuda">文書情報</div>
+          <div class="body">
+            <h2>文書情報（P1）<span>1 件</span></h2>
+            <div class="item"><span class="no">3</span><span class="sev mid">■ 中</span><span>「作成者」に値が入っています（4字）<small>意図したものでなければ消してください。</small></span></div>
+          </div>
+        </div>
+        <div class="group zero">
+          <div class="fuda">済</div>
+          <div class="body"><h2>隠れたテキスト（P7）<span>見つかりませんでした</span></h2><h2>添付ファイル（P9）<span>見つかりませんでした</span></h2></div>
+        </div>
+        <p class="notice">見つけられるのは、ここに並べた種類だけです。ページ 3 の画像の中身は、まだ調べていません。</p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,97 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- 検査の画面の案 E2「お守りの札」（E を、角の丸め・DADS の値・WCAG 2.2 AA を目標に作り直したもの）。動かない見本。数字・項目は架空。 -->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>案E2 お守りの札 — お守りPDF</title>
+    <link rel="stylesheet" href="tokens-v2.css" />
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      :root { --results-w: 30rem; }
+      .results .btn { margin: var(--space-4) 0; }
+      .group { display: grid; grid-template-columns: 2.75rem minmax(0, 1fr); margin-top: var(--space-3); border: 1px solid var(--color-line); border-radius: var(--radius-panel); overflow: hidden; }
+      .fuda { display: grid; place-items: center; padding: var(--space-3) 0; background: var(--color-accent); color: var(--color-on-dark); writing-mode: vertical-rl; font-weight: 700; font-size: var(--text-small); letter-spacing: 0.2em; }
+      .group.ok .fuda { background: var(--color-ok-tint); color: var(--color-ok); }
+      .body { padding: var(--space-3) var(--space-4); }
+      .body h2 { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); margin: 0; font-size: var(--text-base); }
+      .body h2 .count { flex: none; min-width: 2.6rem; text-align: center; padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--color-accent-tint); color: var(--color-accent); font-size: var(--text-small); }
+      .item { display: grid; grid-template-columns: 1.6rem auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); width: 100%; min-height: var(--target-min); margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-control-line); border-radius: var(--radius); background: var(--color-surface); text-align: left; font-size: var(--text-small); cursor: pointer; }
+      .item[aria-current="true"] { border: var(--border-strong) solid var(--color-accent); background: var(--color-accent-tint); }
+      .item .no { font-weight: 700; }
+      .item .why { display: block; color: var(--color-muted); }
+      .ok-list { list-style: none; margin: var(--space-1) 0 0; padding: 0; }
+      .ok-list li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0 var(--space-3); padding: var(--space-1) 0; }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#results">結果へ移る</a>
+    <header class="appbar">
+      <p class="brand"><span class="seal" aria-hidden="true">守</span>お守りPDF</p>
+      <nav aria-label="手順">
+        <ol class="steps">
+          <li class="done"><span class="n" aria-hidden="true">✓</span>選ぶ<span class="visually-hidden">（済み）</span></li>
+          <li aria-current="step"><span class="n">2</span>確かめる</li>
+          <li><span class="n">3</span>片付ける</li>
+          <li><span class="n">4</span>読み直す</li>
+        </ol>
+      </nav>
+      <p class="zero-send">送信しない作り・このパソコンの中だけで確かめます</p>
+    </header>
+    <main class="layout">
+      <nav class="thumbs" aria-label="ページ">
+        <h2>ページ</h2>
+        <button class="thumb" type="button" aria-label="ページ 1"><span class="pg" aria-hidden="true">1</span></button>
+        <button class="thumb" type="button" aria-current="page" aria-label="ページ 2、見つかった所 1 か所"><span class="thumb-count" aria-hidden="true">1</span><span class="pg" aria-hidden="true">2</span></button>
+        <button class="thumb" type="button" aria-label="ページ 3"><span class="pg" aria-hidden="true">3</span></button>
+      </nav>
+      <section class="stage" aria-label="ページ 2 の絵">
+        <div class="sheet" role="img" aria-label="ページ 2。番号 1 の枠が、上から4行目の左にあります">
+          <div class="ln" style="top: 10%"></div><div class="ln" style="top: 14%"></div><div class="ln" style="top: 18%"></div>
+          <div class="ln" style="top: 22%; right: 45%"></div>
+          <div class="mark" style="left: 10%; top: 21%; width: 30%; height: 4.5%"><span class="mark-no">1</span></div>
+          <div class="ln" style="top: 30%"></div><div class="ln" style="top: 34%"></div><div class="ln" style="top: 38%; right: 30%"></div>
+        </div>
+      </section>
+      <section class="results" id="results" tabindex="-1" aria-labelledby="r-title">
+        <h1 id="r-title">お守りの種類ごとの結果</h1>
+        <p class="summary" role="status">見本の書類.pdf・3 ページ　<strong>3 か所</strong> 見つかりました</p>
+        <button class="btn wide" type="button">3 か所を片付ける</button>
+
+        <section class="group" aria-labelledby="g6">
+          <div class="fuda" aria-hidden="true">黒塗り</div>
+          <div class="body">
+            <h2 id="g6">見せかけの黒塗り（P6）<span class="count">1 件</span></h2>
+            <button class="item" type="button" aria-current="true"><span class="no">1</span><span class="sev high">▲ 高</span><span>ページ 2：黒い四角の下に字が残っています（10字）<span class="why">上に重ねただけなので、下の字をコピーできます。</span></span></button>
+          </div>
+        </section>
+        <section class="group" aria-labelledby="g5">
+          <div class="fuda" aria-hidden="true">前の版</div>
+          <div class="body">
+            <h2 id="g5">前の版の残り（P5）<span class="count">1 件</span></h2>
+            <button class="item" type="button"><span class="no">2</span><span class="sev high">▲ 高</span><span>直す前の版の中身が残っています<span class="why">見た目は新しくても、前の中身を取り出せます。</span></span></button>
+          </div>
+        </section>
+        <section class="group" aria-labelledby="g1">
+          <div class="fuda" aria-hidden="true">文書情報</div>
+          <div class="body">
+            <h2 id="g1">文書情報（P1）<span class="count">1 件</span></h2>
+            <button class="item" type="button"><span class="no">3</span><span class="sev mid">■ 中</span><span>「作成者」に値が入っています（4字）<span class="why">意図したものでなければ消してください。</span></span></button>
+          </div>
+        </section>
+        <section class="group ok" aria-labelledby="g0">
+          <div class="fuda" aria-hidden="true">済</div>
+          <div class="body">
+            <h2 id="g0">見つからなかった種類</h2>
+            <ul class="ok-list">
+              <li>隠れたテキスト（P7）<span class="zero">見つかりませんでした</span></li>
+              <li>添付ファイル（P9）<span class="zero">見つかりませんでした</span></li>
+            </ul>
+          </div>
+        </section>
+        <p class="notice">見つけられるのは、ここに並べた種類だけです。ページ 3 の画像の中身は、まだ調べていません。</p>
+      </section>
+    </main>
+  </body>
+</html>

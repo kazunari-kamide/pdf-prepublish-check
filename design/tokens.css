@@ -3,6 +3,8 @@
  * お守りPDF のデザインの決まり（色・文字・余白・部品）。説明は design/README.md。
  * 画面（src/style.css）は、ここにある変数だけを使う。決まりにない値を足すときは、先にここへ足す（CLAUDE.md §6）。
  * 2026-11-03：画面の案 A・B・C（src/design-proposals/）から、本人の返事（PR #31）で組み合わせを決めた。
+ * 2026-11-05：見た目を案 E2「お守りの札」（design/proposals/2026-11-05-inspect-v2/）にした。角の丸め・フォーカス・押せる所の大きさは、
+ *   デジタル庁デザインシステム（DADS）の値を参考にした（出典は design/README.md）。
  */
 
 :root {
@@ -15,24 +17,32 @@
   --color-ok-tint: #e7f0ed; /* 片付けた結果の欄の下地（緑を薄めたもの） */
   --color-ok-wash: rgb(47 111 94 / 8%); /* ページの上の「済」の枠の中（下の絵が透けて見える） */
 
+  /* ---- 色：フォーカスの黄（状態の色。2色の決まりの外。2026-11-05 本人が承認）。DADS の yellow-300 と同じ値 */
+  --color-focus: #ffd43d; /* 墨の上で 10.06:1 */
+  --color-focus-line: #000000;
+
   /* ---- 色：下地（ベース色を薄めたもの） */
   --color-paper: #fbfaf7; /* 画面の下地 */
   --color-surface: #ffffff; /* 紙・欄の下地 */
   --color-sunken: #efece6; /* ページの並び・中央の台 */
-  --color-line: #d9d4ca; /* 区切りの線 */
+  --color-line: #d9d4ca; /* 区切りの線（飾り。押せる所の枠には使わない） */
+  --color-control-line: #8a857c; /* 押せる所の枠。白の上で 3.67:1（WCAG 1.4.11 の 3:1 以上） */
+  --color-chip: #f4f2ee; /* 手順の札・お知らせの下地。補足の文字が 6.82:1 */
   --color-muted: #57534e; /* 補足の文字（白の上で 7:1 以上） */
   --color-accent-tint: #f7e9e8; /* 危ない所の枠の中の薄い色 */
   --color-on-dark: #ffffff; /* 墨・紅の上の文字 */
   --color-accent-wash: rgb(163 32 27 / 10%); /* ページの上の枠の中（下の絵が透けて見える） */
 
-  /* ---- 文字：見出し用と本文用の2つ。いまは端末の書体（同梱する書体は決めてほしいこと） */
-  --font-head: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Noto Serif JP", serif;
+  /* ---- 文字：見出しも本文もゴシック（2026-11-05 本人が承認。見出しは太字で分ける）。いまは端末の書体 */
+  --font-head: var(--font-body);
   --font-body: "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Meiryo", "Noto Sans JP", sans-serif;
   --text-base: 18px; /* 本文。役所の職員が読むので大きめ */
   --text-small: 0.9rem;
   --text-h1: 1.6rem;
   --text-h2: 1.15rem;
   --leading: 1.7;
+  --leading-head: 1.4;
+  --tracking: 0.02em; /* DADS：26px 以下の字は 2% */
 
   /* ---- 余白 */
   --space-1: 0.25rem;
@@ -46,9 +56,25 @@
   --border-mark: 3px; /* ページの上の枠の太さ */
   --border-done: 2px; /* 片付けた所の枠の太さ（点線。残っている所の枠より細い） */
   --border-strong: 2px;
-  --shadow-sheet: 0 1px 4px rgb(0 0 0 / 15%); /* 大きなページの影 */
-  --radius: 0; /* 角は丸めない（落ち着いた見た目） */
-  --focus-ring: 3px solid var(--color-base);
+  --shadow-sheet: 0 2px 10px rgb(0 0 0 / 12%); /* 大きなページの影 */
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 8%), 0 2px 8px rgb(0 0 0 / 6%); /* 欄の影（1段だけ。重ねない） */
+
+  /* ---- 角の丸め（DADS の 8・12px にそろえる。2026-11-05） */
+  --radius: 8px; /* ボタン・項目・札 */
+  --radius-panel: 12px; /* 欄・種類ごとの囲み */
+  --radius-sheet: 4px; /* PDF のページ（紙なので、ほぼ角のまま） */
+  --radius-full: 999px; /* 手順の札・件数の札・番号の札 */
+
+  /* ---- フォーカス（DADS のボタンと同じ形：黒の 4px の線＋黄の 2px の縁） */
+  --focus-outline: 4px solid var(--color-focus-line);
+  --focus-offset: 2px;
+  --focus-halo: 0 0 0 2px var(--color-focus);
+
+  /* ---- 押せる所の大きさ（DADS のボタン：44 CSS px 以上） */
+  --target-min: 44px;
+  --button-height: 48px;
+  --button-height-large: 56px;
   --width-thumbs: 7.5rem;
-  --width-results: 25rem;
+  --width-results: 30rem;
+  --width-fuda: 2.75rem; /* 種類ごとの札の幅 */
 }

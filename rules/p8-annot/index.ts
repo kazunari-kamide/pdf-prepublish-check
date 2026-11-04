@@ -1,22 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P8（注釈・コメント）1.0.0：注釈に残った作成者欄（/T）と、内容（/Contents・/Subj・/RC）を見つける。
+// 検出ルール P8（注釈・コメント）1.1.0：注釈に残った作成者欄（/T）と、内容（/Contents・/Subj・/RC）を見つける。
 // Acrobat などで注釈を付けると、作成者欄に付けた人のログイン名（姓のローマ字など）が入る。
 // 文書情報（P1 の /Info）を消しても、注釈の作成者欄は残る。
 //
 // 1件 ＝ 欄（T・Contents・Subj・RC）と値の組み1つ。同じ欄に同じ値を持つ注釈は、何個あっても1件にまとめ、
 // 注釈の数とページを添える（全注釈で同じ作成者なら1件）。値そのものは返さない（字数だけ。includeValues のときだけ値も返す）。
 // フォームの欄（/Widget）の /T は欄の名前なので見ない。吹き出し（/Popup）は親の注釈の欄を写したものなので見ない。
-
+//
+// 1.1.0：隠しの印（/F の Hidden・NoView）のある注釈は、hidden: true として別の件にする（画面に見えないため、より危ない）。
+// 隠しの印のある注釈は、見た目のストリーム（/AP の /N）の中に描かれた字も数える（field: "AP"）。
+// スタンプ注釈などで、字が /Contents になく、見た目の中だけにある型（隠したまま残ると、取り出せる）。
+// 隠しでない注釈の見た目は、画面に見えている字なので数えない。読み取り専用・ロックの印は隠しではない。
 import { PDFArray, PDFDict, PDFHexString, PDFName, PDFRawStream, PDFStream, PDFString, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { loadPdf } from "../shared/load.ts";
 import { decodeTextBytes } from "../p1-info/index.ts";
+import { appearanceStreams, countShownGlyphs, dictOf, hiddenFlagOf, streamData } from "../common/index.ts";
 
 export const RULE_ID = "p8-annot";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
-export const FIELDS = ["T", "Contents", "Subj", "RC"] as const;
+export const FIELDS = ["T", "Contents", "Subj", "RC", "AP"] as const;
 export type P8Field = (typeof FIELDS)[number];
 
 /** 1ページの注釈の数の上限。超えたページは、そこから先を見ずに limits に出す【仮の値】 */
@@ -33,7 +38,9 @@ export const GENERIC_AUTHORS = ["author", "user", "administrator", "admin", "ユ
 export type P8Finding = {
   pattern: "P8";
   field: P8Field;
-  /** 値の字数（前後の空白を除く） */
+  /** 隠しの印（Hidden・NoView）のある注釈か。AP は隠しの注釈だけで数えるので、いつも true */
+  hidden: boolean;
+  /** 値の字数（前後の空白を除く。AP は描かれる字の数） */
   chars: number;
   /** この値を持つ注釈の数 */
   annotations: number;
@@ -45,6 +52,9 @@ export type P8Finding = {
 
 export type P8NotCounted = { field: P8Field; reason: "generic_author" | "digits_only"; annotations: number };
 
+/** 見た目のストリームとして読む大きさの上限（バイト）【仮の値】 */
+const MAX_AP_BYTES = 4 * 1024 * 1024;
+
 export type P8Report = {
   rule: { id: string; version: string };
   status: "ok" | "error";
@@ -52,6 +62,8 @@ export type P8Report = {
   pages: number | null;
   /** 見た注釈の数（Widget・Popup を除く） */
   annotations: number;
+  /** そのうち、隠しの印のある注釈の数 */
+  hiddenAnnotations: number;
   findings: P8Finding[];
   /** 値はあったが、決まり文句として数えなかったもの */
   notCounted: P8NotCounted[];
@@ -98,6 +110,22 @@ function fieldText(ctx: PDFContext, field: P8Field, raw: PDFObject | undefined):
   return t.length ? t : null;
 }
 
+/** 見た目のストリームに描かれた字（空白を除く）。なければ null */
+function appearanceText(ctx: PDFContext, annot: PDFDict): string | null {
+  let text = "";
+  let glyphs = 0;
+  for (const s of appearanceStreams(ctx, annot)) {
+    const data = streamData(s, MAX_AP_BYTES);
+    if (!data) continue;
+    const c = countShownGlyphs(ctx, data, dictOf(ctx, s.dict.get(PDFName.of("Resources"))), { includeText: true });
+    glyphs += c.glyphs;
+    text += c.text;
+  }
+  if (glyphs === 0) return null;
+  // 字の中身が分からない書体（ToUnicode なし）でも、字の数は数える。まとめる鍵には字の数を使う
+  return text.length >= glyphs ? text : text + "0000".repeat(glyphs - [...text].length);
+}
+
 function genericReason(field: P8Field, value: string): P8NotCounted["reason"] | null {
   if (field !== "T") return null;
   if (/^[0-9０-９]+$/.test(value)) return "digits_only";
@@ -106,7 +134,7 @@ function genericReason(field: P8Field, value: string): P8NotCounted["reason"] | 
 }
 
 export async function detectP8Annot(bytes: Uint8Array, options: DetectOptions = {}): Promise<P8Report> {
-  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, annotations: 0, findings: [], notCounted: [], limits: [] };
+  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, annotations: 0, hiddenAnnotations: 0, findings: [], notCounted: [], limits: [] };
   if (bytes.length === 0) return { ...base, status: "error", pages: null, error: { code: "empty", message: "ファイルが空です。" } };
   const loaded = await loadPdf(bytes);
   if (loaded.status === "error") {
@@ -127,7 +155,7 @@ export async function detectP8Annot(bytes: Uint8Array, options: DetectOptions = 
 
   const report: P8Report = { ...base, status: "ok", pages: pages.length, findings: [], notCounted: [], limits: [] };
   if (loaded.decrypted) report.decrypted = loaded.decrypted;
-  const groups = new Map<string, { field: P8Field; value: string; annotations: number; pages: Set<number> }>();
+  const groups = new Map<string, { field: P8Field; hidden: boolean; value: string; annotations: number; pages: Set<number> }>();
   const skipped = new Map<string, P8NotCounted>();
   const seen = new Set<PDFObject>();
 
@@ -147,8 +175,10 @@ export async function detectP8Annot(bytes: Uint8Array, options: DetectOptions = 
         const subtype = st instanceof PDFName ? st.decodeText() : "";
         if (subtype === "Widget" || subtype === "Popup") continue;
         report.annotations++;
+        const hidden = hiddenFlagOf(ctx, annot) !== null;
+        if (hidden) report.hiddenAnnotations++;
         for (const field of FIELDS) {
-          const value = fieldText(ctx, field, annot.get(PDFName.of(field)));
+          const value = field === "AP" ? (hidden ? appearanceText(ctx, annot) : null) : fieldText(ctx, field, annot.get(PDFName.of(field)));
           if (value === null) continue;
           const reason = genericReason(field, value);
           if (reason) {
@@ -158,8 +188,8 @@ export async function detectP8Annot(bytes: Uint8Array, options: DetectOptions = 
             skipped.set(k, s);
             continue;
           }
-          const k = `${field}\u0000${value}`;
-          const g = groups.get(k) ?? { field, value, annotations: 0, pages: new Set<number>() };
+          const k = `${field}\u0000${hidden}\u0000${value}`;
+          const g = groups.get(k) ?? { field, hidden, value, annotations: 0, pages: new Set<number>() };
           g.annotations++;
           g.pages.add(pageNo);
           groups.set(k, g);
@@ -171,11 +201,13 @@ export async function detectP8Annot(bytes: Uint8Array, options: DetectOptions = 
   });
 
   for (const g of groups.values()) {
-    const f: P8Finding = { pattern: "P8", field: g.field, chars: [...g.value].length, annotations: g.annotations, pages: [...g.pages].sort((a, b) => a - b) };
+    const f: P8Finding = { pattern: "P8", field: g.field, hidden: g.hidden, chars: [...g.value].length, annotations: g.annotations, pages: [...g.pages].sort((a, b) => a - b) };
     if (options.includeValues) f.value = g.value;
     report.findings.push(f);
   }
-  report.findings.sort((a, b) => FIELDS.indexOf(a.field) - FIELDS.indexOf(b.field) || (a.pages[0] ?? 0) - (b.pages[0] ?? 0));
+  report.findings.sort(
+    (a, b) => Number(b.hidden) - Number(a.hidden) || FIELDS.indexOf(a.field) - FIELDS.indexOf(b.field) || (a.pages[0] ?? 0) - (b.pages[0] ?? 0),
+  );
   report.notCounted = [...skipped.values()];
   return report;
 }
