@@ -1,0 +1,68 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R  >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<<  /Length 179 >>
+stream
+BT /F1 16 Tf 72 790 Td (Fictional sample report) Tj ET
+BT /F1 11 Tf 72 770 Td (This file was made for testing. All names are fictional.) Tj ET
+BT /F5 12 Tf 72 700 Td (NAME) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]  /Resources << /Font << /F1 3 0 R   /F5 10 0 R >>  >> /Contents 4 0 R   >>
+endobj
+6 0 obj
+<<  /Length 58 >>
+stream
+600 0 0 0 600 700 d1 150 0 100 700 re 200 300 200 100 re f
+endstream
+endobj
+7 0 obj
+<<  /Length 56 >>
+stream
+600 0 0 0 600 700 d1 0 0 100 700 re 400 300 200 100 re f
+endstream
+endobj
+8 0 obj
+<<  /Length 58 >>
+stream
+600 0 0 0 600 700 d1 100 0 100 700 re 400 300 200 100 re f
+endstream
+endobj
+9 0 obj
+<<  /Length 58 >>
+stream
+600 0 0 0 600 700 d1 200 0 100 700 re 200 300 200 100 re f
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type3 /FontBBox [0 0 600 700] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /N 6 0 R /A 7 0 R /M 8 0 R /E 9 0 R >> /Encoding << /Type /Encoding /Differences [65 /A 69 /E 77 /M 78 /N] >> /FirstChar 65 /LastChar 90 /Widths [600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600 600] /Resources << >> >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000015 00000 n 
+0000000065 00000 n 
+0000000122 00000 n 
+0000000219 00000 n 
+0000000450 00000 n 
+0000000593 00000 n 
+0000000702 00000 n 
+0000000809 00000 n 
+0000000918 00000 n 
+0000001027 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R  /ID [<4B41534F55424C494E44303030303031> <4B41534F55424C494E44303030303031>] >>
+startxref
+1417
+%%EOF

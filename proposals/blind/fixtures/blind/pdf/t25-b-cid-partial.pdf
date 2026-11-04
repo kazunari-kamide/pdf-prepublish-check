@@ -1,0 +1,81 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R  >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<<  /Length 246 >>
+stream
+BT /F1 16 Tf 72 790 Td (Fictional sample report) Tj ET
+BT /F1 11 Tf 72 770 Td (This file was made for testing. All names are fictional.) Tj ET
+BT /F2 12 Tf 72 700 Td <000100020003000400050006000700080009000A0009> Tj ET
+q 0 g 120 694 90 20 re f Q
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]  /Resources << /Font << /F1 3 0 R /F2 9 0 R   >>  >> /Contents 4 0 R   >>
+endobj
+6 0 obj
+<<  /Length 465 >>
+stream
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /Adobe-Identity-UCS def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+10 beginbfchar
+<0001> <6C0F>
+<0002> <540D>
+<0003> <67B6>
+<0004> <7A7A>
+<0005> <6B21>
+<0006> <90CE>
+<0007> <96FB>
+<0008> <8A71>
+<0009> <3007>
+<000A> <4E5D>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end
+
+endstream
+endobj
+7 0 obj
+<< /Type /FontDescriptor /FontName /KasouMincho /Flags 6 /FontBBox [0 -120 1000 880] /ItalicAngle 0 /Ascent 880 /Descent -120 /CapHeight 700 /StemV 80 >>
+endobj
+8 0 obj
+<< /Type /Font /Subtype /CIDFontType2 /BaseFont /KasouMincho /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor 7 0 R /DW 1000 /CIDToGIDMap /Identity >>
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /KasouMincho /Encoding /Identity-H /DescendantFonts [8 0 R] /ToUnicode 6 0 R >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000015 00000 n 
+0000000065 00000 n 
+0000000122 00000 n 
+0000000219 00000 n 
+0000000517 00000 n 
+0000000659 00000 n 
+0000001176 00000 n 
+0000001345 00000 n 
+0000001552 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R  /ID [<4B41534F55424C494E44303030303031> <4B41534F55424C494E44303030303031>] >>
+startxref
+1688
+%%EOF

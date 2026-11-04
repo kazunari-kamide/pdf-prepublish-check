@@ -30,6 +30,7 @@
     "check:sanitized": "node sanitize/check/cli.ts",
     "check:browser": "node scripts/check-browser.mjs",
     "check:live": "node scripts/check-live.mjs",
+    "eval:blind": "node eval/blind/run.ts",
     "cli": "node cli/omamori.ts",
     "eval:redact": "vitest run tests/redact-eval.test.ts --silent=false"
   },
