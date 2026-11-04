@@ -3,9 +3,9 @@
 // 1つのファイルを、新しい Worker で片付ける（検査と同じ作り。src/inspect/run.ts）。
 // 時間の上限を超えたら、その Worker だけを止める。画面は止めない（CLAUDE.md §5）。
 
-import { WORKER_TIMEOUT_MS } from "../inspect/limits";
-import type { SanitizeOutcome, SanitizeRequest, SanitizeResponse } from "./protocol";
-import type { RedactArea } from "./areas";
+import { WORKER_TIMEOUT_MS } from "../inspect/limits.ts";
+import type { SanitizeOutcome, SanitizeRequest, SanitizeResponse } from "./protocol.ts";
+import type { RedactArea } from "./areas.ts";
 
 let nextId = 1;
 
@@ -39,6 +39,8 @@ export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER
           decrypted: res.decrypted,
           elapsedMs: elapsed(),
         });
+      } else if (res.type === "redact_blocked") {
+        finish({ kind: "blocked", removed: res.removed, notDone: res.notDone, leftovers: res.leftovers, elapsedMs: elapsed() });
       } else if (res.type === "refused") finish({ kind: "refused", message: res.message, elapsedMs: elapsed() });
       else finish({ kind: "error", message: res.message, elapsedMs: elapsed() });
     };

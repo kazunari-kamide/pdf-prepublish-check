@@ -4,8 +4,8 @@
 // 時間の上限を超えたら、その Worker だけを止める。画面は止めない（CLAUDE.md §5）。
 // ファイルごとに Worker を作り直すのは、細工された PDF の影響を次のファイルに残さないため。
 
-import { WORKER_TIMEOUT_MS } from "./limits";
-import type { InspectOutcome, InspectProgress, InspectRequest, InspectResponse } from "./protocol";
+import { WORKER_TIMEOUT_MS } from "./limits.ts";
+import type { InspectOutcome, InspectProgress, InspectRequest, InspectResponse } from "./protocol.ts";
 
 let nextId = 1;
 
