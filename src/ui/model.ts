@@ -108,7 +108,8 @@ export function buildView(summary: InspectSummary): ViewModel {
     for (const n of r.notices) {
       // 省いたページは、ルールごとに上限が違うので、どのルールが省いたかを添える
       const key = n.kind === "skipped_pages" ? `${r.label}（${r.pattern}）：${n.message}` : n.message;
-      const m = merged.get(key) ?? { pages: [], problem: n.kind !== "decrypted" };
+      // 復号したこと・知らせるだけのもの（info。文字認識の層・XFA など）は、調べきれなかった所に数えない
+      const m = merged.get(key) ?? { pages: [], problem: n.kind !== "decrypted" && n.kind !== "info" };
       m.pages.push(...n.pages);
       merged.set(key, m);
     }

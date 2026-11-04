@@ -174,7 +174,8 @@ describe("P4 ファイルパス・内部ホスト名", () => {
 describe("ページの縮小画像・XFA・C2PA", () => {
   it("縮小画像のページと大きさ", async () => {
     const r = await detectExtras(await pdf(ext.CASES, "ext-l01"));
-    expect(r.thumbnails).toEqual([{ pattern: "P5", page: 2, width: 30, height: 20, bytes: 600 }]);
+    // extras 1.1.0 から：いまのページ（白紙）と比べた結果も返す。縮小画像は一様な灰色（明るさ 0.78）なので「違う」
+    expect(r.thumbnails).toEqual([{ pattern: "P5", page: 2, width: 30, height: 20, bytes: 600, compare: "differs" }]);
   });
   it("XFA の入力した値の字数（タグを除く）", async () => {
     const r = await detectExtras(await pdf(ext.CASES, "ext-l02"));
