@@ -23,7 +23,9 @@ describe("画面の形", () => {
     const v = buildView(summary([rule({})]));
     expect(v.clean).toBe(true);
     expect(v.tone).toBe("ok");
-    expect(v.coverage).toEqual(["見せかけの黒塗り（P6）：見つかりませんでした"]);
+    expect(v.verdict).toBe("none");
+    expect(v.headline).toBe("調べた範囲では、見つかりませんでした。");
+    expect(v.coverage.find((c) => c.key === "P6")).toMatchObject({ state: "checked", found: 0, reasons: [] });
   });
 
   it("調べなかった画像があれば、見つからなくても「全部緑」にしない。ページ番号をまとめて出す", () => {

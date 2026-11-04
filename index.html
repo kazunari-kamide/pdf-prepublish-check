@@ -9,6 +9,7 @@
     <!-- アイコンを取りに行かせない（/favicon.ico への要求をなくす） -->
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/site/links.css" />
   </head>
   <body>
     <a class="skip" href="#results">結果へ移る</a>
@@ -29,7 +30,7 @@
         </li>
         <li id="step-verify" data-state="todo">
           <span class="step-no" aria-hidden="true">4</span><span class="step-name"><span class="visually-hidden">4 </span>読み直す</span>
-          <span class="step-note" id="step-verify-note">全部 緑になれば完了</span>
+          <span class="step-note" id="step-verify-note">残り 0 件なら完了</span>
         </li>
       </ol>
       <p class="zero-send">送信しない作り・このパソコンの中だけで確かめます</p>
@@ -46,6 +47,10 @@
           <span class="drop-note">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
           <input id="file" type="file" accept="application/pdf,.pdf" />
         </label>
+        <p class="sample" id="sample-row">
+          <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
+          <span class="sample-note">架空の申請書です（黒い四角の下に、架空の名前が残っています）。</span>
+        </p>
 
         <div class="filebar" id="filebar" hidden>
           <span class="filebar-name" id="file-name"></span>
@@ -71,6 +76,15 @@
         <div id="actions" class="actions" hidden>
           <button id="sanitize" type="button" aria-describedby="sanitize-note">片付ける</button>
           <p id="sanitize-note"></p>
+          <div id="pick-tools" class="pick-tools" hidden>
+            <button id="pick-toggle" class="pick-toggle" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
+            <p id="pick-help" class="pick-help" hidden>ページの上を、黒塗りしたい所の角から角へ、ドラッグしてください。選んだ所は、墨の点線の枠で出ます。キーボードだけでは、まだ選べません。</p>
+            <p class="pick-help">個人情報の候補から選ぶ：候補を探すルールが、この版にはまだないため使えません。</p>
+            <div id="picks" class="picks" hidden>
+              <p id="pick-count"></p>
+              <ul id="pick-list"></ul>
+            </div>
+          </div>
         </div>
 
         <div id="verified" class="verified" data-state="none" hidden>
@@ -80,11 +94,20 @@
         <section id="clean" class="clean" aria-labelledby="clean-title" hidden>
           <h3 id="clean-title">片付けた結果</h3>
           <p id="clean-count" class="clean-count"></p>
-          <a id="download" class="download" download>片付けた PDF を保存する</a>
+          <a id="download" class="download" download aria-disabled="true" aria-describedby="save-note">片付けた PDF を保存する</a>
+          <p id="save-note" class="save-note"></p>
+          <label id="save-confirm" class="save-confirm" hidden>
+            <input id="save-confirm-box" type="checkbox" />
+            <span>言い切れない所があると分かったうえで保存する</span>
+          </label>
           <p id="download-note" class="download-note"></p>
           <div id="not-done" class="not-done" hidden>
             <h4>▲ 片付けられなかった所</h4>
             <ul id="not-done-list"></ul>
+          </div>
+          <div id="before-after" class="before-after" hidden>
+            <h4>型ごとの数（片付ける前 → 読み直したあと）</h4>
+            <ul id="before-after-list"></ul>
           </div>
           <details id="removed" class="removed" open>
             <summary id="removed-title">取り除いたもの</summary>
@@ -92,6 +115,8 @@
           </details>
           <ul id="clean-notes" class="clean-notes" hidden></ul>
           <p id="clean-scope" class="clean-scope"></p>
+          <a id="report-download" class="report-download" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
+          <p class="report-note">前後の SHA-256・消した所と字数・調べた範囲を、文字だけで残します。字の中身とファイル名は載せません。</p>
         </section>
 
         <div id="notices" class="notices" hidden>
@@ -101,9 +126,20 @@
 
         <div id="groups" class="groups"></div>
 
+        <details id="props" class="props" hidden></details>
+
+        <details id="ruleset" class="ruleset" hidden></details>
+
         <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。見つけた字の中身は、画面に出しません。数と場所だけを出します。</p>
       </aside>
     </main>
+
+    <!-- サイトの部分（持ち場 G）：記事・プライバシーの説明へのリンク。ページの中身は src/site/、ビルドは site.ts -->
+    <footer class="site-links" aria-label="サイトの案内">
+      <a href="/articles/">記事の一覧（黒塗りの下の文字・作成者の名前など、12 の型と手順）</a>
+      <a href="/privacy.html">プライバシーについて</a>
+      <p>このサイトは、開いた回数などを、配信先のサーバーの記録だけで数えます。PDF の中身やファイルの名前は、どこにも送りません。</p>
+    </footer>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

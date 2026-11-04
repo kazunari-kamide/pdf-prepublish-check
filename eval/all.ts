@@ -21,6 +21,8 @@ const EVALS = [
   { pattern: "P9", script: "p9.ts", dir: "p9" },
   { pattern: "P5", script: "p5.ts", dir: "p5" },
   { pattern: "P7", script: "p7.ts", dir: "p7" },
+  // 見える文字の個人情報（rules/pii。番号 P13 は【仮】）。片付けをしない型なので、片付けた PDF は渡らない
+  { pattern: "P13【仮】", script: "pii.ts", dir: "pii" },
 ];
 
 if (process.argv.length > 2) {

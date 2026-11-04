@@ -1,0 +1,103 @@
+{
+  "file": "pii-02-honorific.pdf",
+  "description": "「様」「殿」「さん」の前の氏名（確認）。各位・利用者様・役職の様は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-02-honorific#1",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        60,
+        758.68,
+        109.5,
+        769.67
+      ],
+      "confidence": "check",
+      "chars": 4
+    },
+    {
+      "id": "pii-02-honorific#2",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        87.5,
+        734.68,
+        120.5,
+        745.67
+      ],
+      "confidence": "check",
+      "chars": 3
+    },
+    {
+      "id": "pii-02-honorific#3",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        93,
+        710.68,
+        115,
+        721.67
+      ],
+      "confidence": "check",
+      "chars": 2
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-02-honorific#n1",
+      "kind": "honorific_group",
+      "page": 1,
+      "rect": [
+        60,
+        662.68,
+        115,
+        673.67
+      ]
+    },
+    {
+      "id": "pii-02-honorific#n2",
+      "kind": "honorific_group",
+      "page": 1,
+      "rect": [
+        60,
+        638.68,
+        104,
+        649.67
+      ]
+    },
+    {
+      "id": "pii-02-honorific#n3",
+      "kind": "role",
+      "page": 1,
+      "rect": [
+        60,
+        614.68,
+        93,
+        625.67
+      ]
+    },
+    {
+      "id": "pii-02-honorific#n4",
+      "kind": "honorific_group",
+      "page": 1,
+      "rect": [
+        60,
+        590.68,
+        82,
+        601.67
+      ]
+    },
+    {
+      "id": "pii-02-honorific#n5",
+      "kind": "honorific_group",
+      "page": 1,
+      "rect": [
+        60,
+        566.68,
+        93,
+        577.67
+      ]
+    }
+  ]
+}

@@ -42,11 +42,27 @@
 - `index.html` の `<meta>` の CSP も残す。ヘッダーの CSP は、`<meta>` の CSP に `frame-ancestors 'none'`（`<meta>` では効かない）を足しただけで、ほかは同じ値。2つの CSP は両方とも効くが、値が同じなので食い違わない。`.htaccess` が効かなかったときの守りにもなる。食い違いは `scripts/check-dist.mjs` が止める。
 - Xserver の「HTTPS転送設定」は、`public_html` の `.htaccess` に転送の行を書く仕組みなので（推測。Xserver のマニュアルで確かめていない）、配信のたびに上書きされても転送が消えないよう、同じ転送を `.htaccess` に書いている。
 
+## 開いた回数の数え方（アクセス解析）
+
+- ページには解析のスクリプトを入れない（2026-11-05 本人が決定。`docs/no-network.md` の「通信の決まり」）。そのため、解析のための Secrets はない。
+- 開いた回数・参照元・ブラウザの種類は、Xserver のアクセスログ（サーバーパネルの「アクセスログ」「アクセス解析」）で見る。ログの残る期間と、取り出し方は【本人が Xserver のマニュアルで確かめる】。
+- SNS などに貼るリンクには `?utm_source=<貼った所>` を付ける（README）。アクセスログの「求められた場所」に、そのまま残る。
+
+## 検索エンジンの確認（Google Search Console）
+
+確認のコードは秘密の値ではない（公開されるページに載る）。同じ手順で同じものをビルドできるよう、リポジトリに書く。
+
+- **メタタグで確かめるとき**：`src/site/search-console.ts` の `GOOGLE_SITE_VERIFICATION` に、渡された `content="…"` の中の値を入れる。ビルドでトップページの `<head>` に `<meta name="google-site-verification" …>` が入る。
+- **確認のファイルで確かめるとき**：渡された `googleXXXX.html` を、中身を変えずに `public/` に置く。ビルドで `dist/` の一番上に写る。`scripts/check-dist.mjs` は、中身が `google-site-verification: <ファイルの名前>` の1行のときだけ通す。
+- サイトマップは `https://omamoripdf.com/sitemap.xml`（`site.ts` がビルドの時に作る）。Search Console の「サイトマップ」に、この場所を入れる。
+
 ## 本番の確かめ（`npm run check:live`）
 
 手元でも動かせる（先に `npm run build` で、配信したものと同じ `dist/` を作る）。
 
 - トップページの `csp.ts` のヘッダーが、同じ値で1つずつ付いている（サーバーが別の値を足して二重になっても止まる）
+- サイトのページ（記事の一覧・記事1つ・プライバシー）も 200 で返り、同じヘッダーが付いている
+- トップページが、外のサイトからスクリプトを読み込んでいない
 - `.mjs` が `text/javascript`、`.wasm` が `application/wasm` で返る（今は `.wasm` を配っていないので、省いたと表示する）
 - `dist/` のファイルが本番と1バイトも違わない。`.htaccess` は外から読めない
 - `http://` と `www` つきは、301 で `https://omamoripdf.com/` へ（`www` の名前が引けないときは、省いたと表示する）
@@ -56,3 +72,4 @@
 - Xserver の前に立つ nginx のキャッシュなどで、静的ファイルにヘッダーが付かないことがあるか。初回の配信のあと `check:live` で確かめる。
 - GitHub Actions の Ubuntu で、`check:browser` の Chrome が headless で動くか。初回の配信で確かめる。
 - `www.omamoripdf.com` の名前（DNS）と証明書があるか。
+- `https://omamoripdf.com/articles`（末尾の / なし）を開いたとき、Apache が `/articles/` へ送り直すか。送り直す先が `http://` になって、もう一度 301 が挟まらないか。

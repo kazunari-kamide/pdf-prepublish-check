@@ -1,0 +1,57 @@
+{
+  "file": "pii-13-card-number.pdf",
+  "description": "カード番号：4 けたずつの 16 けた（Luhn と番号の頭が合うもの）。日時の並び・見本の番号は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-13-card-number#1",
+      "type": "card_number",
+      "page": 1,
+      "rect": [
+        120.5,
+        758.68,
+        225,
+        769.67
+      ],
+      "confidence": "high",
+      "chars": 16
+    },
+    {
+      "id": "pii-13-card-number#2",
+      "type": "card_number",
+      "page": 1,
+      "rect": [
+        109.5,
+        734.68,
+        214,
+        745.67
+      ],
+      "confidence": "check",
+      "chars": 19
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-13-card-number#n1",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        87.5,
+        686.68,
+        192,
+        697.67
+      ]
+    },
+    {
+      "id": "pii-13-card-number#n2",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        109.5,
+        662.68,
+        214,
+        673.67
+      ]
+    }
+  ]
+}

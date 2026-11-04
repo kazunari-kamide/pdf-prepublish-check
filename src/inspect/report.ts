@@ -9,8 +9,8 @@ export type Rect = [number, number, number, number];
 /** 深刻度（用語集 §3）。高・中・低の3段 */
 export type Severity = "high" | "medium" | "low";
 
-/** 漏洩パターンの番号（用語集 §1） */
-export type Pattern = "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "P7" | "P8" | "P9" | "P10" | "P11" | "P12";
+/** 漏洩パターンの番号（用語集 §1）。P13（見える文字の個人情報らしい字）は【仮】の番号（rules/pii） */
+export type Pattern = "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "P7" | "P8" | "P9" | "P10" | "P11" | "P12" | "P13";
 
 /** 見つけた所1つ */
 export type Item = {
@@ -25,6 +25,11 @@ export type Item = {
   /** ページの上の場所があるときだけ */
   page: number | null;
   rect: Rect | null;
+  /**
+   * 確からしさ。check＝ルールが「確かめてください」とした所（P6 の confidence: check・画像を解けなかった所など）。
+   * 画面では、断定しない言葉で出す。省いたときは、ふつうの見つけた所
+   */
+  confidence?: "check";
 };
 
 /** 知らせること（漏れではないが、利用者に伝えること） */
@@ -58,6 +63,11 @@ export type PageBox = {
 
 /** 1つのファイルの検査の結果 */
 export type InspectSummary = {
+  /**
+   * プロパティの一覧（文書情報と XMP のすべての欄。値つき）。値を画面に出してよいのは、この一覧だけ（11/5 B の 8）。
+   * 読めなかったときは null。古い形の結果にはない
+   */
+  properties?: import("./properties").PropertyList | null;
   pages: PageBox[];
   /** ページの形を読めなかったとき true（一覧は出せるが、ページの上には描けない） */
   pagesUnreadable: boolean;
