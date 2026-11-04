@@ -16,5 +16,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["src", "rules", "sanitize"],
-  "exclude": ["sanitize/check"]
+  "exclude": ["sanitize/check", "sanitize/node"]
 }

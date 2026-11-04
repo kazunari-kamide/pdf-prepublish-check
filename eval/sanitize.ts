@@ -15,6 +15,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { sanitizePdf } from "../sanitize/index.ts";
+import { createNodeImageCodec } from "../sanitize/node/image-codec.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const TYPES = ["p6", "p1", "p9", "p5", "p7"] as const;
@@ -25,6 +26,7 @@ function argValue(name: string): string | undefined {
 }
 
 async function main() {
+  const codec = createNodeImageCodec();
   const outRoot = path.resolve(argValue("--out") ?? path.join(ROOT, ".tmp", "sanitized"));
   const score = !process.argv.includes("--no-score");
   const picked = process.argv.slice(2).filter((a) => (TYPES as readonly string[]).includes(a));
@@ -41,7 +43,8 @@ async function main() {
     const started = Date.now();
     for (const f of files) {
       const t0 = Date.now();
-      const r = await sanitizePdf(new Uint8Array(readFileSync(path.join(dir, f))));
+      // JPEG・CCITT・JBIG2 の画像も塗る（PDF.js で解く。JPEG は @napi-rs/canvas で書き直す。ブラウザでは OffscreenCanvas で書く）
+      const r = await sanitizePdf(new Uint8Array(readFileSync(path.join(dir, f))), { codec });
       if (r.status === "ok") {
         writeFileSync(path.join(out, f), r.bytes);
         ok++;

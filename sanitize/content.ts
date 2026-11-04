@@ -48,9 +48,9 @@ import {
 import { measureImageDarkness } from "../rules/p6-text/images.ts";
 import { luminanceOf } from "../rules/p6-text/page.ts";
 import { RectIndex, coveredFraction, type SanCover } from "./geometry.ts";
-import { burnImage } from "./images.ts";
+import { burnImage, type BurnFailure, type BurnLimits } from "./images.ts";
 import { serializeOps } from "./serialize.ts";
-import type { NotDoneItem, RemovedItem } from "./types.ts";
+import type { ImageCodec, NotDoneItem, NotDoneReason, RemovedItem, SanitizeTraceEvent } from "./types.ts";
 
 export const SETTINGS = {
   /** 塗りを「濃い」とみなす明るさの上限。検出ルールの 0.35（検証器は 0.3 なので、それより広い） */
@@ -63,7 +63,16 @@ export const SETTINGS = {
   coveredFractionMin: 0.5,
   /** 画像を覆いとみなす濃い画素の割合の下限（検証器と同じ 0.95。検出ルールの 0.97 より広い） */
   darkImageFractionMin: 0.95,
+  /** 丸ごと解く画像の大きさの上限（バイト）。超えた Flate の画像は、流して塗る（images.ts） */
   maxImageBytes: 64 * 1024 * 1024,
+  /** 塗る画像の画素の数の上限。600dpi の A3（約 7,000 万画素）まで入る（検出ルール 1.9.0 と同じ。2026-11-04 人が決めた） */
+  maxImagePixels: 72_000_000,
+  /** 塗りを「明るい」とみなす明るさの下限（検出ルールの lightLuminanceMin と同じ 0.9）。明るい覆いは、画像の画素を塗るときだけ使う */
+  lightLuminanceMin: 0.9,
+  /** 明るい塗りで、覆いにはしないが「片付けられなかった所」にする不透明さの下限（これ未満は、下がはっきり見えるので何もしない） */
+  uncertainAlphaMin: 0.5,
+  /** JPEG に書き直すときの品質（0〜1） */
+  jpegQuality: 0.92,
   maxOperationsPerPage: 3_000_000,
   maxFormDepth: 12,
   // P7（rules/p7-hidden の値と同じ）
@@ -77,6 +86,27 @@ export const SETTINGS = {
 export type ContentSettings = typeof SETTINGS;
 
 export class TooManyOperations extends Error {}
+
+/**
+ * 白い不透明な塗りが、下を隠す重ね方（/BM）。白を重ねた結果が白になるもの（Screen・Lighten・ColorDodge・HardLight・Luminosity）。
+ * Multiply・Darken などでは、白を重ねても下がそのまま見えるので、塗ると見た目が変わる（覆いにしない。片付けられなかった所にする）
+ */
+const LIGHT_HIDING_BLENDS = new Set(["Normal", "Compatible", "Screen", "Lighten", "ColorDodge", "HardLight", "Luminosity"]);
+
+/** 黒でない塗りの記録の上限（1ページ） */
+const FILL_LOG_MAX = 5000;
+
+/** 黒でない塗りの記録（trace 用）。decision は、覆いにしたか・しなかった理由 */
+type FillLogEntry = {
+  seq: number;
+  rect: Rect;
+  luminance: number | null;
+  alpha: number;
+  blend: string;
+  hidden: boolean;
+  annotation: boolean;
+  decision: "light_cover" | "skip_blend" | "skip_hidden" | "skip_transparent" | "ignore_transparent" | "no_area" | "mid_tone" | "unknown_color";
+};
 
 type P7Reason = "hidden_layer" | "off_page" | "clipped" | "invisible" | "tiny" | "same_color" | "covered_light";
 
@@ -139,6 +169,8 @@ type GState = {
   ca: number;
   CA: number;
   normal: boolean;
+  /** 重ね方（ExtGState の /BM の最初の名前。既定は Normal） */
+  blend: string;
   lw: number;
   font: FontInfo | null;
   size: number;
@@ -307,6 +339,15 @@ class Walker {
   ops = 0;
   readonly glyphs: Glyph[] = [];
   readonly covers: SanCover[] = [];
+  /** 明るい色（白など）の不透明な覆い。画像の画素を塗るときだけ使う（字の消し方には使わない）。表示しないレイヤーのものは入れない */
+  readonly lightCovers: SanCover[] = [];
+  /** 明るい不透明な塗りのうち、覆いにしなかったもの（下を隠さない重ね方・表示しないレイヤー）。画像の上にあれば、片付けられなかった所にする */
+  readonly lightSkipped: Array<SanCover & { why: "blend" | "hidden" | "transparent" | "unreadable" }> = [];
+  /**
+   * 黒でない塗りの記録（確かめの道具 trace のため。数・名前だけ。上限 FILL_LOG_MAX 件）。
+   * 明るさが分からない色・中くらいの明るさの色も入れる（実物で「なぜ覆いにならなかったか」を見るため）
+   */
+  readonly fillLog: FillLogEntry[] = [];
   readonly fills: Fill[] = [];
   readonly images: Array<{ seq: number; box: Rect }> = [];
   readonly imageUses: ImageUse[] = [];
@@ -324,9 +365,14 @@ class Walker {
     this.pageNo = pageNo;
   }
 
+  logFill(seq: number, rect: Rect, g: GState, hidden: boolean, annotation: boolean, decision: FillLogEntry["decision"]) {
+    if (this.fillLog.length >= FILL_LOG_MAX) return;
+    this.fillLog.push({ seq, rect, luminance: g.fill, alpha: g.ca, blend: g.blend, hidden, annotation, decision });
+  }
+
   initial(ctm: Matrix): GState {
     return {
-      ctm, clip: INF_RECT, fillN: 1, strokeN: 1, fill: 0, stroke: 0, ca: 1, CA: 1, normal: true, lw: 1,
+      ctm, clip: INF_RECT, fillN: 1, strokeN: 1, fill: 0, stroke: 0, ca: 1, CA: 1, normal: true, blend: "Normal", lw: 1,
       font: null, size: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, mode: 0,
     };
   }
@@ -393,6 +439,27 @@ class Walker {
               ...(plain ? {} : { shape: { parts: shapeParts, rule } }),
             });
           }
+        } else if (g.fill !== null && g.fill >= s.lightLuminanceMin && g.ca >= s.uncertainAlphaMin) {
+          // 白などの不透明な塗り：画像の上にあれば、下の画素を塗る（ページの中の白い四角も入れる。消しすぎの側。2026-11-04 人が決めた）。
+          // 下を隠さない重ね方（Multiply など）・表示しないレイヤー・半透明（不透明さ 0.5 以上 0.9 未満）のものは、
+          // 塗ると見た目が変わるので塗らず、画像の上にあれば片付けられなかった所にする（黙って残さない）
+          const shapeParts = parts.filter((p) => p.length >= 3 && area(boundsOf(p)) > 0);
+          const hidden = isHidden();
+          if (shapeParts.length) {
+            const plain = shapeParts.length === 1 && isAxisRect(shapeParts[0]!);
+            const cover: SanCover = {
+              seq, rect: boundsOf(shapeParts.flat()), kind: annotation ? "annotation" : "fill", tone: "light",
+              ...(plain ? {} : { shape: { parts: shapeParts, rule } }),
+            };
+            const why = hidden ? "hidden" : !LIGHT_HIDING_BLENDS.has(g.blend) ? "blend" : g.ca < s.opacityMin ? "transparent" : null;
+            if (why === null) this.lightCovers.push(cover);
+            else this.lightSkipped.push({ ...cover, why });
+            this.logFill(seq, cover.rect, g, hidden, annotation, why === null ? "light_cover" : `skip_${why}`);
+          } else this.logFill(seq, box, g, hidden, annotation, "no_area");
+        } else if (g.fill === null || g.fill > s.darkLuminanceMax) {
+          // 記録だけ（明るさが分からない色・中くらいの明るさ・ほとんど透明な白）
+          const decision = g.fill === null ? "unknown_color" : g.fill >= s.lightLuminanceMin ? "ignore_transparent" : "mid_tone";
+          this.logFill(seq, box, g, isHidden(), annotation, decision);
         }
       }
       if (doStroke && g.stroke !== null && g.stroke <= s.darkLuminanceMax && g.CA >= s.opacityMin) {
@@ -484,6 +551,7 @@ class Walker {
               const arr = ctx.lookup(bm);
               const first = arr instanceof PDFArray ? nameOf(ctx, arr.get(0)) : nameOf(ctx, bm);
               g.normal = first === "Normal" || first === "Compatible";
+              g.blend = first ?? "Normal";
             }
           }
           break;
@@ -800,30 +868,45 @@ function scanAnnotations(ctx: PDFContext, page: PDFPage, w: Walker, visible: Vis
     if (subtype === "Popup") continue;
     const flags = annot.lookup(PDFName.of("F"));
     if (flags instanceof PDFNumber && flags.asNumber() & (FLAG_HIDDEN | FLAG_NOVIEW)) continue;
+    // 注釈全体の不透明さ（/CA）。0.5 未満は、下がはっきり見えるので覆いにも notDone にもしない。
+    // 0.5 以上 0.9 未満は、見た目の中の塗りに引き継ぎ、白い塗りなら notDone の側にする（半透明）
     const ca = annot.lookup(PDFName.of("CA"));
-    if (ca instanceof PDFNumber && ca.asNumber() < s.opacityMin) continue;
+    const alpha = ca instanceof PDFNumber ? ca.asNumber() : 1;
+    if (alpha < s.uncertainAlphaMin) continue;
+    // 見た目を読めない注釈は、覆いかどうか分からない。画像の上にあれば notDone にする（黙って残さない）
+    const unreadable = () => w.lightSkipped.push({ seq: ++w.seq, rect, kind: "annotation", tone: "light", why: "unreadable" });
     const ap = appearance(ctx, annot);
     if (ap) {
       const m = appearanceMatrix(ctx, ap, rect);
-      if (!m) continue;
+      if (!m) {
+        unreadable();
+        continue;
+      }
       let data: Uint8Array;
       try {
         data = streamData(ap);
       } catch {
+        unreadable();
         continue;
       }
       const node: CNode = { data, res: dictOf(ctx, ap.dict.get(PDFName.of("Resources"))), hasInline: false, forms: new Map(), textOps: new Map(), images: new Map(), actualText: new Set() };
       try {
-        w.run(node, w.initial(m), false, 0, new Set(), true);
+        w.run(node, { ...w.initial(m), ca: Math.min(1, alpha), CA: Math.min(1, alpha) }, false, 0, new Set(), true);
       } catch (e) {
         if (e instanceof TooManyOperations) throw e;
+        unreadable();
       }
       continue;
     }
     if (subtype === "Square") {
       const ic = numsOf(ctx, annot.get(PDFName.of("IC")));
       const lum = ic && ic.length > 0 ? luminanceOf(ic, ic.length) : null;
-      if (lum !== null && lum <= s.darkLuminanceMax) w.covers.push({ seq: ++w.seq, rect, kind: "annotation" });
+      if (lum !== null && lum <= s.darkLuminanceMax) {
+        if (alpha >= s.opacityMin) w.covers.push({ seq: ++w.seq, rect, kind: "annotation" });
+      } else if (lum !== null && lum >= s.lightLuminanceMin) {
+        if (alpha >= s.opacityMin) w.lightCovers.push({ seq: ++w.seq, rect, kind: "annotation", tone: "light" });
+        else w.lightSkipped.push({ seq: ++w.seq, rect, kind: "annotation", tone: "light", why: "transparent" });
+      }
     }
   }
   void visible;
@@ -1017,12 +1100,46 @@ function rewriteNode(ctx: PDFContext, node: CNode, burned: Map<ImageUse, PDFRef>
 
 // ---------------------------------------------------------------- 本体
 
+/**
+ * 覆い c で、画素の中心が必ず入るはずの画素のだいたいの数。塗れた画素が 0 なのにこれが 2 以上なら、塗り損ねとして片付けられなかった所にする。
+ * 重なりの面積は、覆いの形で測る（形のある覆いの箱で測ると多めに出るため）。
+ * 縦横に置いた画像では、重なりが縦横とも 1.5 画素以上あるときだけ数える（それより細い覆いは、画素の中心が入らないことがあるため）
+ */
+function expectedPixels(c: SanCover, u: ImageUse): number {
+  const d = u.stream.dict;
+  const W = d.lookup(PDFName.of("Width"));
+  const H = d.lookup(PDFName.of("Height"));
+  const w = W instanceof PDFNumber ? W.asNumber() : 0;
+  const h = H instanceof PDFNumber ? H.asNumber() : 0;
+  const det = Math.abs(u.ctm[0] * u.ctm[3] - u.ctm[1] * u.ctm[2]);
+  if (!(w > 0 && h > 0) || !(det > 0)) return 0;
+  const overlap = coveredFraction(c, u.box) * area(u.box);
+  if (u.ctm[1] === 0 && u.ctm[2] === 0) {
+    const ix = intersect(c.rect, u.box);
+    const pxW = Math.abs(u.ctm[0]) / w;
+    const pxH = Math.abs(u.ctm[3]) / h;
+    if ((ix[2] - ix[0]) / pxW < 1.5 || (ix[3] - ix[1]) / pxH < 1.5) return 0;
+  }
+  // 1 画素の面積 ＝ 単位の正方形を ctm で写した平行四辺形の面積 ÷ 画素の数。傾いた画像では、箱のうち画像そのものの割合をかける
+  return (overlap * Math.min(1, det / Math.max(area(u.box), 1e-9))) / (det / (w * h));
+}
+
+/** 画像を塗れなかったときの説明（画面にそのまま出す） */
+function notBurnedLabel(reason: BurnFailure, light: boolean): string {
+  const what = light ? "白い四角・注釈の下の画像" : "黒い四角の下の画像";
+  if (reason === "too_large") return `${what}が大きすぎるため、塗りつぶせませんでした。画像の中身が残っています`;
+  if (reason === "no_codec") return `${what}（JPEG・FAX 形式などの画像）を塗りつぶせませんでした。画像の中身が残っています`;
+  if (reason === "unsupported_filter") return `${what}（JPEG 2000 などの形式）を塗りつぶせませんでした。画像の中身が残っています`;
+  if (reason === "unsupported_color") return `${what}（読めない色の形式）を塗りつぶせませんでした。画像の中身が残っています`;
+  return `${what}を読めなかったため、塗りつぶせませんでした。画像の中身が残っているかもしれません`;
+}
+
 export type PageOutcome = { removed: RemovedItem[]; notDone: NotDoneItem[]; redactAnnots: PDFObject[] };
 
 const RECT_ROUND = (r: Rect): Rect => r.map((v) => Math.round(v * 100) / 100) as Rect;
 
 /** 1ページを片付ける。書き換えたときは、ページの /Contents・/Resources を差し替える */
-export function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: number, visible: Visibility, s: ContentSettings): PageOutcome {
+export async function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: number, visible: Visibility, s: ContentSettings, codec?: ImageCodec, trace?: (e: SanitizeTraceEvent) => void): Promise<PageOutcome> {
   const removed: RemovedItem[] = [];
   const notDone: NotDoneItem[] = [];
   const mb = page.getMediaBox();
@@ -1059,19 +1176,57 @@ export function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: numb
     const r = judgeP7(gl, view, near, w.images, s);
     if (r) gl.remove = { pattern: "P7", reason: r };
   }
-  // P6：画像の画素
-  const burned = new Map<ImageUse, PDFRef>();
-  const burnedReport: Array<{ rect: Rect; pixels: number }> = [];
-  for (const u of w.imageUses) {
-    const over = coverIndex.query(u.box, bySeq).filter((c) => c.seq > u.seq && intersectionArea(c.rect, u.box) > 0);
-    if (!over.length) continue;
-    const r = burnImage(ctx, u.stream, dictOf(ctx, u.res?.get(PDFName.of("ColorSpace"))), u.ctm, over, s.maxImageBytes);
-    const rect = over.map((c) => intersect(c.rect, u.box)).reduce(union);
-    if (!r.ok) {
-      notDone.push({
-        pattern: "P6", reason: "unsupported_image", page: pageNo, rect: RECT_ROUND(rect),
-        label: "黒い四角の下の画像（JPEG などの形式）を塗りつぶせませんでした。画像の中身が残っているかもしれません",
+  if (trace) {
+    trace({
+      type: "page", page: pageNo, operations: w.ops, images: w.imageUses.length, inlineImages: w.inlineImages.length,
+      darkCovers: w.covers.length, lightCovers: w.lightCovers.length, lightSkipped: w.lightSkipped.length, fillLog: w.fillLog.length,
+    });
+    for (const u of w.imageUses) {
+      const d = u.stream.dict;
+      const num = (k: string) => { const v = d.lookup(PDFName.of(k)); return v instanceof PDFNumber ? v.asNumber() : null; };
+      const filter = d.lookup(PDFName.of("Filter"));
+      trace({
+        type: "image", page: pageNo, seq: u.seq, box: RECT_ROUND(u.box), ctm: u.ctm.map((v) => Math.round(v * 1000) / 1000),
+        width: num("Width"), height: num("Height"), bpc: num("BitsPerComponent"),
+        filter: filter instanceof PDFName ? filter.decodeText() : filter instanceof PDFArray ? filter.asArray().map((x) => (x instanceof PDFName ? x.decodeText() : "?")).join(",") : null,
+        inForm: u.node !== root,
       });
+    }
+    for (const e of w.fillLog) trace({ type: "fill", page: pageNo, ...e, rect: RECT_ROUND(e.rect), overImages: w.imageUses.filter((u) => u.seq < e.seq && intersectionArea(e.rect, u.box) > 0).map((u) => u.seq) });
+  }
+  // P6：画像の画素（黒い覆いと、白などの明るい覆い）
+  const burned = new Map<ImageUse, PDFRef>();
+  const burnedReport: Array<{ rect: Rect; pixels: number; tone: "dark" | "light" }> = [];
+  const lightIndex = new RectIndex(w.lightCovers);
+  const limits: BurnLimits = { maxBytes: s.maxImageBytes, maxPixels: s.maxImagePixels, jpegQuality: s.jpegQuality, ...(codec ? { codec } : {}) };
+  for (const u of w.imageUses) {
+    const after = (c: SanCover) => c.seq > u.seq && intersectionArea(c.rect, u.box) > 0;
+    const over = [...coverIndex.query(u.box, bySeq).filter(after), ...lightIndex.query(u.box, bySeq).filter(after)].sort(bySeq);
+    if (!over.length) continue;
+    const r = await burnImage(ctx, u.stream, dictOf(ctx, u.res?.get(PDFName.of("ColorSpace"))), u.ctm, over, limits);
+    const expected = over.map((c) => expectedPixels(c, u));
+    trace?.({
+      type: "burn", page: pageNo, imageSeq: u.seq, ok: r.ok, ...(r.ok ? { via: r.via, pixels: r.pixels } : { reason: r.reason }),
+      covers: over.map((c, k) => ({ seq: c.seq, tone: c.tone ?? "dark", kind: c.kind, rect: RECT_ROUND(c.rect), painted: r.ok ? (r.perCover[k] ?? 0) : 0, reached: r.ok ? (r.reached[k] ?? false) : false, expected: Math.round(expected[k]!) })),
+    });
+    if (r.ok) {
+      // 安全網：画素の中心が入るはずの覆いで、1 画素も塗れなかったら、黙って残さず片付けられなかった所にする
+      over.forEach((c, k) => {
+        // 上に重なったあとの覆いの色で塗られた画素も「届いた」と数える（reached）。どの画素にも届かなかったときだけ出す
+        if (!r.reached[k] && expected[k]! >= 2) {
+          notDone.push({
+            pattern: "P6", reason: "unsupported_image", page: pageNo, rect: RECT_ROUND(intersect(c.rect, u.box)),
+            label: `${c.tone === "light" ? "白い四角・注釈の下の画像" : "黒い四角の下の画像"}を塗りつぶせませんでした（画像の置き方を読み取れませんでした）。画像の中身が残っているかもしれません`,
+          });
+        }
+      });
+    }
+    if (!r.ok) {
+      // 塗れない：覆いごとに「片付けられなかった所」にする（注釈は外さない。画面で「全部消えた」と言わせない）
+      const reason: NotDoneReason = r.reason === "too_large" ? "image_too_large" : "unsupported_image";
+      for (const c of over) {
+        notDone.push({ pattern: "P6", reason, page: pageNo, rect: RECT_ROUND(intersect(c.rect, u.box)), label: notBurnedLabel(r.reason, c.tone === "light") });
+      }
       continue;
     }
     if (r.pixels === 0) continue;
@@ -1080,15 +1235,32 @@ export function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: numb
     // 覆いが複数あるときに全部を1つの箱にまとめると、画像全体の箱に近くなり、塗っていない所まで枠に入るため
     over.forEach((c, k) => {
       const n = r.perCover[k] ?? 0;
-      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n });
+      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n, tone: c.tone === "light" ? "light" : "dark" });
+    });
+  }
+  // 画像の上の明るい不透明な塗りのうち、覆いにしなかったもの：塗らないが、黙って残さない（片付けられなかった所にする）
+  for (const c of w.lightSkipped) {
+    const under = [...w.imageUses, ...w.inlineImages].filter((u) => u.seq < c.seq && intersectionArea(c.rect, u.box) > 0);
+    if (!under.length) continue;
+    notDone.push({
+      pattern: "P6", reason: "uncertain_cover", page: pageNo, rect: RECT_ROUND(under.map((u) => intersect(c.rect, u.box)).reduce(union)),
+      label: c.why === "blend"
+        ? "画像の上の白い四角が特別な重ね方（乗算など）で描かれているため、下の画像を塗りませんでした。下の画像の中身が残っています。見えている内容を確かめてください"
+        : c.why === "transparent"
+          ? "画像の上の白い四角が半透明のため、下の画像を塗りませんでした（塗ると見た目が変わるため）。下の画像の中身が残っています。見えている内容を確かめてください"
+          : c.why === "unreadable"
+            ? "画像の上の注釈の見た目を読めなかったため、下の画像を塗りませんでした。下の画像の中身が残っているかもしれません"
+            : "表示しないレイヤーの中の白い四角の下の画像は、塗りませんでした（塗ると見た目が変わるため）。下の画像の中身が残っています",
     });
   }
   for (const im of w.inlineImages) {
-    const over = w.covers.filter((c) => c.seq > im.seq && intersectionArea(c.rect, im.box) > 0);
+    const after = (c: SanCover) => c.seq > im.seq && intersectionArea(c.rect, im.box) > 0;
+    const over = [...w.covers.filter(after), ...w.lightCovers.filter(after)];
     if (!over.length) continue;
+    const light = over.every((c) => c.tone === "light");
     notDone.push({
       pattern: "P6", reason: "inline_image", page: pageNo, rect: RECT_ROUND(over.map((c) => intersect(c.rect, im.box)).reduce(union)),
-      label: "黒い四角の下の画像（ページに直接埋め込んだ形）を塗りつぶせませんでした",
+      label: light ? "白い四角・注釈の下の画像（ページに直接埋め込んだ形）を塗りつぶせませんでした" : "黒い四角の下の画像（ページに直接埋め込んだ形）を塗りつぶせませんでした",
     });
   }
 
@@ -1139,7 +1311,10 @@ export function sanitizePageContent(ctx: PDFContext, page: PDFPage, pageNo: numb
     removed.push({ pattern: "P6", kind: "covered_text", page: pageNo, rect: RECT_ROUND(c.rect), count: e.chars, label: `黒い四角の下に残っていた字（${e.chars} 字）` });
   }
   for (const b of burnedReport) {
-    removed.push({ pattern: "P6", kind: "covered_pixels", page: pageNo, rect: b.rect, count: b.pixels, label: `黒い四角の下に残っていた画像の中身（${b.pixels} 画素を黒く塗りました）` });
+    removed.push({
+      pattern: "P6", kind: "covered_pixels", page: pageNo, rect: b.rect, count: b.pixels,
+      label: b.tone === "light" ? `白い四角の下に残っていた画像の中身（${b.pixels} 画素を白く塗りました）` : `黒い四角の下に残っていた画像の中身（${b.pixels} 画素を黒く塗りました）`,
+    });
   }
   for (const e of p7.values()) {
     removed.push({ pattern: "P7", kind: "hidden_text", reason: e.reason, page: pageNo, rect: RECT_ROUND(e.rect), count: e.chars, label: `${P7_LABEL[e.reason]}（${e.chars} 字）` });

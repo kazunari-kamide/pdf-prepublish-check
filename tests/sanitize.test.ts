@@ -417,7 +417,7 @@ describe("通信しない（sanitize/）", () => {
   const list = (dir: string): string[] =>
     readdirSync(dir).flatMap((n) => {
       const p = path.join(dir, n);
-      return statSync(p).isDirectory() ? (n === "check" ? [] : list(p)) : /\.ts$/.test(n) ? [p] : [];
+      return statSync(p).isDirectory() ? (n === "check" || n === "node" ? [] : list(p)) : /\.ts$/.test(n) ? [p] : [];
     });
   it("ブラウザで動く片付けのコードに、通信の仕組みがない", () => {
     const files = list(path.join(ROOT, "sanitize"));
@@ -430,7 +430,7 @@ describe("通信しない（sanitize/）", () => {
   it("ブラウザで動く片付けのコードは、Node だけの部品と確かめの道具を読まない", () => {
     for (const f of list(path.join(ROOT, "sanitize"))) {
       const s = readFileSync(f, "utf8");
-      expect(s, f).not.toMatch(/from "node:|from "\.\/check|pdfjs-dist/);
+      expect(s, f).not.toMatch(/from "node:|from "\.\/check|from "\.\/node|pdfjs-dist|@napi-rs/);
     }
   });
 });

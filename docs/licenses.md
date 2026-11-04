@@ -13,6 +13,7 @@
 | pdf-lib | 1.17.1 | MIT | 合成 PDF（テスト用 PDF）を作る。検出ルール rules/p6-text で PDF の中の部品を読む（2026-11-03 から。画面に組み込むと dist/ に入る） | 2026-11-03 | https://github.com/Hopding/pdf-lib |
 | @pdf-lib/fontkit | 1.1.1 | MIT | 合成 PDF に日本語のフォントを埋め込む | 2026-11-03 | https://github.com/Hopding/fontkit |
 | pdfjs-dist | 6.4.299 | Apache-2.0 | 検証器で PDF を読む（検出ルールとは別の読み方）。画面でページの絵を描く（2026-11-03 から。`build/pdf.min.mjs` と `build/pdf.worker.min.mjs` を、手を加えずに dist/ に入れて配る。理由は docs/no-network.md）。最新の 6.5.438 は 2026-11-01 に出たばかりなので、1つ前の版にした | 2026-11-03 | https://github.com/mozilla/pdf.js |
+| @napi-rs/canvas | 1.1.0 | MIT | Node（採点・テスト）で、片付けが塗った JPEG の画像を JPEG に書き直す。片付けの見た目の確かめ（npm run check:sanitized）で PDF.js がページを描く。ブラウザでは使わない（ブラウザは OffscreenCanvas で書く。dist/ に入らない）。これまでは pdfjs-dist の任意の依存として入っていたものを、package.json に明記した | 2026-11-04 | https://github.com/Brooooooklyn/canvas |
 
 ## 間接の依存（package-lock.json から数えた。2026-11-03、pdf-lib などを足したあと）
 
@@ -20,7 +21,7 @@
 
 | ライセンス | 件数 | 主なもの |
 |---|---|---|
-| MIT | 62 | rolldown、postcss、chai、@napi-rs/canvas（pdfjs-dist が Node で使う任意の依存）、@pdf-lib/standard-fonts、@pdf-lib/upng など |
+| MIT | 62 | rolldown、postcss、chai、@napi-rs/canvas（pdfjs-dist が Node で使う依存。2026-11-04 から直接の依存にもした。上の表）、@pdf-lib/standard-fonts、@pdf-lib/upng など |
 | Apache-2.0 | 24 | typescript と、その OS ごとの部品、pdfjs-dist、detect-libc、expect-type |
 | MPL-2.0 | 12 | lightningcss と、その OS ごとの部品（Vite が CSS の処理に使う） |
 | MIT AND Zlib | 1 | pako（pdf-lib が圧縮に使う） |

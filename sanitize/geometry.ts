@@ -13,6 +13,11 @@ export type SanCover = {
   shape?: { parts: Point[][]; rule: "nonzero" | "evenodd" };
   /** 何で覆っているか（画面に出す説明のため） */
   kind: "fill" | "stroke" | "image" | "annotation" | "redact";
+  /**
+   * 覆いの色の向き。ないときは dark（黒など濃い色）。light（白など明るい色）の覆いは、画像の画素を塗るときだけ使い、
+   * 下の画素をその色（白）で塗る。字の消し方（P6 の字の層）には使わない（白い覆いの下の字は P7 の範囲）
+   */
+  tone?: "light";
 };
 
 /** 点 (x, y) が覆いの中にあるか */
