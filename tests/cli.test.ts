@@ -170,3 +170,47 @@ describe("段階の決め方", () => {
     expect(s.runs[0].results[0].level).toBe("note");
   });
 });
+
+describe("PDF 以外の形式", { timeout: 120_000 }, () => {
+  it("フォルダの中の写真・Office も調べ、型・数・場所を返す", async () => {
+    const { docx, jpeg, para, run: wrun, tiff, rationalTag, FAKE_NAME } = await import("./helpers/formats-samples.ts");
+    const dir = mkdtempSync(path.join(tmp, "mixed-"));
+    writeFileSync(path.join(dir, "photo.jpg"), jpeg({ exif: tiff({ gps: [rationalTag(2, [35, 1, 0, 1, 0, 1]), rationalTag(4, [139, 1, 0, 1, 0, 1])] }) }));
+    writeFileSync(path.join(dir, "memo.docx"), docx({ body: [para(wrun(FAKE_NAME, '<w:color w:val="000000"/><w:highlight w:val="black"/>'))] }));
+    writeFileSync(path.join(dir, "clean.docx"), docx());
+    writeFileSync(path.join(dir, "old.doc"), new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]));
+    const r = run("check", "--format", "json", dir);
+    expect(r.code).toBe(2);
+    const j = JSON.parse(r.out);
+    const by = new Map(j.files.map((f: { path: string }) => [path.basename(f.path), f]));
+    // 古い Office（.doc）は、フォルダからは拾わない
+    expect([...by.keys()].sort()).toEqual(["clean.docx", "memo.docx", "photo.jpg"]);
+    const photo = by.get("photo.jpg") as { format: string; items: Array<{ type: string; ruleId: string; severity: string }> };
+    expect(photo.format).toBe("jpeg");
+    expect(photo.items.map((i) => i.type)).toEqual(["image.gps"]);
+    expect(photo.items[0]!.ruleId).toBe("formats-image");
+    const memo = by.get("memo.docx") as { items: Array<{ type: string; where?: string }> };
+    expect(memo.items.map((i) => i.type)).toEqual(["office.fake_redaction"]);
+    expect(memo.items[0]!.where).toBe("段落 1");
+    expect((by.get("clean.docx") as { stage: string }).stage).toBe("none");
+    expect(r.out).not.toContain(FAKE_NAME);
+  });
+
+  it("ファイルを直接渡したときは、古い Office も「調べていない」と返す（3）", () => {
+    const f = path.join(tmp, "old.xls");
+    writeFileSync(f, new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+    const r = run("check", f);
+    expect(r.code).toBe(3);
+    expect(r.out).toContain("古い形式の Office");
+  });
+
+  it("SARIF：Office の場所は logicalLocations に入れる", async () => {
+    const { xlsx } = await import("./helpers/formats-samples.ts");
+    const f = path.join(tmp, "book.xlsx");
+    writeFileSync(f, xlsx({ sheets: [{ cells: [{ ref: "A1", value: "1" }] }, { state: "hidden" }] }));
+    const s = JSON.parse(run("check", "--format", "sarif", f).out);
+    const res = s.runs[0].results[0];
+    expect(res.ruleId).toBe("formats-office");
+    expect(res.locations[0].logicalLocations[0].name).toBe("2 枚目のシート");
+  });
+});

@@ -21,6 +21,7 @@ import { TooManyCovers, TooManyOperations, contentBytes, coverageOf, createPageS
 import { DEFAULT_SETTINGS, type P6TextSettings } from "../rules/p6-text/settings.ts";
 import { detectP9Attach } from "../rules/p9-attach/index.ts";
 import { loadPdf } from "../rules/shared/load.ts";
+import { XMP_KNOWN_PREFIXES as XMP_KNOWN, xmpProperties } from "../formats/xmp.ts";
 
 export const COMPARE_VERSION = "0.1.0";
 
@@ -222,12 +223,6 @@ function diffFields<T>(before: Map<string, T>, after: Map<string, T>, same: (a: 
   return out;
 }
 
-const XMP_KNOWN = new Set([
-  "dc", "xmp", "xap", "pdf", "pdfx", "pdfaid", "xmpMM", "xapMM", "xmpRights", "xapRights", "photoshop", "tiff", "exif", "exifEX",
-  "aux", "crs", "stRef", "stEvt", "xmpTPg", "xmpGImg", "illustrator", "iptc4xmpCore", "Iptc4xmpCore", "Iptc4xmpExt", "plus", "lr",
-]);
-const XMP_SKIP = new Set(["rdf", "x", "xml", "xmlns"]);
-
 function readXmp(doc: PDFDocument): string | null {
   const meta = doc.catalog.lookup(PDFName.of("Metadata"));
   if (!(meta instanceof PDFStream)) return null;
@@ -241,54 +236,7 @@ function readXmp(doc: PDFDocument): string | null {
   return new TextDecoder("utf-8").decode(data);
 }
 
-/**
- * XMP の項目（rdf:Description の直下の要素と属性）の名前と、比べるための中身。
- * 中身は比べるためだけに使い、返さない
- */
-export function xmpProperties(xml: string): Map<string, string> {
-  const out = new Map<string, string>();
-  const tag = /<(\/?)([A-Za-z_][\w.-]*:[\w.-]+)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
-  const attr = /([A-Za-z_][\w.-]*:[\w.-]+)\s*=\s*("([^"]*)"|'([^']*)')/g;
-  // 深さ：rdf:Description の中にいる間は、その直下の要素を1つの項目として、閉じるまでの字をまとめる
-  let inDesc = 0;
-  let current: { name: string; start: number; depth: number } | null = null;
-  let depth = 0;
-  let m: RegExpExecArray | null;
-  while ((m = tag.exec(xml))) {
-    const [, close, name, rest, self] = m;
-    if (!name) continue;
-    if (name === "rdf:Description") {
-      if (close) inDesc = Math.max(0, inDesc - 1);
-      else {
-        for (const a of rest!.matchAll(attr)) {
-          const n = a[1]!;
-          if (!XMP_SKIP.has(n.split(":")[0]!)) out.set(n, a[3] ?? a[4] ?? "");
-        }
-        if (!self) inDesc++;
-      }
-      continue;
-    }
-    if (!inDesc) continue;
-    if (close) {
-      depth--;
-      if (current && depth === current.depth) {
-        out.set(current.name, (out.get(current.name) ?? "") + xml.slice(current.start, m.index));
-        current = null;
-      }
-      continue;
-    }
-    if (!current && !XMP_SKIP.has(name.split(":")[0]!)) {
-      if (self) {
-        out.set(name, (out.get(name) ?? "") + rest);
-        continue;
-      }
-      current = { name, start: m.index + m[0].length, depth };
-    }
-    if (!self) depth++;
-  }
-  return out;
-}
-
+export { xmpProperties };
 // ---------------------------------------------------------------- ③ 数
 
 function countAnnotations(doc: PDFDocument): number {

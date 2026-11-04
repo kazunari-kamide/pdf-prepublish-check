@@ -77,6 +77,48 @@
 | 入口 | — | 検査器の使い方。① ブラウザの検査器、② Claude Code のスキル／MCP（利用者自身の Claude から使う。こちらのサービスは何も受け取らない） |
 | ループ | — | 決まった時刻に4段を回す仕組み。運営の Claude API はここでだけ使い、利用者の PDF には触れない |
 | 事前調査 | — | 11/2 より前に行った、公開 PDF の実態調査。統計だけを公開する |
+| コマンドの道具 | `cli/` | フォルダごとまとめて調べる道具（`npx omamori-pdf check`）。画面と同じルールの一覧で調べ、型・数・場所を人が読む形・JSON・SARIF で出す。通信しない（docs/cli.md） |
+| 段階 | `stage` | コマンドの道具の結果のまとめ。見つからない（0）・確認してほしい所だけ（1）・高い危険（2）・調べられなかった所がある（3）。終了コードの数と同じ |
+| 調べられなかった所 | `unchecked` | PDF でない・大きすぎる・ルールが止まった・省いたページ・読めなかった画像など、調べていない所。「問題なし」には数えない |
+| 2つの PDF の比べ | `compare/` | 元の PDF と公開する PDF（片付けの前と後）を比べ、消したはずの字が残っていないか（数と場所）、文書情報・XMP の違い、版・添付・注釈の数の違いを出す |
+| 消したはずの字 | — | 公開する PDF の濃い覆いの下に、覆いより先に描いた字として残っている、元の PDF の字。覆いのあとに描き直した字（上に見えている字）は数えない |
+| PDF 以外の形式 | `formats/` | 写真（JPEG・PNG・WebP。HEIC は有ると知らせるだけ）と今の Office（docx・xlsx・pptx）。いまは知らせるまで（消すのは後） |
+
+### PDF 以外の形式の型（`formats/`）
+
+PDF の P1〜P12 とは別に、`image.*`・`office.*` の名前で呼ぶ。深刻度はどれも【仮】。
+
+| 型 | 意味 | 深刻度【仮】 |
+|---|---|---|
+| `image.gps` | 写真の EXIF・XMP に、撮った場所（緯度・経度）が入っている | 高（位置のない GPS の欄だけなら低） |
+| `image.thumbnail` | EXIF の中の縮小画像（見本）。本体と縦横の比が違えば、切り取る前の写真かもしれない | 中（比が違えば高） |
+| `image.exif_person` | 撮った人・著作権者・カメラの持ち主・カメラの番号などの欄 | 中 |
+| `image.exif_text` | 写真の説明・コメント・タイトルなどの欄 | 中 |
+| `image.exif_device` | カメラの機種・撮った日時・ソフトなどの欄 | 低 |
+| `image.xmp` | 写真の XMP（作成の記録） | 人をたどれる項目か編集の履歴があれば中、なければ低 |
+| `image.iptc` | 写真の説明の記録（IPTC） | 中 |
+| `image.png_text` | PNG の文字の欄 | 中 |
+| `image.heic_meta` | HEIC・HEIF に EXIF・XMP の項目が有る（中身は調べていない） | 中 |
+| `office.person` | プロパティの作成者・最後に保存した人 | 中 |
+| `office.organization` | プロパティの会社名・管理者 | 中 |
+| `office.property` | プロパティのタイトル・件名・キーワードなど | 低 |
+| `office.custom_property` | 独自のプロパティ | 中 |
+| `office.template_path` | ひな形の場所（パス） | 中 |
+| `office.link_base` | リンクの基準の場所 | 中 |
+| `office.external_link` | 外のファイルへのつながり（手元のファイルへのリンク・外のブック・リンクした画像など。ウェブのリンクは数えない） | 中 |
+| `office.embedded` | 中に埋め込まれたファイル | 中 |
+| `office.comments` | コメント（書いた人の数も） | 中 |
+| `office.tracked_changes` | 変更履歴（Word）・共有ブックの変更履歴（Excel） | 高（書式の変更だけなら中） |
+| `office.hidden_text` | 隠し文字（Word） | 高 |
+| `office.fake_redaction` | 字と同じ色の蛍光ペン・網掛け・セルの塗り・図形の塗り（見せかけの黒塗り） | 高 |
+| `office.same_color_text` | 背景と同じ色（白）の字 | 高 |
+| `office.hidden_value` | 値を見せない書式（`;;;`）のセル（Excel） | 高 |
+| `office.hidden_sheet` | 隠したシート（Excel） | 中 |
+| `office.hidden_rows` | 隠した行・列（Excel） | 中 |
+| `office.hidden_slide` | 表示しないスライド（PowerPoint） | 中 |
+| `office.notes` | 発表者のメモ（PowerPoint） | 中 |
+| `office.cover_shape` | 字のある図形の上に重ねた濃い図形（PowerPoint は高）・本文の上の濃い図形（Word は中） | 高・中 |
+| `office.off_slide_text` | スライドの外に置いた字（PowerPoint） | 高 |
 
 ## 5. 自治体・入札
 

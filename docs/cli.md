@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # コマンドの道具（cli/）
 
-PDF を公開・提出する前に、フォルダごとまとめて確かめるための道具です。画面の検査器と同じルールの一覧（`src/inspect/rules.ts` の `RULES`）で調べ、**型・数・場所だけ**を出します。覆われた字・欄の値・中のファイル名は出しません。
+PDF を公開・提出する前に、フォルダごとまとめて確かめるための道具です。PDF は画面の検査器と同じルールの一覧（`src/inspect/rules.ts` の `RULES`）で調べ、写真（JPEG・PNG・WebP・HEIC）と今の Office（docx・xlsx・pptx）は `formats/` で調べます（`formats/README.md`）。**型・数・場所だけ**を出します。覆われた字・欄の値・中のファイル名・シートの名前は出しません。
 
 - **通信しません。** ファイルを読んで、結果を画面かファイルに書くだけです（`tests/cli-no-network.test.ts` で、通信の部品を使っていないことを文字で確かめています。目安であって、保証ではありません）。
 - ファイル1つごとに Node の Worker を作り直し、時間（既定 120 秒）とメモリ（既定 2048MB）の上限を超えたら、その Worker だけを止めます。止めたファイルは「調べられなかった所」に数えます。
@@ -28,7 +28,9 @@ npx omamori-pdf compare <元の PDF> <公開する PDF>
 | `--fail-on <段階,…>` | 終了コードを 0 以外にする段階。`review`・`high`・`unchecked` を `,` でつなぐ。`never` で、どの段階でも 0。既定は `review,high,unchecked` |
 | `--timeout <秒>` | ファイル1つにかけてよい時間。既定は 120 秒 |
 
-- フォルダを渡すと、中までたどって `.pdf` を調べます（リンク・`node_modules`・`.git` はたどりません。1万個まで）。ファイルを直接渡したときは、拡張子を問わず中身で見分けます。
+- フォルダを渡すと、中までたどって `.pdf`・`.jpg`・`.jpeg`・`.png`・`.webp`・`.heic`・`.heif`・`.docx`・`.docm`・`.xlsx`・`.xlsm`・`.pptx`・`.pptm` を調べます（リンク・`node_modules`・`.git` はたどりません。1万個まで）。古い Office（.doc など）・一太郎は調べないので、フォルダからは拾いません。
+- ファイルを直接渡したときは、拡張子を問わず中身（先頭のバイト）で見分けます。調べられない形式なら「調べられなかった所」（3）になります。
+- PDF の結果の `ruleId` は検出ルールの id（`p6-text` など）、写真は `formats-image`、Office は `formats-office` です。PDF 以外の `pattern` は `null` で、細かい型は `type`（`image.gps` など。`docs/glossary.md`）に入ります。PDF 以外の場所は `where`（「2 枚目のシート B3」など）に入ります。
 
 ### 終了コード（check）
 
