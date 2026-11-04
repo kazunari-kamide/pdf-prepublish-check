@@ -15,9 +15,10 @@ import { inspectInWorker } from "./inspect/run";
 import { toFraction, viewSize } from "./inspect/view";
 import { PdfView, RenderTimeout } from "./render/pdf-view";
 import { sanitizeInWorker } from "./sanitize/run";
-import { buildCleanView, cleanedFileName, type CleanView, type DoneMark } from "./ui/clean-model";
-import { FUDA_ERROR, FUDA_NONE, fudaLabel } from "./ui/fuda";
-import { buildView, type Group, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
+import type { CoverageRow } from "./ui/coverage";
+import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
+import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -63,6 +64,9 @@ const ui = {
   cleanCount: el<HTMLParagraphElement>("clean-count"),
   download: el<HTMLAnchorElement>("download"),
   downloadNote: el<HTMLParagraphElement>("download-note"),
+  saveNote: el<HTMLParagraphElement>("save-note"),
+  saveConfirm: el<HTMLLabelElement>("save-confirm"),
+  saveConfirmBox: el<HTMLInputElement>("save-confirm-box"),
   notDone: el<HTMLDivElement>("not-done"),
   notDoneList: el<HTMLUListElement>("not-done-list"),
   removed: el<HTMLDetailsElement>("removed"),
@@ -107,6 +111,8 @@ let busy = false;
 let generation = 0;
 let session: Session | null = null;
 let downloadUrl: string | null = null;
+/** 片付けた PDF（保存する中身）。保存のリンクは、読み直しが通ったあとでだけ、ここから作る */
+let cleanedBlob: Blob | null = null;
 
 function setStatus(text: string, tone: "neutral" | "ok" | "problem" = "neutral") {
   ui.status.textContent = text;
@@ -127,9 +133,36 @@ function setStep(li: HTMLLIElement, state: "todo" | "now" | "done") {
 }
 
 function releaseDownload() {
+  lockDownload();
+  cleanedBlob = null;
+  ui.saveConfirm.hidden = true;
+  ui.saveConfirmBox.checked = false;
+  ui.saveNote.textContent = "";
+}
+
+/** 保存のリンクを押せない形にする（href を外す。読み上げでも「使えない」と伝える） */
+function lockDownload() {
   if (downloadUrl) URL.revokeObjectURL(downloadUrl);
   downloadUrl = null;
   ui.download.removeAttribute("href");
+  ui.download.setAttribute("aria-disabled", "true");
+}
+
+/** 保存のリンクを押せる形にする。読み直しが通ったときだけ呼ぶ（saveGate） */
+function unlockDownload() {
+  if (!cleanedBlob) return;
+  if (!downloadUrl) downloadUrl = URL.createObjectURL(cleanedBlob);
+  ui.download.href = downloadUrl;
+  ui.download.removeAttribute("aria-disabled");
+}
+
+function applySaveGate(gate: SaveGate) {
+  ui.saveNote.textContent = SAVE_NOTE[gate];
+  ui.saveNote.dataset.gate = gate;
+  ui.saveConfirm.hidden = gate !== "confirm";
+  ui.saveConfirmBox.checked = false;
+  if (gate === "ok") unlockDownload();
+  else lockDownload();
 }
 
 function clearResults() {
@@ -161,7 +194,7 @@ function reset() {
 const SEVERITY_MARK: Record<Row["severity"], string> = { high: "▲", medium: "■", low: "●" };
 
 /** 種類ごとの囲み：左に札（飾り。読み上げでは見出しを読む）、右に見出しと項目（案 E2。design/README.md） */
-function groupBox(fuda: string, kind: "found" | "none" | "error"): { box: HTMLElement; body: HTMLDivElement } {
+function groupBox(fuda: string, kind: "found" | "scope"): { box: HTMLElement; body: HTMLDivElement } {
   const box = make("section", undefined, "group");
   box.dataset.status = kind;
   const tag = make("span", fuda, "fuda");
@@ -171,75 +204,89 @@ function groupBox(fuda: string, kind: "found" | "none" | "error"): { box: HTMLEl
   return { box, body };
 }
 
+function itemButton(r: Row): HTMLButtonElement {
+  const btn = make("button", undefined, "item");
+  btn.type = "button";
+  btn.id = `item-${r.no}`;
+  btn.dataset.severity = r.severity;
+  if (r.check) btn.dataset.check = "true";
+  const top = make("span", undefined, "item-top");
+  top.append(
+    make("span", String(r.no), "item-no"),
+    // 確かめてほしい所は、深刻度の札の代わりに「？ 確かめる」の札（形と字で示す。断定しない）
+    r.check
+      ? make("span", "？ 確かめる", "item-sev sev-check")
+      : make("span", `${SEVERITY_MARK[r.severity]} ${r.severityLabel}`, `item-sev sev-${r.severity}`),
+    make("span", r.page !== null ? `ページ ${r.page}` : "ファイル全体", "item-page"),
+  );
+  btn.append(top, make("span", r.title, "item-title"), make("span", r.why, "item-why"), make("span", r.detail, "item-detail"));
+  btn.addEventListener("click", () => void select(r));
+  return btn;
+}
+
+/** 「見た所・見なかった所」の1行の、状態の言葉（形の印つき。色だけにしない） */
+function coverageText(c: CoverageRow, phase: Session["phase"]): string {
+  const parts: string[] = [];
+  if (c.found) parts.push(`${phase === "after" ? "残り" : "見つかった"} ${c.found} 件`);
+  if (c.check) parts.push(`確かめる ${c.check} 件`);
+  const counts = parts.length ? parts.join("・") : phase === "after" ? "残っていない" : "見つからない";
+  switch (c.state) {
+    case "checked":
+      return `${parts.length ? "▲" : "✓"} 調べた：${counts}`;
+    case "partial":
+      return `◐ 一部だけ調べた：${counts}`;
+    case "failed":
+      return "－ 調べられなかった";
+    case "not_in_version":
+      return "○ この版では調べていない";
+  }
+}
+
 function renderGroups(s: Session) {
-  const none: Group[] = [];
-  const errors: Group[] = [];
   for (const g of s.view.groups) {
-    if (g.status === "error") {
-      errors.push(g);
-      continue;
-    }
-    if (!g.rows.length) {
-      none.push(g);
-      continue;
-    }
+    if (g.status === "error" || !g.rows.length) continue;
     const { box, body } = groupBox(fudaLabel(g.label, g.pattern), "found");
     const head = make("h3", undefined, "group-head");
+    const sure = g.rows.filter((r) => !r.check).length;
+    const check = g.rows.length - sure;
     head.append(make("span", `${g.label}（${g.pattern}）`, "group-name"));
-    head.append(make("span", `${g.rows.length} 件`, "group-count"));
+    head.append(make("span", [sure ? `${sure} 件` : "", check ? `確かめる ${check} 件` : ""].filter(Boolean).join("・"), "group-count"));
     body.append(head);
-    if (g.message) body.append(make("p", g.message, "group-message"));
     const list = make("ol", undefined, "items");
     for (const r of g.rows) {
       const li = make("li");
-      const btn = make("button", undefined, "item");
-      btn.type = "button";
-      btn.id = `item-${r.no}`;
-      btn.dataset.severity = r.severity;
-      const top = make("span", undefined, "item-top");
-      top.append(
-        make("span", String(r.no), "item-no"),
-        make("span", `${SEVERITY_MARK[r.severity]} ${r.severityLabel}`, `item-sev sev-${r.severity}`),
-        make("span", r.page !== null ? `ページ ${r.page}` : "ファイル全体", "item-page"),
-      );
-      btn.append(top, make("span", r.title, "item-title"), make("span", r.why, "item-why"), make("span", r.detail, "item-detail"));
-      btn.addEventListener("click", () => void select(r));
-      li.append(btn);
+      li.append(itemButton(r));
       list.append(li);
     }
     body.append(list);
     ui.groups.append(box);
   }
-  // 調べられなかった種類は、1つの囲みにまとめる（隠さない。理由がみな同じなら、理由は1回だけ出す）
-  if (errors.length) {
-    const { box, body } = groupBox(FUDA_ERROR, "error");
-    body.append(make("h3", "調べられなかった種類", "group-head"));
-    const reasons = new Set(errors.map((g) => g.message ?? ""));
-    const shared = reasons.size === 1 ? [...reasons][0] : null;
-    if (shared) body.append(make("p", shared, "group-message"));
-    const list = make("ul", undefined, "none-list");
-    for (const g of errors) {
-      const li = make("li");
-      li.append(make("span", `${g.label}（${g.pattern}）`, "group-name"), make("span", "調べられませんでした", "group-count"));
-      if (!shared && g.message) li.append(make("span", g.message, "group-message"));
-      list.append(li);
-    }
-    body.append(list);
-    ui.groups.append(box);
+  renderCoverage(s);
+}
+
+/** 見た所・見なかった所：P1〜P12 と新しい型を1行ずつ、毎回並べる（調べていない理由も） */
+function renderCoverage(s: Session) {
+  const { box, body } = groupBox(FUDA_SCOPE, "scope");
+  box.id = "coverage";
+  body.append(make("h3", "見た所・見なかった所", "group-head"));
+  body.append(
+    make(
+      "p",
+      "この版のルールで、どこまで調べたかを、型ごとに並べます。「調べた」は、決めた範囲を調べたという意味で、すべてを保証するものではありません。",
+      "group-message",
+    ),
+  );
+  const list = make("ul", undefined, "coverage-list");
+  for (const c of s.view.coverage) {
+    const li = make("li");
+    li.dataset.state = c.state;
+    if (c.found || c.check) li.dataset.found = "true";
+    li.append(make("span", `${c.name}（${c.key}）`, "coverage-name"), make("span", coverageText(c, s.phase), "coverage-state"));
+    for (const r of c.reasons) li.append(make("span", r, "coverage-reason"));
+    list.append(li);
   }
-  if (none.length) {
-    const word = s.phase === "after" ? "残っていません" : "見つかりませんでした";
-    const { box, body } = groupBox(FUDA_NONE, "none");
-    body.append(make("h3", s.phase === "after" ? "残っていない種類" : "見つからなかった種類", "group-head"));
-    const list = make("ul", undefined, "none-list");
-    for (const g of none) {
-      const li = make("li");
-      li.append(make("span", `${g.label}（${g.pattern}）`, "group-name"), make("span", word, "group-count"));
-      list.append(li);
-    }
-    body.append(list);
-    ui.groups.append(box);
-  }
+  body.append(list);
+  ui.groups.append(box);
 }
 
 // ---------------------------------------------------------------- 左：縮小した各ページ
@@ -593,6 +640,7 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
     c.left === null ? `片付ける前 ${c.before} か所 → 読み直せませんでした` : `片付ける前 ${c.before} か所 → 読み直したあと ${c.left} か所`;
   ui.cleanCount.dataset.verdict = c.verdict;
   ui.download.download = file.name;
+  applySaveGate(saveGate(c));
   ui.downloadNote.textContent = `${file.name}（${file.pages} ページ・${formatBytes(file.bytes)}・${file.seconds}）。元の PDF は変えていません。`;
 
   ui.notDoneList.replaceChildren(...c.notDone.map((t) => make("li", t)));
@@ -649,12 +697,12 @@ async function runSanitize() {
     setStatus("片付けた PDF を、最初から検査し直しています…");
     ui.progress.value = 0;
 
-    // 保存する PDF（Blob は中身を写して持つ）。絵を描く側にも写しを渡し、検査の Worker には元を渡し切る
+    // 保存する PDF（Blob は中身を写して持つ）。絵を描く側にも写しを渡し、検査の Worker には元を渡し切る。
+    // 保存のリンク（Blob の URL）は、ここでは作らない。読み直しが通ったあと（renderCleaned の saveGate）でだけ作る
     const name = cleanedFileName(s.fileName);
     const byteLength = out.bytes.byteLength;
     releaseDownload();
-    downloadUrl = URL.createObjectURL(new Blob([out.bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" }));
-    ui.download.href = downloadUrl;
+    cleanedBlob = new Blob([out.bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" });
     const opening = PdfView.open(out.bytes.slice()).catch(() => ({ ok: false as const, reason: "unreadable" as const }));
     const re = await inspectInWorker(out.bytes.buffer as ArrayBuffer, (p) => {
       ui.progress.max = p.total;
@@ -698,6 +746,14 @@ async function runSanitize() {
 }
 
 ui.sanitize.addEventListener("click", () => void runSanitize());
+ui.saveConfirmBox.addEventListener("change", () => {
+  if (ui.saveConfirmBox.checked) unlockDownload();
+  else lockDownload();
+});
+// 押せない形のときは、押しても何もしない（href がないので、もともと保存は起きない。念のため止める）
+ui.download.addEventListener("click", (e) => {
+  if (ui.download.getAttribute("aria-disabled") === "true") e.preventDefault();
+});
 
 ui.input.addEventListener("change", () => {
   const file = ui.input.files?.[0];

@@ -80,7 +80,12 @@
         <section id="clean" class="clean" aria-labelledby="clean-title" hidden>
           <h3 id="clean-title">片付けた結果</h3>
           <p id="clean-count" class="clean-count"></p>
-          <a id="download" class="download" download>片付けた PDF を保存する</a>
+          <a id="download" class="download" download aria-disabled="true" aria-describedby="save-note">片付けた PDF を保存する</a>
+          <p id="save-note" class="save-note"></p>
+          <label id="save-confirm" class="save-confirm" hidden>
+            <input id="save-confirm-box" type="checkbox" />
+            <span>言い切れない所があると分かったうえで保存する</span>
+          </label>
           <p id="download-note" class="download-note"></p>
           <div id="not-done" class="not-done" hidden>
             <h4>▲ 片付けられなかった所</h4>

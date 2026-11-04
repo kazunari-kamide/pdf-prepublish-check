@@ -569,12 +569,8 @@ progress {
   color: var(--color-on-dark);
 }
 
-.group[data-status="none"] .fuda {
-  background: var(--color-ok-tint);
-  color: var(--color-ok);
-}
-
-.group[data-status="error"] .fuda {
+/* 見た所・見なかった所：札は墨の字に札の地（緑にしない。「調べた」は「すべて大丈夫」ではないため） */
+.group[data-status="scope"] .fuda {
   background: var(--color-chip);
   color: var(--color-base);
 }
@@ -609,24 +605,21 @@ progress {
   text-align: center;
 }
 
-.group[data-status="error"] .group-count {
-  color: var(--color-muted);
-  font-weight: 400;
-}
 
 .group-message {
   margin: var(--space-1) 0 0;
   font-size: var(--text-small);
 }
 
-.none-list {
+/* 見た所・見なかった所の一覧：型ごとに1行。状態は印（✓▲◐－○）と字で示す */
+.coverage-list {
   list-style: none;
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   font-size: var(--text-small);
 }
 
-.none-list li {
+.coverage-list li {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
@@ -634,26 +627,32 @@ progress {
   padding: var(--space-1) 0;
 }
 
-.none-list li + li {
+.coverage-list li + li {
   border-top: 1px solid var(--color-line);
 }
 
-.group[data-status="none"] .group-count {
-  color: var(--color-ok);
+.coverage-state {
+  white-space: nowrap;
   font-weight: 700;
 }
 
-.group[data-status="none"] .group-count::before {
-  content: "✓ ";
+.coverage-list li[data-state="checked"]:not([data-found]) .coverage-state {
+  color: var(--color-ok);
 }
 
-/* 調べられなかった種類：「✓」も緑も付けない（「問題なし」に見せない） */
-.group[data-status="error"] .group-count::before {
-  content: "－ ";
+.coverage-list li[data-found] .coverage-state {
+  color: var(--color-accent);
 }
 
-.none-list .group-message {
+.coverage-list li[data-state="failed"] .coverage-state,
+.coverage-list li[data-state="not_in_version"] .coverage-state {
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.coverage-reason {
   flex-basis: 100%;
+  color: var(--color-muted);
 }
 
 .items {
@@ -713,6 +712,16 @@ progress {
 
 .item-sev.sev-high {
   color: var(--color-accent);
+}
+
+/* 確かめてほしい所：「？ 確かめる」の札は点線（言い切らない形）。項目の枠も点線 */
+.item-sev.sev-check {
+  border-style: dashed;
+  color: var(--color-base);
+}
+
+.item[data-check] {
+  border-style: dashed;
 }
 
 .item-page {
@@ -822,8 +831,49 @@ progress {
   border-color: var(--color-base);
 }
 
-.download:hover {
+.download[href]:hover {
   text-decoration: underline;
+}
+
+/* 読み直しが通るまで押せない形（href がない）。押せるボタンと見分けられるよう、地と字の色を変え、斜線の印も付ける。
+   残っている所があるときの墨の地より優先する */
+.download[aria-disabled="true"],
+.clean .download[aria-disabled="true"] {
+  border-color: var(--color-control-line);
+  background: var(--color-chip);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+.download[aria-disabled="true"]::before {
+  content: "⊘ ";
+}
+
+.save-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.save-note[data-gate="blocked"] {
+  color: var(--color-accent);
+}
+
+.save-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  margin-top: var(--space-1);
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.save-confirm input {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  accent-color: var(--color-base);
 }
 
 .download-note {

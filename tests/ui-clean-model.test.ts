@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import type { NotDoneItem, RemovedItem } from "../sanitize/types.ts";
 import type { InspectSummary, RuleResult } from "../src/inspect/report";
-import { buildCleanView, cleanedFileName, MAX_LINES_PER_GROUP } from "../src/ui/clean-model";
+import { buildCleanView, cleanedFileName, saveGate, MAX_LINES_PER_GROUP } from "../src/ui/clean-model";
 import { buildView } from "../src/ui/model";
 import { scopeCaveats } from "../src/ui/scope";
 
@@ -107,12 +107,20 @@ describe("保存するファイルの名前", () => {
   });
 });
 
-describe("読み直しで調べていない層の一言（src/ui/scope.ts）", () => {
-  const CAVEAT = "P6 のうち、画像の下の中身は、読み直しではまだ調べていません。";
+describe("読み直しで調べていない所の一言（src/ui/scope.ts）", () => {
+  const CAVEAT = "P6 のうち、読み解けなかった画像の下の中身は、調べていません。";
+  const unread = summary([
+    rule({ pattern: "P6", label: "見せかけの黒塗り", notices: [{ kind: "unchecked_images", message: "読めない", pages: [2] }] }),
+  ]);
 
-  it("P6 を調べられたときは、画像の下の中身を調べていないと添える", () => {
-    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: false });
+  it("P6 で読み解けなかった画像があれば、その下を調べていないと添える", () => {
+    const c = buildCleanView({ before: buildView(found), after: buildView(unread), removed, notDone: [], decrypted: false });
     expect(c.scope).toContain(CAVEAT);
+  });
+
+  it("読み解けなかった画像がなければ添えない（画像の層も調べたため）", () => {
+    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: false });
+    expect(c.scope).not.toContain(CAVEAT);
   });
 
   it("P6 を調べられなかったときは添えない（調べた型に P6 が入らないため）", () => {
@@ -123,6 +131,31 @@ describe("読み直しで調べていない層の一言（src/ui/scope.ts）", (
   });
 
   it("出す所は1か所：ViewModel の caveats は scopeCaveats と同じ", () => {
-    expect(buildView(empty).caveats).toEqual(scopeCaveats(empty.rules));
+    expect(buildView(unread).caveats).toEqual(scopeCaveats(unread.rules));
+  });
+});
+
+describe("保存のボタンを押せるか（saveGate）", () => {
+  it("読み直しが通ったときだけ、そのまま押せる", () => {
+    expect(saveGate({ verdict: "clean", left: 0 })).toBe("ok");
+  });
+  it("残りは 0 件でも、言い切れない所があれば、分かったうえでの印が要る", () => {
+    expect(saveGate({ verdict: "unsure", left: 0 })).toBe("confirm");
+  });
+  it("残っている所がある・読み直せなかったときは押せない", () => {
+    expect(saveGate({ verdict: "left", left: 2 })).toBe("blocked");
+    expect(saveGate({ verdict: "unsure", left: null })).toBe("blocked");
+  });
+});
+
+describe("読み直しの範囲の文", () => {
+  it("同じ型は1回だけ、用語集の名前で並べる（P4・P10・P11 も番号だけにしない）", () => {
+    const after = summary([
+      rule({ ruleId: "p7-hidden", pattern: "P7", label: "隠れたテキスト" }),
+      rule({ ruleId: "font-glyphs", pattern: "P7", label: "書体に残った字形" }),
+      rule({ ruleId: "p4-paths", pattern: "P4", label: "ファイルパス・内部ホスト名" }),
+    ]);
+    const c = buildCleanView({ before: buildView(found), after: buildView(after), removed: [], notDone: [], decrypted: false });
+    expect(c.scope).toBe("読み直しで調べたのは 隠れたテキスト（P7）・ファイルパス・内部ホスト名（P4） です。");
   });
 });
