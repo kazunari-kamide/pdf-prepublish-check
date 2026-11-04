@@ -8,11 +8,12 @@
 // - 深刻度は【仮】。P6 の「高」だけが docs/prd.md §3-5 で決まっている。ほかは PR の「決めてほしいこと」に書く。
 
 import { detectP1Info, type P1InfoReport } from "../../rules/p1-info/index.ts";
-import { detectP5Revisions, type P5Kind, type P5Report } from "../../rules/p5-revisions/index.ts";
+import { detectP5Revisions, type P5Kind, type P5Part, type P5Report } from "../../rules/p5-revisions/index.ts";
 import { detectP6Text, type P6TextReport } from "../../rules/p6-text/index.ts";
 import { DEFAULT_SETTINGS as P6_SETTINGS } from "../../rules/p6-text/settings.ts";
 import { detectP7Hidden, type P7Reason, type P7Report } from "../../rules/p7-hidden/index.ts";
 import { detectP9Attach, type P9AttachReport, type P9Where } from "../../rules/p9-attach/index.ts";
+import { detectPii, type Basis as PiiBasis, type PiiReport, type PiiType } from "../../rules/pii/index.ts";
 import { inspectAttachments, type InnerDetector, type P9Inner } from "../../rules/p9-attach/inner.ts";
 import { detectP8Annot, type P8Field, type P8Report } from "../../rules/p8-annot/index.ts";
 import { detectP2Xmp, type P2XmpKind, type P2XmpReport } from "../../rules/p2-xmp/index.ts";
@@ -24,13 +25,17 @@ import { detectAltText, type AltKind, type AltReport } from "../../rules/alt-tex
 import { detectInfoXmpDiff, type DiffReport } from "../../rules/props/index.ts";
 import { detectExtras, type ExtrasReport } from "../../rules/extras/index.ts";
 import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/index.ts";
+import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report";
+
+/** ルールに渡す道具。imageDecoder＝pdf-lib で解けない画像（JPEG など）を解く道具（Worker が PDF.js で作る） */
+export type RunContext = { imageDecoder?: ExternalImageDecoder };
 
 export type RuleEntry = {
   id: string;
   label: string;
   pattern: Pattern;
-  run(bytes: Uint8Array): Promise<RuleResult>;
+  run(bytes: Uint8Array, ctx?: RunContext): Promise<RuleResult>;
 };
 
 /** どのルールの報告にもある部分 */
@@ -46,7 +51,7 @@ function defineRule<R extends BaseReport>(meta: {
   id: string;
   label: string;
   pattern: Pattern;
-  detect(bytes: Uint8Array): Promise<R>;
+  detect(bytes: Uint8Array, ctx: RunContext): Promise<R>;
   items(report: R): Item[];
   notices?(report: R): Notice[];
 }): RuleEntry {
@@ -54,8 +59,8 @@ function defineRule<R extends BaseReport>(meta: {
     id: meta.id,
     label: meta.label,
     pattern: meta.pattern,
-    async run(bytes) {
-      const report = await meta.detect(bytes);
+    async run(bytes, ctx = {}) {
+      const report = await meta.detect(bytes, ctx);
       const base = { ruleId: report.rule.id, ruleVersion: report.rule.version, label: meta.label, pattern: meta.pattern };
       if (report.status === "error") {
         return { ...base, status: "error", message: report.error?.message ?? "調べられませんでした。", items: [], notices: [] };
@@ -69,7 +74,7 @@ function defineRule<R extends BaseReport>(meta: {
 
 const DECRYPTED: Notice = {
   kind: "decrypted",
-  message: "パスワードなしで開ける暗号化がかかっていたので、ほどいて調べました。",
+  message: "パスワードなしで開ける暗号化がかかっていたので、外して調べました。",
   pages: [],
 };
 
@@ -93,43 +98,86 @@ const p6 = defineRule<P6TextReport>({
   id: "p6-text",
   label: "見せかけの黒塗り",
   pattern: "P6",
-  detect: (b) => detectP6Text(b),
-  items: (r) =>
-    r.findings.map((f) =>
-      f.layer === "text"
-        ? {
-            pattern: "P6",
-            severity: "high",
-            title: "黒い四角の下に、字が残っています",
-            why: "上から重ねただけなので、下の字を選んでコピーできます。",
-            detail: `覆っているもの：${P6_COVER[f.cover] ?? "図形"}／残っている字：${f.chars}字`,
-            page: f.page,
-            rect: f.rect,
-          }
-        : {
-            // 画像の層（検出ルール 1.5.0 から）。文言は仮。画面の担当が見直す
-            pattern: "P6",
-            severity: "high",
-            title: f.tone === "light" ? "白い四角の下に、画像の中身が残っています" : "黒い四角の下に、画像の中身が残っています",
-            why: "画像の上に重ねただけなので、四角を外したり画像を取り出したりすると、下に写っているものが見えます。",
-            detail: `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`,
-            page: f.page,
-            rect: f.rect,
-          },
-    ),
+  detect: (b, ctx) => detectP6Text(b, ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}),
+  items: (r) => r.findings.map(p6Item),
   notices: (r) => {
     const out = skippedNotices(r.skippedPages);
-    const pages = [...new Set(r.uncheckedImages.map((u) => u.page))];
-    if (pages.length) {
+    // 画像を解けなかった理由ごとに分けて知らせる（大きすぎる・読めない形式）
+    const large = [...new Set(r.uncheckedImages.filter((u) => u.reason === "too_large").map((u) => u.page))];
+    const other = [...new Set(r.uncheckedImages.filter((u) => u.reason !== "too_large").map((u) => u.page))];
+    if (large.length) {
       out.push({
         kind: "unchecked_images",
-        message: "このページの画像は調べていません（画像の形式を読めなかったため）。黒く塗った画像があっても、ここでは見つけられません。",
-        pages,
+        message: "このページの画像は、大きすぎるため調べていません。黒く塗った画像や、画像の上の黒い四角があっても、ここでは見つけられません。",
+        pages: large,
+      });
+    }
+    if (other.length) {
+      out.push({
+        kind: "unchecked_images",
+        message: "このページの画像は、この版では読み解けない形式のため調べていません。黒く塗った画像や、画像の上の黒い四角があっても、ここでは見つけられません。",
+        pages: other,
       });
     }
     return out;
   },
 });
+
+/** P6 の1件を画面の形にする。confidence: check は、断定しない言葉で出す（「確かめてください」） */
+export function p6Item(f: P6TextReport["findings"][number]): Item {
+  const cover = `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`;
+  const base = { pattern: "P6" as const, severity: "high" as const, page: f.page, rect: f.rect };
+  const check = f.confidence === "check" ? { confidence: "check" as const } : {};
+  if (f.layer === "text") {
+    return f.confidence === "check"
+      ? {
+          ...base,
+          ...check,
+          title: "黒い四角の下に、字が残っているかもしれません",
+          why: "見出しの帯や番号の札のような形にも見えるため、言い切れません。黒塗りのつもりなら、下の字を選んでコピーできてしまいます。確かめてください。",
+          detail: `${cover}／重なっている字：${f.chars}字`,
+        }
+      : {
+          ...base,
+          title: "黒い四角の下に、字が残っています",
+          why: "上から重ねただけなので、下の字を選んでコピーできます。",
+          detail: `${cover}／残っている字：${f.chars}字`,
+        };
+  }
+  const box = f.tone === "light" ? "白い四角" : "黒い四角";
+  if (f.reason === "under_unreadable") {
+    return {
+      ...base,
+      ...check,
+      title: `${box}の下の画像を、読み解けませんでした`,
+      why: "画像の上に重ねただけなら、下に写っているものが残っています。この版では画像の形式を読めないため、言い切れません。確かめてください。",
+      detail: cover,
+    };
+  }
+  if (f.reason === "under_later_paint") {
+    return {
+      ...base,
+      ...check,
+      title: `${box}の下に、画像の中身が残っているかもしれません`,
+      why: "四角の上に細い線などが重なっていて、下を十分に測れませんでした。確かめてください。",
+      detail: cover,
+    };
+  }
+  return f.confidence === "check"
+    ? {
+        ...base,
+        ...check,
+        title: `${box}の下に、画像の中身が残っているかもしれません`,
+        why: "下の画像が写真のように色や濃淡の多いものなので、言い切れません。上に重ねただけなら、四角を外すと見えます。確かめてください。",
+        detail: cover,
+      }
+    : {
+        ...base,
+        title: `${box}の下に、画像の中身が残っています`,
+        why: "画像の上に重ねただけなので、四角を外したり画像を取り出したりすると、下に写っているものが見えます。",
+        detail: cover,
+      };
+}
 
 // ---------------------------------------------------------------- P7 隠れたテキスト
 
@@ -141,6 +189,31 @@ const P7_REASON: Record<P7Reason, string> = {
   tiny: "小さすぎて見えない字",
   same_color: "背景と同じ色の字",
   covered_light: "白っぽい図形の下に隠れた字",
+  squashed: "横につぶれて見えない字",
+  same_color_image: "画像と同じ色の字",
+  covered_image: "あとから重ねた画像の下に隠れた字",
+  hidden_codepoint: "見えない文字コード",
+  remapped: "見た目と取り出される字が違う字",
+  overdrawn: "同じ所に重ねて描いた、違う字",
+};
+
+/** 見える字の中の隠し（検出ルール 1.1.0 から）は、見出しと理由を分ける。文言・深刻度は【仮】 */
+const P7_VISIBLE_KIND: Partial<Record<P7Reason, { title: string; why: string; severity: "high" | "medium" }>> = {
+  hidden_codepoint: {
+    title: "見えない文字コードが入っています",
+    why: "画面には出ませんが、コピーや検索、AI に読ませたときに、見えない印や指示として取り出されます。",
+    severity: "medium",
+  },
+  remapped: {
+    title: "見た目と、コピーで取り出される字が違います",
+    why: "画面で読める字とは別の字が、検索やコピーで取り出されます。",
+    severity: "high",
+  },
+  overdrawn: {
+    title: "同じ所に、違う字が重ねて描かれています",
+    why: "上に重なった字しか読めませんが、下の字も検索やコピーで取り出せます。",
+    severity: "high",
+  },
 };
 
 const p7 = defineRule<P7Report>({
@@ -151,15 +224,18 @@ const p7 = defineRule<P7Report>({
   // P7 の既定の値（rules/p7-hidden）は検出ルールの担当の範囲なので変えず、画面から呼ぶときだけ上書きする。
   detect: (b) => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
   items: (r) =>
-    r.findings.map((f) => ({
-      pattern: "P7",
-      severity: "high", // 【仮】
-      title: "見えない字が残っています",
-      why: "画面では見えませんが、検索やコピーで取り出せます。",
-      detail: `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
-      page: f.page,
-      rect: f.rect,
-    })),
+    r.findings.map((f) => {
+      const v = P7_VISIBLE_KIND[f.reason];
+      return {
+        pattern: "P7",
+        severity: v?.severity ?? "high", // 【仮】
+        title: v?.title ?? "見えない字が残っています",
+        why: v?.why ?? "画面では見えませんが、検索やコピーで取り出せます。",
+        detail: `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
+        page: f.page,
+        rect: f.rect,
+      };
+    }),
   notices: (r) => skippedNotices(r.skippedPages),
 });
 
@@ -201,6 +277,16 @@ const P5_KIND: Record<P5Kind, string> = {
   metadata: "埋め込まれた作成の記録",
   image: "画像",
   embedded_file: "添付ファイル",
+  dict_text: "字の入った情報",
+};
+
+/** 字の中身を持たない構造の部品の呼び名（検出ルール 1.2.0 の cleanupOnly.parts） */
+const P5_PART: Record<P5Part, string> = {
+  font: "フォントの設定",
+  font_file: "フォントの本体",
+  cmap: "文字の対応表",
+  color_profile: "色の設定",
+  other: "そのほかの部品",
 };
 
 const p5 = defineRule<P5Report>({
@@ -208,8 +294,8 @@ const p5 = defineRule<P5Report>({
   label: "旧版の残存",
   pattern: "P5",
   detect: (b) => detectP5Revisions(b),
-  items: (r) =>
-    r.findings.map((f) => ({
+  items: (r) => {
+    const items: Item[] = r.findings.map((f) => ({
       pattern: "P5",
       severity: "high", // 【仮】
       title: `修正する前の版の「${P5_KIND[f.kind] ?? "中身"}」が、ファイルの中に残っています`,
@@ -219,7 +305,23 @@ const p5 = defineRule<P5Report>({
         .join("／"),
       page: null,
       rect: null,
-    })),
+    }));
+    // 字の中身を持たない構造の部品だけの残り（1.2.0）。漏れとは分けて「低」で1行だけ出し、片付けへ案内する
+    const c = r.cleanupOnly;
+    if (c && c.count > 0) {
+      const parts = (Object.keys(P5_PART) as P5Part[]).filter((p) => c.parts[p] > 0).map((p) => `${P5_PART[p]} ${c.parts[p]}個`);
+      items.push({
+        pattern: "P5",
+        severity: "low", // 【仮】
+        title: "使われていない部品が、ファイルの中に残っています（片付けで消せる残り）",
+        why: "調べた範囲では字の中身は見つかりませんでしたが、作った道具や使った字の手がかりになることがあるので、「片付ける」で消せます。",
+        detail: parts.join("／"),
+        page: null,
+        rect: null,
+      });
+    }
+    return items;
+  },
 });
 
 // ---------------------------------------------------------------- P9 添付ファイル
@@ -267,12 +369,12 @@ const p9 = defineRule<P9WithInner>({
   id: "p9-attach",
   label: "添付ファイル",
   pattern: "P9",
-  async detect(b) {
+  async detect(b, ctx) {
     const report = await detectP9Attach(b);
     if (report.status !== "ok" || report.findings.length === 0) return { ...report, inner: [] };
     // 添付が PDF なら、ほかの検出ルール（この一覧の P9 以外）で中も調べる。中の添付は inspectAttachments が入れ子でたどる
     const detectors: InnerDetector[] = RULES.filter((r) => r.id !== "p9-attach").map((r) => async (bytes) => {
-      const res = await r.run(bytes);
+      const res = await r.run(bytes, ctx);
       if (res.status === "error") throw new Error("inner rule error");
       return res.items;
     });
@@ -306,6 +408,59 @@ const p9 = defineRule<P9WithInner>({
       : [],
 });
 
+// ---------------------------------------------------------------- P13【仮】 見える文字の個人情報らしい字
+
+const PII_TYPE: Record<PiiType, string> = {
+  name: "氏名",
+  address: "住所",
+  phone: "電話番号",
+  my_number: "マイナンバー",
+  bank_account: "口座番号",
+  birth_date: "生年月日",
+  email: "メールアドレス",
+  card_number: "カード番号",
+};
+const PII_BASIS: Record<PiiBasis, string> = {
+  label: "前後の語から",
+  column_header: "表の見出しから",
+  honorific: "「様」などの呼び方から",
+  pattern: "字の形から",
+  check_digit: "番号の検査用の数字が合うことから",
+};
+
+const pii = defineRule<PiiReport>({
+  id: "pii",
+  label: "個人情報らしい字",
+  pattern: "P13", // 【仮】の番号
+  detect: (b) => detectPii(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
+  // 黒塗りの候補として示すだけ（決めるのは利用者）。字の中身は出さず、型・場所・確からしさだけを出す
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P13",
+      severity: f.confidence === "high" ? "medium" : "low", // 【仮】
+      title: `${PII_TYPE[f.type] ?? "個人情報"}らしい字があります（黒塗りの候補）`,
+      why: "公開すると、本人が分かってしまうおそれがあります。黒塗りが要るかを確かめてください。",
+      detail: `確からしさ：${f.confidence === "high" ? "高" : "確認"}（${PII_BASIS[f.basis] ?? "字の形から"}）／${f.chars}字${f.vertical ? "／縦書き" : ""}`,
+      page: f.page,
+      rect: f.rect,
+    })),
+  notices: (r) => {
+    const out = skippedNotices(r.skippedPages.map((s) => ({ page: s.page, reason: s.reason === "unreadable_page" ? "unreadable_page" : "heavy" })));
+    if (r.unreadable.pages.length) {
+      out.push({
+        kind: "partial",
+        message: "このページには、中身を読み取れない字があります。その字の中の個人情報らしい字は探せていません。",
+        pages: r.unreadable.pages,
+      });
+    }
+    if (r.truncatedPages.length) {
+      out.push({ kind: "partial", message: "このページは字が多すぎるため、個人情報らしい字を途中までしか探していません。", pages: r.truncatedPages });
+    }
+    return out;
+  },
+});
+
+/** 画面で使う検出ルール。一覧には、この並びで出す */
 // ---------------------------------------------------------------- P8 注釈・コメント
 
 const P8_FIELD: Record<P8Field, string> = {
@@ -621,4 +776,4 @@ const fontGlyphs = defineRule<FontGlyphReport>({
 });
 
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, extras, p1, infoXmpDiff, p2, p4, p9, p8, p11, p12, p10];
+export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, extras, p1, infoXmpDiff, p2, p4, p9, p8, p11, p12, p10, pii];

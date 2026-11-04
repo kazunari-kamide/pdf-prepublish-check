@@ -1,0 +1,81 @@
+{
+  "file": "pii-04-vertical.pdf",
+  "description": "縦書き：氏名・住所（漢数字）・電話（漢数字）。日付・条文の番号・役職の列は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-04-vertical#1",
+      "type": "name",
+      "page": 1,
+      "rect": [
+        514.5,
+        703,
+        525.5,
+        747
+      ],
+      "confidence": "high",
+      "chars": 3
+    },
+    {
+      "id": "pii-04-vertical#2",
+      "type": "address",
+      "page": 1,
+      "rect": [
+        490.5,
+        538,
+        501.5,
+        747
+      ],
+      "confidence": "high",
+      "chars": 19
+    },
+    {
+      "id": "pii-04-vertical#3",
+      "type": "phone",
+      "page": 1,
+      "rect": [
+        466.5,
+        604,
+        477.5,
+        747
+      ],
+      "confidence": "high",
+      "chars": 13
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-04-vertical#n1",
+      "kind": "date",
+      "page": 1,
+      "rect": [
+        442.5,
+        637,
+        453.5,
+        736
+      ]
+    },
+    {
+      "id": "pii-04-vertical#n2",
+      "kind": "article_number",
+      "page": 1,
+      "rect": [
+        418.5,
+        670,
+        429.5,
+        780
+      ]
+    },
+    {
+      "id": "pii-04-vertical#n3",
+      "kind": "role",
+      "page": 1,
+      "rect": [
+        394.5,
+        747,
+        405.5,
+        780
+      ]
+    }
+  ]
+}

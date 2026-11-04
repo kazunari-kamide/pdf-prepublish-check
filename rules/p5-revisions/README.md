@@ -12,12 +12,13 @@ const report = await detectP5Revisions(bytes);
 | 項目 | 中身 |
 |---|---|
 | `findings[].where` | `superseded`（同じ番号を書き直した前の定義）・`free`（いまの xref が「使っていない」と印をつけた）・`unreferenced`（いまの xref にあるが、根からたどれない）・`orphan`（どの版の xref にも載っていない） |
-| `findings[].kind` | `info`・`content`・`annotation`・`form_value`・`metadata`・`image`・`embedded_file` |
+| `findings[].kind` | `info`・`content`・`annotation`・`form_value`・`metadata`・`image`・`embedded_file`・`dict_text`（1.2.0） |
 | `findings[].revision` | その定義のある版（1 ＝ いちばん古い。`%%EOF` で数える）。orphan は null |
-| `findings[].chars` | info・annotation・form_value のとき、残っている字の数（目安） |
+| `findings[].chars` | info・annotation・form_value・dict_text のとき、残っている字の数（目安） |
 | `notCounted` | 残っているが数えなかったもの（骨組み・字のない注釈・値のない欄・ファイル指定・数える欄のない文書情報・P9 で数える添付） |
 | `summary` | `previousInfo`（前の版の文書情報）・`removedAttachment`（free の添付の中身） |
 | `chainFallback` | `/Prev` の鎖をたどれず、ファイルの中の順で版を決めたとき true |
+| `cleanupOnly` | 片付けで消せる残り（1.2.0）。`notCounted` のうち骨組み（reason が `structure`）の数 `count` と、部品の種類ごとの数 `parts`（`font`・`font_file`・`cmap`・`color_profile`・`other`）。漏れ（`findings`）には数えない |
 
 ## 読み方
 
@@ -33,6 +34,24 @@ const report = await detectP5Revisions(bytes);
 4. 定義ごとに場所を決める。どの版の xref からも指されていない → orphan。いまの表で使っていない → free。いまの表が指している定義 → 根（trailer の `/Root`・`/Info`・`/Encrypt`）からたどれなければ unreferenced（たどれれば、いまの版で使っているので数えない）。それ以外 → superseded。
 5. 種類は辞書の鍵で見分ける（rubric/p5.md §2 の表のとおり）。中身（`/Type` のないストリーム・部品）は、pdf-lib の `decodePDFRawStream` で解き、字を描く命令（`Tj`・`TJ`・`'`・`"`）があれば content。xref ストリームとオブジェクトストリームは数えない（`notCounted` にも出さない）。
 
+## 字の中身を持たない部品と、オブジェクトストリームの中の孤立した辞書（1.2.0）
+
+- **構造の部品を中身と取り違えない。** `/Type` のないストリームは、字を描く命令があれば content としていた。フォントの本体（FontFile2 など）のバイト列が、たまたま `>"` や `) Tj` に見えると、版が1つしかない PDF でも「前の版の残り（高）」になっていた（スキャンの見本 PDF に残っていた、使われていないフォントで起きた）。1.2.0 では、字の命令を探す前に、次のどれかに当たれば骨組み（structure）とする。
+  1. フォントの本体の印：`/Length1`〜`/Length3`、`/Subtype /Type1C`・`/CIDFontType0C`・`/OpenType`
+  2. 中身の頭の印：TrueType（`00 01 00 00`・`true`・`OTTO`・`ttcf`・`typ1`）、CFF、Type 1（`%!PS-AdobeFont`・`%!FontType1`）、ICC（36 バイト目の `acsp`）、CMap（`begincmap`）
+  3. どれかの版の定義から部品として指されている（FontDescriptor の `/FontFile`・`/FontFile2`・`/FontFile3`・`/CIDSet`、フォントの `/ToUnicode`・`/Encoding`・`/CIDToGIDMap`、`[/ICCBased n 0 R]`）うえで、`BT`〜`ET` の中に字の命令がない
+  - 部品として指されていても、`BT`〜`ET` の中に字の命令があれば、従来どおり content（中身）として数える。
+- **片付けで消せる残り（`cleanupOnly`）。** 骨組み（structure）だけの残りは、漏れ（`findings`）にせず、`cleanupOnly` に数と種類だけを出す。画面では「低」の1行（「使われていない部品が、ファイルの中に残っています（片付けで消せる残り）」）として出し、「片付ける」へ案内する。片付け（`sanitize/`）は、使われていない部品を全部消している（合成 PDF の全部を片付けて読み直し、0 件になることを `tests/sanitize-reinspect.test.ts` で確かめている）。
+- **オブジェクトストリームの中の、どこからも指されていない辞書（dict_text）。** オブジェクトストリームの中にあり、場所が unreferenced か orphan の辞書で、注釈・欄・文書情報・ファイル指定のどれでもなく、構造の部品（`/Type` が Catalog・Pages・Page・Font・FontDescriptor・Encoding・CMap・ExtGState・Pattern・Shading・XObject・Group・Mask・Halftone・OCMD など）でもないものは、文字列の値の字数を数え、1字以上なら `dict_text` として数える。字そのものは返さない。
+  - 数えない文字列：`/Registry`・`/Ordering`・`/Lang`・`/ID`・`/Version`・`/M`、Producer・日付の欄、`D:` で始まる日付、CIDSystemInfo（`/Registry` と `/Ordering` を持つ辞書）の中。間接参照はたどらない（入れ子の辞書・配列は中まで見る）。
+  - オブジェクトストリームの外（xref の表で指される）の孤立した辞書は、いままでどおり骨組みとして扱う（依頼の範囲がオブジェクトストリームの中のため）。
+
+## ハイブリッド xref（1.2.1）
+
+- Word などが保存する「ハイブリッド xref」（古い形の xref の表に、`/XRefStm` で xref ストリームを混ぜた形）では、オブジェクトストリームの中の番号を、表では「使っていない（f）」とし、xref ストリームの側で場所を示す（PDF 1.7 §7.5.8.4）。
+- 1.2.0 までは、同じ版の中で表の項目を先に採っていたので、オブジェクトストリームの中のいま使っている部品（書体の辞書など）を「使っていない（free）」とみなしていた。漏れ（`findings`）には数えなかったが、1.2.0 の `cleanupOnly` に入り、版が1つの Word の PDF で「片付けで消せる残り」の行が出るところだった。
+- 1.2.1 では、同じ版の中では「使っている」項目を先に採る。`tests/p5-hybrid-xref.test.ts`（型の一覧の F01 の対照）で確かめる。
+
 ## 暗号化された PDF（1.1.0、PR #24 の返事の 1）
 
 - **利用者のパスワードが空のもの**（印刷・編集の禁止だけのもの）は、前の版も含めて復号して調べる。対応する方式は共通の復号（`rules/shared/decrypt.ts`）と同じ：RC4（V1・V2、R2・R3）、AES-128 と RC4（V4・R4）、AES-256（V5・R5・R6）。報告の `decrypted` に方式と、解けなかったオブジェクトの数を出す。
@@ -44,6 +63,9 @@ const report = await detectP5Revisions(bytes);
 ## 合成 PDF で測った値（2026-11-03、`npm run eval`）
 
 - 1.1.0：検出率 100.0%（24 件中 24 件）。誤検知率 0.0%（20 件中 0 件）。1.0.0 では 87.5%（24 件中 21 件。暗号化した3個を見逃した）。内訳は `docs/evolution.md`。
+- 1.2.0（2026-11-04、`npm run eval:p5`）：検出率 100.0%（24 件中 24 件）。誤検知率 0.0%（20 件中 0 件）。1.1.0 と同じ。採点の合成 PDF（fixtures/p5）には、取り違えたフォントの本体も、オブジェクトストリームの中の孤立した字の入った辞書もないため、数字は動かない。直した所は `tests/p5-gaps.test.ts` の合成 PDF（隠しあり・対照）で確かめる。
+- 1.2.1（2026-11-04、`npm run eval`）：検出率 100.0%（24 件中 24 件）。誤検知率 0.0%（20 件中 0 件）。片付けたあとに残る情報 0 件。1.2.0 と同じ。
+  - 参考：ほかの型の合成 PDF（fixtures/p6）のスキャンの見本 6 個で、1.1.0 は使われていないフォントの本体を content（高）としていた。1.2.0 では 6 個とも findings は 0 件で、`cleanupOnly` が 5 件ずつ（フォントの辞書 3・本体 1・対応表 1）。
 
 ## できないこと（限界）
 
@@ -54,6 +76,8 @@ const report = await detectP5Revisions(bytes);
 - pdf-lib の差し込みは、pdf-lib 1.17.1 の中の作り（`parseIndirectObject`・`maybeParseCrossRefSection` などの名前と、`subsections` の形）に頼っている。pdf-lib の版を上げるときは、このルールのテストで確かめる。
 - xref の項目の位置と、定義の位置が完全に同じときだけ「指されている」とする。位置が少しずれた（壊れた）PDF では、いまの定義を orphan と取り違えることがある。
 - 字を描く命令は、文字の並びで探す目安。
+- 使われていない文字の対応表（ToUnicode）は、そのフォントで使った字の種類（並びではない）を含むことがあるが、骨組みとして `cleanupOnly` に入れ、漏れには数えない（1.2.0）。
+- `dict_text` はオブジェクトストリームの中の辞書だけ。前の版の辞書（superseded・free）や、オブジェクトストリームの外の辞書の字は数えない。`/Type` を見て構造の部品を外すので、`/Type` を省いた部品の字（例：フォントの説明の文字列）を数えることがある。
 - 種類の見分けは、辞書の鍵での目安。`/Type` を省いた注釈などは、骨組みと見分けられないことがある。
 - 線形化（Linearized）した PDF は、最初のページ用の xref があり、版が2つに見える。合成 PDF ではまだ試していない。
 - 圧縮を解くのは、保存されている大きさが 32 MB までのストリーム。それより大きいものは `unreadable_stream`。圧縮を解いた結果が大きくなる細工は、このルールの中では止めない（画面では Worker の上限で止める）。

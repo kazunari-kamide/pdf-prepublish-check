@@ -21,6 +21,7 @@ const SHORT: Record<string, string> = {
   "文書情報と XMP の食い違い": "食い違い",
   ページの縮小画像: "縮小画像",
   書体に残った字形: "字形",
+  個人情報らしい字: "個人情報", // P13【仮】
 };
 
 export const FUDA_MAX = 4;
@@ -31,7 +32,5 @@ export function fudaLabel(label: string, pattern: string): string {
   return pattern;
 }
 
-/** 見つからなかった種類をまとめた囲みの札 */
-export const FUDA_NONE = "済";
-/** 調べられなかった種類の札 */
-export const FUDA_ERROR = "未";
+/** 見た所・見なかった所の囲みの札（11/5 B。見つからなかった種類の「済」と、調べられなかった種類の「未」を、この1つにまとめた） */
+export const FUDA_SCOPE = "範囲";

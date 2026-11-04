@@ -1,0 +1,70 @@
+{
+  "file": "pii-07-bank-account.pdf",
+  "description": "口座番号：「口座番号」「普通」のあとの 7 けた、ゆうちょの記号・番号。文書番号・会員番号は対照",
+  "pages": 1,
+  "leaks": [
+    {
+      "id": "pii-07-bank-account#1",
+      "type": "bank_account",
+      "page": 1,
+      "rect": [
+        296.5,
+        758.68,
+        335,
+        769.67
+      ],
+      "confidence": "check",
+      "chars": 7
+    },
+    {
+      "id": "pii-07-bank-account#2",
+      "type": "bank_account",
+      "page": 1,
+      "rect": [
+        148,
+        734.68,
+        186.5,
+        745.67
+      ],
+      "confidence": "high",
+      "chars": 7
+    },
+    {
+      "id": "pii-07-bank-account#3",
+      "type": "bank_account",
+      "page": 1,
+      "rect": [
+        159,
+        710.68,
+        263.5,
+        721.67
+      ],
+      "confidence": "high",
+      "chars": 15
+    }
+  ],
+  "negatives": [
+    {
+      "id": "pii-07-bank-account#n1",
+      "kind": "document_number",
+      "page": 1,
+      "rect": [
+        109.5,
+        662.68,
+        170,
+        673.67
+      ]
+    },
+    {
+      "id": "pii-07-bank-account#n2",
+      "kind": "member_number",
+      "page": 1,
+      "rect": [
+        109.5,
+        638.68,
+        148,
+        649.67
+      ]
+    }
+  ]
+}

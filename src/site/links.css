@@ -1,0 +1,26 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * 検査のページ（index.html）の下に置く、サイトの案内（記事・プライバシーへのリンク）。持ち場 G。
+ * 値は design/tokens.css の変数だけを使う（src/style.css が tokens.css を読み込む）。
+ */
+
+.site-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-line);
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.site-links a {
+  color: var(--color-base);
+  text-underline-offset: 0.2em;
+}
+
+.site-links p {
+  flex-basis: 100%;
+  margin: 0;
+}
