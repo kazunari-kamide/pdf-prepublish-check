@@ -10,6 +10,7 @@ import type { NotDoneItem, RemovedItem } from "../sanitize/types.ts";
 import type { InspectSummary, RuleResult } from "../src/inspect/report";
 import { buildCleanView, cleanedFileName, MAX_LINES_PER_GROUP } from "../src/ui/clean-model";
 import { buildView } from "../src/ui/model";
+import { scopeCaveats } from "../src/ui/scope";
 
 const page = { page: 1, view: [0, 0, 595, 842] as [number, number, number, number], rotate: 0 as const };
 
@@ -103,5 +104,25 @@ describe("保存するファイルの名前", () => {
     expect(cleanedFileName("報告書.pdf")).toBe("報告書_片付け済み.pdf");
     expect(cleanedFileName("a.PDF")).toBe("a_片付け済み.pdf");
     expect(cleanedFileName(".pdf")).toBe("document_片付け済み.pdf");
+  });
+});
+
+describe("読み直しで調べていない層の一言（src/ui/scope.ts）", () => {
+  const CAVEAT = "P6 のうち、画像の下の中身は、読み直しではまだ調べていません。";
+
+  it("P6 を調べられたときは、画像の下の中身を調べていないと添える", () => {
+    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: false });
+    expect(c.scope).toContain(CAVEAT);
+  });
+
+  it("P6 を調べられなかったときは添えない（調べた型に P6 が入らないため）", () => {
+    const broken = summary([rule({ pattern: "P6", label: "見せかけの黒塗り", status: "error", message: "調べられませんでした。" })]);
+    expect(scopeCaveats(broken.rules)).toEqual([]);
+    const c = buildCleanView({ before: buildView(found), after: buildView(broken), removed, notDone: [], decrypted: false });
+    expect(c.scope).not.toContain(CAVEAT);
+  });
+
+  it("出す所は1か所：ViewModel の caveats は scopeCaveats と同じ", () => {
+    expect(buildView(empty).caveats).toEqual(scopeCaveats(empty.rules));
   });
 });
