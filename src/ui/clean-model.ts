@@ -85,6 +85,8 @@ export function buildCleanView(input: {
     ? `読み直しで調べたのは ${checked.map((p) => `${PATTERN_NAME[p as SanitizePattern] ?? p}（${p}）`).join("・")} です。`
     : "読み直しでは、どの型も調べられませんでした。";
   if (notChecked.length) scope += `${notChecked.join("・")} は片付けましたが、読み直しでは調べていません（調べるルールがまだありません）。`;
+  // 調べた型の中でも、調べていない層があれば添える（決め打ちの中身は src/ui/scope.ts の1か所）
+  if (after) scope += after.caveats.join("");
 
   const left = after ? after.rows.length : null;
   let verdict: CleanView["verdict"];

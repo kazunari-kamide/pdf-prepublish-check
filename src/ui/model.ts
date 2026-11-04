@@ -4,6 +4,7 @@
 // 見た目（色・形）は持たない。design/ の案を選んだあとも、この形はそのまま使う。
 
 import type { Item, PageBox, Rect, Severity, InspectSummary } from "../inspect/report";
+import { scopeCaveats } from "./scope";
 
 export type Row = {
   no: number;
@@ -41,6 +42,8 @@ export type ViewModel = {
   pages: PageMarks[];
   /** 図形が多すぎるとして、どれかのルールが省いたページ（ページの絵も描かない） */
   heavyPages: number[];
+  /** 調べていない層の一言（src/ui/scope.ts。片付けたあとの読み直しの範囲に添える） */
+  caveats: string[];
   /** 見つかった所が0件で、調べられなかった項目も省いたページもないとき true（「全部緑」の状態） */
   clean: boolean;
 };
@@ -136,5 +139,5 @@ export function buildView(summary: InspectSummary): ViewModel {
   const heavyPages = [
     ...new Set(summary.rules.flatMap((r) => r.notices.filter((n) => n.reason === "heavy").flatMap((n) => n.pages))),
   ].sort((a, b) => a - b);
-  return { headline, tone, rows, groups, heavyPages, notices, unchecked, coverage, pages, clean };
+  return { headline, tone, rows, groups, heavyPages, notices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
 }
