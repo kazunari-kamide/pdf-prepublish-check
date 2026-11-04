@@ -8,6 +8,9 @@
   "engines": {
     "node": ">=22.12.0"
   },
+  "bin": {
+    "omamori-pdf": "cli/omamori.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && vite build && node scripts/check-dist.mjs",
@@ -27,6 +30,7 @@
     "check:sanitized": "node sanitize/check/cli.ts",
     "check:browser": "node scripts/check-browser.mjs",
     "check:live": "node scripts/check-live.mjs",
+    "cli": "node cli/omamori.ts",
     "eval:redact": "vitest run tests/redact-eval.test.ts --silent=false"
   },
   "devDependencies": {
