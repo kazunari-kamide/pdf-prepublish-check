@@ -175,7 +175,7 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
     for (const name of ["@napi-rs/canvas", "@pdf-lib/fontkit", "vite", "vitest", "typescript", "subset-font", "@types/node", "actions/checkout", "lftp", "BIZ UDゴシック"]) {
       expect(l, name).not.toContain(`>${escapeHtml(name)}<`);
     }
-    // 全文のファイルも、並べた部品・書体とこの道具の分だけ
+    // 全文のファイルも、並べた部品・書体と当サービスの分だけ
     const listed = [...d.shipped, ...d.fonts].map((r) => r.textHref!.slice(1));
     expect([...licenses.files.keys()].sort()).toEqual([...listed, "licenses/AGPL-3.0.txt"].sort());
     expect([...files.keys()].filter((k) => k.startsWith("licenses/")).sort()).toEqual([...licenses.files.keys()].sort());
@@ -226,7 +226,7 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
     expect(githubRepo("https://gitlab.com/a/b")).toBeNull();
   });
 
-  it("ページに、この道具の AGPL-3.0・ソースの場所・部品の表が出る", () => {
+  it("ページに、当サービスの AGPL-3.0・ソースの場所・部品の表が出る", () => {
     const l = pages.get("licenses.html")!;
     expect(l).toContain("AGPL-3.0-only");
     expect(l).toContain('href="/licenses/AGPL-3.0.txt"');
