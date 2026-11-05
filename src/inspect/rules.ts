@@ -166,6 +166,16 @@ export function p6Item(f: P6TextReport["findings"][number]): Item {
           detail: `${cover}／残っている字：${f.chars}字`,
         };
   }
+  if (f.layer === "vector") {
+    // 図形の層（検出ルール 1.13.0 から）：白い四角の注釈の下に、線や形で描いた字が残っているかもしれない。いつも「確かめてください」【文言は仮】
+    return {
+      ...base,
+      ...check,
+      title: "白い四角の注釈の下に、線や形で描いた字が残っているかもしれません",
+      why: "字を図形として描いた上に、白い四角を重ねただけなら、注釈を消すと下の字が見えます。罫線や図の場合もあるため、言い切れません。確かめてください。",
+      detail: `覆っているもの：注釈（白）／下にある図形：${f.paths}個`,
+    };
+  }
   const box = f.tone === "light" ? "白い四角" : "黒い四角";
   if (f.reason === "under_unreadable") {
     return {
@@ -240,8 +250,9 @@ const P7_VISIBLE_KIND: Partial<Record<P7Reason, { title: string; why: string; se
   },
   // 見えない所に置いた画像（検出ルール 1.2.0 から）。字ではないので、字の数は出さない
   image_off_page: {
-    title: "ページの外に、画像が置かれています",
-    why: "画面や印刷には出ませんが、画像を取り出すと中身が見えます。消し忘れの画像でないか、確かめてください。",
+    // 検出ルール 1.4.0 から、大部分（見える所が半分以下）がページの外にはみ出した画像も含む
+    title: "ページの外に、画像の全部か大部分が置かれています",
+    why: "ページの外の部分は画面や印刷には出ませんが、画像を取り出すと見えます。消し忘れの画像でないか、確かめてください。",
     severity: "medium",
   },
   image_clipped: {

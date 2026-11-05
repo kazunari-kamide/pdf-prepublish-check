@@ -71,6 +71,13 @@ export type P6TextSettings = {
   coloredFractionMin: number;
   /** 文字の層：覆われた字の箱の高さが、どれもこれより小さければ「確かめてください」にする（ポイント）【仮の値】（1.8.0 から） */
   tinyGlyphHeightMax: number;
+  /**
+   * 図形の層（1.13.0 から）：白い不透明な四角の注釈の下に、ページの中身の道（塗り・線の命令）がこの数以上あれば、
+   * パスで描いた字を覆っているかもしれないとして「確かめてください」で出す（見つける段の3回目。2026-11-05、人の決定）
+   */
+  vectorMinPaths: number;
+  /** 図形の層（1.13.0 から）：道の数が vectorMinPaths に届かなくても、線分の数の合計がこの数以上なら出す */
+  vectorMinSegments: number;
 };
 
 export const DEFAULT_SETTINGS: P6TextSettings = {
@@ -103,4 +110,6 @@ export const DEFAULT_SETTINGS: P6TextSettings = {
   maxImagePixels: 72_000_000,
   coloredChromaMin: 0.2,
   coloredFractionMin: 0.2,
+  vectorMinPaths: 15,
+  vectorMinSegments: 500,
 };

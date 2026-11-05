@@ -15,7 +15,7 @@
 | pdf-lib | 1.17.1 | MIT | 合成 PDF（テスト用 PDF）を作る。検出ルール rules/p6-text で PDF の中の部品を読む（2026-11-03 から。画面に組み込むと dist/ に入る） | 2026-11-03 | https://github.com/Hopding/pdf-lib |
 | @pdf-lib/fontkit | 1.1.1 | MIT | 合成 PDF に日本語のフォントを埋め込む | 2026-11-03 | https://github.com/Hopding/fontkit |
 | pdfjs-dist | 6.4.299 | Apache-2.0 | 検証器で PDF を読む（検出ルールとは別の読み方）。画面でページの絵を描く（2026-11-03 から。`build/pdf.min.mjs` と `build/pdf.worker.min.mjs` を、手を加えずに dist/ に入れて配る。理由は docs/no-network.md）。最新の 6.5.438 は 2026-11-01 に出たばかりなので、1つ前の版にした | 2026-11-03 | https://github.com/mozilla/pdf.js |
-| @napi-rs/canvas | 1.1.0 | MIT | Node（採点・テスト）で、片付けが塗った JPEG の画像を JPEG に書き直す。片付けの見た目の確かめ（npm run check:sanitized）で PDF.js がページを描く。ブラウザでは使わない（ブラウザは OffscreenCanvas で書く。dist/ に入らない）。これまでは pdfjs-dist の任意の依存として入っていたものを、package.json に明記した | 2026-11-04 | https://github.com/Brooooooklyn/canvas |
+| @napi-rs/canvas | 1.1.0 | MIT | Node（採点・テスト）で、整える処理が塗った JPEG の画像を JPEG に書き直す。整えた PDF の見た目の確かめ（npm run check:sanitized）で PDF.js がページを描く。ブラウザでは使わない（ブラウザは OffscreenCanvas で書く。dist/ に入らない）。これまでは pdfjs-dist の任意の依存として入っていたものを、package.json に明記した | 2026-11-04 | https://github.com/Brooooooklyn/canvas |
 | subset-font | 2.9.0 | BSD-3-Clause | 同梱の書体（Noto Sans JP）を、使う字だけに絞って WOFF2 にする（`npm run fonts:build`。design/fonts/README.md）。開発用で、dist/ には入らない。中で使う harfbuzzjs 1.6.4（MIT）・fontverter 2.0.0（BSD-3-Clause）・wawoff2 2.0.1（MIT）・woff2sfnt-sfnt2woff 1.0.0（MIT）・p-limit 3.1.0（MIT）・yocto-queue 0.1.0（MIT）・argparse 2.0.1（Python-2.0）と、前から入っていた pako 1.0.11（MIT AND Zlib）も、どれも AGPL-3.0 と両立する（2026-11-05 本人が承認） | 2026-11-05 | https://github.com/papandreou/subset-font |
 
 ## 間接の依存（package-lock.json から数えた。2026-11-03、pdf-lib などを足したあと）
@@ -67,7 +67,7 @@
 
 外部の素材としては、2026-11-05 から、同梱の書体（Noto Sans JP を絞ったもの）と、そのライセンスの文（`OFL.txt`）が dist/ に入る（上の「フォント・素材」）。
 
-2026-11-05 から、サイトのライセンスのページ（`/licenses.html`）を、ビルドの時にこのファイルの表（「直接の依存」の出典・「フォント・素材」）と package-lock.json から作る（`site-licenses.ts`）。並べるのは、ブラウザに配るもの（dist/）に入る部品と書体だけ（画面・ルール・片付けが読み込む pdf-lib・pdfjs-dist とその依存、置き場所が src/assets/ の書体）。開発・テスト・配信にだけ使う道具は、このファイルにだけ載せる。表の見出しや列の名前を変えるときは、`site-licenses.ts` も直す（合わなければビルドが止まって知らせる）。
+2026-11-05 から、サイトのライセンスのページ（`/licenses.html`）を、ビルドの時にこのファイルの表（「直接の依存」の出典・「フォント・素材」）と package-lock.json から作る（`site-licenses.ts`）。並べるのは、ブラウザに配るもの（dist/）に入る部品と書体だけ（画面・ルール・整える処理が読み込む pdf-lib・pdfjs-dist とその依存、置き場所が src/assets/ の書体）。開発・テスト・配信にだけ使う道具は、このファイルにだけ載せる。表の見出しや列の名前を変えるときは、`site-licenses.ts` も直す（合わなければビルドが止まって知らせる）。
 
 ## 値を参考にしたもの（コード・ファイルは写していない）
 
