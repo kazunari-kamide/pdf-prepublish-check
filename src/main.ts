@@ -7,7 +7,8 @@
 //   片付けた PDF を検査し直した結果だけで言う（sanitize/README.md「4 読み直す」）。
 // - 片付けた PDF は Blob にして、利用者が保存する（URL.createObjectURL。通信ではない）。
 // - ファイルから取り出した文字や、ファイル名は、HTML として解釈させない（textContent だけを使う。CLAUDE.md §11-3）。
-// - 字の中身は出さない。数と場所だけ（検査の Worker も片付けの Worker も、そもそも返さない）。
+// - 見つけた字の中身は、頭の数文字だけを出して伏せ、「中身を見る」で全部を出す（2026-11-05 本人が決めた。src/ui/reveal.ts）。
+//   中身は画面の中だけで使う。報告書には「中身も入れる」を選んだときだけ入れる。ログ・ファイル名には入れない。
 
 import type { InspectOutcome } from "./inspect/protocol";
 import type { PageBox, InspectSummary } from "./inspect/report";
@@ -27,7 +28,8 @@ import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
 import { sampleFile } from "./ui/sample";
-import { beforeAfterCounts, buildProcessReport, sha256Hex } from "./ui/process-report";
+import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
+import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -79,6 +81,8 @@ const ui = {
   beforeAfter: el<HTMLDivElement>("before-after"),
   beforeAfterList: el<HTMLUListElement>("before-after-list"),
   reportDownload: el<HTMLAnchorElement>("report-download"),
+  reportContents: el<HTMLLabelElement>("report-contents"),
+  reportContentsBox: el<HTMLInputElement>("report-contents-box"),
   saveConfirm: el<HTMLLabelElement>("save-confirm"),
   saveConfirmBox: el<HTMLInputElement>("save-confirm-box"),
   notDone: el<HTMLDivElement>("not-done"),
@@ -156,6 +160,20 @@ let downloadUrl: string | null = null;
 /** 片付けた PDF（保存する中身）。保存のリンクは、読み直しが通ったあとでだけ、ここから作る */
 let cleanedBlob: Blob | null = null;
 let reportUrl: string | null = null;
+/** 報告書の中身（中身を入れるかを選び直したときに、作り直すため）。見つけた字の中身は contents に分けて持つ */
+let reportInput: { base: ProcessReportInput; contents: NonNullable<ProcessReportInput["contents"]> } | null = null;
+
+/** 報告書を作り直す。「中身も入れる」に印があるときだけ、見つけた字の中身を入れる（初めは入れない） */
+function refreshReport() {
+  if (!reportInput) return;
+  if (reportUrl) URL.revokeObjectURL(reportUrl);
+  const withContents = ui.reportContentsBox.checked && reportInput.contents.length > 0;
+  const text = buildProcessReport(withContents ? { ...reportInput.base, contents: reportInput.contents } : reportInput.base);
+  reportUrl = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  ui.reportDownload.href = reportUrl;
+  ui.reportDownload.hidden = false;
+  ui.reportContents.hidden = reportInput.contents.length === 0;
+}
 /** 小さくした PDF（保存する中身）と、その保存のリンク。読み直しが通ったあとでだけリンクを作る（片付けと同じ） */
 let compressedBlob: Blob | null = null;
 let compressUrl: string | null = null;
@@ -184,8 +202,11 @@ function releaseDownload() {
   lockDownload();
   if (reportUrl) URL.revokeObjectURL(reportUrl);
   reportUrl = null;
+  reportInput = null;
   ui.reportDownload.removeAttribute("href");
   ui.reportDownload.hidden = true;
+  ui.reportContents.hidden = true;
+  ui.reportContentsBox.checked = false;
   cleanedBlob = null;
   cleanedState = null;
   resetCompress();
@@ -417,6 +438,31 @@ function itemButton(r: Row): HTMLButtonElement {
   return btn;
 }
 
+/**
+ * 見つけた字の中身：頭の数文字だけを出して伏せ、「中身を見る」で全部を出す（もう一度押すと伏せる）。
+ * 字は textContent でだけ出す（HTML として解釈させない）。full を渡すと、全部を出すときにその部品を使う（プロパティの一覧の印つきの値）
+ */
+function revealBox(content: string, what: string, full?: () => HTMLElement): HTMLElement {
+  const box = make("div", undefined, "reveal");
+  const text = make("span", maskContent(content), "reveal-text");
+  text.setAttribute("aria-live", "polite");
+  const btn = make("button", REVEAL_LABEL.closed, "reveal-toggle");
+  btn.type = "button";
+  btn.setAttribute("aria-pressed", "false");
+  btn.setAttribute("aria-label", `${what}の中身を見る`);
+  btn.addEventListener("click", () => {
+    const open = btn.getAttribute("aria-pressed") !== "true";
+    btn.setAttribute("aria-pressed", String(open));
+    btn.textContent = open ? REVEAL_LABEL.open : REVEAL_LABEL.closed;
+    btn.setAttribute("aria-label", open ? `${what}の中身を伏せる` : `${what}の中身を見る`);
+    if (open && full) text.replaceChildren(full());
+    else text.textContent = open ? fullContent(content) : maskContent(content);
+    box.dataset.open = String(open);
+  });
+  box.append(make("span", "中身：", "reveal-label"), text, btn);
+  return box;
+}
+
 /** 候補の行の「黒塗りに加える／外す」（押した状態を aria-pressed と字で示す） */
 function candidateButton(r: Row): HTMLButtonElement {
   const b = make("button", undefined, "pick-candidate");
@@ -478,10 +524,12 @@ function renderGroups(s: Session) {
       });
       body.append(all);
     }
+    if (g.rows.some((r) => r.content)) body.append(make("p", `見つけた字の中身は、頭の数文字だけを出しています。${REVEAL_NOTE}`, "reveal-note"));
     const list = make("ol", undefined, "items");
     for (const r of g.rows) {
       const li = make("li");
       li.append(itemButton(r));
+      if (r.content) li.append(revealBox(r.content, `${r.no} 番`));
       if (candidates.some((c) => c.no === r.no)) li.append(candidateButton(r));
       list.append(li);
     }
@@ -723,7 +771,7 @@ function propRows(list: Array<{ key: string; value: string; truncated: boolean }
   for (const p of list) {
     const row = make("div", undefined, "prop-row");
     row.append(make("dt", label(p.key)), make("dd"));
-    row.querySelector("dd")!.append(valueWithMarks(p.value, p.truncated));
+    row.querySelector("dd")!.append(revealBox(p.value, label(p.key), () => valueWithMarks(p.value, p.truncated)));
     dl.append(row);
   }
   return dl;
@@ -742,14 +790,14 @@ function renderProperties(s: Session) {
   summary.append(
     make("span", p ? `プロパティの一覧（文書情報 ${p.info.length} 欄・XMP ${p.xmp.length} 欄）` : "プロパティの一覧（読めませんでした）"),
     // 閉じていても読める一言（値をそのまま出す所なので、画面共有・画面の撮影の前に閉じてもらう）
-    make("span", "開くと欄の値をそのまま出します。画面を共有・撮影する前は、閉じておいてください。", "props-warn"),
+    make("span", "開くと欄の値を、頭の数文字だけ出します。画面を共有・撮影する前は、閉じておいてください。", "props-warn"),
   );
   ui.props.append(summary);
   const body = make("div", undefined, "props-body");
   body.append(
     make(
       "p",
-      "この一覧だけは、欄の値をそのまま出します（このパソコンの画面の中だけで、外には出ません）。団体名らしい語には印を付けています（形で拾うだけなので、見落としや関係のない語もあります）。",
+      `欄の値は、頭の数文字だけを出しています。「中身を見る」で全部を出します（このパソコンの画面の中だけで、外には出ません）。${REVEAL_NOTE}団体名らしい語には、全部を出したときに印を付けています（形で拾うだけなので、見落としや関係のない語もあります）。`,
       "props-note",
     ),
   );
@@ -1301,7 +1349,7 @@ async function runSanitize() {
     const afterView = afterSummary ? buildView(afterSummary) : null;
     renderBeforeAfter(s.view, afterView);
     if (s.sha256 && afterSha) {
-      const text = buildProcessReport({
+      const base: ProcessReportInput = {
         date: new Date().toLocaleDateString("sv-SE"), // YYYY-MM-DD（利用者のパソコンの日付）
         before: { sha256: s.sha256, bytes: s.byteLength, coverage: s.view.coverage },
         after: { sha256: afterSha, bytes: byteLength, pages: out.pages, coverage: afterView?.coverage ?? null },
@@ -1309,10 +1357,12 @@ async function runSanitize() {
         notDone: out.notDone,
         verdict: clean.headline,
         rules: (afterSummary ?? s.summary).rules.filter((r) => r.ruleVersion).map((r) => `${r.ruleId}@${r.ruleVersion}`),
-      });
-      reportUrl = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-      ui.reportDownload.href = reportUrl;
-      ui.reportDownload.hidden = false;
+      };
+      // 見つけた字の中身（整える前に見つけた所）。報告書には「中身も入れる」を選んだときだけ入れる
+      const contents = s.view.rows.filter((r) => r.content).map((r) => ({ pattern: r.pattern, page: r.page, title: r.title, content: r.content! }));
+      reportInput = { base, contents };
+      ui.reportContentsBox.checked = false;
+      refreshReport();
     }
   } catch {
     if (gen === generation) cleanFailed("整える途中で問題が起きました。");
@@ -1332,6 +1382,7 @@ ui.download.addEventListener("click", (e) => {
 });
 
 ui.compressRun.addEventListener("click", () => void runCompress());
+ui.reportContentsBox.addEventListener("change", refreshReport);
 ui.compressConfirmBox.addEventListener("change", () => {
   if (ui.compressConfirmBox.checked) unlockCompressDownload();
   else lockCompressDownload();

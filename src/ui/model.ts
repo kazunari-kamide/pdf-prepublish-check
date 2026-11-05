@@ -24,6 +24,8 @@ export type Row = {
   detail: string;
   /** ルールが「確かめてください」とした所（言い切れない所）。画面では断定しない形で出す */
   check: boolean;
+  /** 見つけた字の中身（あるときだけ）。画面の中だけで使い、伏せて出す（src/ui/reveal.ts） */
+  content?: string;
 };
 
 /** 型（ルール）ごとのまとまり。見つからなかった型も並べる */
@@ -97,6 +99,7 @@ export function buildView(summary: InspectSummary): ViewModel {
     title: it.title,
     why: it.why,
     detail: it.detail,
+    ...(it.content ? { content: it.content } : {}),
     check: it.confidence === "check",
   }));
 
