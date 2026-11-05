@@ -10,8 +10,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, decodePDFRawStream } from "pdf-lib";
 import { describe, expect, it } from "vitest";
-import { IMAGE, OUT, PAGE, REDACTED, toPdfRect } from "../demo/scan-minutes/build.mjs";
-import { sanitizePdf } from "../sanitize/index.ts";
+import { IMAGE, LARGE, LARGE_MIN_BYTES, OUT, PAGE, REDACTED, toPdfRect } from "../demo/scan-minutes/build.mjs";
+import { compress, sanitizePdf } from "../sanitize/index.ts";
+import { rulesCheck } from "../sanitize/redact-check.ts";
+import { SIZE_LIMITS, nextForLimit } from "../src/ui/compress-model.ts";
 import { createNodeImageCodec } from "../sanitize/node/image-codec.ts";
 import { createNodeImageDecoder } from "../eval/image-decoder.ts";
 import { inspectAll } from "../src/inspect/inspect";
@@ -95,6 +97,80 @@ describe.each([OUT.pdf, OUT.pdfMarked])("demo/scan-minutes/%s", (file) => {
     const c = buildCleanView({ before, after, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted });
     expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: 0, notDone: 0, verdict: "clean" });
   }, 60_000);
+});
+
+// 大きい版（撮影で「3MB 以下」に縮める所を見せるため。300 dpi・カラー・3 ページ）
+describe.each([OUT.large, OUT.largeMarked])("demo/scan-minutes/%s（大きい版）", (file) => {
+  it("3 ページとも 300 dpi のスキャンの画像だけで、3MB を超える。黒い四角は 1 ページめに、今の版と同じ場所で 3 つ", async () => {
+    const bytes = read(file);
+    expect(bytes.length).toBeGreaterThan(LARGE_MIN_BYTES);
+    const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+    expect(doc.getPageCount()).toBe(LARGE.pages);
+    doc.getPages().forEach((page, i) => {
+      expect(page.getSize()).toEqual({ width: PAGE.width, height: PAGE.height });
+      const res = page.node.Resources()!;
+      expect(res.lookupMaybe(PDFName.of("Font"), PDFDict)?.keys() ?? []).toEqual([]);
+      const xobjects = res.lookup(PDFName.of("XObject"), PDFDict);
+      expect(xobjects.keys()).toHaveLength(1);
+      const img = xobjects.lookup(xobjects.keys()[0]!) as PDFRawStream;
+      expect(img.dict.get(PDFName.of("Filter"))).toEqual(PDFName.of("DCTDecode"));
+      expect((img.dict.get(PDFName.of("Width")) as PDFNumber).asNumber()).toBe(IMAGE.width * LARGE.scale);
+      expect((img.dict.get(PDFName.of("Height")) as PDFNumber).asNumber()).toBe(IMAGE.height * LARGE.scale);
+      const annots = page.node.lookupMaybe(PDFName.of("Annots"), PDFArray);
+      if (i > 0) {
+        expect(annots?.size() ?? 0).toBe(0);
+        return;
+      }
+      const rects = annots!.asArray().map((r) => (doc.context.lookup(r, PDFDict).lookup(PDFName.of("Rect"), PDFArray).asArray() as PDFNumber[]).map((n) => n.asNumber()));
+      expect(rects).toEqual(boxes.boxes.map((b) => b.pdfRect));
+    });
+    const info = doc.context.trailerInfo.Info ? doc.context.lookup(doc.context.trailerInfo.Info, PDFDict) : undefined;
+    expect(info?.keys() ?? []).toEqual([]);
+  });
+
+  it("P6 の「高」が 3 件だけ出て、整えると 0（緑）。整えたあとも 3MB を超え、「3MB 以下」を選ぶと上限まで縮み、縮めたあとも 0", async () => {
+    const bytes = read(file);
+    const ctx = { imageDecoder: createNodeImageDecoder() };
+    const inspect = (b: Uint8Array) => inspectAll(b, () => {}, RULES, ctx);
+    const first = await inspect(bytes);
+    const found = first.rules.flatMap((r) => r.items.map((it) => ({ ...it, pattern: r.pattern })));
+    expect(found.map((f) => [f.pattern, f.severity, f.page])).toEqual([
+      ["P6", "high", 1],
+      ["P6", "high", 1],
+      ["P6", "high", 1],
+    ]);
+    const before = buildView(first);
+    const codec = createNodeImageCodec();
+    const r = await sanitizePdf(bytes, { codec });
+    expect(r.status).toBe("ok");
+    if (r.status !== "ok") return;
+    expect(r.removed.filter((x) => x.kind === "covered_pixels")).toHaveLength(3);
+    const c = buildCleanView({ before, after: buildView(await inspect(r.bytes)), removed: r.removed, notDone: r.notDone, decrypted: r.decrypted });
+    expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: 0, notDone: 0, verdict: "clean" });
+    // 整えたあとも上限を超えている（だから「3MB 以下」で縮める場面になる）
+    const limit = SIZE_LIMITS.find((l) => l.mb === 3)!;
+    expect(r.bytes.length).toBeGreaterThan(limit.bytes);
+    // 画面（src/main.ts）と同じ順に、上限に収まるまで縮める（ふつう → もっと小さく）
+    let current = r.bytes;
+    const tried: string[] = [];
+    for (;;) {
+      const next = nextForLimit(current.length, limit, tried as never);
+      if (next.kind !== "try") {
+        expect(next.kind).toBe("fits");
+        break;
+      }
+      tried.push(next.preset.id);
+      const z = await compress(current, { codec, maxDpi: next.preset.maxDpi, jpegQuality: next.preset.jpegQuality, checks: [rulesCheck(inspect)] });
+      expect(z.status).toBe("ok");
+      if (z.status !== "ok") return;
+      current = z.bytes;
+    }
+    expect(current.length).toBeLessThanOrEqual(limit.bytes);
+    // 撮影の目安：1 回め（ふつう：150 dpi・質 0.75）で収まる
+    expect(tried).toEqual(["normal"]);
+    const again = await inspect(current);
+    expect(again.rules.flatMap((x) => x.items)).toEqual([]);
+  }, 300_000);
 });
 
 describe("黒い四角を外した版（下が見える版）の画像", () => {

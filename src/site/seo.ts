@@ -31,6 +31,11 @@ export const INSPECTOR_HEAD = {
 
 /** 記事以外のページの、head だけの題と説明（本文の見出しは pages.ts・render.ts・privacy.ts のまま） */
 const PAGE_HEAD: Record<string, { title: string; description: string }> = {
+  "/about": {
+    title: "お守りPDFとは：公開前の PDF を、送らずに確かめる｜お守りPDF",
+    description:
+      "黒塗りの下の字や作った人の名前など、PDF の見た目では分からない情報を、公開・提出の前に見つけて消し、読み直して確かめます。無料・登録なしで、選んだ PDF はどこにも送信しません。",
+  },
   "/articles/": {
     title: "記事の一覧：PDF に残る情報の型と直し方｜お守りPDF",
     description:
