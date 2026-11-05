@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument, PDFName, StandardFonts } from "pdf-lib";
 import { detectP5Revisions } from "../rules/p5-revisions/index.ts";
-import { allPresent, contentBlocks, xmpTokens } from "../rules/p5-revisions/compare.ts";
+import { allPresent, contentBlocks, findPresent, xmpTokens } from "../rules/p5-revisions/compare.ts";
 import { RULES } from "../src/inspect/rules.ts";
 
 const p5Rule = RULES.find((r) => r.id === "p5-revisions")!;
@@ -214,4 +214,45 @@ describe("描かれない部品", () => {
     expect(r.findings.map((f) => `${f.kind}:${f.compare ?? "-"}`)).toEqual(["unused_form:-"]);
     expect(severities).toEqual(["medium"]);
   });
+});
+
+describe("比べる処理の速さ（1.4.1）", () => {
+  it("まとめて探した結果は、1つずつ includes で探した結果と同じ", () => {
+    // 決まった種から作る、ばらばらの字（短い字・重なる字・ほかの字の頭や尻にあたる字・日本語を混ぜる）
+    let seed = 12345;
+    const rand = (n: number) => ((seed = (seed * 1103515245 + 12345) >>> 0) % n);
+    const alphabet = ["a", "b", "c", "ab", "あ", "い", "\u0000", "\n"];
+    const word = (len: number) => Array.from({ length: len }, () => alphabet[rand(alphabet.length)]).join("");
+    for (let round = 0; round < 200; round++) {
+      const hay = word(rand(60));
+      const needles = Array.from({ length: 1 + rand(12) }, () => word(rand(6)));
+      const got = findPresent(needles, hay)!;
+      for (const n of needles) expect(got.has(n), `${JSON.stringify(n)} in ${JSON.stringify(hay)}`).toBe(hay.includes(n));
+    }
+  });
+
+  it("探す字の合計が上限を超えたら探さない", () => {
+    expect(findPresent(["abcd", "efgh"], "xxabcdxx", 7)).toBeNull();
+    expect([...findPresent(["abcd", "efgh"], "xxabcdxx", 8)!]).toEqual(["abcd"]);
+  });
+
+  it("塊の多い前の版と、大きな今の版を比べても、時間が延びない（結果は変わらない）", async () => {
+    const block = (prefix: string, i: number) => `BT (${prefix}${String(i).padStart(6, "0")}zz) Tj ET`;
+    const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+    const b = await makeBase();
+    const n = 40_000;
+    const old = range(n).map((i) => block("Q", i)).join("\n");
+    // 今の版：大きな中身のあとに、前の版の字がすべてある（前の版の字は、今の版にもすべてある）
+    const current = [...range(400_000).map((i) => block("R", i)), ...range(n).reverse().map((i) => block("Q", i))].join("\n");
+    const v1 = append(b.bytes, { objects: [[b.contents, stream(old)]], root: b.root, size: b.size });
+    const v2 = append(v1, { objects: [[b.contents, stream(current)]], root: b.root, size: b.size });
+    const t0 = performance.now();
+    const r = await detectP5Revisions(v2);
+    const ms = performance.now() - t0;
+    const content = r.findings.filter((f) => f.kind === "content").sort((x, y) => x.revision! - y.revision!);
+    // 1番目の版（Hello）は今の版にないので「違う」、2番目の版は字がすべて今の版にあるので「同じ」
+    expect(content.map((f) => f.compare)).toEqual(["differs", "same"]);
+    // 1つずつ探す作り（1.4.0）では、比べるだけで塊の数 × 今の版の長さに比例する時間がかかった
+    expect(ms).toBeLessThan(4_000);
+  }, 60_000);
 });

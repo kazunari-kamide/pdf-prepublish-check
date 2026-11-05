@@ -29,13 +29,14 @@ import {
 import { InflateLimitError, beginLoadMeter, decodeStream, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { unusedForms } from "./unused-forms.ts";
-import { allPresent, contentBlocks, xmpTokens } from "./compare.ts";
+import { contentBlocks, findPresent, xmpTokens } from "./compare.ts";
 import { decryptDefinitions, expandObjectStream, hasEncryptMarker, isMaskedObjStm, maskObjectStreams, unmaskObjectStream } from "./decrypt.ts";
 
 export const RULE_ID = "p5-revisions";
 // 1.3.1：解くと大きすぎるオブジェクトストリーム（圧縮の爆弾）で止まったら、黙って中身を落とさず「大きすぎるため調べていません」にする
 // 1.4.0：前の版の残りごとに、今の版と字の中身を比べた結果（compare）を返す（実物の PDF で、同じ中身の残りが「高」で多く出たため。2026-11-05）
-export const RULE_VERSION = "1.4.0";
+// 1.4.1：比べる処理を速くした（結果は 1.4.0 と同じ）
+export const RULE_VERSION = "1.4.1";
 
 export type P5Where = "superseded" | "free" | "unreferenced" | "orphan";
 /** unused_form（1.3.0 から）＝いまの版のページの資源にあるが、どこからも描かれない部品（Form XObject）で、字を描く命令を持つもの */
@@ -538,12 +539,14 @@ type Corpus = {
   dictJoined: string;
   /** ページの中身・部品の字（BT〜ET ごとの字をつないだもの） */
   content: string;
+  /** BT〜ET ごとの字（先に引く近道） */
+  contentSet: Set<string>;
   /** 今の版の中身をすべて読めたか（読めなかったときは、見つからなくても「違う」と言い切らない） */
   contentOk: boolean;
   xmpSet: Set<string>;
   xmpJoined: string;
-  /** 画像・添付などのストリームの中身（長さごと） */
-  streamsByLength: Map<number, Uint8Array[]>;
+  /** 画像・添付などのストリームの中身（長さと要約の値ごと） */
+  streamsByDigest: Map<string, Uint8Array[]>;
 };
 
 /** 比べのために読む、今の版の中身の大きさの上限（固まらないため） */
@@ -583,7 +586,7 @@ function currentCorpus(live: Map<number, Def>, reachable: Set<number>): Corpus {
   const dict: string[] = [];
   const blocks: string[] = [];
   const xmp: string[] = [];
-  const streamsByLength = new Map<number, Uint8Array[]>();
+  const streamsByDigest = new Map<string, Uint8Array[]>();
   let contentOk = true;
   let size = 0;
   const pushDict = (o: PDFObject, depth = 0): void => {
@@ -607,9 +610,10 @@ function currentCorpus(live: Map<number, Def>, reachable: Set<number>): Corpus {
     if (o instanceof PDFStream) {
       pushDict(o.dict);
       if (!(o instanceof PDFRawStream)) continue;
-      const list = streamsByLength.get(o.contents.length);
+      const dg = digest(o.contents);
+      const list = streamsByDigest.get(dg);
       if (list) list.push(o.contents);
-      else streamsByLength.set(o.contents.length, [o.contents]);
+      else streamsByDigest.set(dg, [o.contents]);
       const isXmp = o.dict.get(K.Type) === K.Metadata;
       if (!isXmp && !maybeContent(o)) continue;
       if (o.contents.length > LIMITS.streamBytes || size > CORPUS_LIMIT) {
@@ -626,12 +630,12 @@ function currentCorpus(live: Map<number, Def>, reachable: Set<number>): Corpus {
       }
       size += raw.length;
       if (isXmp) {
-        xmp.push(...xmpTokens(new TextDecoder("utf-8").decode(raw)));
+        for (const t of xmpTokens(new TextDecoder("utf-8").decode(raw))) xmp.push(t);
         continue;
       }
       if (partBySignature(raw)) continue;
       const text = latin1.decode(raw);
-      if (hasTextOperators(text)) blocks.push(...contentBlocks(text));
+      if (hasTextOperators(text)) for (const b of contentBlocks(text)) blocks.push(b);
     } else {
       pushDict(o);
     }
@@ -640,43 +644,48 @@ function currentCorpus(live: Map<number, Def>, reachable: Set<number>): Corpus {
     dictSet: new Set(dict),
     dictJoined: dict.join("\n"),
     content: blocks.join(""),
+    contentSet: new Set(blocks),
     contentOk,
     xmpSet: new Set(xmp),
     xmpJoined: xmp.join("\n"),
-    streamsByLength,
+    streamsByDigest,
   };
 }
 
 const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
 
-/** 前の版の1つの定義を、今の版と比べる */
-function compareWithCurrent(d: Def, kind: P5Kind, cur: Corpus, resolve: (o: PDFObject | undefined) => PDFObject | undefined): P5Compare {
+/** バイト列の要約の値（長さと FNV-1a）。同じ中身の候補を引くため */
+function digest(b: Uint8Array): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i]!, 0x01000193);
+  return `${b.length}:${h >>> 0}`;
+}
+
+/** 探す先：content＝ページの中身の字、dict＝辞書の字、xmp＝XMP と辞書の字 */
+type Haystack = "content" | "dict" | "xmp";
+type Prepared = { result: P5Compare } | { hay: Haystack; tokens: string[] };
+
+/** 前の版の1つの定義から、比べる字を取り出す（画像・添付・読めないものは、ここで結果を決める） */
+function prepareCompare(d: Def, kind: P5Kind, cur: Corpus, resolve: (o: PDFObject | undefined) => PDFObject | undefined): Prepared {
   const o = d.obj;
-  const inDicts = (tokens: string[]): P5Compare => (allPresent(tokens, cur.dictSet, cur.dictJoined) ? "same" : "differs");
   if (kind === "image" || kind === "embedded_file") {
-    if (!(o instanceof PDFRawStream)) return "uncompared";
-    return (cur.streamsByLength.get(o.contents.length) ?? []).some((b) => sameBytes(b, o.contents)) ? "same" : "differs";
+    if (!(o instanceof PDFRawStream)) return { result: "uncompared" };
+    return { result: (cur.streamsByDigest.get(digest(o.contents)) ?? []).some((b) => sameBytes(b, o.contents)) ? "same" : "differs" };
   }
   if (kind === "content" || kind === "metadata") {
-    if (!(o instanceof PDFRawStream) || o.contents.length > LIMITS.streamBytes) return "uncompared";
+    if (!(o instanceof PDFRawStream) || o.contents.length > LIMITS.streamBytes) return { result: "uncompared" };
     let raw: Uint8Array;
     try {
       raw = decodeStream(o);
     } catch (e) {
       rethrowIfInflateLimit(e);
-      return "uncompared";
+      return { result: "uncompared" };
     }
-    if (kind === "metadata") {
-      const tokens = xmpTokens(new TextDecoder("utf-8").decode(raw));
-      const set = new Set([...cur.xmpSet, ...cur.dictSet]);
-      return allPresent(tokens, set, `${cur.xmpJoined}\n${cur.dictJoined}`) ? "same" : "differs";
-    }
+    if (kind === "metadata") return { hay: "xmp", tokens: xmpTokens(new TextDecoder("utf-8").decode(raw)) };
     // 空白だけの字は比べない
-    const tokens = contentBlocks(latin1.decode(raw)).filter((b) => b.replace(/[\s\u0000]/g, "") !== "");
-    if (tokens.every((t) => cur.content.includes(t))) return "same";
-    return cur.contentOk ? "differs" : "uncompared";
+    return { hay: "content", tokens: contentBlocks(latin1.decode(raw)).filter((b) => b.replace(/[\s\u0000]/g, "") !== "") };
   }
-  if (!(o instanceof PDFDict)) return "uncompared";
+  if (!(o instanceof PDFDict)) return { result: "uncompared" };
   const tokens: string[] = [];
   if (kind === "info") {
     for (const [k, v] of o.entries()) {
@@ -698,8 +707,42 @@ function compareWithCurrent(d: Def, kind: P5Kind, cur: Corpus, resolve: (o: PDFO
     }
   } else if (kind === "dict_text") {
     stringTokens(o, tokens, NOT_COUNTED_TEXT_KEYS);
-  } else return "uncompared";
-  return inDicts(tokens);
+  } else return { result: "uncompared" };
+  return { hay: "dict", tokens };
+}
+
+/**
+ * 前の版の残りをまとめて、今の版と比べる（1.4.1 から）。
+ * 前の版の字を探す先ごとにまとめ、先に Set で引き、残りは探す先を1回だけなめて探す（compare.ts の findPresent）。
+ * 字が今の版のどこかに（部分としてでも）すべてあれば same。結果は 1つずつ includes で探したときと同じ。
+ * 探す字が多すぎて探さなかったときは uncompared
+ */
+function compareAll(items: Array<{ f: P5Finding; d: Def }>, cur: Corpus, resolve: (o: PDFObject | undefined) => PDFObject | undefined): void {
+  const xmpSet = new Set([...cur.xmpSet, ...cur.dictSet]);
+  const hay: Record<Haystack, { set: Set<string>; text: () => string; need: Set<string>; found: Set<string> | null }> = {
+    content: { set: cur.contentSet, text: () => cur.content, need: new Set(), found: null },
+    dict: { set: cur.dictSet, text: () => cur.dictJoined, need: new Set(), found: null },
+    xmp: { set: xmpSet, text: () => `${cur.xmpJoined}\n${cur.dictJoined}`, need: new Set(), found: null },
+  };
+  const prepared = items.map(({ f, d }) => ({ f, p: prepareCompare(d, f.kind, cur, resolve) }));
+  for (const { p } of prepared) {
+    if ("result" in p) continue;
+    const h = hay[p.hay];
+    for (const t of p.tokens) if (!h.set.has(t)) h.need.add(t);
+  }
+  for (const h of Object.values(hay)) if (h.need.size) h.found = findPresent(h.need, h.text());
+  for (const { f, p } of prepared) {
+    if ("result" in p) {
+      f.compare = p.result;
+      continue;
+    }
+    const h = hay[p.hay];
+    const missing = p.tokens.filter((t) => !h.set.has(t));
+    if (missing.length === 0) f.compare = "same";
+    else if (h.found === null) f.compare = "uncompared";
+    else if (missing.every((t) => h.found!.has(t))) f.compare = "same";
+    else f.compare = p.hay === "content" && !cur.contentOk ? "uncompared" : "differs";
+  }
 }
 
 // ---------------------------------------------------------------- 本体
@@ -865,7 +908,7 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
   // 今の版との比べ（1.4.0 から）
   if (toCompare.length) {
     const current = currentCorpus(live, reachable);
-    for (const { f, d } of toCompare) f.compare = compareWithCurrent(d, f.kind, current, resolve);
+    compareAll(toCompare, current, resolve);
   }
   // 資源にあるが描かれない部品（1.3.0 から。unused-forms.ts）。いまの版のページからたどる
   const pages: PDFDict[] = [];

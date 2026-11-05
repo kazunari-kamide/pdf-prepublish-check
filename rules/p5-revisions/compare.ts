@@ -129,7 +129,89 @@ export function xmpTokens(xml: string): string[] {
   return out;
 }
 
-/** 前の版の字（tokens）が、今の版の字（set か、つないだ文字列）にすべてあるか */
+/** 前の版の字（tokens）が、今の版の字（set か、つないだ文字列）にすべてあるか（1つずつ探す。小さな比べ・テスト用） */
 export function allPresent(tokens: string[], set: Set<string>, joined: string): boolean {
   return tokens.every((t) => set.has(t) || joined.includes(t));
+}
+
+/** 一度に探す字の合計の上限（文字の数）。超えたら探さない（null を返す） */
+export const MAX_NEEDLE_CHARS = 2_000_000;
+
+/**
+ * needles のうち、haystack の中に（部分として）現れるものの集まりを返す（1.4.1 から）。
+ * 1つずつ haystack.includes で探すと、needles の数 × haystack の長さの時間がかかるので、
+ * 全部の needles から1つの自動機械（Aho–Corasick）を作り、haystack を頭から1回だけなめる。
+ * かかる時間は、needles の字の合計と haystack の長さにほぼ比例する。結果は includes で1つずつ探したときと同じ。
+ * needles の字の合計が maxChars を超えたら null（探さない）
+ */
+export function findPresent(needles: Iterable<string>, haystack: string, maxChars = MAX_NEEDLE_CHARS): Set<string> | null {
+  const list = [...new Set(needles)];
+  const found = new Set<string>();
+  let total = 0;
+  for (const n of list) total += n.length;
+  if (total > maxChars) return null;
+  // 木を作る。go の鍵は「節の番号 × 65536 ＋ 字の符号（UTF-16 の単位）」
+  const go = new Map<number, number>();
+  const out: number[][] = [[]]; // 節ごとに、そこで終わる needle の番号
+  const step = (node: number, c: number) => go.get(node * 65536 + c);
+  let nodes = 1;
+  list.forEach((n, id) => {
+    if (n === "") {
+      found.add(n);
+      return;
+    }
+    let node = 0;
+    for (let i = 0; i < n.length; i++) {
+      const key = node * 65536 + n.charCodeAt(i);
+      let next = go.get(key);
+      if (next === undefined) {
+        next = nodes++;
+        go.set(key, next);
+        out.push([]);
+      }
+      node = next;
+    }
+    out[node]!.push(id);
+  });
+  // 失敗のつなぎ（幅優先）と、出力のつなぎ（そこから失敗をたどって最初に出会う、needle の終わる節）
+  const fail = new Int32Array(nodes);
+  const outLink = new Int32Array(nodes).fill(-1);
+  const children: Array<Array<[number, number]>> = Array.from({ length: nodes }, () => []);
+  for (const [key, child] of go) children[Math.floor(key / 65536)]!.push([key % 65536, child]);
+  const queue: number[] = [];
+  for (const [, child] of children[0]!) {
+    fail[child] = 0;
+    queue.push(child);
+  }
+  for (let qi = 0; qi < queue.length; qi++) {
+    const node = queue[qi]!;
+    for (const [c, child] of children[node]!) {
+      let f = fail[node]!;
+      while (f !== 0 && step(f, c) === undefined) f = fail[f]!;
+      const g = step(f, c);
+      fail[child] = g !== undefined && g !== child ? g : 0;
+      const fc = fail[child]!;
+      outLink[child] = out[fc]!.length ? fc : outLink[fc]!;
+      queue.push(child);
+    }
+  }
+  // haystack を1回なめる。出力をたどるのは、まだ印を付けていない節だけ（同じ節を何度もたどらない）
+  const marked = new Uint8Array(nodes);
+  let node = 0;
+  for (let i = 0; i < haystack.length; i++) {
+    const c = haystack.charCodeAt(i);
+    let next = step(node, c);
+    while (next === undefined && node !== 0) {
+      node = fail[node]!;
+      next = step(node, c);
+    }
+    node = next ?? 0;
+    for (let v = node; v > 0 && !marked[v]; v = outLink[v]!) {
+      marked[v] = 1;
+      for (const id of out[v]!) found.add(list[id]!);
+      if (outLink[v]! < 0) break;
+    }
+    if (found.size === list.length) break;
+  }
+  return found;
 }
