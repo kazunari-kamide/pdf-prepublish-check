@@ -82,16 +82,37 @@ function searchBox(): string {
   ].join("\n");
 }
 
+/**
+ * 見出しまわりの立体感のある飾り（2026-11-05 本人が承認）。はじめは CSS の版（傾けた紙の束）を出し、
+ * 読み込み役（site-3d.js）が、手が空いてから 3D の描画（data-scene）に入れ替える。飾りなので読み上げない。
+ */
+function hero(o: RenderOptions): string[] {
+  const title = `<h1>${e(ARTICLES_META.title)}</h1>`;
+  const lead = `<p class="site-lead">${e(ARTICLES_META.description)}</p>`;
+  if (!o.hero) return [`      ${title}`, `      ${lead}`];
+  return [
+    `      <div class="site-hero" data-scene="${e(o.hero.scene)}">`,
+    `        <div class="site-hero-text">`,
+    `          ${title}`,
+    `          ${lead}`,
+    `        </div>`,
+    `        <div class="site-hero-3d" aria-hidden="true">`,
+    `          <div class="site-stack"><span class="site-sheet"></span><span class="site-sheet"></span><span class="site-sheet"><i></i><i class="site-sheet-bar"></i><i></i><i class="site-sheet-short"></i><i></i></span><span class="site-badge">✓</span></div>`,
+    `        </div>`,
+    `      </div>`,
+  ];
+}
+
 export function renderArticleIndex(o: RenderOptions): string {
   const body = [
-    `      <h1>${e(ARTICLES_META.title)}</h1>`,
-    `      <p class="site-lead">${e(ARTICLES_META.description)}</p>`,
+    ...hero(o),
     ...(o.searchScript ? [searchBox()] : []),
     tagNav(),
     ...list("型の解説", ARTICLES.filter((a) => a.pattern), o),
     ...list("正しいやり方の手順", ARTICLES.filter((a) => !a.pattern), o),
     toInspector(),
     ...(o.searchScript ? [`      <script type="module" src="${e(o.searchScript)}"></script>`] : []),
+    ...(o.hero ? [`      <script type="module" src="${e(o.hero.loader)}"></script>`] : []),
   ].join("\n");
   return layout(ARTICLES_META, body, o);
 }

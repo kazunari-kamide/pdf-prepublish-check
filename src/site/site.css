@@ -57,9 +57,9 @@ body.site {
 }
 
 .site :focus-visible {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-offset);
-  box-shadow: var(--focus-halo);
+  /* 1 色の線（黄と黒の 2 重にしない。2026-11-05 本人）。色・太さ・離し方は design/sheet.css（B の #107：墨 900・3px・3px） */
+  outline: var(--bw-focus, 3px) solid var(--focus-ring);
+  outline-offset: var(--focus-gap, 3px);
 }
 
 /* 押せる所は、どれも指の形のカーソル（チェックボックスとその字も。ブラウザの既定では指にならない） */
@@ -276,7 +276,7 @@ body.site {
 
 /* ---- 記事の一覧・タグのページ（記事の札 .site-cards があるページ）：ページの地を薄い色（へこんだ台）にし、白い札を並べる
  * 上の帯は白のまま、下の帯は薄い地のまま。札は浮いた欄（白・枠・影 1 段） */
-body.site:has(.site-cards) {
+html:has(.site-cards) {
   background: var(--surface-sunken);
 }
 
@@ -692,6 +692,313 @@ body.site:has(.site-cards) {
   list-style: disc;
 }
 
+/* ================================================================ 立体感（2026-11-05 本人の頼み「もっとリッチに」）
+ * 影は墨を薄くして何層か重ね（--shadow-*）、ホバーで少し浮き、押すと沈む。値は design/sheet.css。
+ * 動きを減らす設定の人には、浮く・傾く・ゆっくり浮く・にじみの動きを出さない（この節のいちばん下の @media）。 */
+
+/* ---- ページの地のごく薄い色のにじみ（紅・緑・墨を 4〜5% に薄めたもの）。ゆっくり動く（2026-11-05 本人の頼み） */
+body.site {
+  position: relative;
+  isolation: isolate;
+}
+
+body.site::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 32% at 18% 12%, rgb(163 32 27 / 5%), transparent 70%),
+    radial-gradient(34% 38% at 86% 28%, rgb(47 111 94 / 5%), transparent 70%),
+    radial-gradient(46% 36% at 55% 96%, rgb(43 42 40 / 4%), transparent 70%);
+  animation: site-drift 48s ease-in-out infinite alternate;
+}
+
+@keyframes site-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(3%, -2%, 0);
+  }
+}
+
+/* ---- タグ・型の番号：角の丸い札（ピル）。白からごく薄い墨へのふくらみと、やわらかい影 */
+.site-tag {
+  border-color: var(--ink-300);
+  background: linear-gradient(var(--surface-card), var(--ink-50));
+  box-shadow: var(--shadow-pill);
+  transition: transform var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out), border-color var(--dur-hover);
+}
+
+.site a.site-tag:hover {
+  transform: translateY(var(--lift-pill));
+  box-shadow: var(--shadow-lift);
+  border-color: var(--line-control);
+  background: linear-gradient(var(--surface-card), var(--ink-50));
+}
+
+.site a.site-tag:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-press);
+}
+
+/* 選んでいるタグ：墨の地に白の字と「✓」（色だけで示さない） */
+.site-tag[aria-current="page"] {
+  background: var(--surface-strong);
+  border-color: var(--surface-strong);
+  color: var(--text-on-strong);
+  box-shadow: var(--shadow-pill);
+}
+
+.site-tag[aria-current="page"]::before {
+  content: "✓ ";
+}
+
+/* ---- 記事の札：重ねた影で奥行き。ホバーで少し浮き、図が少し動く */
+.site-cards > li.card {
+  border-color: rgb(43 42 40 / 8%);
+  box-shadow: var(--shadow-rest);
+  transition: transform var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+}
+
+.site-cards > li.card:last-child {
+  border-bottom-color: rgb(43 42 40 / 8%);
+}
+
+.site-cards > li.card:hover,
+.site-cards > li.card:focus-within {
+  transform: translateY(var(--lift-card));
+  box-shadow: var(--shadow-lift);
+}
+
+.site-cards .card-figure {
+  transition: transform 0.35s var(--ease-out);
+}
+
+.site-cards > li.card:hover .card-figure {
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* ---- 欄（タグの絞り込み・検査のページへのつなぎ・点検の一覧のカード）：重ねた影 */
+.site-tag-nav,
+.site-steps-card {
+  border-color: rgb(43 42 40 / 8%);
+  box-shadow: var(--shadow-rest);
+}
+
+.site-steps-card {
+  transition: box-shadow var(--dur-hover) var(--ease-out);
+}
+
+.site-steps-card:hover {
+  box-shadow: var(--shadow-lift);
+}
+
+.site-cta {
+  box-shadow: var(--shadow-rest);
+}
+
+.site-step-no {
+  background: radial-gradient(circle at 35% 30%, var(--ink-700), var(--ink-900) 70%);
+  box-shadow: 0 2px 4px rgb(43 42 40 / 25%);
+}
+
+/* ---- ボタン：ふくらみと影。ホバーで浮き、押すと沈む */
+.site .site-cta-link {
+  background: linear-gradient(var(--ink-800), var(--ink-900));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), var(--shadow-rest);
+  transition: transform var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+}
+
+.site .site-cta-link:hover {
+  background: linear-gradient(var(--ink-800), var(--ink-900));
+  transform: translateY(var(--lift-pill));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), var(--shadow-lift);
+}
+
+.site .site-cta-link:active {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-press);
+}
+
+/* ---- 入力欄（サイトのすべての字を入れる欄）：角を丸め、内側に薄いへこみ */
+.site input:not([type="checkbox"]):not([type="radio"]),
+.site textarea,
+.site select {
+  min-height: 48px;
+  padding: 0 var(--sp-4);
+  font: inherit;
+  color: var(--text-strong);
+  background: var(--surface-card);
+  border: var(--bw-2) solid var(--line-control);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-inset);
+  transition: border-color var(--dur-hover);
+}
+
+.site textarea {
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-l);
+}
+
+.site input:not([type="checkbox"]):not([type="radio"]):hover,
+.site textarea:hover,
+.site select:hover {
+  border-color: var(--line-strong);
+}
+
+/* ---- 記事の一覧の見出しまわりの飾り（はじめは CSS の版。3D が描けたら .is-3d で入れ替える） */
+.site-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-4);
+  align-items: center;
+  margin: 0 0 var(--sp-5);
+}
+
+.site-hero .site-lead {
+  margin-bottom: 0;
+}
+
+.site-hero-3d {
+  position: relative;
+  width: 13rem;
+  height: 11rem;
+  perspective: 700px;
+}
+
+.site-hero-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.site-hero.is-3d .site-stack {
+  display: none;
+}
+
+.site-stack {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6.5rem;
+  height: 8rem;
+  margin: -4rem 0 0 -3.25rem;
+  transform-style: preserve-3d;
+  transform: rotateX(52deg) rotateZ(-38deg);
+  animation: site-float 6s ease-in-out infinite;
+}
+
+.site-sheet {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: var(--surface-card);
+  border: 1px solid var(--ink-300);
+  box-shadow: 0 1px 0 var(--ink-300), 0 18px 24px rgb(43 42 40 / 14%);
+}
+
+.site-sheet:nth-child(1) {
+  background: var(--ink-50);
+}
+
+.site-sheet:nth-child(2) {
+  transform: translateZ(12px);
+}
+
+.site-sheet:nth-child(3) {
+  transform: translateZ(24px);
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  padding: 0.8rem 0.7rem;
+}
+
+.site-sheet i {
+  display: block;
+  height: 0.3rem;
+  border-radius: 3px;
+  background: var(--ink-200);
+}
+
+.site-sheet i.site-sheet-bar {
+  height: 0.55rem;
+  width: 75%;
+  border-radius: 2px;
+  background: var(--ink-900); /* 黒塗りの帯 */
+}
+
+.site-sheet i.site-sheet-short {
+  width: 60%;
+}
+
+.site-badge {
+  position: absolute;
+  right: -0.8rem;
+  top: -0.6rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-on-strong);
+  font-weight: var(--fw-strong);
+  transform: translateZ(54px) rotateZ(38deg) rotateX(-52deg);
+  background: radial-gradient(circle at 35% 30%, #4b8a78, var(--midori-700) 65%);
+  box-shadow: 0 10px 16px rgb(36 87 72 / 30%);
+}
+
+@keyframes site-float {
+  0%,
+  100% {
+    transform: rotateX(52deg) rotateZ(-38deg) translateZ(0);
+  }
+  50% {
+    transform: rotateX(52deg) rotateZ(-38deg) translateZ(10px);
+  }
+}
+
+/* 動きを減らす設定の人には、動き（浮く・傾く・ゆっくり浮く・にじみの動き）を出さない。影と形だけ残す */
+@media (prefers-reduced-motion: reduce) {
+  body.site::before,
+  .site-stack {
+    animation: none;
+  }
+
+  .site-tag,
+  .site-cards > li.card,
+  .site-cards .card-figure,
+  .site-steps-card,
+  .site .site-cta-link {
+    transition: none;
+  }
+
+  .site a.site-tag:hover,
+  .site a.site-tag:active,
+  .site-cards > li.card:hover,
+  .site-cards > li.card:focus-within,
+  .site-cards > li.card:hover .card-figure,
+  .site .site-cta-link:hover,
+  .site .site-cta-link:active {
+    transform: none;
+  }
+}
+
+@media (max-width: 40rem) {
+  .site-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-hero-3d {
+    width: 100%;
+    max-width: 13rem;
+    height: 9rem;
+  }
+}
+
 @media (max-width: 40rem) {
   :root {
     --site-gutter: var(--sp-4);
@@ -731,8 +1038,14 @@ body.site:has(.site-cards) {
   }
 
   .site-cta,
-  .site-figure {
+  .site-figure,
+  .site-steps-card {
     box-shadow: none;
+  }
+
+  body.site::before,
+  .site-hero-3d {
+    display: none;
   }
 
   /* 点検の一覧：紙では □ の形で出す（チェックボックスの見た目はブラウザごとに違うため、枠の四角に置きかえる） */

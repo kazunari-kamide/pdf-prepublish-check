@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { Plugin } from "vite";
+import { build as viteBuild, type Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
 import { OFFICIAL_ORIGIN } from "./htaccess.ts";
 import { faviconHref, inlineMark } from "./logo.ts";
@@ -93,6 +93,43 @@ export function searchScript(): { file: string; source: string } {
   return { file: `assets/article-search-${createHash("sha256").update(source).digest("hex").slice(0, 10)}.js`, source };
 }
 
+/**
+ * 記事の一覧の見出しまわりの 3D の飾り（2026-11-05 本人が承認）。
+ * - loader：あとから 3D を読む小さな役（src/site/site-3d.js。そのまま置く）
+ * - scene：three.js で形を組み立てて描くファイル（src/site/omamori-3d-scene.js を、three.js と一緒に束ねて縮めたもの）
+ * scene の名前は、元のファイルと three.js の版から決める（束ねる前に、HTML に書く名前が要るため）
+ */
+export function heroScripts(): { loader: { file: string; source: string }; scene: { file: string; entry: string } } {
+  const loader = readFileSync(path.join(ROOT, "src", "site", "site-3d.js"), "utf8");
+  const entry = path.join(ROOT, "src", "site", "omamori-3d-scene.js");
+  const three = JSON.parse(readFileSync(path.join(ROOT, "node_modules", "three", "package.json"), "utf8")) as { version: string };
+  const sceneHash = createHash("sha256").update(readFileSync(entry, "utf8")).update(`three@${three.version}`).digest("hex").slice(0, 10);
+  return {
+    loader: { file: `assets/site-3d-${createHash("sha256").update(loader).digest("hex").slice(0, 10)}.js`, source: loader },
+    scene: { file: `assets/omamori-3d-${sceneHash}.js`, entry },
+  };
+}
+
+/** 3D の飾りの scene を、three.js と一緒に 1 つの ES モジュールに束ねて縮める（ビルドと、開発のサーバーで使う） */
+export async function buildHeroScene(entry = heroScripts().scene.entry): Promise<string> {
+  const out = await viteBuild({
+    configFile: false,
+    logLevel: "silent",
+    publicDir: false,
+    build: {
+      write: false,
+      minify: true,
+      target: "es2022",
+      emptyOutDir: false,
+      lib: { entry, formats: ["es"], fileName: () => "omamori-3d.js" },
+    },
+  });
+  const outputs = (Array.isArray(out) ? out : [out]) as Array<{ output?: Array<{ type: string; code?: string }> }>;
+  const chunk = outputs.flatMap((o) => o.output ?? []).find((c) => c.type === "chunk");
+  if (!chunk?.code) throw new Error("3D の飾り（omamori-3d-scene.js）を束ねられませんでした");
+  return chunk.code;
+}
+
 /** dist/ に置く字でないファイル（記事の図）。鍵は dist/ の中の名前 */
 export function siteBinaryFiles(): Map<string, Uint8Array> {
   return buildFigures().files;
@@ -114,9 +151,12 @@ export function siteFiles(): Map<string, string> {
     brandMark: inlineMark("mark", "site-brand-mark"), // 帯は白の地（design/sheet.md）なので、明るい地のマーク
   };
   const files = renderSite({ ...options, figures: figures.assets });
-  // 記事の一覧（検索のスクリプトを読む）と、タグごとの一覧のページ
-  for (const [name, page] of renderIndexPages({ ...options, figures: figures.assets, searchScript: `/${search.file}` })) files.set(name, page);
+  // 記事の一覧（検索のスクリプトと、3D の飾りの読み込み役を読む）と、タグごとの一覧のページ
+  const hero = heroScripts();
+  const heroOption = { scene: `/${hero.scene.file}`, loader: `/${hero.loader.file}` };
+  for (const [name, page] of renderIndexPages({ ...options, figures: figures.assets, searchScript: `/${search.file}`, hero: heroOption })) files.set(name, page);
   files.set(search.file, search.source);
+  files.set(hero.loader.file, hero.loader.source); // scene は束ねるのに時間がかかるので、generateBundle と開発のサーバーで作る
   const licenses = buildLicenses(ROOT);
   for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);
   for (const [name, text] of licenses.files) files.set(name, text);
@@ -156,8 +196,9 @@ export function sitePages(): Plugin {
         return { html: html.replace(/<title>[^<]*<\/title>/, head), tags: meta ? [{ tag: "meta", attrs: meta, injectTo: "head" }] : [] };
       },
     },
-    generateBundle() {
+    async generateBundle() {
       for (const [fileName, source] of siteFiles()) this.emitFile({ type: "asset", fileName, source });
+      this.emitFile({ type: "asset", fileName: heroScripts().scene.file, source: await buildHeroScene() });
       this.emitFile({ type: "asset", fileName: OG_IMAGE_PATH.slice(1), source: ogImage() });
       for (const [fileName, source] of siteBinaryFiles()) this.emitFile({ type: "asset", fileName, source });
     },
@@ -170,6 +211,16 @@ export function sitePages(): Plugin {
           return res.end(ogImage());
         }
         const key = name.replace(/^\//, "");
+        if (key === heroScripts().scene.file) {
+          buildHeroScene().then(
+            (code) => {
+              res.setHeader("Content-Type", TYPES[".js"] ?? "text/javascript");
+              res.end(code);
+            },
+            (err: unknown) => next(err),
+          );
+          return;
+        }
         const body = name === "/index.html" ? undefined : (siteFiles().get(key) ?? siteBinaryFiles().get(key));
         if (body === undefined) return next();
         res.setHeader("Content-Type", TYPES[path.extname(name)] ?? "application/octet-stream");
