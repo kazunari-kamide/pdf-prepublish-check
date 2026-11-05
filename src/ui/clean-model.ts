@@ -124,7 +124,8 @@ export function buildCleanView(input: {
   const chosen = chosenFields(input.properties);
   const chosenRows = after ? after.rows.filter((r) => CHOSEN_PATTERNS.includes(r.pattern) && r.field !== undefined && chosen.has(r.field)).length : 0;
   const left = after ? after.rows.length - candidateRows - chosenRows : null;
-  const afterClean = after ? after.clean || (left === 0 && after.unchecked.length === 0 && after.notices.length === 0) : false;
+  // 字のないページのお知らせ（no_text）は数えない：整えると見えない字が消えて、字のないページになることがあるため（2026-11-06）
+  const afterClean = after ? after.clean || (left === 0 && after.unchecked.length === 0 && after.notices.length - (after.noTextNotices ?? 0) === 0) : false;
   let verdict: CleanView["verdict"];
   let headline: string;
   if (left === null) {

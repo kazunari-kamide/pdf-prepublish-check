@@ -29,7 +29,7 @@ import { TooManyOperations, extractText, pageContent, type ExtractSettings, type
 export const RULE_ID = "pii";
 // 0.1.2：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
 // 0.1.3：設定 includeText を足す（渡したときだけ、見つけた字そのものを 1 件ごとに返す。既定は返さない）
-export const RULE_VERSION = "0.1.3";
+export const RULE_VERSION = "0.1.4";
 
 export { PII_TYPES, type PiiType, type Confidence, type Basis, type ExcludeReason };
 export type { Rect };
@@ -91,6 +91,8 @@ export type PiiReport = {
   unreadable: { pages: number[]; glyphs: number };
   /** 字が多すぎて途中までしか読まなかったページ */
   truncatedPages: number[];
+  /** 字が 1 つもないページ（スキャンした画像だけのページなど）。ここは個人情報らしい字を探せていない（0.1.4 から） */
+  noTextPages: number[];
 };
 
 /** includeText：見つけた字そのものを、1件ごとに text として返す（ほかのルールと同じ名前と形。既定は返さない） */
@@ -226,6 +228,7 @@ export async function detectPii(bytes: Uint8Array, options: DetectOptions = {}):
     skippedPages: [],
     unreadable: { pages: [], glyphs: 0 },
     truncatedPages: [],
+    noTextPages: [],
   };
   const loaded = await loadPdf(bytes);
   if (loaded.status !== "ok") {
@@ -264,6 +267,8 @@ export async function detectPii(bytes: Uint8Array, options: DetectOptions = {}):
         report.unreadable.glyphs += text.unreadable;
       }
       if (text.truncated) report.truncatedPages.push(pageNo);
+      // 字が 1 つもない（読み取れない字もない）ページ：スキャンの画像だけなど。探す字がないので、探せていないと知らせる
+      if (text.glyphs.length === 0 && text.unreadable === 0) report.noTextPages.push(pageNo);
       const r = scanGlyphs(text.glyphs, settings, { includeText: options.includeText === true });
       for (const f of r.findings) report.findings.push({ ...f, page: pageNo });
       for (const e of r.excluded) report.excluded[e.reason]++;
