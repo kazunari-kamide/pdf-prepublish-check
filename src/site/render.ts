@@ -160,7 +160,8 @@ export function renderArticle(a: Article, o: RenderOptions): string {
   const e = escapeHtml;
   const kicker = a.pattern ? `型の解説・${a.pattern}` : "正しいやり方の手順";
   const body = [
-    `      <article class="site-article">`,
+    // data-article は、記事の一覧の札から移るときの動き（motion.ts の view-transition-name）を当てるための印
+    `      <article class="site-article" data-article="${e(a.slug)}">`,
     `      <p class="site-kicker">${e(kicker)}</p>`,
     `      <h1>${e(a.title)}</h1>`,
     `      <p class="site-lead">${e(a.description)}</p>`,

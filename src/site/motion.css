@@ -1,0 +1,88 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * サイトのページ（記事の一覧・タグのページ・各記事）の動き。持ち場 G。site.css の後につなぐ（site.ts の siteCss）。
+ * - ページを移るとき：@view-transition で、ふわっと切り替える。札（記事）の名前は記事ごとに決まっているので、
+ *   タグのページ同士・一覧と記事のあいだで、同じ記事の札が滑って入れ替わる。名前は、ビルドの時に motion.ts が記事の一覧から作って、この後につなぐ。
+ * - 記事の一覧のページの中で絞り込むとき：article-search.js が document.startViewTransition を使う（あれば）。
+ * - 動きを減らす設定（prefers-reduced-motion: reduce）の人には、動きを出さない。動かないブラウザでは、今までどおり普通に移る。
+ * - 動きは 0.3 秒前後で、札がふわっと入れ替わる程度にとどめる。
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
+/* 動きの長さと、ゆるみ（初めは速く、終わりはゆっくり） */
+::view-transition-group(*) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+}
+
+/* 新しく出る札は、少し下から浮かび上がる。消える札は、少し縮んで消える（入れ替わる札は、そのまま滑る） */
+.card {
+  view-transition-class: site-card;
+}
+
+::view-transition-new(.site-card):only-child {
+  animation: site-card-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+::view-transition-old(.site-card):only-child {
+  animation: site-card-out 160ms ease-in both;
+}
+
+@keyframes site-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+
+@keyframes site-card-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+/* 上の帯とタグの並びは、ページを移っても動かさない（中身だけが入れ替わって見える） */
+.site-band {
+  view-transition-name: site-band;
+}
+
+.site-tag-nav {
+  view-transition-name: site-tag-nav;
+}
+
+/* ---- その場の絞り込みで選んでいるタグ（article-search.js が aria-current を付ける）。
+ * 色だけで示さないよう、✓ と太字だけを足す。札の形・地の色・指を置いたとき・フォーカスの印は D の持ち場（site.css・design/）なので、ここでは決めない。 */
+.site-tag-nav [aria-current]::before,
+.card-tags [aria-current]::before {
+  content: "✓ ";
+}
+
+.site-tag-nav [aria-current],
+.card-tags [aria-current] {
+  font-weight: bold;
+}
+
+/* 絞り込みで隠した札・節は、並びから外す（ほかの決まりの display に負けないように） */
+.site-cards > .card[hidden],
+[data-search-section][hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
