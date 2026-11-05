@@ -75,7 +75,8 @@ if (htaccess !== null) {
   }
   if (!/^\s*AddType text\/javascript \.mjs\s*$/m.test(htaccess)) problems.push(".htaccess に AddType text/javascript .mjs がありません");
   if (!/^\s*AddType application\/wasm \.wasm\s*$/m.test(htaccess)) problems.push(".htaccess に AddType application/wasm .wasm がありません");
-  if (!/^\s*Header always set Strict-Transport-Security "max-age=\d+[^"]*" "expr=%\{HTTPS\} == 'on'"\s*$/m.test(htaccess)) problems.push(".htaccess に Strict-Transport-Security のヘッダーがありません（https の応答だけに付ける形で）");
+  // HSTS は条件（expr=）を付けずに付ける。配信先では %{HTTPS} が真にならず、条件を付けると黙って付かなくなるため（docs/deploy.md）
+  if (!/^\s*Header always set Strict-Transport-Security "max-age=\d+[^"]*"\s*$/m.test(htaccess)) problems.push(".htaccess に Strict-Transport-Security のヘッダーがありません（条件を付けない形で）");
   const notFound = htaccess.match(/^\s*ErrorDocument 404 \/(\S+)\s*$/m);
   if (!notFound) problems.push(".htaccess に ErrorDocument 404 がありません");
   else if (!existsSync(path.join(DIST, notFound[1]))) problems.push(`.htaccess の ErrorDocument 404 が指す ${notFound[1]} が、dist/ にありません`);
