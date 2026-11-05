@@ -18,9 +18,10 @@
 //
 // 保存の前に、入れた PDF と出来上がった PDF の両方に同じ確かめ（checks）をかけ、種類ごとの残りが1つでも増えたら blocked にする。
 
-import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFName, PDFNumber, PDFObjectCopier, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { PDFArray, PDFBool, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
 import { loadPdf } from "../rules/shared/load.ts";
 import { SETTINGS, makeVisibility, readPageForCheck } from "./content.ts";
+import { onePagePdf } from "./image-sample.ts";
 import { MAX_INPUT_BYTES } from "./index.ts";
 import type { CompressIncrease, CompressOptions, CompressResult, CompressSkip, RedactLeftover } from "./types.ts";
 
@@ -141,22 +142,6 @@ function downsample(src: Uint8Array, w: number, h: number, nw: number, nh: numbe
     }
   }
   return out;
-}
-
-/** 画像1つだけを描いた小さな PDF（片付けの images.ts と同じ形。codec.decode に渡す） */
-async function onePagePdf(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined): Promise<Uint8Array> {
-  const one = await PDFDocument.create({ updateMetadata: false });
-  const copier = PDFObjectCopier.for(ctx, one.context);
-  const copy = copier.copy(stream) as PDFStream;
-  const cs = stream.dict.get(PDFName.of("ColorSpace"));
-  if (cs instanceof PDFName && colorSpaces?.get(cs)) copy.dict.set(PDFName.of("ColorSpace"), copier.copy(colorSpaces.get(cs)!));
-  copy.dict.delete(PDFName.of("SMask"));
-  copy.dict.delete(PDFName.of("Mask"));
-  const ref = one.context.register(copy);
-  const page = one.addPage([1, 1]);
-  page.node.set(PDFName.of("Resources"), one.context.obj({ XObject: { I: ref } }));
-  page.node.set(PDFName.of("Contents"), one.context.register(one.context.stream("q 1 0 0 1 0 0 cm /I Do Q")));
-  return one.save({ useObjectStreams: false });
 }
 
 /** 確かめの残りを、種類ごとの数にまとめる（場所は比べない。小さくすると画像の境の画素がずれるため） */

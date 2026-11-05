@@ -28,17 +28,17 @@ import type { RemovedItem } from "./types.ts";
 
 const N = (s: string) => PDFName.of(s);
 
-function dictOf(ctx: PDFContext, o: PDFObject | undefined): PDFDict | undefined {
+export function dictOf(ctx: PDFContext, o: PDFObject | undefined): PDFDict | undefined {
   const v = o instanceof PDFRef ? ctx.lookup(o) : o;
   if (v instanceof PDFDict) return v;
   if (v instanceof PDFStream) return v.dict;
   return undefined;
 }
-function nameOf(ctx: PDFContext, o: PDFObject | undefined): string | undefined {
+export function nameOf(ctx: PDFContext, o: PDFObject | undefined): string | undefined {
   const v = o instanceof PDFRef ? ctx.lookup(o) : o;
   return v instanceof PDFName ? v.decodeText() : undefined;
 }
-function hasValue(ctx: PDFContext, o: PDFObject | undefined): boolean {
+export function hasValue(ctx: PDFContext, o: PDFObject | undefined): boolean {
   const v = o instanceof PDFRef ? ctx.lookup(o) : o;
   if (v instanceof PDFString || v instanceof PDFHexString) return v.asBytes().some((b) => b !== 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d && b !== 0);
   return v !== undefined;
@@ -71,7 +71,7 @@ export function removeDocInfo(doc: PDFDocument): RemovedItem[] {
 }
 
 /** すべての辞書を1回ずつ見る（文書の根から。参照の輪は1回だけ） */
-function walkDicts(ctx: PDFContext, from: PDFObject[], visit: (d: PDFDict) => void) {
+export function walkDicts(ctx: PDFContext, from: PDFObject[], visit: (d: PDFDict) => void) {
   const seen = new Set<PDFObject>();
   const stack: PDFObject[] = [...from];
   while (stack.length) {
@@ -91,7 +91,7 @@ function walkDicts(ctx: PDFContext, from: PDFObject[], visit: (d: PDFDict) => vo
   }
 }
 
-const rootRefs = (ctx: PDFContext): PDFObject[] => (ctx.trailerInfo.Root ? [ctx.trailerInfo.Root] : []);
+export const rootRefs = (ctx: PDFContext): PDFObject[] => (ctx.trailerInfo.Root ? [ctx.trailerInfo.Root] : []);
 
 /** P2：/Metadata を外す */
 export function removeXmp(ctx: PDFContext): RemovedItem[] {
