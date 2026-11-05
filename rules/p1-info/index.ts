@@ -24,7 +24,7 @@ import {
 import { loadPdf } from "../shared/load.ts";
 
 export const RULE_ID = "p1-info";
-export const RULE_VERSION = "1.2.0";
+export const RULE_VERSION = "1.3.0";
 
 /** 決まった欄（rubric/p1.json の breakdown.standard と同じ並び）。それ以外は独自の欄 */
 export const STANDARD_KEYS = ["Title", "Author", "Subject", "Keywords", "Creator"] as const;
@@ -219,7 +219,9 @@ function currentInfo(doc: PDFDocument, bytes: Uint8Array, segmentStart: number):
   if (t >= 0) {
     try {
       const parsed = PDFObjectParser.forBytes(bytes.subarray(t + TRAILER.length), context).parseObject();
-      if (parsed instanceof PDFDict) infoEntry = parsed.get(PDFName.of("Info"));
+      // 最後の trailer に /Info が無くても、/Prev も無ければ増分更新ではない（線形化した PDF の、ファイルの最後にある
+      // 本体の xref の trailer は /Size だけのことがあり、/Info は先頭の trailer にある）。そのときは pdf-lib の読んだものを使う（1.3.0）
+      if (parsed instanceof PDFDict && (parsed.has(PDFName.of("Info")) || parsed.has(PDFName.of("Prev")))) infoEntry = parsed.get(PDFName.of("Info"));
     } catch {
       // 読めなければ pdf-lib の読んだものを使う
     }
