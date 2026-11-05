@@ -26,7 +26,8 @@ import {
 import { TooManyOperations, extractText, pageContent, type ExtractSettings, type Glyph, type Rect } from "./text.ts";
 
 export const RULE_ID = "pii";
-export const RULE_VERSION = "0.1.1";
+// 0.1.2：設定 includeText を足す（渡したときだけ、見つけた字そのものを 1 件ごとに返す。既定は返さない）
+export const RULE_VERSION = "0.1.2";
 
 export { PII_TYPES, type PiiType, type Confidence, type Basis, type ExcludeReason };
 export type { Rect };
@@ -53,10 +54,15 @@ export type PiiFinding = {
   /** high＝前後の語・表の見出しが型を指している、check＝形は合うが手がかりが弱い（確かめてもらう） */
   confidence: Confidence;
   basis: Basis;
-  /** 字数（空白を除く）。中身は返さない */
+  /** 字数（空白を除く） */
   chars: number;
   /** 縦書きか */
   vertical: boolean;
+  /**
+   * includeText のときだけ（0.1.2 から）。見つけた字そのもの（行の中の、候補の範囲の字。空白もそのまま）。
+   * 渡さないときは入れない（既定）。記録・ログ・報告書には使わない
+   */
+  text?: string;
 };
 
 export type PiiSkipReason = "too_many_operations" | "unreadable_page" | "page_limit";
@@ -85,7 +91,8 @@ export type PiiReport = {
   truncatedPages: number[];
 };
 
-export type DetectOptions = { settings?: Partial<PiiSettings> };
+/** includeText：見つけた字そのものを、1件ごとに text として返す（ほかのルールと同じ名前と形。既定は返さない） */
+export type DetectOptions = { settings?: Partial<PiiSettings>; includeText?: boolean };
 
 const emptyCounts = (): PiiCounts => ({
   total: 0,
@@ -145,8 +152,8 @@ function segmentsOf(lines: Line[]): Segment[] {
 
 type PageResult = { findings: Omit<PiiFinding, "page">[]; excluded: Array<{ reason: ExcludeReason }> };
 
-/** 集めた字（1ページぶん）から探す */
-export function scanGlyphs(glyphs: Glyph[], settings: PiiSettings = DEFAULT_SETTINGS): PageResult {
+/** 集めた字（1ページぶん）から探す。includeText のときだけ、見つけた字そのものを text に入れる */
+export function scanGlyphs(glyphs: Glyph[], settings: PiiSettings = DEFAULT_SETTINGS, opts: { includeText?: boolean } = {}): PageResult {
   const lines = buildLines(glyphs, settings.line);
   const findings: PageResult["findings"] = [];
   const excluded: PageResult["excluded"] = [];
@@ -162,8 +169,11 @@ export function scanGlyphs(glyphs: Glyph[], settings: PiiSettings = DEFAULT_SETT
       }
       return;
     }
-    const chars = [...line.text.slice(offset + h.start, offset + h.end)].filter((c) => c.trim() !== "").length;
-    findings.push({ type: h.type, rect, confidence: h.confidence, basis: h.basis, chars, vertical: line.dir === "v" || line.dir === "vu" });
+    const text = line.text.slice(offset + h.start, offset + h.end);
+    const chars = [...text].filter((c) => c.trim() !== "").length;
+    const f: PageResult["findings"][number] = { type: h.type, rect, confidence: h.confidence, basis: h.basis, chars, vertical: line.dir === "v" || line.dir === "vu" };
+    if (opts.includeText) f.text = text;
+    findings.push(f);
   };
 
   // 1. 行ごと（前後の語を手がかりにする）
@@ -252,7 +262,7 @@ export async function detectPii(bytes: Uint8Array, options: DetectOptions = {}):
         report.unreadable.glyphs += text.unreadable;
       }
       if (text.truncated) report.truncatedPages.push(pageNo);
-      const r = scanGlyphs(text.glyphs, settings);
+      const r = scanGlyphs(text.glyphs, settings, { includeText: options.includeText === true });
       for (const f of r.findings) report.findings.push({ ...f, page: pageNo });
       for (const e of r.excluded) report.excluded[e.reason]++;
     } catch (e) {
