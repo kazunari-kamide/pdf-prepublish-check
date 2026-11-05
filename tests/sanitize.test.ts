@@ -422,8 +422,18 @@ describe("通信しない（sanitize/）", () => {
   it("ブラウザで動く片付けのコードに、通信の仕組みがない", () => {
     const files = list(path.join(ROOT, "sanitize"));
     expect(files.length).toBeGreaterThan(0);
+    // 例外：XMP を書くのに要る名前空間の名前（通信には使わない決まった名前。0.9.0 のプロパティの書き直しから）。
+    // 引用符で閉じた、この 5 つと完全に同じものだけを除く
+    const XMP_NAMESPACES = [
+      "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      "http://purl.org/dc/elements/1.1/",
+      "http://ns.adobe.com/xap/1.0/",
+      "http://ns.adobe.com/pdf/1.3/",
+      "http://www.aiim.org/pdfa/ns/id/",
+    ];
     for (const f of files) {
-      const s = readFileSync(f, "utf8");
+      let s = readFileSync(f, "utf8");
+      for (const ns of XMP_NAMESPACES) s = s.split(`"${ns}"`).join('""');
       expect(s, f).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|RTCPeerConnection|importScripts|https?:\/\//);
     }
   });
