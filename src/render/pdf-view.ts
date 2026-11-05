@@ -4,8 +4,12 @@
 //
 // 通信しないための設定（2026-11-03 本人が決定。docs/no-network.md）：
 // - 渡すのはバイト列だけ（data）。URL から読む道（url・range・stream）は使わない。
-// - CMap・標準の書体・ICC・WASM の取り寄せ先（cMapUrl など）は渡さない。取り寄せの道を開けない。
-// - useWorkerFetch: false、useWasm: false。
+// - 2026-11-06 本人が決定（案 B）：CCITT・JBIG2・JPEG 2000 の画像を解く部品（WASM の代わりの JS）と字の対応表（cMap）は、
+//   配信の中の /pdfjs/ に置いたもの（pdfjs-dist の写し。src/render/pdfjs-parts.ts）を、自分の配信先から読む。
+//   前は渡さなかったため、スキャンの画像がまっ白になり、埋め込まれていない日本語の字が描かれなかった。
+//   cMap は、この画面（主のスレッド）が fetch で読み、PDF.js の Worker に渡す（useWorkerFetch: false）。検査のページの CSP だけ connect-src 'self'（csp.ts）。
+//   標準の書体（standardFontDataUrl）と ICC（色の変換）は渡さない（理由は src/render/pdfjs-parts.ts）。
+// - useWorkerFetch: false、useWasm: false（WASM は使わず、代わりの JS を import() で読む。'wasm-unsafe-eval' は足さない）。
 // - CVE-2024-4367（書体の処理で eval を使っていた）の設定 isEvalSupported は、6.x にはない。6.4.299 の build/ に
 //   eval・new Function は 0 件（2026-11-03 に数えた）。
 // - それでも中のコードには fetch などが残る。ページ全体の CSP（connect-src 'none'）で止め、
@@ -20,6 +24,7 @@ import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs
 // scripts/check-dist.mjs が「pdfjs-dist と1バイトも違わないファイル」だけに通信の仕組みを許すため（docs/no-network.md）。
 import pdfjsUrl from "pdfjs-dist/build/pdf.min.mjs?url";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { PDFJS_CMAP_URL, PDFJS_WASM_URL } from "./pdfjs-parts";
 
 /** 1ページを描く時間の上限（ミリ秒）【仮の値】。検査の Worker の上限（60秒）より短くし、絵のせいで待たせない */
 export const RENDER_TIMEOUT_MS = 8_000;
@@ -55,6 +60,9 @@ export class PdfView {
       data: bytes,
       useWorkerFetch: false,
       useWasm: false,
+      wasmUrl: PDFJS_WASM_URL,
+      cMapUrl: PDFJS_CMAP_URL,
+      cMapPacked: true,
       enableXfa: false,
       // PDF の中の書体を、ブラウザの書体（@font-face）として読ませない。字は PDF.js が形をなぞって描く。
       // 細工した書体がブラウザの書体の処理に届く道を閉じる（2026-11-05。絵の変わり方は design/screenshots/ で比べた）

@@ -4,7 +4,7 @@
 // CSP の値をここに書き写さないのは、<meta> の CSP・vite preview のヘッダーと食い違わないようにするため。
 // npm run build で dist/.htaccess として出る（vite.config.ts）。dist/.htaccess を直接書き換えない。
 
-import { contactHeaders, securityHeaders } from "./csp.ts";
+import { checkHeaders, contactHeaders, securityHeaders } from "./csp.ts";
 
 /** 公式のドメイン（CLAUDE.md §11-6）。www つきや http で来たら、ここへ 301 で送る */
 export const OFFICIAL_HOST = "omamoripdf.com";
@@ -64,7 +64,8 @@ export function buildHtaccess(): string {
     "# 見つからないときは、自前のページを返す（下のヘッダーは always なので、404 の応答にも付く）",
     `ErrorDocument 404 ${NOT_FOUND_PAGE}`,
     "",
-    "# CSP などのヘッダー。検査のページ（check.html）の <meta> の CSP と同じ値に、frame-ancestors 'none' を足したもの",
+    "# CSP などのヘッダー。サイトのページの <meta> の CSP と同じ値に、frame-ancestors 'none' を足したもの。",
+    "# 検査のページ（check.html）だけは、下の <FilesMatch> で connect-src を 'self' にする",
     "<IfModule mod_headers.c>",
     ...headers,
     "  # HSTS は条件を付けずに付ける（配信先の前の nginx が https を受けるため、%{HTTPS} では見分けられない。",
@@ -81,6 +82,16 @@ export function buildHtaccess(): string {
     `<FilesMatch "^(${[CONTACT_PAGE_FILE, CONTACT_SEND_FILE].map((f) => f.replace(/\./g, "\\.")).join("|")})$">`,
     "  <IfModule mod_headers.c>",
     ...Object.entries(contactHeaders)
+      .filter(([k, v]) => securityHeaders[k] !== v)
+      .map(([k, v]) => `    Header always set ${k} ${quoted(k, v)}`),
+    "  </IfModule>",
+    "</FilesMatch>",
+    "",
+    "# 検査のページだけ、自分の配信先の /pdfjs/ の部品（cMap）を読める CSP にする（connect-src 'self'。ほかは上と同じ値。",
+    "# 2026-11-06 本人が決定）。外のサイトへの送り先は増やさない",
+    `<FilesMatch "^${CHECK_PAGE_FILE.replace(/\./g, "\\.")}$">`,
+    "  <IfModule mod_headers.c>",
+    ...Object.entries(checkHeaders)
       .filter(([k, v]) => securityHeaders[k] !== v)
       .map(([k, v]) => `    Header always set ${k} ${quoted(k, v)}`),
     "  </IfModule>",
