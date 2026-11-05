@@ -93,10 +93,38 @@ body.site {
   box-decoration-break: clone;
 }
 
+/* 指を置いたとき：下線は足さず（マーカーと二重にしない）、帯を上へ広げて字の下半分まで塗る */
 .site-main :is(p, dd) a:not([class]):hover,
-.site-section li > a:not([class]):hover {
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
+.site-section li > a:not([class]):hover,
+.site-list-link:hover .site-list-title > span {
+  --marker-top: 30%;
+}
+
+/* 関係する記事の一覧の行：型の番号の札（白いピル）＋題。マーカーは題の字だけに引き、札にはかけない */
+.site .site-list-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-weight: var(--fw-strong);
+  text-decoration: none;
+}
+
+/* 型のない記事（手順）は札がないので、題だけの 1 列 */
+.site .site-list-link:not(:has(.site-tag)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.site-list-link .site-tag {
+  margin-right: 0;
+  background: var(--surface-card);
+}
+
+.site-list-title > span {
+  padding-inline: 0.08em;
+  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .site :focus-visible {

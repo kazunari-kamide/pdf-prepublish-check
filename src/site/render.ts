@@ -215,7 +215,9 @@ function toRelated(a: Article): string {
     const r = ARTICLES.find((x) => x.slug === slug);
     if (!r) throw new Error(`関係する記事が見つかりません：${a.slug} → ${slug}`);
     const tag = r.pattern ? `<span class="site-tag">${e(r.pattern)}</span>` : "";
-    return `          <li><a href="${articlePath(r)}">${tag}${e(r.title)}</a></li>`;
+    // 型の番号の札は、マーカーの帯の外に置く（帯は題の字だけに引く。design/sheet.md「案 C」の強調・リンク）。
+    // 題は箱（.site-list-title）の中の字（span）に帯を引く。折り返しても行ごとに引け、2 行目は札の右にそろう
+    return `          <li><a class="site-list-link" href="${articlePath(r)}">${tag}<span class="site-list-title"><span>${e(r.title)}</span></span></a></li>`;
   });
   return [
     `      <nav class="site-section" aria-label="関係する記事">`,
