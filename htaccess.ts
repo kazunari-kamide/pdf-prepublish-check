@@ -112,6 +112,9 @@ export function buildHtaccess(): string {
  *   返すときの中の要求では動かさない（動くと、見つからない .html が 404 でなく 301 になり、書き換えと輪になる）。
  *   %1 は、すぐ上の RewriteCond（THE_REQUEST）の組なので、THE_REQUEST の条件を最後に置く。
  * - 2つ目：.html なしで来た要求を、同じ名前の .html のファイルがあれば、そのファイルで返す（中だけの書き換え。アドレスは変わらない）。
+ *   同じ名前のフォルダがあっても、.html を返す（/licenses：licenses.html と、ライセンスの全文を置く licenses/ がある。
+ *   フォルダを先に見ると、Apache が /licenses/ へ 301 で移し、フォルダの一覧を止めているので 403 になる。2026-11-05 の本番で起きた）。
+ *   末尾が / の場所（フォルダ）は書き換えない。
  * 手元の vite preview では、site.ts の cleanUrlMiddleware が同じ動きをする（tests/clean-urls.test.ts で、同じ表の場所を確かめる）。
  */
 export const CLEAN_URL_RULES: readonly string[] = [
@@ -122,9 +125,9 @@ export const CLEAN_URL_RULES: readonly string[] = [
   "RewriteCond %{REQUEST_FILENAME} -f",
   "RewriteCond %{THE_REQUEST} ^[A-Z]+\\s/+([^?\\s]*?)\\.html[?\\s]",
   "RewriteRule \\.html$ /%1 [R=301,L]",
-  "# .html なしで来たら、同じ名前の .html のファイルを返す（アドレスはそのまま）",
+  "# .html なしで来たら、同じ名前の .html のファイルを返す（アドレスはそのまま。同じ名前のフォルダがあっても .html を返す）",
+  "RewriteCond %{REQUEST_URI} !/$",
   "RewriteCond %{REQUEST_FILENAME} !-f",
-  "RewriteCond %{REQUEST_FILENAME} !-d",
   "RewriteCond %{REQUEST_FILENAME}.html -f",
   "RewriteRule ^(.+)$ $1.html [L]",
 ];
