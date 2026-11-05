@@ -7,22 +7,38 @@
 // - 全部のルールでの読み直しは、ここではしない。画面が、片付けた PDF を検査の入口に最初から入れ直して行う
 //   （同じ検査を2回回さないため。捨てた案：ここでも rulesCheck(inspectAll) を redact に渡す）。
 
-import { compress, redact, sanitizePdf } from "../../sanitize/index.ts";
-import type { CompressImages, CompressIncrease, ImageCodec, NotDoneItem, RedactCheck, RedactLeftover, RemovedItem } from "../../sanitize/types.ts";
+import { compress, preflightTidy, redact, sanitizePdf } from "../../sanitize/index.ts";
+import type { CompressImages, CompressIncrease, ImageCodec, NotDoneItem, PropertyChange, RedactCheck, RedactLeftover, RemovedItem, TidyPreflight } from "../../sanitize/types.ts";
+import type { TidyChoices } from "./protocol.ts";
 import type { RedactArea } from "./areas.ts";
 
 export type SanitizeJobResult =
-  | { type: "sanitized"; bytes: Uint8Array; pages: number; removed: RemovedItem[]; notDone: NotDoneItem[]; decrypted: boolean }
+  | { type: "sanitized"; bytes: Uint8Array; pages: number; removed: RemovedItem[]; notDone: NotDoneItem[]; decrypted: boolean; properties?: PropertyChange[] }
   | { type: "redact_blocked"; removed: RemovedItem[]; notDone: NotDoneItem[]; leftovers: RedactLeftover[] }
   | { type: "refused"; message: string };
 
-export async function sanitizeJob(input: Uint8Array, areas: unknown, codec?: ImageCodec): Promise<SanitizeJobResult> {
-  const options = codec ? { codec } : {};
+export async function sanitizeJob(input: Uint8Array, areas: unknown, codec?: ImageCodec, tidy: TidyChoices = {}): Promise<SanitizeJobResult> {
+  // 本人が選んだこと（プロパティ・PDF/A の印・電子署名）は、ふつうの片付けにも、自分で黒塗りする redact にも同じく渡す
+  const options = { ...(codec ? { codec } : {}), ...tidyOptions(tidy) };
   const picked = Array.isArray(areas) ? (areas as RedactArea[]) : [];
   const r = picked.length ? await redact(input, picked, options) : await sanitizePdf(input, options);
   if (r.status === "error") return { type: "refused", message: r.message };
   if (r.status === "blocked") return { type: "redact_blocked", removed: r.removed, notDone: r.notDone, leftovers: r.leftovers };
-  return { type: "sanitized", bytes: r.bytes, pages: r.pages, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted };
+  return { type: "sanitized", bytes: r.bytes, pages: r.pages, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted, ...("properties" in r && r.properties ? { properties: r.properties } : {}) };
+}
+
+/** 画面から来た選んだことを、片付けの設定の形にする（知らない値は渡さない。片付けの側でも確かめる） */
+function tidyOptions(t: TidyChoices) {
+  return {
+    ...(t.properties && typeof t.properties === "object" ? { properties: t.properties } : {}),
+    ...(t.pdfaMark === "keep" || t.pdfaMark === "remove" ? { pdfaMark: t.pdfaMark } : {}),
+    ...(t.signatures === "keep" || t.signatures === "remove" ? { signatures: t.signatures } : {}),
+  };
+}
+
+/** 整える前に聞く：プロパティの今の値・PDF/A の印・電子署名の数（片付けの preflightTidy） */
+export async function preflightJob(input: Uint8Array): Promise<TidyPreflight> {
+  return preflightTidy(input);
 }
 
 export type CompressJobResult =

@@ -5,10 +5,11 @@
 //   片付けの報告（removed）は「何をしたか」を見せるためだけに使い、「残っていない」の根拠にしない（sanitize/README.md「4 読み直す」）。
 // - 「残っていません」は、読み直しで調べた型についてだけ言う（CLAUDE.md §11-5b）。
 
-import type { NotDoneItem, RemovedItem, SanitizePattern } from "../../sanitize/types.ts";
+import type { NotDoneItem, PropertyChange, RemovedItem, SanitizePattern } from "../../sanitize/types.ts";
 import type { Rect } from "../inspect/report.ts";
 import { CATALOG } from "./coverage.ts";
 import { CANDIDATE_PATTERNS } from "./picks.ts";
+import { changeLines, chosenFields } from "./tidy-model.ts";
 import type { ViewModel } from "./model.ts";
 
 /**
@@ -34,7 +35,14 @@ export const MAX_LINES_PER_GROUP = 30;
 export type RemovedGroup = { pattern: SanitizePattern; name: string; self: boolean; lines: string[]; total: number };
 export type DoneMark = { page: number; rect: Rect; label: string };
 
+/** 本人が選んだ値として「残り」に数えない型（文書情報・XMP・他の団体の名前。欄の名前 field があるもの） */
+const CHOSEN_PATTERNS: readonly string[] = ["P1", "P2", "P3"];
+
 export type CleanView = {
+  /** 本人が「そのまま」「書き直す」を選んだので、読み直しで「残り」に数えなかった行の数 */
+  chosen: number;
+  /** プロパティを項目ごとにどうしたか（値は入れない） */
+  propertyLines: string[];
   /** clean＝読み直して残り 0 件で、片付けられなかった所も調べられなかった所もない（「全部緑」）。
    *  left＝読み直して、まだ残っている。unsure＝0 件だが、言い切れない所がある */
   verdict: "clean" | "left" | "unsure";
@@ -61,6 +69,8 @@ export function buildCleanView(input: {
   removed: RemovedItem[];
   notDone: NotDoneItem[];
   decrypted: boolean;
+  /** プロパティを書き直したとき、項目ごとに何をしたか（片付けの r.properties）。値そのものは入らない */
+  properties?: PropertyChange[];
 }): CleanView {
   const { before, after, removed, notDone, decrypted } = input;
 
@@ -101,7 +111,10 @@ export function buildCleanView(input: {
   // 黒塗りの候補（P13【仮】、見える文字の個人情報らしい字）は、片付けでは消さない（黒塗りにするかは利用者が決める）ので、
   // 「残っている所」に数えない（2026-11-04 人が決めた）。候補の行だけが残り、ほかに知らせることがなければ「全部緑」にする
   const candidateRows = after ? after.groups.filter((g) => CANDIDATE_PATTERNS.includes(g.pattern)).reduce((s, g) => s + g.rows.length, 0) : 0;
-  const left = after ? after.rows.length - candidateRows : null;
+  // 本人が「そのまま」「書き直す」を選んだ欄の値（文書情報・XMP）は、本人が選んだ値なので「残っている所」に数えない（2026-11-05）
+  const chosen = chosenFields(input.properties);
+  const chosenRows = after ? after.rows.filter((r) => CHOSEN_PATTERNS.includes(r.pattern) && r.field !== undefined && chosen.has(r.field)).length : 0;
+  const left = after ? after.rows.length - candidateRows - chosenRows : null;
   const afterClean = after ? after.clean || (left === 0 && after.unchecked.length === 0 && after.notices.length === 0) : false;
   let verdict: CleanView["verdict"];
   let headline: string;
@@ -119,7 +132,8 @@ export function buildCleanView(input: {
     headline = "読み直したところ、調べた項目で残っている所は 0 件でした。";
   }
 
-  return { verdict, headline, before: before.rows.length, left, removed: removedGroups, notDone: notDoneLines, notes, doneMarks, scope };
+  if (chosenRows > 0) notes.push(`本人が「そのまま」「書き直す」を選んだプロパティの値（${chosenRows} か所）は、残っている所に数えていません。`);
+  return { verdict, headline, before: before.rows.length, left, removed: removedGroups, notDone: notDoneLines, notes, doneMarks, scope, chosen: chosenRows, propertyLines: changeLines(input.properties) };
 }
 
 /**

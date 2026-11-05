@@ -27,6 +27,11 @@ export type Item = {
    * 画面の中だけで使い、頭の数文字だけを出して伏せる（src/ui/reveal.ts）。報告書・ログ・保存するファイル名には入れない
    */
   content?: string;
+  /**
+   * 文書情報・XMP の欄の値のとき、その欄の名前（文書情報は Title など、XMP は dc:title など）。中身は入らない。
+   * 整えるときに本人が「そのまま」「書き直す」を選んだ欄を、読み直しの「残り」に数えないために使う
+   */
+  field?: string;
   /** ページの上の場所があるときだけ */
   page: number | null;
   rect: Rect | null;

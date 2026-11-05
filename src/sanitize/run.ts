@@ -4,12 +4,13 @@
 // 時間の上限を超えたら、その Worker だけを止める。画面は止めない（CLAUDE.md §5）。
 
 import { WORKER_TIMEOUT_MS } from "../inspect/limits.ts";
-import type { CompressOutcome, SanitizeOutcome, SanitizeRequest, SanitizeResponse } from "./protocol.ts";
+import type { CompressOutcome, SanitizeOutcome, SanitizeRequest, SanitizeResponse, TidyChoices } from "./protocol.ts";
+import type { TidyPreflight } from "../../sanitize/types.ts";
 import type { RedactArea } from "./areas.ts";
 
 let nextId = 1;
 
-export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER_TIMEOUT_MS, areas: RedactArea[] = []): Promise<SanitizeOutcome> {
+export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER_TIMEOUT_MS, areas: RedactArea[] = [], tidy: TidyChoices = {}): Promise<SanitizeOutcome> {
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
   const id = nextId++;
@@ -37,6 +38,7 @@ export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER
           removed: res.removed,
           notDone: res.notDone,
           decrypted: res.decrypted,
+          ...(res.properties ? { properties: res.properties } : {}),
           elapsedMs: elapsed(),
         });
       } else if (res.type === "redact_blocked") {
@@ -48,7 +50,7 @@ export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER
     worker.onerror = () => finish({ kind: "error", message: "整える処理 が止まりました。", elapsedMs: elapsed() });
     worker.onmessageerror = () => finish({ kind: "error", message: "整えた結果を受け取れませんでした。", elapsedMs: elapsed() });
 
-    const req: SanitizeRequest = areas.length ? { type: "sanitize", id, buffer, areas } : { type: "sanitize", id, buffer };
+    const req: SanitizeRequest = { type: "sanitize", id, buffer, ...(areas.length ? { areas } : {}), tidy };
     worker.postMessage(req, [buffer]);
   });
 }
@@ -87,6 +89,35 @@ export function compressInWorker(
     worker.onerror = () => finish({ kind: "error", message: "整える処理 が止まりました。", elapsedMs: elapsed() });
     worker.onmessageerror = () => finish({ kind: "error", message: "小さくした結果を受け取れませんでした。", elapsedMs: elapsed() });
     const req: SanitizeRequest = { type: "compress", id, buffer, maxDpi: preset.maxDpi, jpegQuality: preset.jpegQuality };
+    worker.postMessage(req, [buffer]);
+  });
+}
+
+/**
+ * 整える前に、プロパティの今の値・PDF/A の印・電子署名の数を聞く（新しい Worker。時間の上限を超えたら止める）。
+ * 渡したバイト列は Worker に渡し切るので、呼ぶ側は写しを渡す
+ */
+export function preflightInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER_TIMEOUT_MS): Promise<TidyPreflight | null> {
+  const id = nextId++;
+  const worker = new Worker(new URL("../worker/sanitize.worker.ts", import.meta.url), { type: "module" });
+  return new Promise<TidyPreflight | null>((resolve) => {
+    let settled = false;
+    const finish = (r: TidyPreflight | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.terminate();
+      resolve(r);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    worker.onmessage = (e: MessageEvent<SanitizeResponse>) => {
+      const res = e.data;
+      if (!res || res.id !== id) return;
+      finish(res.type === "preflighted" ? res.result : null);
+    };
+    worker.onerror = () => finish(null);
+    worker.onmessageerror = () => finish(null);
+    const req: SanitizeRequest = { type: "preflight", id, buffer };
     worker.postMessage(req, [buffer]);
   });
 }

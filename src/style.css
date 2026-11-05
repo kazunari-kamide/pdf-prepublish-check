@@ -1196,6 +1196,7 @@ progress {
 .not-done ul,
 .removed ul,
 .clean-notes {
+  overflow-wrap: anywhere;
   margin: 0;
   padding-left: var(--space-4);
   font-size: var(--text-small);
@@ -1540,6 +1541,78 @@ progress {
 
 .reveal-note {
   margin: 0 0 var(--space-2);
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+/* 整えるときのプロパティ（8 項目ごとに 消す／そのまま／書き直す）と、PDF/A・電子署名の問いかけ。
+   色・線は今ある決まりだけを使う（デザインシートを当てるときに見直す） */
+.tidy-props h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--text-small);
+}
+
+.tidy-list {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.tidy-row,
+.consent-item {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-2) 0;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.tidy-row legend,
+.consent-item legend {
+  padding: 0;
+  font-weight: 700;
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+
+.tidy-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+}
+
+.tidy-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+  cursor: pointer;
+}
+
+.tidy-mode input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--color-base);
+}
+
+.tidy-input {
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font: inherit;
+}
+
+.consent {
+  margin: 0 0 var(--space-3);
+}
+
+.tidy-summary {
+  margin: var(--space-1) 0 0;
   font-size: var(--text-small);
   color: var(--color-muted);
 }

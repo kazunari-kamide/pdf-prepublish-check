@@ -22,6 +22,8 @@ export type ProcessReportInput = {
   verdict: string;
   /** 使った検出ルールと版（ruleId@version） */
   rules: string[];
+  /** プロパティを項目ごとにどうしたか（tidy-model.ts の changeLines。値は入れない） */
+  properties?: string[];
   /**
    * 見つけた字の中身（保存の前に「中身も入れる」を選んだときだけ渡す。初めは渡さない）。
    * 渡さなければ、報告書には中身を一切入れない
@@ -91,6 +93,11 @@ export function buildProcessReport(input: ProcessReportInput): string {
     lines.push(`- ${patternWithName(r.pattern)}／${where}／${r.label}／数：${unit}`);
   }
   lines.push("");
+  if (input.properties?.length) {
+    lines.push("■ プロパティ（本人が選んだこと。値は載せていません）");
+    for (const t of input.properties) lines.push(`- ${t}`);
+    lines.push("");
+  }
   lines.push("■ 消せなかった所");
   if (!input.notDone.length) lines.push("- ありません。");
   for (const n of input.notDone) lines.push(`- ${patternWithName(n.pattern)}／${n.page !== undefined ? `ページ ${n.page}` : "ファイル全体"}／${n.label}`);
