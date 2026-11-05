@@ -64,7 +64,7 @@ const OVER_BLANK = { x: 30, y: 183, width: 150, height: 15 };
 
 describe("P6 の画像の層（1.5.0）", () => {
   it("この版は、文字の層と画像の層を調べる", () => {
-    expect(CHECKED_LAYERS).toEqual(["text", "image"]);
+    expect(CHECKED_LAYERS).toEqual(["text", "image", "vector"]);
   });
 
   it("スキャン画像の字の上の黒い四角を見つける", async () => {
