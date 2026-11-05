@@ -89,9 +89,11 @@ const pageUrlFor = (f) => {
 };
 const articleFile = files.find((f) => /^articles\/(?!index\.html$|tags\/).+\.html$/.test(f));
 const tagFile = files.find((f) => /^articles\/tags\/.+\.html$/.test(f));
+// 同じ名前のフォルダがあるページ（licenses.html と licenses/ など）。フォルダを先に見ると /x/ へ移って 403 になったので、別に確かめる
+const pagesWithFolder = files.filter((f) => f.endsWith(".html") && !f.endsWith("index.html") && files.some((g) => g.startsWith(`${f.slice(0, -".html".length)}/`)));
 
 // ---- .html 付きの場所は、.html なしへ 301（外からのリンクや検索の結果を切らさないため）
-for (const f of ["privacy.html", CONTACT_PAGE_FILE, articleFile, tagFile].filter(Boolean)) {
+for (const f of [...new Set(["privacy.html", CONTACT_PAGE_FILE, articleFile, tagFile, ...pagesWithFolder].filter(Boolean))]) {
   try {
     const r = await get(new URL(f, base), "HEAD");
     const loc = r.headers.get("location");
@@ -103,9 +105,9 @@ for (const f of ["privacy.html", CONTACT_PAGE_FILE, articleFile, tagFile].filter
   }
 }
 
-// ---- サイトのページ（記事の一覧・プライバシー・記事1つ・タグのページ。site.ts が作る）が .html なしの場所で 200 を返し、同じヘッダーが付いている
+// ---- サイトのページ（記事の一覧・プライバシー・記事1つ・タグのページ・同じ名前のフォルダがあるページ。site.ts が作る）が .html なしの場所で 200 を返し、同じヘッダーが付いている
 // 記事は1つだけ見る（どれも同じ .htaccess のもとで返るため）
-for (const page of ["articles/", "privacy", articleFile && pageUrlFor(articleFile), tagFile && pageUrlFor(tagFile)].filter(Boolean)) {
+for (const page of [...new Set(["articles/", "privacy", articleFile && pageUrlFor(articleFile), tagFile && pageUrlFor(tagFile), ...pagesWithFolder.map(pageUrlFor)].filter(Boolean))]) {
   try {
     const r = await get(new URL(page, base));
     if (r.status !== 200) {

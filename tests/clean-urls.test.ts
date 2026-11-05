@@ -38,6 +38,13 @@ describe("場所の扱い（cleanUrlRoute。本番の .htaccess と同じ決ま�
     expect(cleanUrlRoute(ABOUT_PATH, withAbout)).toEqual({ kind: "rewrite", url: "/about.html" });
     expect(cleanUrlRoute("/about.html", withAbout)).toEqual({ kind: "redirect", location: "/about" });
   });
+  it("同じ名前のフォルダがあるページ（licenses.html と licenses/）も、.html なしの場所で .html を返す（2026-11-05 の本番で /licenses が /licenses/ へ移って 403 になった）", () => {
+    const withLicenses = (f: string) => f === "licenses.html" || f === "licenses/AGPL-3.0.txt" || exists(f);
+    expect(cleanUrlRoute("/licenses", withLicenses)).toEqual({ kind: "rewrite", url: "/licenses.html" });
+    expect(cleanUrlRoute("/licenses.html", withLicenses)).toEqual({ kind: "redirect", location: "/licenses" });
+    expect(cleanUrlRoute("/licenses/AGPL-3.0.txt", withLicenses)).toBeNull();
+    expect(cleanUrlRoute("/licenses/", withLicenses)).toBeNull();
+  });
   it("ないページは、どちらの形でも書き換えも移しもしない（404 のページになる）", () => {
     for (const u of ["/no-such-page", "/no-such-page.html", "/articles/no-such", "/articles/no-such.html", "/%E0%A4%A"]) expect(cleanUrlRoute(u, exists), u).toBeNull();
   });
@@ -70,6 +77,15 @@ describe(".htaccess の書き換え", () => {
     expect(conds).toContain("RewriteCond %{REQUEST_FILENAME} -f");
     expect(conds.join("\n")).toContain("index\\.html$");
     expect(conds.join("\n")).toContain("google[0-9a-z]+\\.html$");
+  });
+  it(".html なしの書き換えは、フォルダかどうかを見ない（!-d を使わない）。末尾が / の場所は書き換えない", () => {
+    const at = CLEAN_URL_RULES.indexOf("RewriteRule ^(.+)$ $1.html [L]");
+    const redirect = CLEAN_URL_RULES.indexOf("RewriteRule \\.html$ /%1 [R=301,L]");
+    expect(redirect).toBeGreaterThan(0);
+    const conds = CLEAN_URL_RULES.slice(redirect + 1, at);
+    expect(conds).not.toContain("RewriteCond %{REQUEST_FILENAME} !-d");
+    expect(conds).toContain("RewriteCond %{REQUEST_URI} !/$");
+    expect(conds).toContain("RewriteCond %{REQUEST_FILENAME}.html -f");
   });
   it("前からの設定（HSTS・CSP・404・https への 301）は残っている", () => {
     for (const s of ["Strict-Transport-Security", "Content-Security-Policy", `ErrorDocument 404 ${NOT_FOUND_PAGE}`, "RewriteCond %{HTTPS} !on", "AddType text/javascript .mjs"]) expect(ht, s).toContain(s);
