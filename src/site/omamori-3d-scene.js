@@ -144,7 +144,9 @@ export function mount(container) {
     const t = (performance.now() - start) / 1000;
     stack.position.y = Math.sin(t * 0.9) * 0.06; // ゆっくり浮く
     stack.rotation.z = -0.62 + Math.sin(t * 0.45) * 0.04;
-    b.rotation.y = Math.sin(t * 1.2) * 0.25;
+    // 緑の札は、紙の束の傾きを打ち消して、いつも手前を向く（「✓」が読めるように）。少しだけ左右に揺れる
+    b.quaternion.copy(stack.quaternion).invert();
+    b.rotateY(Math.sin(t * 1.2) * 0.25);
     shadow.material.opacity = 0.08 - stack.position.y * 0.25;
     renderer.render(scene, camera);
   });
