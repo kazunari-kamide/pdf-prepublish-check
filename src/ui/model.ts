@@ -7,6 +7,7 @@ import type { Item, PageBox, Rect, Severity, InspectSummary } from "../inspect/r
 import { buildCoverage, hasIncomplete, type CoverageRow } from "./coverage";
 import { scopeCaveats } from "./scope";
 import { ruleOrigin, type RuleOrigin } from "./rule-origin";
+import { CANDIDATE_PATTERNS } from "./picks";
 
 export type Row = {
   no: number;
@@ -25,6 +26,11 @@ export type Row = {
   detail: string;
   /** ルールが「確かめてください」とした所（言い切れない所）。画面では断定しない形で出す */
   check: boolean;
+  /**
+   * 見えている個人情報らしい字（黒塗りの候補。P13【仮】）。「見た目では分からない情報」とは別に数える
+   * （見えている字なので、黒塗りにするかは本人が決める。2026-11-05 本人が決めた）
+   */
+  candidate: boolean;
   /** 見つけた字の中身（あるときだけ）。画面の中だけで使い、伏せて出す（src/ui/reveal.ts） */
   content?: string;
   /** 文書情報・XMP の欄の値のとき、その欄の名前（Title・dc:title など） */
@@ -43,7 +49,7 @@ export type Group = {
   rows: Row[];
 };
 
-export type PageMarks = { box: PageBox; marks: Array<{ no: number; severity: Severity; title: string; rect: Rect }> };
+export type PageMarks = { box: PageBox; marks: Array<{ no: number; severity: Severity; title: string; rect: Rect; candidate: boolean }> };
 
 /**
  * 結論（3つ）。found＝見つかった（確かめてほしい所だけのときも含む）、none＝調べた範囲では見つからなかった、
@@ -56,6 +62,10 @@ export type ViewModel = {
   headline: string;
   tone: "neutral" | "ok" | "problem";
   rows: Row[];
+  /** 見た目では分からない情報の数（候補の行を除く）。見出し・手順の帯・整える前後の数は、これを読む */
+  hidden: number;
+  /** 見えている個人情報らしい字（候補）の数。見えない情報とは別の一文で出す */
+  candidates: number;
   groups: Group[];
   notices: string[];
   unchecked: string[];
@@ -79,17 +89,30 @@ function pagesText(pages: number[]): string {
   return sorted.length > 20 ? `${shown} ほか ${sorted.length - 20} ページ` : shown;
 }
 
+const isCandidatePattern = (pattern: string) => CANDIDATE_PATTERNS.includes(pattern);
+
 export function buildView(summary: InspectSummary): ViewModel {
-  const all: Array<Item & { label: string; ruleIndex: number }> = [];
-  summary.rules.forEach((r, ruleIndex) => {
-    for (const it of r.items) all.push({ ...it, label: r.label, ruleIndex });
-  });
-  all.sort(
-    (a, b) =>
-      SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
-      (a.page ?? Infinity) - (b.page ?? Infinity) ||
-      (b.rect ? b.rect[3] : 0) - (a.rect ? a.rect[3] : 0),
-  );
+  // 種類（ルール）の中は、深刻度 → ページ → 上から の順に並べる
+  const byPlace = (a: Item, b: Item) =>
+    SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
+    (a.page ?? Infinity) - (b.page ?? Infinity) ||
+    (b.rect ? b.rect[3] : 0) - (a.rect ? a.rect[3] : 0);
+  const perRule = summary.rules.map((r, ruleIndex) => r.items.map((it) => ({ ...it, label: r.label, ruleIndex })).sort(byPlace));
+  // 種類の並び：見つかった種類を先に（見えない情報の種類を、いちばん重い項目の順に → 見えている候補の種類）、見つからなかった種類はルールの順で後ろに。
+  // 番号は、この並べた順に上から 1, 2, 3… と振る（一覧の上から順に見ればよいように。2026-11-05 夜のレビュー §0）
+  const order = summary.rules
+    .map((_, i) => i)
+    .sort((a, b) => {
+      const ea = perRule[a]!.length === 0;
+      const eb = perRule[b]!.length === 0;
+      if (ea !== eb) return ea ? 1 : -1;
+      if (ea) return a - b;
+      const ca = isCandidatePattern(summary.rules[a]!.pattern);
+      const cb = isCandidatePattern(summary.rules[b]!.pattern);
+      if (ca !== cb) return ca ? 1 : -1;
+      return SEVERITY_ORDER[perRule[a]![0]!.severity] - SEVERITY_ORDER[perRule[b]![0]!.severity] || a - b;
+    });
+  const all = order.flatMap((i) => perRule[i]!);
 
   const rows: Row[] = all.map((it, i) => {
     const origin = ruleOrigin(summary.rules[it.ruleIndex]!.ruleId, it.kind);
@@ -109,17 +132,21 @@ export function buildView(summary: InspectSummary): ViewModel {
     ...(it.content ? { content: it.content } : {}),
     ...(it.field ? { field: it.field } : {}),
     check: it.confidence === "check",
+    candidate: isCandidatePattern(it.pattern),
     ...(origin ? { origin } : {}),
     };
   });
 
-  const groups: Group[] = summary.rules.map((r, i) => ({
-    label: r.label,
-    pattern: r.pattern,
-    status: r.status,
-    message: r.status === "error" ? (r.message ?? "調べられませんでした。") : null,
-    rows: rows.filter((_, j) => all[j]!.ruleIndex === i),
-  }));
+  const groups: Group[] = order.map((i) => {
+    const r = summary.rules[i]!;
+    return {
+      label: r.label,
+      pattern: r.pattern,
+      status: r.status,
+      message: r.status === "error" ? (r.message ?? "調べられませんでした。") : null,
+      rows: rows.filter((_, j) => all[j]!.ruleIndex === i),
+    };
+  });
 
   // お知らせ：同じ文はまとめ、ページ番号を合わせる
   const merged = new Map<string, { pages: number[]; problem: boolean }>();
@@ -147,24 +174,37 @@ export function buildView(summary: InspectSummary): ViewModel {
     const box = boxes.get(it.page);
     if (!box) return;
     const pm = byPage.get(it.page) ?? { box, marks: [] };
-    pm.marks.push({ no: row.no, severity: row.severity, title: row.title, rect: it.rect });
+    pm.marks.push({ no: row.no, severity: row.severity, title: row.title, rect: it.rect, candidate: row.candidate });
     byPage.set(it.page, pm);
   });
   const pages = [...byPage.values()].sort((a, b) => a.box.page - b.box.page);
 
   const coverage = buildCoverage(summary);
   const clean = rows.length === 0 && errors.length === 0 && !partial && !hasIncomplete(coverage);
-  const sure = rows.filter((r) => !r.check).length;
-  const check = rows.length - sure;
+  // 見えない情報と、見えている候補を別に数える（候補は見出しの数に入れない）
+  const hiddenRows = rows.filter((r) => !r.candidate);
+  const hidden = hiddenRows.length;
+  const candidates = rows.length - hidden;
+  const sure = hiddenRows.filter((r) => !r.check).length;
+  const check = hidden - sure;
+  const candidateLine = candidates ? `ほかに、見えている個人情報らしい字が ${candidates} か所あります（黒塗りするかは、あなたが決めます）。` : "";
   let verdict: Verdict;
   let headline: string;
   let tone: ViewModel["tone"];
-  if (rows.length) {
+  if (hidden) {
     verdict = "found";
     tone = "problem";
-    headline = sure
+    headline = (sure
       ? `見た目では分からない情報が、${sure} か所見つかりました。${check ? `ほかに、確かめてほしい所が ${check} か所あります。` : ""}`
-      : `見た目では分からない情報が残っているかもしれない所が、${check} か所あります。確かめてください。`;
+      : `見た目では分からない情報が残っているかもしれない所が、${check} か所あります。確かめてください。`) + candidateLine;
+  } else if (candidates) {
+    // 見えない情報はなく、見えている候補だけ（紅にしない。黒塗りにするかは本人が決める）
+    verdict = "found";
+    tone = "neutral";
+    const incomplete = errors.length > 0 || partial || hasIncomplete(coverage);
+    headline =
+      `見た目では分からない情報は、${incomplete ? "調べた範囲では" : ""}見つかりませんでした。見えている個人情報らしい字が ${candidates} か所あります（黒塗りするかは、あなたが決めます）。` +
+      (incomplete ? "調べきれなかった所があります。「見た所・見なかった所」を確かめてください。" : "");
   } else if (clean) {
     verdict = "none";
     headline = "調べた範囲では、見つかりませんでした。";
@@ -182,5 +222,5 @@ export function buildView(summary: InspectSummary): ViewModel {
       ),
     ),
   ].sort((a, b) => a - b);
-  return { verdict, headline, tone, rows, groups, heavyPages, notices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
+  return { verdict, headline, tone, rows, hidden, candidates, groups, heavyPages, notices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
 }

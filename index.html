@@ -16,17 +16,26 @@
     <!-- PDF を画面の上へ持ってきている間だけ、画面全体に「ここに落とす」を出す（見た目は置き場の .drop[data-over] と同じ） -->
     <div id="drop-anywhere" class="drop-anywhere" aria-hidden="true" hidden>
       <span class="drop-title">ここに落とすと、この PDF を確かめます</span>
-      <span class="drop-note">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
+      <span class="drop-note">PDF はこの端末のブラウザの中だけで読みます。どこにも送りません。</span>
     </div>
     <p id="unofficial" class="unofficial" role="alert" hidden></p>
     <header class="band">
-      <h1 class="brand"><!--omamori:mark-->お守りPDF</h1>
+      <p class="brand"><!--omamori:mark-->お守りPDF</p>
       <a class="about-link" href="/about">お守りPDF について</a>
     </header>
 
-    <!-- 一言の紹介と進み具合（2026-11-05 本人の画面のレビュー 1-1・1-2）。左右 2 列の上に置き、読み込んだあとも進み具合は残す。紹介の 1 行は、選ぶ前だけ -->
+    <!-- 概要と進み具合（2026-11-05 本人が承認したトップの直し）。左右 2 列の上に置く。
+         概要（見出し・具体例の 1 文・札 3 つ）は、PDF を読み込む前だけ。進み具合（手順）は、読み込んだあとだけ（src/style.css） -->
     <div class="guide" id="guide">
-      <p class="hero" id="hero">公開する前の PDF に、消したつもりの情報が残っていないか確かめます</p>
+      <div class="hero" id="hero">
+        <h1 class="hero-title">公開する前に、<wbr />PDF の「見えない残り」を消す</h1>
+        <p class="hero-lead">黒塗りの下の字、作った人の名前、前の版などを見つけて消し、消えたかを読み直して確かめます。</p>
+        <ul class="hero-chips" aria-label="約束">
+          <li>どこにも送らない</li>
+          <li>無料</li>
+          <li>登録なし</li>
+        </ul>
+      </div>
       <ol class="steps" aria-label="手順">
         <li id="step-pick" data-state="now" aria-current="step">
           <span class="step-no" aria-hidden="true">1</span><span class="step-name"><span class="visually-hidden">1 </span>選ぶ</span>
@@ -56,15 +65,16 @@
         <!-- 枠全体を押せる。ブラウザの「ファイルを選択／選択されていません」は見せず（欄は残し、Tab で届く）、ボタンの見た目は「PDF を選ぶ」1 つ（A3）。
              送らないことの一文は、ファイルを渡すこの枠の中の 1 か所だけ（A2） -->
         <label id="drop" class="drop" for="file">
-          <span class="drop-title">ここに PDF を置く</span>
           <span class="drop-pick" aria-hidden="true">PDF を選ぶ</span>
-          <span class="drop-note">このパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
+          <span class="drop-title">またはここに置く</span>
+          <span class="drop-note">この端末のブラウザの中だけで読みます。どこにも送りません。</span>
           <input id="file" class="drop-input" type="file" accept="application/pdf,.pdf" />
         </label>
         <!-- 枠のすぐ下に、控えめな入口を 2 つ（A5）。規約の 1 行は、その下に小さな字で -->
         <p class="sample" id="sample-row">
           <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
           <span class="sample-note">（架空の申請書）</span>
+          <a class="about-more" href="/about#lp-remains">どんなものが残る？</a>
         </p>
         <details class="limit-entry" id="limit-row">
           <summary>提出先の容量に合わせて小さくしたいとき</summary>
@@ -126,6 +136,7 @@
         <section id="clean" class="clean" aria-labelledby="clean-title" hidden>
           <h3 id="clean-title" tabindex="-1">整えた結果</h3>
           <p id="clean-count" class="clean-count"></p>
+          <p id="clean-candidates" class="clean-candidates" hidden></p>
           <a id="download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="save-note">整えた PDF を保存する</a>
           <p id="save-note" class="save-note"></p>
           <label id="save-confirm" class="save-confirm" hidden>

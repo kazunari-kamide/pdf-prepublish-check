@@ -205,3 +205,25 @@ describe("自分で選んだ所の黒塗り", () => {
     expect(c.doneMarks.filter((m) => m.label.startsWith("選んだ所"))).toHaveLength(2);
   });
 });
+
+describe("見えない情報と、見えている候補を別の数にする（2026-11-05 夜のレビュー §0）", () => {
+  const cand = (n: number) =>
+    rule({
+      pattern: "P13",
+      label: "個人情報らしい字",
+      items: Array.from({ length: n }, (_, i) => ({ pattern: "P13" as const, severity: "medium" as const, title: "住所らしい字", why: "", detail: "", page: 1, rect: [10, 100 + i * 20, 80, 110 + i * 20] as [number, number, number, number] })),
+    });
+  it("整える前も読み直したあとも、見えない情報だけを数える。候補は別に前と後を持つ（0 か所なのに 1 件残る、に見せない）", () => {
+    const before = buildView(summary([...found.rules, cand(3)]));
+    const after = buildView(summary([rule({ pattern: "P6", label: "見せかけの黒塗り" }), rule({ pattern: "P1", label: "文書情報" }), cand(1)]));
+    const c = buildCleanView({ before, after, removed, notDone: [], decrypted: false });
+    expect(c.before).toBe(1);
+    expect(c.left).toBe(0);
+    expect(c.verdict).toBe("clean");
+    expect([c.candidatesBefore, c.candidatesAfter]).toEqual([3, 1]);
+  });
+  it("候補が初めからなければ、候補の数は 0（画面には出さない）", () => {
+    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: false });
+    expect([c.candidatesBefore, c.candidatesAfter]).toEqual([0, 0]);
+  });
+});

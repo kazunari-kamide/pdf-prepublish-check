@@ -137,24 +137,77 @@ select {
   height: var(--logo-header);
 }
 
-/* 一言の紹介と進み具合：左右 2 列の上（作業する場所のすぐ上）。紹介の 1 行は、選ぶ前だけ出す（1-2） */
+/*
+ * 概要と進み具合：左右 2 列の上（作業する場所のすぐ上）。2026-11-05 本人が承認したトップの直し。
+ * - 概要（見出し・具体例の 1 文・札 3 つ）は、PDF を読み込む前だけ出す。
+ * - 進み具合（手順）は、読み込んだあとだけ出す（読み込む前は「まだです」ばかりで、置き場と「選ぶ」が重なるため）。
+ *   :has が使えないブラウザでは、今までどおり両方出る。
+ */
 .guide {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-5) 0;
+  padding: var(--space-5) var(--space-5) 0;
 }
 
+/* 置き場（幅 48rem、真ん中）と同じ列にそろえる（左に寄せると、置き場と軸がずれるため） */
 .hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(100%, 48rem);
+  margin-inline: auto;
+}
+
+body:has(#workspace:not([data-state="empty"])) .hero,
+body:has(#workspace[data-state="empty"]) .steps {
+  display: none;
+}
+
+/* 見出し：日本語は文節で折り、行の長さをそろえる（使えないブラウザでは、ふつうに折る） */
+.hero-title {
   margin: 0;
   font-family: var(--font-head);
-  font-size: var(--text-h2);
+  font-size: clamp(var(--text-h1), 3.2vw, 2.1rem);
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.35;
+  word-break: auto-phrase;
+  text-wrap: balance;
 }
 
-body:has(#workspace:not([data-state="empty"])) .hero {
-  display: none;
+.hero-lead {
+  margin: 0;
+  color: var(--color-muted);
+  text-wrap: pretty;
+}
+
+/* 札（ピル）：サイトのタグ（.site-tag）と、紹介のページの札と同じ形。押せないので、浮く動きは付けない */
+.hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hero-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: var(--bw-1) solid var(--ink-300);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(var(--surface-card), var(--ink-50));
+  box-shadow: var(--shadow-pill);
+  font-size: var(--text-small);
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.hero-chips li::before {
+  content: "✓";
+  color: var(--color-ok);
 }
 
 .steps {
@@ -305,10 +358,14 @@ body:has(#workspace:not([data-state="empty"])) .hero {
 }
 
 /* PDF の欄と結果の欄のあいだの仕切り：見た目は墨の細い線、つまむ所は 44px。結果を見ているときだけ出す */
+/*
+ * つまむ所は、要素そのものを 44px にする（前は ::after で広げていたが、check:layout は要素の箱で測るため）。
+ * 列の幅は前と同じになるよう、左右の負の余白で吸う（前：幅 --sp-2・左右 −--sp-2 で、列の幅は −--sp-2）
+ */
 .splitter {
   position: relative;
-  width: var(--sp-2);
-  margin: 0 calc(-1 * var(--sp-2));
+  width: var(--target-min);
+  margin: 0 calc((var(--target-min) + var(--sp-2)) / -2);
   cursor: col-resize;
   touch-action: none;
 }
@@ -322,16 +379,6 @@ body:has(#workspace:not([data-state="empty"])) .hero {
   width: var(--bw-2);
   transform: translateX(-50%);
   background: var(--line-default);
-}
-
-.splitter::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: var(--target-min);
-  transform: translateX(-50%);
 }
 
 .splitter:hover::before,
@@ -429,7 +476,7 @@ body:has(#workspace:not([data-state="empty"])) .hero {
 .drop {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3) var(--space-5);
   width: min(100%, 48rem);
@@ -449,7 +496,14 @@ body:has(#workspace:not([data-state="empty"])) .hero {
 }
 
 .drop:hover .drop-pick {
-  background: var(--surface-subtle);
+  background: var(--beni-800);
+  transform: translateY(var(--lift-pill));
+  box-shadow: var(--shadow-lift);
+}
+
+.drop:active .drop-pick {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-press);
 }
 
 .drop[data-over="true"] {
@@ -458,24 +512,47 @@ body:has(#workspace:not([data-state="empty"])) .hero {
   background: var(--color-accent-tint);
 }
 
+/* 「またはここに置く」：主ボタンの横の補足。指で操作する端末（置けない）では出さない */
 .drop-title {
-  font-family: var(--font-head);
-  font-size: var(--text-h2);
   font-weight: 700;
+  color: var(--color-muted);
 }
 
-/* 「PDF を選ぶ」：見た目だけのボタン（押すのは枠全体。欄は .drop-input） */
+@media (pointer: coarse) {
+  .drop-title {
+    display: none;
+  }
+}
+
+/* 「PDF を選ぶ」：主の操作。朱の塗りのボタン（紹介のページの主ボタンと同じ色・影・浮き）。見た目だけで、押すのは枠全体（欄は .drop-input） */
 .drop-pick {
   display: inline-flex;
   align-items: center;
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-5);
+  justify-self: start;
+  max-width: 100%; /* 字を大きくした狭い画面でも、枠からはみ出さない（入らなければ折る） */
+  min-height: var(--button-height-large);
+  padding: var(--space-1) var(--space-6);
   border-radius: var(--radius-m);
-  border: var(--bw-1) solid var(--line-strong);
-  background: var(--surface-card);
-  color: var(--text-strong);
+  background: var(--beni-700);
+  color: var(--text-on-strong);
+  font-size: var(--fs-h3);
   font-weight: 700;
-  white-space: nowrap;
+  box-shadow: var(--shadow-rest);
+  transition:
+    transform var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out),
+    background-color var(--dur-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop-pick {
+    transition: none;
+  }
+
+  .drop:hover .drop-pick,
+  .drop:active .drop-pick {
+    transform: none;
+  }
 }
 
 /* 送らないことの一文（ファイルを渡すこの枠の中の 1 か所だけ。A2）。前の印は ✓（「○」は選んでいないラジオボタンに見えるため。A7） */
@@ -513,6 +590,16 @@ body:has(#workspace:not([data-state="empty"])) .hero {
   margin: var(--space-2) 0 0;
   font-size: var(--text-small);
   color: var(--color-muted);
+}
+
+/* リンクの色は、ほかの下線のリンク（下の帯・見本）と同じ墨にそろえる（ブラウザの既定の青にしない） */
+.terms-note a {
+  color: var(--color-base);
+  text-underline-offset: 0.2em;
+}
+
+.terms-note a:hover {
+  text-decoration-thickness: 2px;
 }
 
 /*
@@ -638,6 +725,21 @@ body:has(.terms-dialog[open]) {
 
 .sample-note {
   color: var(--color-muted);
+  margin-right: var(--space-3);
+}
+
+/* 紹介のページの「残り方」へ 1 本（見本と同じ目立たせ方） */
+.about-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  color: var(--color-base);
+  font-weight: 700;
+  text-underline-offset: 0.2em;
+}
+
+.about-more:hover {
+  text-decoration-thickness: 2px;
 }
 
 /* 提出先の容量に合わせて小さくする入口：見本のリンクのすぐ下に、開けて選ぶ形（見本と同じくらいの控えめさ） */
@@ -647,13 +749,20 @@ body:has(.terms-dialog[open]) {
   font-size: var(--text-small);
 }
 
+/* 脇の入口なので、小さな灰色の 1 行にする（見本や主ボタンと競わせない。機能はそのまま） */
 .limit-entry summary {
   display: inline-flex;
   align-items: center;
   min-height: var(--target-min);
-  font-weight: 700;
+  color: var(--color-muted);
+  font-weight: 400;
   text-decoration: underline;
+  text-decoration-color: var(--line-control);
   text-underline-offset: 0.2em;
+}
+
+.limit-entry[open] summary {
+  color: var(--color-base);
 }
 
 .limit-body {
@@ -764,7 +873,6 @@ body:has(.terms-dialog[open]) {
   background: var(--color-accent-wash);
   min-width: 0.75rem;
   min-height: 0.75rem;
-  cursor: pointer;
 }
 
 /* 番号の札を、枠の左上の外に出す（色だけに頼らない） */
@@ -794,6 +902,18 @@ body:has(.terms-dialog[open]) {
 .mark.is-selected .mark-no {
   background: var(--color-surface);
   color: var(--color-accent);
+}
+
+/* 見えている候補の枠：墨の点線（見えない情報の紅の実線と、色と線の形で分ける）。札も墨 */
+.mark.mark-candidate {
+  border-style: dashed;
+  border-color: var(--line-strong);
+  background: transparent;
+}
+
+.mark.mark-candidate .mark-no {
+  border-color: var(--line-strong);
+  background: var(--line-strong);
 }
 
 /* 片付けた所：緑の点線の細い枠と「済」の札。押せない（残っている所の枠と、色・線・字で見分ける） */
@@ -875,8 +995,9 @@ body:has(.terms-dialog[open]) {
   color: var(--color-ok);
 }
 
+/* 印は置き場の側（.drop-note）とそろえて ✓（「◯」は選んでいないラジオボタンに見えるため。A7） */
 #status[data-tone="ok"]::before {
-  content: "◯ ";
+  content: "✓ ";
 }
 
 progress {
@@ -926,6 +1047,15 @@ progress {
 .group[data-status="scope"] .fuda {
   background: var(--color-chip);
   color: var(--color-base);
+}
+
+/* 見えている個人情報らしい字（候補）：紅にせず、知らせの形（墨の帯・「ｉ」の印）。黒塗りにするかは本人が決める（2026-11-05 夜のレビュー §0） */
+.group[data-status="candidate"] .fuda {
+  background: var(--line-strong);
+}
+
+.group[data-status="candidate"] .group-name::before {
+  content: "ｉ ";
 }
 
 .group-body {
@@ -1167,7 +1297,8 @@ progress {
   touch-action: none;
 }
 
-.sheet[data-picking="true"] .mark {
+.sheet[data-picking="true"] .mark,
+.sheet[data-picking="true"] .mark-hit {
   pointer-events: none;
 }
 
@@ -1288,7 +1419,8 @@ progress {
   font-variant-numeric: tabular-nums;
 }
 
-.item[data-check] .item-no {
+.item[data-check] .item-no,
+.item[data-candidate] .item-no {
   background: transparent;
   color: var(--check);
   border: var(--bw-2) dashed var(--check);
@@ -1455,6 +1587,17 @@ progress {
 
 .clean-count {
   margin: 0 0 var(--space-3);
+  font-weight: 700;
+}
+
+/* 見えている候補の前と後（見えない情報の数とは別の行。紅にしない） */
+.clean-candidates {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  font-size: var(--text-small);
+}
+
+.clean-candidates::before {
+  content: "ｉ ";
   font-weight: 700;
 }
 
@@ -1735,8 +1878,8 @@ progress {
     min-width: 0;
     text-align: right;
   }
-  .hero {
-    font-size: 1rem;
+  .hero-title {
+    font-size: var(--fs-h2);
   }
   .drop {
     margin-top: var(--space-3);
@@ -1960,11 +2103,38 @@ progress {
   color: var(--color-muted);
 }
 
-/* ページの絵の上の印：見た目はそのままで、押せる所だけを 44px まで広げる（透明の余白。指で押しやすく） */
-.mark::after {
-  content: "";
+/*
+ * ページの絵の上の、見つかった所の押す所（透明）。見た目の枠（.mark）はそのままの大きさで描き、押す所だけを、
+ * 枠を中心に縦横とも 44px 以上にする（check:layout は要素の箱で測るので、::after で広げるのでは数えられない）。
+ * --x・--y・--w・--h は、ページの上の位置（%）。幅と左は横の長さ、高さと上は縦の長さに対して決まる
+ */
+.mark-hit {
   position: absolute;
-  inset: min(0px, calc((100% - var(--target-min)) / 2));
+  left: calc(var(--x) + (var(--w) - max(var(--w), var(--target-min))) / 2);
+  top: calc(var(--y) + (var(--h) - max(var(--h), var(--target-min))) / 2);
+  width: max(var(--w), var(--target-min));
+  height: max(var(--h), var(--target-min));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* 見た目の枠（見つかった所・消した所・自分で選んだ所）は押せない。押すのは上の .mark-hit */
+.mark {
+  pointer-events: none;
+}
+
+/* とても狭い窓（字を大きくしたスマートフォンなど。幅を rem で測るので、字が大きいほど早く効く）：
+   上の帯のロゴと紹介のリンクを、横に並べきれなければ 2 段にする（横にはみ出さない） */
+@container page (max-width: 16rem) {
+  .band {
+    flex-wrap: wrap;
+  }
+  .about-link {
+    margin-left: 0;
+    text-align: left;
+  }
 }
 
 /* 高さの低い窓（横向きのスマートフォン・大きな拡大）：上の帯を詰め、「整える」が早く見えるようにする */
