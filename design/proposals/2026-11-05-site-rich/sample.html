@@ -1,0 +1,241 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  サイトのページを「もっとリッチに」する案の見本（2026-11-05）。手元で開いて見るためのファイルで、サイトには載せない。
+  値は design/tokens.css・design/sheet.css だけを使う。外から何も読み込まない（CLAUDE.md §2-1）。中身はすべて架空。
+  参考に挙げられたサイトは見ていない（形・配色を写さないため）。シートの色だけから作った。
+-->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>サイトの立体感の見本</title>
+<link rel="stylesheet" href="../../tokens.css">
+<link rel="stylesheet" href="../../sheet.css">
+<style>
+@font-face {
+  font-family: "Noto Sans JP Omamori";
+  src: url("../../../src/assets/fonts/NotoSansJP-subset.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+/* ================= 案：足す変数（当てるときは design/sheet.css に足す） */
+:root {
+  /* 重ねたやわらかい影（墨の色を薄くしたもの。黒にしない） */
+  --shadow-rest: 0 1px 1px rgb(43 42 40 / 4%), 0 2px 4px rgb(43 42 40 / 5%), 0 6px 12px rgb(43 42 40 / 5%);
+  --shadow-lift: 0 2px 2px rgb(43 42 40 / 4%), 0 8px 12px rgb(43 42 40 / 7%), 0 18px 32px rgb(43 42 40 / 10%);
+  --shadow-press: 0 1px 1px rgb(43 42 40 / 6%), inset 0 2px 3px rgb(43 42 40 / 10%);
+  --shadow-pill: 0 1px 0 rgb(43 42 40 / 6%), 0 2px 4px rgb(43 42 40 / 6%);
+  --lift: -3px; /* ホバーで浮く高さ */
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --dur: 0.2s;
+  /* フォーカス：1 色（墨）。外側に 3px 離して 3px の線。白・薄い地・墨の地のどこでも見分けられる */
+  --focus-one: 3px solid var(--ink-900);
+  --focus-gap: 3px;
+}
+
+* { box-sizing: border-box; }
+html { font-size: var(--fs-root); font-family: var(--font-body); line-height: var(--lh-body); letter-spacing: var(--tracking); color: var(--text-strong); background: var(--surface-sunken); }
+body { margin: 0; overflow-wrap: anywhere; }
+a[href], button, label, summary, input[type="checkbox"] { cursor: pointer; }
+
+/* 1 色のフォーカス（黄と黒の 2 重にしない） */
+:focus-visible { outline: var(--focus-one); outline-offset: var(--focus-gap); box-shadow: none; }
+/* 墨の地のボタンだけは、墨の線が地に溶けないよう、白のすき間を見せる（線は 1 色のまま） */
+.btn-primary:focus-visible { outline-offset: var(--focus-gap); }
+
+.band { display: flex; align-items: center; gap: var(--sp-5); padding: var(--sp-3) max(var(--sp-5), calc((100% - 52rem) / 2 + var(--sp-5))); background: var(--surface-page); border-bottom: var(--bw-2) solid var(--line-strong); font-weight: 700; }
+.wrap { max-width: 52rem; margin-inline: auto; padding: var(--sp-6) var(--sp-5) var(--sp-8); }
+h1 { font-size: var(--fs-h1); line-height: var(--lh-head); margin: 0 0 var(--sp-3); }
+h1::after { content: ""; display: block; width: 3rem; height: 4px; margin-top: var(--sp-3); background: var(--danger); border-radius: 2px; }
+h2 { font-size: var(--fs-h2); margin: var(--sp-7) 0 var(--sp-3); padding-left: var(--sp-3); border-left: 4px solid var(--line-strong); }
+.note { color: var(--text-muted); font-size: var(--fs-small); margin: 0 0 var(--sp-4); max-width: var(--measure); }
+.label { display: inline-block; font-size: var(--fs-small); font-weight: 700; color: var(--text-muted); margin: 0 0 var(--sp-2); }
+
+/* ================= 1. タグ：角の丸い札（ピル）。薄い地・やわらかい影・ホバーで少し浮く・押すと沈む */
+.tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); padding: 0; margin: 0; list-style: none; }
+.pill {
+  display: inline-flex; align-items: center; gap: 0.35em; min-height: 44px; padding: 0 var(--sp-4);
+  border-radius: var(--radius-pill); border: var(--bw-1) solid var(--ink-300);
+  background: linear-gradient(var(--surface-card), var(--ink-50)); /* 上を少し明るく：ふくらみ */
+  box-shadow: var(--shadow-pill); color: var(--text-strong); font-size: var(--fs-small); font-weight: 700; text-decoration: none;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur);
+}
+.pill .n { font-weight: 400; color: var(--text-muted); }
+.pill:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--line-control); }
+.pill:active { transform: translateY(0); box-shadow: var(--shadow-press); }
+.pill[aria-current="page"] { background: var(--surface-strong); border-color: var(--surface-strong); color: var(--text-on-strong); }
+.pill[aria-current="page"]::before { content: "✓"; } /* 色だけでなく、印でも分かる */
+.pill[aria-current="page"] .n { color: var(--ink-200); }
+/* 型の番号（P1 など）は、紅の細い輪の小さな札 */
+.pnum { display: inline-grid; place-items: center; min-width: 2.4em; padding: 0 0.5em; border-radius: var(--radius-pill); border: 1.5px solid var(--beni-700); color: var(--beni-700); background: var(--beni-50); font-size: 0.85rem; font-weight: 700; line-height: 1.6; }
+
+/* ================= 2. 札（記事のカード）：重ねた影で奥行き。ホバーで少し浮き、図が少し動く */
+.cards { display: grid; gap: var(--sp-5); grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); padding: 0; margin: 0; list-style: none; }
+.card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface-card); border-radius: var(--radius-l); border: var(--bw-1) solid rgb(43 42 40 / 8%);
+  box-shadow: var(--shadow-rest);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.card:hover, .card:focus-within { transform: translateY(var(--lift)); box-shadow: var(--shadow-lift); }
+.card-fig { aspect-ratio: 16 / 9; background: var(--surface-subtle); display: grid; place-items: center; overflow: hidden; border-bottom: 1px solid var(--line-hair); }
+.card-fig svg { width: 70%; height: auto; transition: transform 0.35s var(--ease); }
+.card:hover .card-fig svg { transform: translateY(-3px) scale(1.03); }
+.card-body { padding: var(--sp-3) var(--sp-4) var(--sp-4); display: grid; gap: var(--sp-2); }
+.card-title { font-weight: 700; line-height: var(--lh-head); color: inherit; text-decoration: none; }
+.card-title::after { content: ""; position: absolute; inset: 0; } /* 札のどこを押しても記事へ（タグは上に重ねて別に押せる） */
+.card-title:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.card .tags { position: relative; z-index: 1; }
+.card .pill { min-height: 36px; padding: 0 var(--sp-3); }
+.card-desc { margin: 0; font-size: var(--fs-small); color: var(--text-muted); }
+
+/* ================= ボタン */
+.buttons { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.btn {
+  min-height: 52px; padding: 0 var(--sp-5); border-radius: var(--radius-m); font: inherit; font-weight: 700; border: var(--bw-1) solid transparent;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur);
+}
+.btn-primary { color: var(--text-on-strong); background: linear-gradient(var(--ink-800), var(--ink-900)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), var(--shadow-rest); }
+.btn-secondary { color: var(--text-strong); background: linear-gradient(var(--surface-card), var(--ink-50)); border-color: var(--line-control); box-shadow: var(--shadow-rest); }
+.btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+.btn:active { transform: translateY(1px); box-shadow: var(--shadow-press); }
+
+/* ================= 3. 入力欄：角の丸み・内側の薄い影（へこみ） */
+.field { display: grid; gap: var(--sp-2); max-width: 30rem; }
+.field label { font-weight: 700; }
+.input {
+  min-height: 48px; padding: 0 var(--sp-4); font: inherit; color: var(--text-strong);
+  background: var(--surface-card); border: var(--bw-2) solid var(--line-control); border-radius: var(--radius-pill);
+  box-shadow: inset 0 1px 2px rgb(43 42 40 / 8%);
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.input:hover { border-color: var(--line-strong); }
+
+/* ================= 点検の一覧のカード */
+.steps-card { background: var(--surface-card); border-radius: var(--radius-l); box-shadow: var(--shadow-rest); overflow: hidden; border: 1px solid rgb(43 42 40 / 8%); transition: box-shadow var(--dur) var(--ease); }
+.steps-card:hover { box-shadow: var(--shadow-lift); }
+.steps-head { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); background: var(--surface-subtle); border-bottom: 2px solid var(--line-strong); font-weight: 700; }
+.step-no { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 50%; color: #fff; background: radial-gradient(circle at 35% 30%, var(--ink-700), var(--ink-900) 70%); box-shadow: 0 2px 4px rgb(43 42 40 / 25%); }
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li + li { border-top: 1px solid var(--line-hair); }
+.checks label { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); transition: background var(--dur); }
+.checks label:hover { background: var(--surface-subtle); }
+.checks input { width: 1.4rem; height: 1.4rem; margin: 0.2rem 0 0; accent-color: var(--ok); }
+
+/* ================= 5. 3D の飾り（CSS だけ）：傾けて重ねた PDF の紙と、お守りの札。ゆっくり浮く */
+.hero { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-5); align-items: center; padding: var(--sp-5); background: var(--surface-card); border-radius: var(--radius-l); box-shadow: var(--shadow-rest); border: 1px solid rgb(43 42 40 / 8%); }
+.hero p { margin: 0; }
+.stage { width: 220px; height: 180px; perspective: 700px; }
+.stack { position: relative; width: 120px; height: 150px; margin: 10px auto 0; transform-style: preserve-3d; transform: rotateX(52deg) rotateZ(-38deg); animation: float 6s ease-in-out infinite; }
+.sheet { position: absolute; inset: 0; border-radius: 6px; background: #fff; border: 1px solid var(--ink-300); box-shadow: 0 1px 0 var(--ink-300), 0 18px 24px rgb(43 42 40 / 14%); }
+.sheet:nth-child(1) { transform: translateZ(0); background: var(--ink-50); }
+.sheet:nth-child(2) { transform: translateZ(14px); }
+.sheet:nth-child(3) { transform: translateZ(28px); padding: 16px 14px; display: grid; gap: 9px; align-content: start; }
+.line { height: 6px; border-radius: 3px; background: var(--ink-200); }
+.line.short { width: 60%; }
+.bar { height: 10px; border-radius: 2px; background: var(--ink-900); width: 75%; } /* 黒塗り */
+.badge { position: absolute; right: -14px; top: -10px; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; transform: translateZ(60px) rotateZ(38deg) rotateX(-52deg); background: radial-gradient(circle at 35% 30%, #4b8a78, var(--midori-700) 65%); box-shadow: 0 10px 16px rgb(36 87 72 / 30%); }
+@keyframes float { 0%, 100% { transform: rotateX(52deg) rotateZ(-38deg) translateZ(0); } 50% { transform: rotateX(52deg) rotateZ(-38deg) translateZ(10px); } }
+
+/* 動きを減らす設定の人には、動き（浮く・傾く・ゆっくり浮く）を出さない。影の変化だけ残す */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+  .pill:hover, .card:hover, .card:focus-within, .btn:hover, .btn:active, .card:hover .card-fig svg { transform: none; }
+}
+
+.cmp { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: var(--sp-4); }
+.cmp > div { background: var(--surface-card); border-radius: var(--radius-l); padding: var(--sp-4); box-shadow: var(--shadow-rest); }
+.cmp h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-h3); }
+.cmp p { margin: 0 0 var(--sp-2); font-size: var(--fs-small); }
+@media (max-width: 40rem) { .hero { grid-template-columns: 1fr; } .stage { margin-inline: auto; } }
+</style>
+</head>
+<body>
+<header class="band">お守りPDF　サイトの立体感の見本（案）</header>
+<main class="wrap">
+  <h1>もっとリッチに：影・ピル・ホバー</h1>
+  <p class="note">色はシート（墨・紅・緑と薄い地）だけ。影は墨を薄くして何層か重ね、ホバーで少し浮き、押すと沈みます。動きを減らす設定の人には、動きを出しません。</p>
+
+  <h2>5. 立体感のある飾り（CSS だけの案）</h2>
+  <div class="hero">
+    <div>
+      <p class="label">トップ・見出しまわりの飾りの案</p>
+      <p>傾けて重ねた PDF の紙に、黒塗りの帯と「済」の緑の札。CSS の 3D（傾き・重なった影）だけで、ライブラリも画像も使いません。ゆっくり浮きます。</p>
+    </div>
+    <div class="stage" aria-hidden="true">
+      <div class="stack">
+        <div class="sheet"></div>
+        <div class="sheet"></div>
+        <div class="sheet"><div class="line"></div><div class="bar"></div><div class="line"></div><div class="line short"></div><div class="line"></div></div>
+        <div class="badge">✓</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>1. タグ（ピル）</h2>
+  <p class="label">種類</p>
+  <ul class="tags">
+    <li><a class="pill" href="#" aria-current="page">すべて <span class="n">32</span></a></li>
+    <li><a class="pill" href="#">型の解説 <span class="n">25</span></a></li>
+    <li><a class="pill" href="#">手順 <span class="n">7</span></a></li>
+  </ul>
+  <p class="label" style="margin-top:var(--sp-3)">話題</p>
+  <ul class="tags">
+    <li><a class="pill" href="#">黒塗り <span class="n">5</span></a></li>
+    <li><a class="pill" href="#">見えない字 <span class="n">5</span></a></li>
+    <li><a class="pill" href="#">文書の情報 <span class="n">8</span></a></li>
+    <li><a class="pill" href="#">前の版 <span class="n">3</span></a></li>
+  </ul>
+  <p class="note" style="margin-top:var(--sp-3)">選んでいるタグは墨の地に白の字と「✓」。ほかは白からごく薄い墨へのふくらみと、やわらかい影。</p>
+
+  <h2>2. 記事の札</h2>
+  <ul class="cards">
+    <li class="card">
+      <div class="card-fig"><svg viewBox="0 0 120 70" aria-hidden="true"><rect x="8" y="6" width="40" height="58" rx="3" fill="#fff" stroke="#8a857c"/><rect x="14" y="16" width="28" height="4" rx="2" fill="#d9d4ca"/><rect x="14" y="26" width="28" height="7" fill="#2b2a28"/><rect x="14" y="38" width="22" height="4" rx="2" fill="#d9d4ca"/><path d="M54 35h16" stroke="#8a857c" stroke-width="2"/><rect x="74" y="22" width="38" height="26" rx="4" fill="#fbf3f2" stroke="#a3201b"/><rect x="80" y="31" width="26" height="4" rx="2" fill="#a3201b"/></svg></div>
+      <div class="card-body">
+        <a class="card-title" href="#"><span class="pnum">P6</span> 見せかけの黒塗り：黒い四角の下に、字が残る</a>
+        <p class="card-desc">黒い四角を重ねただけでは、下の字が残ります。</p>
+        <ul class="tags"><li><a class="pill" href="#">型の解説</a></li><li><a class="pill" href="#">黒塗り</a></li></ul>
+      </div>
+    </li>
+    <li class="card">
+      <div class="card-fig"><svg viewBox="0 0 120 70" aria-hidden="true"><rect x="8" y="6" width="40" height="58" rx="3" fill="#fff" stroke="#8a857c"/><rect x="14" y="16" width="28" height="4" rx="2" fill="#d9d4ca"/><rect x="14" y="26" width="28" height="4" rx="2" fill="#d9d4ca"/><path d="M54 35h16" stroke="#8a857c" stroke-width="2"/><rect x="74" y="16" width="38" height="38" rx="4" fill="#f7f5f1" stroke="#8a857c"/><rect x="80" y="24" width="26" height="4" rx="2" fill="#d9d4ca"/><rect x="80" y="33" width="26" height="6" rx="2" fill="#fbf3f2" stroke="#a3201b"/></svg></div>
+      <div class="card-body">
+        <a class="card-title" href="#"><span class="pnum">P1</span> 文書情報に、作った人の名前が残る</a>
+        <p class="card-desc">作成者の欄に、架空の個人名が残る例です。</p>
+        <ul class="tags"><li><a class="pill" href="#">型の解説</a></li><li><a class="pill" href="#">文書の情報</a></li></ul>
+      </div>
+    </li>
+  </ul>
+
+  <h2>ボタン・3. 入力欄・4. フォーカス</h2>
+  <div class="buttons">
+    <button class="btn btn-primary" type="button">検査のページで確かめる</button>
+    <button class="btn btn-secondary" type="button">記事の一覧へ</button>
+  </div>
+  <div class="field" style="margin-top:var(--sp-5)">
+    <label for="q">記事を探す（題・説明・タグから）</label>
+    <input class="input" id="q" type="search" autocomplete="off">
+  </div>
+  <p class="note" style="margin-top:var(--sp-3)">フォーカスは墨の 1 色の線（3px）を、3px 離して出します。黄と黒の 2 重にはしません。白・薄い地では 12〜14:1、墨のボタンでは 3px のすき間（下の地の色）を挟むので、線と地が分かれて見えます。</p>
+
+  <h2>点検の一覧のカード</h2>
+  <section class="steps-card">
+    <div class="steps-head"><span class="step-no" aria-hidden="true">1</span>作る時（元のファイル）</div>
+    <ul class="checks">
+      <li><label><input type="checkbox"><span>ファイルの情報（作成者・会社名・題など）に、出してよくない名前が入っていないか（P1・P2）</span></label></li>
+      <li><label><input type="checkbox"><span>コメント・変更の履歴・メモを、消すか、すべて確定したか（P8）</span></label></li>
+    </ul>
+  </section>
+
+  <h2>決めてほしいこと：3D の入れ方</h2>
+  <div class="cmp">
+    <div><h3>A. CSS だけ（おすすめ）</h3><p>上の飾り。足す重さは CSS の数 KB だけ。ライブラリなし。CSP を変えない。</p><p>動きを減らす設定では止まる。</p></div>
+    <div><h3>B. SVG の絵</h3><p>同じ形を、斜めから見た SVG の絵にする。数 KB。動きは小さくなる。</p></div>
+    <div><h3>C. 本物の 3D モデル</h3><p>3D の描画のライブラリと、モデルのファイル（同じサイトに置く）。重さは測っていない【 】KB。WebGL が使えない端末への代わりも要る。</p></div>
+  </div>
+</main>
+</body>
+</html>

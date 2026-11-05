@@ -8,7 +8,8 @@
 // - サイトのページ（記事・プライバシー。site.ts が作る）も含め、すべての HTML に同じ CSP の <meta> があり、
 //   直接書いたスクリプト・style がなく、外から読み込んでいないか（公式の URL を指す canonical のリンクと、GitHub を指す <a> のリンクだけは許す）
 // - 検索エンジンの確認のファイル（public/ の googleXXXX.html）は、中身が決まった1行のときだけ通す（src/site/search-console.ts）
-// - サイトのページ（index.html 以外）はスクリプトを持たない。例外は、記事の一覧のページの検索のスクリプト 1 つだけ（src/site/article-search.js）
+// - サイトのページ（index.html 以外）はスクリプトを持たない。例外は、記事の一覧のページの検索のスクリプト（src/site/article-search.js）と
+//   3D の飾りの読み込み役（src/site/site-3d.js。2026-11-05 本人が承認）、1 つずつだけ
 // - assets/ のファイルは、名前に中身のハッシュが付いている（.htaccess で 1 年キャッシュさせるため）
 // - 自前の 404 のページ（404.html）がある（.htaccess の ErrorDocument が指す）
 // - お問い合わせのページ（contact.html）だけ、CSP の form-action が 'self'（ほかは同じ値）。.htaccess も同じ値を、そのページと送り先にだけ返す
@@ -132,18 +133,28 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
   }
   const inlineScript = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/\bsrc=/.test(m[1]) || m[2].trim() !== "");
   if (inlineScript.length) problems.push(`${rel} に直接書いたスクリプトが ${inlineScript.length} か所あります`);
-  // サイトのページ（index.html 以外）はスクリプトを持たない。例外は1つだけ：記事の一覧のページが、検索のスクリプトを1つ読み込む
-  // （2026-11-05 本人が決定。src/site/article-search.js。題・説明・タグをページの中で探すだけで、通信しない）
+  // サイトのページ（index.html 以外）はスクリプトを持たない。例外は記事の一覧のページだけで、次の 2 つ（それぞれ 1 つまで）：
+  // - 検索のスクリプト（2026-11-05 本人が決定。src/site/article-search.js。題・説明・タグをページの中で探すだけで、通信しない）
+  // - 3D の飾りの読み込み役（2026-11-05 本人が承認。src/site/site-3d.js。手が空いてから、同じサイトの 3D の描画を import() で読む）
+  // 読み込み役が読む 3D の描画（data-scene）も、dist/ にあるか・HTML として解釈させる書き方や eval がないかを同じく見る
   if (rel !== "index.html") {
     const scripts = [...text.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
-    const allowed = rel === "articles/index.html" ? scripts.filter((s) => /^<script type="module" src="\/assets\/article-search-[0-9a-f]{10}\.js">$/.test(s)) : [];
-    if (scripts.length !== allowed.length || allowed.length > 1) problems.push(`${rel} にスクリプトがあります（サイトのページで許すのは、記事の一覧のページの検索のスクリプト 1 つだけ）`);
-    for (const s of allowed) {
-      const src = s.match(/src="\/([^"]+)"/)[1];
+    const kinds = [
+      { re: /^<script type="module" src="\/assets\/article-search-[0-9a-f]{10}\.js">$/, label: "検索のスクリプト" },
+      { re: /^<script type="module" src="\/assets\/site-3d-[0-9a-f]{10}\.js">$/, label: "3D の飾りの読み込み役" },
+    ];
+    const allowed = rel === "articles/index.html" ? scripts.filter((s) => kinds.some((k) => k.re.test(s))) : [];
+    const twice = kinds.some((k) => allowed.filter((s) => k.re.test(s)).length > 1);
+    if (scripts.length !== allowed.length || twice) problems.push(`${rel} にスクリプトがあります（サイトのページで許すのは、記事の一覧のページの検索のスクリプトと 3D の飾りの読み込み役、1 つずつだけ）`);
+    const srcs = allowed.map((s) => ({ src: s.match(/src="\/([^"]+)"/)[1], label: kinds.find((k) => k.re.test(s)).label }));
+    const scene = rel === "articles/index.html" ? text.match(/data-scene="\/(assets\/omamori-3d-[0-9a-f]{10}\.js)"/) : null;
+    if (/data-scene=/.test(text) && !scene) problems.push(`${rel} の data-scene が、/assets/omamori-3d-<ハッシュ>.js を指していません`);
+    if (scene) srcs.push({ src: scene[1], label: "3D の描画（読み込み役があとから読む）" });
+    for (const { src, label } of srcs) {
       if (!existsSync(path.join(DIST, src))) problems.push(`${rel} が読み込む ${src} が、dist/ にありません`);
       else if (/\.(innerHTML|outerHTML)\b|insertAdjacentHTML|document\.write|\beval\s*\(|new\s+Function\s*\(/.test(readFileSync(path.join(DIST, src), "utf8"))) {
         problems.push(`${src} に、字を HTML として解釈させる書き方か eval があります`);
-      } else allowedHtml.push(`${rel}（検索のスクリプト ${src} を読み込む。サイトのページで、ただ1つの例外）`);
+      } else allowedHtml.push(`${rel}（${label} ${src}。サイトのページの例外）`);
     }
   }
   if (/<style\b/.test(text) || /\sstyle="/.test(text)) problems.push(`${rel} に直接書いた style があります`);
@@ -246,7 +257,7 @@ if (allowed.length) {
   for (const a of allowed) console.log(`  - ${a}`);
 }
 if (allowedHtml.length) {
-  console.log("\n例外として通したもの（検索エンジンの確認のファイル・記事の一覧の検索のスクリプト・お問い合わせの送り先）：");
+  console.log("\n例外として通したもの（検索エンジンの確認のファイル・記事の一覧の検索のスクリプトと 3D の飾り・お問い合わせの送り先）：");
   for (const a of allowedHtml) console.log(`  - ${a}`);
 }
 if (problems.length) {

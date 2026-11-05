@@ -215,7 +215,7 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     const r1 = run(good);
     expect(r1.out).not.toContain("問題：");
     expect(r1.code).toBe(0);
-    expect(r1.out).toContain("articles/index.html（検索のスクリプト assets/article-search-0123456789.js を読み込む");
+    expect(r1.out).toContain("articles/index.html（検索のスクリプト assets/article-search-0123456789.js。サイトのページの例外）");
 
     const bad = withPages({
       "articles/index.html": page(CSP_OK, `${tag}<script type="module" src="/assets/other-0123456789.js"></script>`),
@@ -231,6 +231,34 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     const missing = run(withPages({ "articles/index.html": page(CSP_OK, tag) }));
     expect(missing.code).toBe(1);
     expect(missing.out).toContain("assets/article-search-0123456789.js が、dist/ にありません");
+  });
+
+  it("記事の一覧のページの 3D の飾り：読み込み役 1 つと、それが読む描画（data-scene）だけを通す（2026-11-05 本人が承認）", () => {
+    const loader = '<script type="module" src="/assets/site-3d-0123456789.js"></script>';
+    const hero = '<div class="site-hero" data-scene="/assets/omamori-3d-abcdef0123.js"></div>';
+    const good = withPages({ "articles/index.html": page(CSP_OK, `${hero}${loader}`) });
+    writeFileSync(path.join(good, "assets", "site-3d-0123456789.js"), "export const x = 1;\n");
+    writeFileSync(path.join(good, "assets", "omamori-3d-abcdef0123.js"), "export function mount() { return true; }\n");
+    const r1 = run(good);
+    expect(r1.out).not.toContain("問題：");
+    expect(r1.code).toBe(0);
+    expect(r1.out).toContain("3D の飾りの読み込み役 assets/site-3d-0123456789.js");
+    expect(r1.out).toContain("3D の描画（読み込み役があとから読む） assets/omamori-3d-abcdef0123.js");
+
+    // 読み込み役が 2 つ・ほかのページに置く・描画に eval・data-scene がほかの場所を指す
+    const bad = withPages({
+      "articles/index.html": page(CSP_OK, `${hero}${loader}${loader}`),
+      "faq.html": page(CSP_OK, loader),
+      "terms.html": page(CSP_OK, '<div data-scene="https://example.com/x.js"></div>'),
+    });
+    writeFileSync(path.join(bad, "assets", "site-3d-0123456789.js"), "export const x = 1;\n");
+    writeFileSync(path.join(bad, "assets", "omamori-3d-abcdef0123.js"), "eval(location.hash);\n");
+    const r2 = run(bad);
+    expect(r2.code).toBe(1);
+    expect(r2.out).toContain("articles/index.html にスクリプトがあります");
+    expect(r2.out).toContain("faq.html にスクリプトがあります");
+    expect(r2.out).toContain("terms.html の data-scene が");
+    expect(r2.out).toContain("assets/omamori-3d-abcdef0123.js に、字を HTML として解釈させる書き方か eval があります");
   });
 
   it("検索エンジンの確認のファイルは、決まった1行のときだけ通す", () => {

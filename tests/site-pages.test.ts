@@ -225,8 +225,8 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
   const lock = JSON.parse(read("package-lock.json")).packages;
   const md = read("docs/licenses.md");
 
-  it("npm の部品は、pdf-lib・pdfjs-dist と pdf-lib の依存だけで、package-lock.json と同じ版・ライセンス", () => {
-    expect(d.shipped.map((r) => r.name).sort()).toEqual(["@pdf-lib/standard-fonts", "@pdf-lib/upng", "pako", "pdf-lib", "pdfjs-dist", "tslib"]);
+  it("npm の部品は、pdf-lib・pdfjs-dist・three（記事の一覧の 3D の飾り）と pdf-lib の依存だけで、package-lock.json と同じ版・ライセンス", () => {
+    expect(d.shipped.map((r) => r.name).sort()).toEqual(["@pdf-lib/standard-fonts", "@pdf-lib/upng", "pako", "pdf-lib", "pdfjs-dist", "three", "tslib"]);
     for (const r of d.shipped) {
       expect(r.version, r.name).toBe(lock[`node_modules/${r.name}`].version);
       expect(r.license, r.name).toBe(lock[`node_modules/${r.name}`].license);
@@ -305,7 +305,8 @@ describe("配るものに入る部品（SHIPPED_ROOTS）が、コードの読み
     const list = (dir: string): string[] =>
       readdirSync(dir).flatMap((n) => {
         const p = path.join(dir, n);
-        return statSync(p).isDirectory() ? list(p) : /\.ts$/.test(n) ? [p] : [];
+        // .js も見る（サイトの 3D の飾り src/site/omamori-3d-scene.js が three を読むため）
+        return statSync(p).isDirectory() ? list(p) : /\.(ts|js)$/.test(n) ? [p] : [];
       });
     // Node でだけ動く所（sanitize/node・sanitize/check）は、配るものに入らない
     const files = ["src", "rules", "sanitize"].flatMap((d) => list(path.join(ROOT, d))).filter((f) => !/[\\/]sanitize[\\/](node|check)[\\/]/.test(f));

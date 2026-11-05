@@ -16,7 +16,7 @@ import type { LicenseData, LicenseEntry } from "./src/site/pages.ts";
  * 画面（src/）・ルール（rules/）・片付け（sanitize/）が読み込むライブラリ。これとその依存が、配るもの（dist/）に入る。
  * ほかのライブラリを読み込むようにしたら、ここに足す（tests/site-pages.test.ts が、読み込みと食い違えば止める）
  */
-export const SHIPPED_ROOTS = ["pdf-lib", "pdfjs-dist"];
+export const SHIPPED_ROOTS = ["pdf-lib", "pdfjs-dist", "three"]; // three：記事の一覧の 3D の飾り（2026-11-05 本人が承認）
 
 /** 書体のうち、ブラウザに配るもの（docs/licenses.md の置き場所が src/assets/ のもの） */
 export const SHIPPED_FONT_DIR = /(^|[^\w/])src\/assets\//;

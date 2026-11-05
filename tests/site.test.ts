@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { cspForContactMeta, cspForMeta } from "../csp.ts";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
-import { renderRobots, renderSitemap, searchScript, siteFiles, verificationMeta } from "../site.ts";
+import { heroScripts, renderRobots, renderSitemap, searchScript, siteFiles, verificationMeta } from "../site.ts";
 import { usedTags } from "../src/site/article-index.ts";
 import { ARTICLES } from "../src/site/articles.ts";
 import { GUIDE_PATHS } from "../src/site/pages.ts";
@@ -109,9 +109,10 @@ describe("ページの HTML", () => {
       expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/`);
       // お問い合わせのページだけ、form-action 'self'（同じサイトへのフォームの送信）だけが違う CSP（docs/contact.md）
       expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(name === "contact.html" ? cspForContactMeta : cspForMeta)}" />`);
-      // スクリプトを持たない。例外は1つだけ：記事の一覧のページの、検索のスクリプト（2026-11-05 本人が決定。src/site/article-search.js）
+      // スクリプトを持たない。例外は記事の一覧のページだけ：検索のスクリプト（2026-11-05 本人が決定）と、3D の飾りの読み込み役（2026-11-05 本人が承認）
       const scripts = page.match(/<script\b[^>]*>/g) ?? [];
-      if (name === "articles/index.html") expect(scripts).toEqual([`<script type="module" src="/${searchScript().file}">`]);
+      if (name === "articles/index.html")
+        expect(scripts).toEqual([`<script type="module" src="/${searchScript().file}">`, `<script type="module" src="/${heroScripts().loader.file}">`]);
       else expect(scripts).toEqual([]);
       expect(page).not.toMatch(/\sstyle=/);
       expect(page).not.toMatch(/\son[a-z]+=/);

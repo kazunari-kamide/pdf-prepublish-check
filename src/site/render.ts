@@ -60,6 +60,8 @@ export interface RenderOptions {
   referrer?: string;
   /** 記事の一覧のページで読み込む、検索のスクリプトの場所（site.ts が置いたもの）。なければ、検索の欄を出さない */
   searchScript?: string;
+  /** 記事の一覧の見出しまわりの 3D の飾り（scene：three.js で描くファイル、loader：あとから読む役。どちらも /assets/ の中） */
+  hero?: { scene: string; loader: string };
 }
 
 export function escapeHtml(s: string): string {
