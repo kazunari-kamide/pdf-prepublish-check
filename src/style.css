@@ -233,16 +233,60 @@ button {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, var(--width-thumbs)) minmax(0, 1fr) minmax(0, var(--width-results));
+  grid-template-columns: minmax(0, var(--width-thumbs)) minmax(0, 1fr) auto minmax(0, var(--results-w, var(--width-results)));
   gap: var(--space-4);
   padding: var(--space-4);
   min-height: 0;
 }
 
 .workspace[data-state="empty"],
-.workspace[data-state="working"],
-.workspace[data-thumbs="none"] {
+.workspace[data-state="working"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--width-results));
+}
+
+.workspace[data-state="result"][data-thumbs="none"] {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, var(--results-w, var(--width-results)));
+}
+
+/* PDF の欄と結果の欄のあいだの仕切り：見た目は墨の細い線、つまむ所は 44px。結果を見ているときだけ出す */
+.splitter {
+  position: relative;
+  width: var(--sp-2);
+  margin: 0 calc(-1 * var(--sp-2));
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.splitter::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--bw-2);
+  transform: translateX(-50%);
+  background: var(--line-default);
+}
+
+.splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--target-min);
+  transform: translateX(-50%);
+}
+
+.splitter:hover::before,
+.splitter[data-dragging="true"]::before,
+.splitter:focus-visible::before {
+  background: var(--line-strong);
+}
+
+.workspace[data-state="empty"] .splitter,
+.workspace[data-state="working"] .splitter {
+  display: none;
 }
 
 /* ---------------------------------------------------------------- 左：縮小した各ページ */
@@ -330,10 +374,34 @@ button {
   cursor: pointer;
 }
 
-.drop:focus-within {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-offset);
-  box-shadow: var(--focus-halo);
+.drop:has(input:focus-visible) {
+  border-style: solid;
+  border-color: var(--line-strong);
+  outline: var(--bw-2) solid var(--line-strong);
+  outline-offset: var(--bw-2);
+}
+
+.drop input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* 「ファイルを選択」：シートの枠だけのボタン（字はブラウザが決める） */
+.drop input::file-selector-button {
+  min-height: var(--target-min);
+  margin-right: var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.drop input::file-selector-button:hover {
+  background: var(--surface-subtle);
 }
 
 .drop[data-over="true"] {
@@ -684,11 +752,44 @@ progress {
 }
 
 .coverage-list li {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+  align-items: baseline;
   gap: 0 var(--space-3);
   padding: var(--space-1) 0;
+}
+
+.coverage-list li .coverage-state {
+  text-align: right;
+}
+
+.coverage-list li .coverage-reason {
+  grid-column: 1 / -1;
+}
+
+.coverage-summary {
+  display: grid;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+  cursor: pointer;
+}
+
+.coverage-summary .group-head {
+  display: inline;
+}
+
+.coverage-summary .group-head::before {
+  content: "▶ ";
+  font-size: 0.8em;
+}
+
+.coverage-details[open] .coverage-summary .group-head::before {
+  content: "▼ ";
+}
+
+.coverage-sum {
+  font-size: var(--text-small);
+  color: var(--text-muted);
 }
 
 .coverage-list li + li {
@@ -987,13 +1088,34 @@ progress {
 }
 
 .item-title {
-  margin-top: var(--space-1);
+  flex: 1 1 12em;
+  min-width: 0;
   font-weight: 700;
   font-size: var(--text-small);
 }
 
+/* 閉じた形を詰める：行の高さと上下の余白を小さく。中身の行（.reveal）も項目のすぐ下に寄せる */
+.items .item {
+  padding-block: var(--space-1);
+  line-height: 1.5;
+}
+
+.items .item-detail {
+  margin-top: 2px;
+}
+
+.items > li > .reveal {
+  margin: 2px 0 var(--space-1);
+}
+
 .item-why {
+  margin-top: var(--space-1);
   font-size: var(--text-small);
+}
+
+/* なぜ危ないかは、押して開いたときだけ出す（閉じた形は 2 行） */
+.item[aria-expanded="false"] .item-why {
+  display: none;
 }
 
 .item-detail {
@@ -1301,6 +1423,9 @@ progress {
     display: flex;
     flex-direction: column;
     padding: var(--space-3);
+  }
+  .splitter {
+    display: none;
   }
   .results {
     order: -1;
