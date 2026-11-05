@@ -57,7 +57,7 @@ describe("保存の前の読み直しで止められたとき", () => {
     ];
     const v = buildBlockedView(l, [{ pattern: "P6", reason: "unsupported_image", label: "画像を塗れませんでした" }] as never);
     expect(v.lines).toEqual(["選んだ所に、字が残っています（ページ 2）：2 件", "画像を塗れませんでした"]);
-    expect(v.headline).toMatch(/片付けられなかった所/);
+    expect(v.headline).toMatch(/消せなかった所/);
     expect([v.headline, ...v.lines].join("")).not.toMatch(/安全です|問題なし/);
   });
 });

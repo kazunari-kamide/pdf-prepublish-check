@@ -266,8 +266,9 @@ describe("検査のページ（index.html）", () => {
     expect(links).toEqual(FOOT_LINKS.map(([h, l]) => [h, l]));
   });
 
-  it("書体の著作権の表示は、ライセンスのページへのリンク1行にした", () => {
-    expect(html).toContain('<a href="/licenses.html">ライセンスのページ</a>');
+  it("書体と部品のライセンスは、下の帯のライセンスのページへのリンクで示す（結果の欄の一文は、2026-11-05 本人の指示で外した）", () => {
+    const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
+    expect(foot).toContain('<a href="/licenses.html">');
     expect(html).not.toContain("© 2014-2021 Adobe");
   });
 });

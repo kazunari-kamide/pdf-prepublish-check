@@ -461,7 +461,7 @@ async function pressSanitize(c, sessionId, evaluate, pdf) {
     return { pressed: false, status: `押せない形でした（${note}）`, count: null, saved: "—", ok: null };
   }
   await evaluate("document.getElementById('sanitize').click(); void 0");
-  const working = "(() => { const s = document.getElementById('status').textContent; return s.startsWith('片付けています') || s.startsWith('片付けた PDF を、最初から'); })()";
+  const working = "(() => { const s = document.getElementById('status').textContent; return /^(片付けています|整えています|片付けた PDF を、最初から|整えた PDF を、最初から)/.test(s); })()";
   // 重いページ（h01）は、片付けと読み直しに時間がかかる。最大 180 秒待つ
   for (let i = 0; i < 900 && (await evaluate(working)); i++) await sleep(200);
   const status = await evaluate("document.getElementById('status').textContent");
