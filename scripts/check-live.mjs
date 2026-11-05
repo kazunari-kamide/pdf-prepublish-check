@@ -137,7 +137,7 @@ try {
   }
   const dir = await get(new URL("assets/", base));
   const listing = dir.status === 200 && /Index of \/assets/i.test(await dir.text());
-  if (listing) problems.push("assets/ を開くと、ファイルの一覧が出ます（Options -Indexes が効いていない）");
+  if (listing) problems.push("assets/ を開くと、ファイルの一覧が出ます（配信先の設定で、フォルダの一覧を止める必要がある）");
   else ok.push(`assets/ を開いても、ファイルの一覧は出ない（${dir.status}）`);
 } catch (e) {
   problems.push(`見つからない場所の確かめができませんでした（${e?.message ?? e}）`);

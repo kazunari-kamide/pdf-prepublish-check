@@ -26,7 +26,6 @@ const decode = (s: string) => s.replace(/&#39;/g, "'");
 function fakeHtaccess(csp: string, headerCsp = `${decode(csp)}; frame-ancestors 'none'`): string {
   return `AddType text/javascript .mjs
 AddType application/wasm .wasm
-Options -Indexes
 ErrorDocument 404 /404.html
 <IfModule mod_headers.c>
   Header always set Content-Security-Policy "${headerCsp}"
@@ -106,12 +105,11 @@ describe("check-dist の .htaccess（docs/deploy.md）", () => {
     expect(r.out).toContain(".htaccess の CSP が、<meta> の CSP（＋ frame-ancestors 'none'）と食い違っています");
   });
 
-  it("ErrorDocument の 404 のページ・Options -Indexes・HSTS がなければ止める", () => {
-    const dir = fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace("Options -Indexes\n", "").replace(/^ {2}Header always set Strict-Transport-Security.*\n/m, ""));
+  it("ErrorDocument の 404 のページ・HSTS がなければ止める", () => {
+    const dir = fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace(/^ {2}Header always set Strict-Transport-Security.*\n/m, ""));
     rmSync(path.join(dir, "404.html"));
     const r = run(dir);
     expect(r.code).toBe(1);
-    expect(r.out).toContain(".htaccess に Options -Indexes がありません");
     expect(r.out).toContain(".htaccess に Strict-Transport-Security のヘッダーがありません");
     expect(r.out).toContain(".htaccess の ErrorDocument 404 が指す 404.html が、dist/ にありません");
   });

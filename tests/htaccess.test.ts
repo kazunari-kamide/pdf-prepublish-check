@@ -30,7 +30,7 @@ describe(".htaccess", () => {
   });
 });
 
-describe(".htaccess の守り（HSTS・埋め込み・一覧・キャッシュ・404）", () => {
+describe(".htaccess の守り（HSTS・埋め込み・キャッシュ・404）", () => {
   const text = buildHtaccess();
 
   it("HSTS は https の応答だけに、1 日から始める（includeSubDomains・preload はまだ付けない）", () => {
@@ -44,8 +44,8 @@ describe(".htaccess の守り（HSTS・埋め込み・一覧・キャッシュ�
     expect(text).toContain('Header always set X-Frame-Options "DENY"');
   });
 
-  it("フォルダの中身の一覧を出さない", () => {
-    expect(text).toMatch(/^Options -Indexes$/m);
+  it("Options は書かない（配信先が .htaccess の Options を許していないと、サイト全体が 500 になるため。docs/deploy.md）", () => {
+    expect(text).not.toMatch(/^\s*Options\b/m);
   });
 
   it("キャッシュ：ふだんは no-cache、assets/ の 200 の応答だけ 1 年。あとの行が上書きする順", () => {

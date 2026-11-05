@@ -75,7 +75,6 @@ if (htaccess !== null) {
   }
   if (!/^\s*AddType text\/javascript \.mjs\s*$/m.test(htaccess)) problems.push(".htaccess に AddType text/javascript .mjs がありません");
   if (!/^\s*AddType application\/wasm \.wasm\s*$/m.test(htaccess)) problems.push(".htaccess に AddType application/wasm .wasm がありません");
-  if (!/^\s*Options -Indexes\s*$/m.test(htaccess)) problems.push(".htaccess に Options -Indexes がありません");
   if (!/^\s*Header always set Strict-Transport-Security "max-age=\d+[^"]*" "expr=%\{HTTPS\} == 'on'"\s*$/m.test(htaccess)) problems.push(".htaccess に Strict-Transport-Security のヘッダーがありません（https の応答だけに付ける形で）");
   const notFound = htaccess.match(/^\s*ErrorDocument 404 \/(\S+)\s*$/m);
   if (!notFound) problems.push(".htaccess に ErrorDocument 404 がありません");
