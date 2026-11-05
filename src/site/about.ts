@@ -383,18 +383,7 @@ ${paperStack("closed")}
       </section>`;
 }
 
-/** 上の帯の案内（このページの区画へのリンクと、記事の一覧。右端に検査のページへのボタン） */
-function aboutNav(): string {
-  return [
-    `        <a href="#lp-how">仕組み</a>`,
-    `        <a href="#lp-scope">見つけるもの</a>`,
-    `        <a href="#lp-faq">よくある質問</a>`,
-    `        <a href="${ARTICLES_PATH}">記事</a>`,
-    `        <a class="lp-nav-cta" href="/">PDF を確かめる</a>`,
-  ].join("\n");
-}
-
 export function renderAbout(o: RenderOptions, cssHref: string): string {
   const body = [hero(), remains(), steps(), trust(), scope(), loop(o), scenes(), faq(), closing()].join("\n");
-  return layout(ABOUT_META, body, o, { bodyClass: "site-lp", extraCssHref: cssHref, navHtml: aboutNav() });
+  return layout(ABOUT_META, body, o, { bodyClass: "site-lp", extraCssHref: cssHref });
 }

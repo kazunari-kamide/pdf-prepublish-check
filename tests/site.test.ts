@@ -14,7 +14,8 @@ import { ARTICLES } from "../src/site/articles.ts";
 import { GUIDE_PATHS } from "../src/site/pages.ts";
 import { tagPath } from "../src/site/tags.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS } from "../src/site/privacy.ts";
-import { escapeHtml, fileFor, renderArticle, sitePaths } from "../src/site/render.ts";
+import { ABOUT_PATH, FOOT_LINKS, NAV_LINKS, escapeHtml, fileFor, pathForFile, renderArticle, sitePaths } from "../src/site/render.ts";
+import { FIGURES, figureSvg } from "../site-figures-draw.ts";
 import type { Section } from "../src/site/types.ts";
 
 const files = siteFiles();
@@ -122,6 +123,28 @@ describe("ページの HTML", () => {
       expect(page).toContain('href="/"');
     });
   }
+
+  it("上の帯・下の帯は、どのページも同じ形：案内 4 つ・右端に検査のページへのボタン・下に紹介のページ。今いるページだけに aria-current", () => {
+    for (const [name, page] of html) {
+      const band = page.split('<header class="site-band">')[1]!.split("</header>")[0]!;
+      const nav = band.split('<nav class="site-nav"')[1]!.split("</nav>")[0]!;
+      expect([...nav.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), name).toEqual(NAV_LINKS.map(([h, l]) => [h, l]));
+      expect(band, name).toContain('<a class="site-band-cta" href="/">PDF を確かめる</a>');
+      const here = pathForFile(name);
+      const current = [...page.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1]);
+      const expected = [...NAV_LINKS, ...FOOT_LINKS].filter(([h]) => h === here).map(([h]) => h);
+      expect(current, name).toEqual(expected);
+    }
+    expect(FOOT_LINKS.map(([h]) => h)).toContain(ABOUT_PATH);
+  });
+
+  it("記事の図は、図の中に枠を描かない（枠は CSS だけ。二重にしない）", () => {
+    for (const slug of Object.keys(FIGURES)) expect(figureSvg(slug).split("</title>")[1]!.trimStart(), slug).toMatch(/^<rect width="640" height="360" fill="#[0-9a-f]{6}"\/>/i);
+    const css = [...files].find(([n]) => /^assets\/site-[0-9a-f]{10}\.css$/.test(n))![1];
+    // 札の縁を薄い値で上書きしない。札の図を拡大しない
+    expect(css).not.toMatch(/border(-[a-z]+)?(-color)?:[^;]*rgb\(43 42 40 \/ 8%\)/);
+    expect(css).not.toMatch(/card-figure\s*\{[^}]*scale\(/);
+  });
 
   it("記事の最後に、検査のページへのつなぎがある", () => {
     for (const a of ARTICLES) expect(files.get(`articles/${a.slug}.html`)).toContain("検査のページで確かめる");
