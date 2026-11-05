@@ -4,6 +4,9 @@
 // - タグの絞り込みは、タグごとのページへのリンクなので、スクリプトなしで使える。
 // - 検索は、記事の一覧のページにだけ、同じサイトのスクリプトのファイル（article-search.js）を1つ読み込む。
 //   検索の欄は hidden で出し、スクリプトが動いたときだけ見せる（動かなくても、一覧とタグはそのまま使える）。
+// - 記事の一覧のページでは、同じスクリプトが、タグのリンク（data-tag）を押したときに、ページを移らずにその場で絞り込む（アドレスは #slug）。
+//   スクリプトが動かないときは、ふつうのリンクとしてタグのページへ移る。タグのページには、スクリプトを入れない。
+// - 札（li.card）の data-article は、ページの移り変わりの動き（motion.ts の view-transition-name）を当てるための印。
 // - 見た目の部品の名前は、デザインシート（design/sheet.md）のもの（card・card-head・card-body・tag）を使う。色や枠はここでは決めない。
 // - 字は、すべて escapeHtml を通す。
 
@@ -19,13 +22,16 @@ export function searchText(a: Article): string {
   return [a.title, a.description, a.pattern ?? "", ...articleTags(a).map((t) => t.label)].join(" ");
 }
 
+/** タグのリンク。inPage（記事の一覧のページ）のときは、その場で絞り込むための data-tag を付ける */
+function tagLink(t: Tag, text: string, inPage: boolean): string {
+  return `<a class="tag site-tag" href="${tagPath(t)}"${inPage ? ` data-tag="${e(t.slug)}" data-tag-label="${e(t.label)}"` : ""}>${text}</a>`;
+}
+
 function card(a: Article, o: RenderOptions, current?: Tag): string {
   const fig = o.figures?.get(a.slug);
-  const tags = articleTags(a).map((t) =>
-    t === current ? `<li><span class="tag site-tag" aria-current="page">${e(t.label)}</span></li>` : `<li><a class="tag site-tag" href="${tagPath(t)}">${e(t.label)}</a></li>`,
-  );
+  const tags = articleTags(a).map((t) => (t === current ? `<li><span class="tag site-tag" aria-current="page">${e(t.label)}</span></li>` : `<li>${tagLink(t, e(t.label), !current)}</li>`));
   return [
-    `          <li class="card" data-search="${e(searchText(a))}">`,
+    `          <li class="card" data-article="${e(a.slug)}" data-tags="${e(articleTags(a).map((t) => t.slug).join(" "))}" data-search="${e(searchText(a))}">`,
     // 一覧の小さな図は、すぐ横に題があるので飾りとして扱う（alt を空にする）
     ...(fig ? [`            <img class="card-figure" src="${e(fig.href)}" alt="" width="${fig.width}" height="${fig.height}" loading="lazy" />`] : []),
     `            <a class="card-head" href="${articlePath(a)}">${a.pattern ? `<span class="tag site-tag">${e(a.pattern)}</span>` : ""}${e(a.title)}</a>`,
@@ -43,14 +49,15 @@ function tagNav(current?: Tag): string {
   const link = (t: Tag) => {
     const n = ARTICLES.filter((a) => articleTags(a).includes(t)).length;
     const label = `${e(t.label)}（${n}）`;
-    return t === current ? `<li><span class="tag site-tag" aria-current="page">${label}</span></li>` : `<li><a class="tag site-tag" href="${tagPath(t)}">${label}</a></li>`;
+    return t === current ? `<li><span class="tag site-tag" aria-current="page">${label}</span></li>` : `<li>${tagLink(t, label, !current)}</li>`;
   };
   const group = (g: Tag["group"]) => TAGS.filter((t) => t.group === g && used.has(t)).map(link).join("");
-  const all = current ? `<a href="${ARTICLES_PATH}">すべての記事（${ARTICLES.length}）</a>` : `<span aria-current="page">すべての記事（${ARTICLES.length}）</span>`;
+  // 記事の一覧のページでは「すべての記事」もリンクにしておき、その場で絞り込んだあとに、元へ戻すのに使う（data-tag=""）
+  const all = current ? `<a href="${ARTICLES_PATH}">すべての記事（${ARTICLES.length}）</a>` : `<a href="${ARTICLES_PATH}" data-tag="" aria-current="page">すべての記事（${ARTICLES.length}）</a>`;
   return [
     `      <nav class="site-section site-tag-nav" aria-label="タグで絞り込む">`,
     `        <h2>タグで絞り込む</h2>`,
-    `        <p>${all}</p>`,
+    `        <p class="site-tag-all">${all}</p>`,
     `        <p class="site-tag-group">種類</p>`,
     `        <ul class="site-tag-list">${group("kind")}</ul>`,
     `        <p class="site-tag-group">話題</p>`,
