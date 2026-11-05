@@ -29,9 +29,14 @@ import { expectedTextOf } from "./remap.ts";
 import { loadPdf } from "../shared/load.ts";
 import { darkFractionOf, readImagePixels, type PixelRead } from "../p6-text/images.ts";
 import { DEFAULT_SETTINGS as P6_SETTINGS } from "../p6-text/settings.ts";
+import { inlineImageStream } from "../shared/inline-image.ts";
+import { readPattern, readShading, tileRange, type PatternPaint } from "../shared/patterns.ts";
+
+/** 模様のタイルを並べる数の上限（1回の塗りごと。中に字のあるタイルの模様だけ）（1.3.0 から） */
+const MAX_PATTERN_TILES = 64;
 
 export const RULE_ID = "p7-hidden";
-export const RULE_VERSION = "1.2.0";
+export const RULE_VERSION = "1.3.0";
 
 export type P7Reason =
   | "hidden_layer"
@@ -271,6 +276,10 @@ type GState = {
   tl: number;
   rise: number;
   mode: number;
+  /** 塗りの色が、中に字を描くタイルの模様のとき（1.3.0 から） */
+  fillTiling?: NonNullable<PatternPaint["tiling"]>;
+  /** この中身の流れの、はじめの行列（模様の空間の基準。1.3.0 から） */
+  base?: M;
 };
 
 class TooManyOperations extends Error {}
@@ -364,7 +373,7 @@ class PageScanner {
   run(data: Uint8Array, resources: PDFDict | null, gs: GState, hiddenDepth: boolean, depth: number, forms: Set<PDFObject>) {
     const ctx = this.ctx;
     const stack: GState[] = [];
-    let g: GState = { ...gs };
+    let g: GState = { ...gs, base: gs.ctm };
     // マーク付きの中身の入れ子：それぞれ「表示しないレイヤーか」
     const marks: boolean[] = [];
     const isHidden = () => hiddenDepth || marks.some(Boolean);
@@ -407,6 +416,25 @@ class PageScanner {
           normal: g.normal,
           rectangular: area(box) > 0 && filled / area(box) >= this.settings.rectangularFillMin,
         });
+        // 字を描くタイルの模様で塗ったとき（1.3.0 から）：塗った所にタイルを並べ、タイルの中の字も字として見る
+        const t = g.fillTiling;
+        if (t && depth < this.settings.maxFormDepth && !forms.has(t.stream)) {
+          const toDevice = mul(t.matrix, g.base ?? IDENTITY);
+          const inv = invert(toDevice);
+          const tiles = inv ? tileRange(inv, box, t, MAX_PATTERN_TILES) : null;
+          if (tiles) {
+            forms.add(t.stream);
+            const saved = g;
+            for (const [i, j] of tiles) {
+              const inner: GState = {
+                ...saved, ctm: mul([1, 0, 0, 1, i * t.xStep, j * t.yStep], toDevice), clip: intersect(saved.clip, box),
+                fillSpace: { kind: "gray", n: 1 }, strokeSpace: { kind: "gray", n: 1 }, fill: 0, stroke: 0, fillTiling: undefined, font: null, expect: null,
+              };
+              this.run(t.data, t.resources ?? resources, inner, isHidden(), depth + 1, forms);
+            }
+            forms.delete(t.stream);
+          }
+        }
       }
       endPath();
     };
@@ -517,13 +545,43 @@ class PageScanner {
         case "cs": g.fillSpace = setSpace(args[0]?.t === "name" ? args[0].v : ""); g.fill = initialColor(g.fillSpace); break;
         case "CS": g.strokeSpace = setSpace(args[0]?.t === "name" ? args[0].v : ""); g.stroke = initialColor(g.strokeSpace); break;
         case "sc":
-        case "scn":
-          g.fill = args.some((a) => a.t === "name") ? null : luminance(g.fillSpace, args.map(num));
+        case "scn": {
+          const pname = args.find((a) => a.t === "name");
+          if (pname?.t === "name") {
+            // 模様（1.3.0 から）：すき間なく不透明に塗る模様で、明るさの分かるものだけを色にする
+            const p = readPattern(ctx, resources ?? undefined, pname.v, args.flatMap((a) => (a.t === "num" ? [a.v] : [])));
+            g.fill = p && p.covers ? p.luminance : null;
+            g.fillTiling = p?.tiling;
+          } else {
+            g.fill = luminance(g.fillSpace, args.map(num));
+            g.fillTiling = undefined;
+          }
           break;
+        }
         case "SC":
-        case "SCN":
-          g.stroke = args.some((a) => a.t === "name") ? null : luminance(g.strokeSpace, args.map(num));
+        case "SCN": {
+          const pname = args.find((a) => a.t === "name");
+          if (pname?.t === "name") {
+            const p = readPattern(ctx, resources ?? undefined, pname.v, args.flatMap((a) => (a.t === "num" ? [a.v] : [])));
+            g.stroke = p && p.covers ? p.luminance : null;
+          } else g.stroke = luminance(g.strokeSpace, args.map(num));
           break;
+        }
+        // シェーディング（sh。1.3.0 から）：いまの切り抜きの中（/BBox があれば、その中）を塗る
+        case "sh": {
+          const sname = args[0]?.t === "name" ? args[0].v : "";
+          const sh = readShading(ctx, res("Shading", sname));
+          if (!sh) break;
+          let box: Rect = g.clip;
+          if (sh.bbox) {
+            const b = sh.bbox;
+            box = intersect(box, boxOf([pt(b[0], b[1]), pt(b[2], b[1]), pt(b[0], b[3]), pt(b[2], b[3])]));
+          }
+          if (!box.every(Number.isFinite) || area(box) <= 0) break;
+          const poly: Array<[number, number]> = [[box[0], box[1]], [box[2], box[1]], [box[2], box[3]], [box[0], box[3]]];
+          this.fills.push({ seq: this.seq++, box, polys: [poly], lum: sh.luminance, alpha: g.ca, normal: g.normal, rectangular: true });
+          break;
+        }
         // 道
         case "m": startSub(pt(num(args[0]), num(args[1]))); break;
         case "l": lineTo(pt(num(args[0]), num(args[1]))); break;
@@ -630,10 +688,15 @@ class PageScanner {
           break;
         }
         // 画像と部品
-        case "BI":
-          // 埋め込みの画像は画素を読まない（覆いにも、色の比べにも使わない。置いた箱だけ）
-          this.images.push({ seq: this.seq++, box: boxOf([pt(0, 0), pt(1, 0), pt(0, 1), pt(1, 1)]), m: g.ctm, stream: null, colorSpaces: undefined, masked: true, alpha: g.ca, normal: g.normal, fillLum: g.fill });
+        case "BI": {
+          // 埋め込みの画像（1.3.0 から）：外の画像と同じに、画素を読んで覆い・色の比べに使う
+          const xo = inlineImageStream(ctx, args);
+          const isMask = xo?.dict.lookup(PDFName.of("ImageMask"));
+          const masked = !xo || (isMask instanceof PDFBool && isMask.asBoolean()) || xo.dict.has(PDFName.of("SMask")) || xo.dict.has(PDFName.of("Mask"));
+          const colorSpaces = resources ? (dictOf(ctx, resources.get(PDFName.of("ColorSpace"))) ?? undefined) : undefined;
+          this.images.push({ seq: this.seq++, box: boxOf([pt(0, 0), pt(1, 0), pt(0, 1), pt(1, 1)]), m: g.ctm, stream: xo, colorSpaces, masked, alpha: g.ca, normal: g.normal, fillLum: g.fill, clip: g.clip, hidden: isHidden() });
           break;
+        }
         case "Do": {
           const name = args[0]?.t === "name" ? args[0].v : "";
           const raw = res("XObject", name);

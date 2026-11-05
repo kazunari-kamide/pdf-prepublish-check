@@ -3,7 +3,8 @@
 // ページの中身（描く命令の列）を、命令と引数に分ける読み手。P6（rules/p6-text）と P7（rules/p7-hidden）で同じものを使う。
 // - 図形を組み立てず、命令を順に渡すだけにする（CLAUDE.md §5 の重いページ対策）。命令の数の上限は、呼ぶ側で数えて打ち切る。
 // - 入ってくるバイト列は細工されている前提で扱う。深すぎる入れ子・多すぎる引数・長すぎる配列は LexError で打ち切る。
-// - 埋め込みの画像（BI … ID … EI）は、中身を命令として読まず、1つの命令 "BI" として返す（引数は画像の辞書1つ）。
+// - 埋め込みの画像（BI … ID … EI）は、中身を命令として読まず、1つの命令 "BI" として返す（引数は画像の辞書と、画像のバイト列。
+//   バイト列は 2026-11-05 から。濃さを測るため。rules/shared/inline-image.ts で画像の流れにする）。
 // ToUnicode の CMap（bfchar・bfrange）も、同じ読み手で読める。
 
 export type Tok =
@@ -191,8 +192,8 @@ export function* operations(data: Uint8Array): Generator<Op, void, void> {
     return { word: w };
   };
 
-  const readInlineImage = (): Map<string, Tok> => {
-    // ID までを辞書として読み、ID のあとの空白1つを飛ばして、前後が空白（または終わり）の "EI" まで捨てる
+  const readInlineImage = (): { dict: Map<string, Tok>; bytes: Uint8Array } => {
+    // ID までを辞書として読み、ID のあとの空白1つを飛ばして、前後が空白（または終わり）の "EI" までを画像のバイト列とする
     const dict = new Map<string, Tok>();
     for (let count = 0; ; count++) {
       const k = readValue(1);
@@ -203,18 +204,30 @@ export function* operations(data: Uint8Array): Generator<Op, void, void> {
       if (count > MAX_ITEMS) throw new LexError("埋め込みの画像の辞書が長すぎます");
     }
     if (i < n && isWhite(data[i]!)) i++;
+    const start = i;
+    // 長さ（/L・/Length。PDF 2.0）があれば、それを使う
+    const lenTok = dict.get("L") ?? dict.get("Length");
+    if (lenTok?.t === "num" && Number.isInteger(lenTok.v) && lenTok.v >= 0 && start + lenTok.v <= n) {
+      i = start + lenTok.v;
+      const bytes = data.subarray(start, i);
+      skipWs();
+      if (data[i] === 0x45 && data[i + 1] === 0x49) i += 2;
+      return { dict, bytes };
+    }
     while (i < n) {
       if (
         data[i] === 0x45 && data[i + 1] === 0x49 &&
         (i === 0 || isWhite(data[i - 1]!)) &&
         (i + 2 >= n || isWhite(data[i + 2]!) || isDelim(data[i + 2]!))
       ) {
+        // EI の前の空白1つは、区切りとして外す
+        const end = i - 1 >= start ? i - 1 : start;
         i += 2;
-        return dict;
+        return { dict, bytes: data.subarray(start, end) };
       }
       i++;
     }
-    return dict;
+    return { dict, bytes: data.subarray(start, n) };
   };
 
   for (;;) {
@@ -226,9 +239,9 @@ export function* operations(data: Uint8Array): Generator<Op, void, void> {
       continue;
     }
     if (v.word === "BI") {
-      const dict = readInlineImage();
+      const { dict, bytes } = readInlineImage();
       stack = [];
-      yield { op: "BI", args: [{ t: "dict", v: dict }] };
+      yield { op: "BI", args: [{ t: "dict", v: dict }, { t: "str", v: bytes }] };
       continue;
     }
     yield { op: v.word, args: stack };

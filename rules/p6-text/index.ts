@@ -19,7 +19,7 @@ import { indexGlyphsByText, isGlyphSizedImage, normalizeGlyphText, isGlyphSizedS
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.11.0";
+export const RULE_VERSION = "1.12.0";
 
 /** P6 の層。text＝黒い四角の下に字が残っている型、image＝スキャン画像の画素が残っている型 */
 export type P6Layer = "text" | "image";
