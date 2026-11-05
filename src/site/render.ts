@@ -20,6 +20,8 @@ export const TERMS_PATH = "/terms";
 export const CONTACT_PATH = "/contact";
 export const FAQ_PATH = "/faq";
 export const CHECKLIST_PATH = "/checklist";
+/** サービス紹介のページ（持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（index.html。tests/site-pages.test.ts） */
+export const ABOUT_PATH = "/about";
 
 /** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
 export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。";

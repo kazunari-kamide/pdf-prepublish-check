@@ -213,7 +213,13 @@ export function sitePages(): Plugin {
         // 検査のページの題・説明・canonical・OGP・X のカード（中身は src/site/seo.ts）
         const head = headLines(INSPECTOR_HEAD_INFO, OFFICIAL_ORIGIN, escapeHtml);
         if (!/<title>[^<]*<\/title>/.test(html)) throw new Error("index.html に <title> がありません（題・説明を入れる場所）");
-        return { html: withTermsDialog(html).replace(/<title>[^<]*<\/title>/, head), tags: meta ? [{ tag: "meta", attrs: meta, injectTo: "head" }] : [] };
+        // 検査のページの出どころの札（src/ui/rule-origin.ts）が PR へのリンクに使う、リポジトリの場所。分からなければ入れない（札は字だけになる）
+        const repo = repoUrl();
+        const tags = [
+          ...(meta ? [{ tag: "meta", attrs: meta, injectTo: "head" as const }] : []),
+          ...(repo ? [{ tag: "meta", attrs: { name: "omamori-repo", content: repo }, injectTo: "head" as const }] : []),
+        ];
+        return { html: withTermsDialog(html).replace(/<title>[^<]*<\/title>/, head), tags };
       },
     },
     generateBundle() {

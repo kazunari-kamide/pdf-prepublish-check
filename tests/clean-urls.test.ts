@@ -10,7 +10,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CLEAN_URL_RULES, NOT_FOUND_PAGE, OFFICIAL_ORIGIN, buildHtaccess } from "../htaccess.ts";
 import { cleanUrlRoute, siteFiles } from "../site.ts";
-import { pathForFile, fileFor } from "../src/site/render.ts";
+import { ABOUT_PATH, fileFor, pathForFile } from "../src/site/render.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DIST_FILES = new Set(["index.html", "privacy.html", "404.html", "articles/index.html", "articles/p6-fake-redaction.html", "articles/tags/document-info.html", "google0123abcd.html", "assets/site-0123456789.css", "sitemap.xml"]);
@@ -30,6 +30,13 @@ describe("場所の扱い（cleanUrlRoute。本番の .htaccess と同じ決ま�
   });
   it("検査のページ・記事の一覧の index.html、検索エンジンの確認のファイル、ほかのファイルは、そのまま", () => {
     for (const u of ["/", "/index.html", "/articles/", "/articles/index.html", "/google0123abcd.html", "/assets/site-0123456789.css", "/sitemap.xml"]) expect(cleanUrlRoute(u, exists), u).toBeNull();
+  });
+  it("検査のページの /?sample=1（#109）は、そのまま。サービス紹介の /about（#109）は、about.html ができれば .html なしで開ける", () => {
+    expect(cleanUrlRoute("/?sample=1", exists)).toBeNull();
+    expect(fileFor(ABOUT_PATH)).toBe("about.html");
+    const withAbout = (f: string) => f === "about.html" || exists(f);
+    expect(cleanUrlRoute(ABOUT_PATH, withAbout)).toEqual({ kind: "rewrite", url: "/about.html" });
+    expect(cleanUrlRoute("/about.html", withAbout)).toEqual({ kind: "redirect", location: "/about" });
   });
   it("ないページは、どちらの形でも書き換えも移しもしない（404 のページになる）", () => {
     for (const u of ["/no-such-page", "/no-such-page.html", "/articles/no-such", "/articles/no-such.html", "/%E0%A4%A"]) expect(cleanUrlRoute(u, exists), u).toBeNull();

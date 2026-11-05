@@ -27,7 +27,7 @@ import {
   TERMS_META,
   renderGuidePages,
 } from "../src/site/pages.ts";
-import { FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor, pathForFile } from "../src/site/render.ts";
+import { ABOUT_PATH, FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor, pathForFile } from "../src/site/render.ts";
 import type { Section } from "../src/site/types.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -293,6 +293,11 @@ describe("検査のページ（index.html）", () => {
     const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
     const links = [...foot.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]);
     expect(links).toEqual(FOOT_LINKS.map(([h, l]) => [h, l]));
+  });
+
+  it("上の帯に、サービス紹介のページへのリンクを 1 つだけ置く", () => {
+    const band = html.match(/<header class="band">[\s\S]*?<\/header>/)![0];
+    expect([...band.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1])).toEqual([ABOUT_PATH]);
   });
 
   it("書体と部品のライセンスは、下の帯のライセンスのページへのリンクで示す（結果の欄の一文は、2026-11-05 本人の指示で外した）", () => {
