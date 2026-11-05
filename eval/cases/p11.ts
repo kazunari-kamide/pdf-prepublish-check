@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// P11（フォームの値）の合成 PDF。鍵は「見え方:欄の種類」。値はすべて架空。
+// P11（フォームの値）の合成 PDF。鍵は「見え方:欄の種類」と、欄の説明の「tooltip:TU・TM」、署名者名の「signature:Name」。値はすべて架空。
 
 import { PDFName, type PDFContext, type PDFDocument, type PDFRef } from "pdf-lib";
 import type { P11Report } from "../../rules/p11-forms/index.ts";
 import { addAnnot, hex, lit, newDoc, save, type Case } from "./pdf.ts";
 
-export const keysOf = (r: P11Report) => r.findings.map((f) => `${f.visibility}:${f.fieldType}`);
+export const keysOf = (r: P11Report) => [
+  ...r.findings.map((f) => `${f.visibility}:${f.fieldType}`),
+  ...r.tooltips.map((t) => `tooltip:${t.key}`),
+  ...r.signatures.map((t) => `signature:${t.key}`),
+];
 
 const HIDDEN = 2;
 const NO_VIEW = 32;
@@ -129,6 +133,47 @@ export const CASES: Case[] = [
     leaks: [],
     async build() {
       const { doc } = await newDoc();
+      return save(doc);
+    },
+  },
+  {
+    id: "p11-l07",
+    kind: "leak",
+    description: "欄の説明（/TU）に担当の名前と内線、書き出し用の名前（/TM）にメールアドレス（1.1.0。値は空）",
+    leaks: ["tooltip:TU", "tooltip:TM"],
+    async build() {
+      const { doc, ctx, pages } = await newDoc();
+      const w1 = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Tx", T: lit("a"), TU: hex("担当 架空 太郎（内線 1234）") });
+      const w2 = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Tx", T: lit("b"), TM: lit("kakuu.taro@example.invalid") });
+      setFields(doc, ctx, [w1, w2]);
+      return save(doc);
+    },
+  },
+  {
+    id: "p11-l08",
+    kind: "leak",
+    description: "署名した欄の署名の辞書に、署名者名（/Name）（1.1.0。知らせるだけ）",
+    leaks: ["signature:Name"],
+    async build() {
+      const { doc, ctx, pages } = await newDoc();
+      const sig = ctx.register(ctx.obj({ Type: "Sig", Filter: "Adobe.PPKLite", Name: hex("架空 花子"), Contents: hex("00") } as never));
+      const w = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Sig", T: lit("sig"), V: sig });
+      setFields(doc, ctx, [w]);
+      return save(doc);
+    },
+  },
+  {
+    id: "p11-c04",
+    kind: "control",
+    description: "ふつうの欄の説明（「お名前を入れてください」「Enter your name」「日付（年/月/日）」）と、署名していない署名の欄",
+    leaks: [],
+    async build() {
+      const { doc, ctx, pages } = await newDoc();
+      const w1 = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Tx", T: lit("a"), TU: hex("お名前を入れてください") });
+      const w2 = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Tx", T: lit("b"), TU: lit("Enter your name") });
+      const w3 = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Tx", T: lit("c"), TU: hex("日付（年/月/日）") });
+      const w4 = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Sig", T: lit("sig") });
+      setFields(doc, ctx, [w1, w2, w3, w4]);
       return save(doc);
     },
   },

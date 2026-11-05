@@ -62,3 +62,10 @@ const report2 = await detectP2Parts(bytes, { includeValues: true }); // 値そ�
 - 文書全体の XMP、写真の EXIF（JPEG の中の APP1。P10）は見ない。
 - 1つのストリームは 16 MB まで、展開した編集用データは 64 MB まで、オブジェクトは 1,000,000 個まで見る。超えたら `limits` に出す。
 - パスワードが要る暗号化 PDF は読まない（`encrypted`）。
+
+## 1.1.0（2026-11-05）
+
+- 画面のルールの一覧（`RULES`）に入れた。名前は「部品の XMP・アプリのデータ」（型は P2）。
+- Illustrator 以外のアプリの `/PieceInfo /<アプリ> /Private` に中身があれば、`private_data`（`source: "app"`、中身は読まない）として返す。文書（カタログ）の `/PieceInfo` も見る（`owner: "document"`）。`/Private` が空のもの、`/LastModified` だけのものは数えない。
+- 人名の見分け方（`classifyName`）：数字の入った値は、空白で区切った語が 2 つ以上あり、そのうち 1 つが字だけの語（小文字か、漢字・かななどを含む）なら、名前として数える（例：`Taro KAKUU-0123`）。`user01`・`PC-1234`・`PC 1234` は、いままでどおりアカウント・端末の名前として数えない。`p2-xmp` も同じ見分け方を使う。
+- 合成 PDF：4 件（隠しあり 2・対照 2。`eval/cases/p2-parts.ts`）で、検出 3/3、誤検知 0。
