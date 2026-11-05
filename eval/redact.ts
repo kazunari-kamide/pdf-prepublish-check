@@ -57,7 +57,7 @@ const CASES: Case[] = [
   {
     name: "ページに直接埋め込んだ画像",
     build: () => buildPdf(() => ({ pages: [{ content: "q 100 0 0 50 100 100 cm BI /W 2 /H 2 /CS /G /BPC 8 ID \x00\xff\xff\x00 EI Q\n" + textAt(100, 120, "見本") }] })),
-    areas: [{ page: 1, rect: [100, 100, 200, 150] }], expect: "blocked",
+    areas: [{ page: 1, rect: [100, 100, 200, 150] }], expect: "ok", // 0.8.0 から、画像の部品に移し替えて塗る
   },
   { name: "対照：何も選ばない", build: () => buildPdf(() => ({ pages: [{ content: LINE() }] })), areas: [], expect: "ok" },
   { name: "対照：字のない所", build: () => buildPdf(() => ({ pages: [{ content: LINE() }] })), areas: [{ page: 1, rect: [250, 50, 350, 100] }], expect: "ok" },
