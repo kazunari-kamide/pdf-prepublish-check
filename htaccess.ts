@@ -69,7 +69,34 @@ export function buildHtaccess(): string {
     `  RewriteRule ^ https://${OFFICIAL_HOST}%{REQUEST_URI} [R=301,L]`,
     "  RewriteCond %{HTTPS} !on",
     `  RewriteRule ^ https://${OFFICIAL_HOST}%{REQUEST_URI} [R=301,L]`,
+    "",
+    ...CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)),
     "</IfModule>",
     "",
   ].join("\n");
 }
+
+/**
+ * サイトのページを .html なしの場所で開く書き換え（2026-11-05。ファイルは dist/ の .html のまま）。
+ * - 1つ目：.html 付きで来た要求を、.html なしへ 301 で移す（外からのリンクや検索の結果を切らさないため）。
+ *   ファイルがあるときだけ。index.html（検査のページ・記事の一覧）と、検索エンジンの確認のファイル（googleXXXX.html）は移さない。
+ *   REDIRECT_STATUS が空のとき（外から来た要求そのもの）だけにする。書き換えたあとや、ErrorDocument の 404 のページを
+ *   返すときの中の要求では動かさない（動くと、見つからない .html が 404 でなく 301 になり、書き換えと輪になる）。
+ *   %1 は、すぐ上の RewriteCond（THE_REQUEST）の組なので、THE_REQUEST の条件を最後に置く。
+ * - 2つ目：.html なしで来た要求を、同じ名前の .html のファイルがあれば、そのファイルで返す（中だけの書き換え。アドレスは変わらない）。
+ * 手元の vite preview では、site.ts の cleanUrlMiddleware が同じ動きをする（tests/clean-urls.test.ts で、同じ表の場所を確かめる）。
+ */
+export const CLEAN_URL_RULES: readonly string[] = [
+  "# サイトのページは .html なしの場所で開く。.html 付きで来たら、.html なしへ 301（ファイルがあるときだけ）",
+  "RewriteCond %{ENV:REDIRECT_STATUS} ^$",
+  "RewriteCond %{REQUEST_URI} !(^|/)index\\.html$",
+  "RewriteCond %{REQUEST_URI} !^/google[0-9a-z]+\\.html$",
+  "RewriteCond %{REQUEST_FILENAME} -f",
+  "RewriteCond %{THE_REQUEST} ^[A-Z]+\\s/+([^?\\s]*?)\\.html[?\\s]",
+  "RewriteRule \\.html$ /%1 [R=301,L]",
+  "# .html なしで来たら、同じ名前の .html のファイルを返す（アドレスはそのまま）",
+  "RewriteCond %{REQUEST_FILENAME} !-f",
+  "RewriteCond %{REQUEST_FILENAME} !-d",
+  "RewriteCond %{REQUEST_FILENAME}.html -f",
+  "RewriteRule ^(.+)$ $1.html [L]",
+];

@@ -27,7 +27,7 @@ import {
   TERMS_META,
   renderGuidePages,
 } from "../src/site/pages.ts";
-import { ABOUT_PATH, FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor } from "../src/site/render.ts";
+import { ABOUT_PATH, FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor, pathForFile } from "../src/site/render.ts";
 import type { Section } from "../src/site/types.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -50,7 +50,8 @@ describe("ページの形", () => {
   });
 
   it("404 のページは、.htaccess の ErrorDocument が指す場所にあり、検査のページ・記事の一覧へつながる", () => {
-    expect(NOT_FOUND_PAGE).toBe(NOT_FOUND_META.path);
+    // ErrorDocument が指すのはファイル（/404.html）。ページの場所は .html なし（/404）
+    expect(NOT_FOUND_PAGE).toBe(`/${fileFor(NOT_FOUND_META.path)}`);
     const p = pages.get("404.html")!;
     expect(p).toContain("ページが見つかりません");
     expect(p).toContain('href="/articles/"');
@@ -68,7 +69,7 @@ describe("ページの形", () => {
     it(`${name}：題・説明・canonical・CSP があり、検査のページへつながり、スクリプトがない`, () => {
       expect(page).toMatch(/<title>[^<]+｜お守りPDF<\/title>/);
       expect(page).toMatch(/<meta name="description" content="[^"]{20,}" \/>/);
-      expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/${name}" />`);
+      expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}${pathForFile(name)}" />`);
       expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspForMeta)}" />`);
       expect(page).toContain('href="/"');
       expect(page).not.toMatch(/<script\b|\sstyle=|\son[a-z]+=/);
@@ -308,7 +309,7 @@ describe("検査のページ（index.html）", () => {
 
   it("書体と部品のライセンスは、下の帯のライセンスのページへのリンクで示す（結果の欄の一文は、2026-11-05 本人の指示で外した）", () => {
     const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
-    expect(foot).toContain('<a href="/licenses.html">');
+    expect(foot).toContain('<a href="/licenses">');
     expect(html).not.toContain("© 2014-2021 Adobe");
   });
 });

@@ -11,7 +11,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
@@ -155,6 +155,54 @@ const TYPES: Record<string, string> = {
   ".png": "image/png",
 };
 
+function isFile(p: string): boolean {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export type CleanUrlRoute = { kind: "redirect"; location: string } | { kind: "rewrite"; url: string } | null;
+
+/**
+ * 本番の .htaccess の書き換え（htaccess.ts の CLEAN_URL_RULES）と同じ決まりで、場所をどう扱うかを決める。
+ * exists は、dist/ の中のファイルの名前（先頭の / なし）があるか。
+ * - .html 付き（index.html・googleXXXX.html を除く）で、ファイルがあれば、.html なしへ 301（? のあとはそのまま）
+ * - .html なしで、同じ名前の .html があれば、そのファイルで返す（アドレスはそのまま）
+ */
+export function cleanUrlRoute(rawUrl: string, exists: (file: string) => boolean): CleanUrlRoute {
+  const q = rawUrl.indexOf("?");
+  const pathname = q < 0 ? rawUrl : rawUrl.slice(0, q);
+  const query = q < 0 ? "" : rawUrl.slice(q);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const file = decoded.replace(/^\/+/, "");
+  if (decoded.endsWith(".html")) {
+    if (/(^|\/)index\.html$/.test(decoded) || /^\/google[0-9a-z]+\.html$/.test(decoded) || !exists(file)) return null;
+    return { kind: "redirect", location: `${pathname.replace(/^\/+/, "/").replace(/\.html$/, "")}${query}` };
+  }
+  if (file === "" || decoded.endsWith("/") || exists(file) || !exists(`${file}.html`)) return null;
+  return { kind: "rewrite", url: `${pathname}.html${query}` };
+}
+
+function cleanUrlMiddleware(exists: (file: string) => boolean) {
+  return (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(): void }, next: () => void) => {
+    const route = cleanUrlRoute(req.url ?? "/", exists);
+    if (route?.kind === "redirect") {
+      res.statusCode = 301;
+      res.setHeader("Location", route.location);
+      return res.end();
+    }
+    if (route?.kind === "rewrite") req.url = route.url;
+    next();
+  };
+}
+
 export function sitePages(): Plugin {
   return {
     name: "omamori-site-pages",
@@ -179,7 +227,13 @@ export function sitePages(): Plugin {
       this.emitFile({ type: "asset", fileName: OG_IMAGE_PATH.slice(1), source: ogImage() });
       for (const [fileName, source] of siteBinaryFiles()) this.emitFile({ type: "asset", fileName, source });
     },
+    // vite preview（check:browser・check:layout が開く）でも、本番の .htaccess と同じに、.html なしの場所でページを返す
+    configurePreviewServer(server) {
+      const dist = path.join(ROOT, "dist");
+      server.middlewares.use(cleanUrlMiddleware((file) => isFile(path.join(dist, file))));
+    },
     configureServer(server) {
+      server.middlewares.use(cleanUrlMiddleware((file) => siteFiles().has(file)));
       server.middlewares.use((req, res, next) => {
         const url = (req.url ?? "/").split("?")[0] ?? "/";
         const name = url.endsWith("/") ? `${url}index.html` : url;

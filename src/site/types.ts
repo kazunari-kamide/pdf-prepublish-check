@@ -16,7 +16,7 @@ export interface Section {
 }
 
 export interface Article {
-  /** ファイルの名前（/articles/<slug>.html） */
+  /** 場所の名前（/articles/<slug>。ファイルは <slug>.html） */
   slug: string;
   /** 型の解説なら型の番号（P1〜P12）。手順の記事なら null */
   pattern: string | null;
