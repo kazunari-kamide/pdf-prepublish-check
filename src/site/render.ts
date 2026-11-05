@@ -48,7 +48,7 @@ export interface RenderOptions {
   cssHref: string;
   /** ファビコンの href（logo.ts の faviconHref）。なければ、取りに行かせない data:, にする */
   favicon?: string;
-  /** 墨の帯に置くロゴマークの SVG（logo.ts の inlineMark。リポジトリの中のファイルから作るので、escapeHtml を通さない） */
+  /** 上の帯（白の地）に置くロゴマークの SVG（logo.ts の inlineMark。リポジトリの中のファイルから作るので、escapeHtml を通さない） */
   brandMark?: string;
   /** ソースを公開している GitHub のリポジトリの場所。分からないときは null（リンクを出さず、文だけにする） */
   repoUrl?: string | null;
