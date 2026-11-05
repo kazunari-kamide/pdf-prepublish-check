@@ -92,25 +92,51 @@ body { margin: 0; overflow-wrap: anywhere; } /* 字を大きくしたとき、�
 .uline { text-decoration: underline var(--danger) 2px; text-underline-offset: 0.2em; background: var(--danger-bg); }
 
 /* ---------- お知らせ */
+/*
+ * お知らせ。枠はどの辺も同じ太さにし、左の強調は枠の内側の帯（inset の影）で描く（--band に色を入れる）。
+ * 「確かめる」は枠だけ点線にし、帯は実線のまま、ほかの3種類とそろえる。
+ */
 .notice {
+  --band: var(--line-strong);
   display: grid; grid-template-columns: auto 1fr; gap: var(--sp-1) var(--sp-3);
-  padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-m);
-  border: var(--bw-1) solid; border-left-width: var(--bw-accent);
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) calc(var(--sp-4) + var(--bw-accent));
+  border-radius: var(--radius-m);
+  border: var(--bw-1) solid var(--band);
+  box-shadow: inset var(--bw-accent) 0 0 0 var(--band);
   margin: 0 0 var(--sp-3); max-width: 46rem;
 }
-.notice-mark { font-weight: var(--fw-strong); width: 1.6em; height: 1.6em; display: grid; place-items: center; border-radius: var(--radius-pill); font-size: 0.9em; }
+/*
+ * 印：外の箱の高さを、題の 1 行の高さ（1em × 行の高さ）にそろえ、丸をその上下の真ん中に置く。
+ * 4 種類とも同じ大きさ・同じ位置。字を大きくしても em で付いていく。
+ */
+.notice-mark {
+  position: relative; align-self: start;
+  width: 1.5em; height: calc(1em * var(--lh-body));
+  display: grid; place-items: center;
+  font-weight: var(--fw-strong); font-style: normal; line-height: 1;
+}
+.notice-mark::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1.5em; transform: translateY(-50%);
+  border-radius: var(--radius-pill); box-sizing: border-box;
+}
+.notice-mark > span { position: relative; font-size: 0.8em; }
 .notice-title { font-weight: var(--fw-strong); margin: 0; }
 .notice p { grid-column: 2; margin: 0; }
-.notice[data-kind="danger"] { background: var(--danger-bg); border-color: var(--danger-line); }
-.notice[data-kind="danger"] .notice-mark { background: var(--danger); color: var(--text-on-strong); }
+.notice[data-kind="danger"] { --band: var(--danger-line); background: var(--danger-bg); }
+.notice[data-kind="danger"] .notice-mark::before { background: var(--danger); }
+.notice[data-kind="danger"] .notice-mark, .notice[data-kind="ok"] .notice-mark { color: var(--text-on-strong); }
 .notice[data-kind="danger"] .notice-title { color: var(--text-danger); }
-.notice[data-kind="ok"] { background: var(--ok-bg); border-color: var(--ok-line); }
-.notice[data-kind="ok"] .notice-mark { background: var(--ok); color: var(--text-on-strong); }
+.notice[data-kind="ok"] { --band: var(--ok-line); background: var(--ok-bg); }
+.notice[data-kind="ok"] .notice-mark::before { background: var(--ok); }
 .notice[data-kind="ok"] .notice-title { color: var(--text-ok); }
-.notice[data-kind="check"] { background: var(--check-bg); border: var(--bw-2) dashed var(--check); border-left: var(--bw-accent) dashed var(--check); }
-.notice[data-kind="check"] .notice-mark { border: var(--bw-2) solid var(--check); }
-.notice[data-kind="info"] { background: var(--info-bg); border-color: var(--line-default); border-left-color: var(--info); }
-.notice[data-kind="info"] .notice-mark { border: var(--bw-2) solid var(--info); font-style: normal; }
+.notice[data-kind="check"] { --band: var(--check); background: var(--check-bg); border: var(--bw-2) dashed var(--check); padding-left: calc(var(--sp-4) + var(--bw-accent) - var(--bw-1)); }
+.notice[data-kind="check"] .notice-mark::before { border: var(--bw-2) solid var(--check); }
+.notice[data-kind="info"] { --band: var(--info); background: var(--info-bg); border-color: var(--line-default); }
+.notice[data-kind="info"] .notice-mark::before { border: var(--bw-2) solid var(--info); }
+/* ハイコントラストの設定では影が消えるので、左の帯の代わりに左の枠を太くする */
+@media (forced-colors: active) {
+  .notice { border-left-width: var(--bw-accent); border-left-style: solid; }
+}
 
 /* ---------- ボタン */
 .buttons { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }
@@ -307,10 +333,10 @@ td.n { text-align: right; }
   <section class="sec" aria-labelledby="s-notice">
     <h2 class="h1" id="s-notice">4. お知らせ（注意・合格・確かめる・知らせ）</h2>
     <p class="note">4 種類とも、左の太い線・印・題の字で分けます。色が見えなくても、印と線の形（実線・点線）で区別できます。</p>
-    <div class="notice" data-kind="danger" role="note"><span class="notice-mark" aria-hidden="true">▲</span><p class="notice-title">残っています：見せかけの黒塗り 1 件</p><p>黒い四角の下に、字がテキストとして残っています。選んで写すと読めてしまいます。</p></div>
-    <div class="notice" data-kind="ok" role="note"><span class="notice-mark" aria-hidden="true">✓</span><p class="notice-title">読み直しました：残りは 0 件</p><p>片付けた PDF をはじめから読み直し、調べた型では何も見つかりませんでした。</p></div>
-    <div class="notice" data-kind="check" role="note"><span class="notice-mark" aria-hidden="true">？</span><p class="notice-title">確かめてください：残っているかもしれません</p><p>画像の中の黒い四角は、下に何があるかを言い切れません。元の書類と見比べてください。</p></div>
-    <div class="notice" data-kind="info" role="note"><span class="notice-mark" aria-hidden="true">ｉ</span><p class="notice-title">検査を省いたページがあります：3 ページ</p><p>図形が多すぎるため、このページは検査していません。結果の数にも含めていません。</p></div>
+    <div class="notice" data-kind="danger" role="note"><span class="notice-mark" aria-hidden="true"><span>▲</span></span><p class="notice-title">残っています：見せかけの黒塗り 1 件</p><p>黒い四角の下に、字がテキストとして残っています。選んで写すと読めてしまいます。</p></div>
+    <div class="notice" data-kind="ok" role="note"><span class="notice-mark" aria-hidden="true"><span>✓</span></span><p class="notice-title">読み直しました：残りは 0 件</p><p>片付けた PDF をはじめから読み直し、調べた型では何も見つかりませんでした。</p></div>
+    <div class="notice" data-kind="check" role="note"><span class="notice-mark" aria-hidden="true"><span>？</span></span><p class="notice-title">確かめてください：残っているかもしれません</p><p>画像の中の黒い四角は、下に何があるかを言い切れません。元の書類と見比べてください。</p></div>
+    <div class="notice" data-kind="info" role="note"><span class="notice-mark" aria-hidden="true"><span>ｉ</span></span><p class="notice-title">検査を省いたページがあります：3 ページ</p><p>図形が多すぎるため、このページは検査していません。結果の数にも含めていません。</p></div>
   </section>
 
   <!-- 5. 部品 -->
@@ -373,7 +399,7 @@ td.n { text-align: right; }
       <div class="page-body">
         <p class="kicker">点検の一覧</p>
         <p class="h-display" style="font-weight:700">公開・提出の前の点検</p>
-        <div class="notice howto" data-kind="info" role="note"><span class="notice-mark" aria-hidden="true">ｉ</span><p class="notice-title">使い方</p><p>上から順に確かめ、済んだら印を付けてください。（ ）の中は型の番号です。この点検は目安で、ここに無い残り方もあります。</p></div>
+        <div class="notice howto" data-kind="info" role="note"><span class="notice-mark" aria-hidden="true"><span>ｉ</span></span><p class="notice-title">使い方</p><p>上から順に確かめ、済んだら印を付けてください。（ ）の中は型の番号です。この点検は目安で、ここに無い残り方もあります。</p></div>
 
         <section class="steps-card" aria-labelledby="st1">
           <div class="steps-head"><span class="step-no" aria-hidden="true">1</span><h3 id="st1">作る時</h3><span class="when">元のファイル</span></div>
