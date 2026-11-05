@@ -87,6 +87,7 @@ const ui = {
   verifiedText: el<HTMLParagraphElement>("verified-text"),
   clean: el<HTMLElement>("clean"),
   cleanCount: el<HTMLParagraphElement>("clean-count"),
+  cleanCandidates: el<HTMLParagraphElement>("clean-candidates"),
   download: el<HTMLAnchorElement>("download"),
   downloadNote: el<HTMLParagraphElement>("download-note"),
   saveNote: el<HTMLParagraphElement>("save-note"),
@@ -484,7 +485,8 @@ const SEVERITY_MARK: Record<Row["severity"], string> = { high: "▲", medium: "�
  * 種類ごとの囲み：左に色の帯（飾り。字は出さない）、右に見出しと項目（案 E2。design/README.md）。
  * 帯の字は見出しと同じことを言うので外した（2026-11-05 本人の画面のレビュー B4）
  */
-function groupBox(kind: "found" | "scope"): { box: HTMLElement; body: HTMLDivElement } {
+/** found＝見えない情報の種類（紅）、candidate＝見えている個人情報らしい字の候補（知らせの形。紅にしない）、scope＝見た所・見なかった所 */
+function groupBox(kind: "found" | "candidate" | "scope"): { box: HTMLElement; body: HTMLDivElement } {
   const box = make("section", undefined, "group");
   box.dataset.status = kind;
   const tag = make("span", undefined, "fuda");
@@ -500,6 +502,7 @@ function itemButton(r: Row): HTMLButtonElement {
   btn.id = `item-${r.no}`;
   btn.dataset.severity = r.severity;
   if (r.check) btn.dataset.check = "true";
+  if (r.candidate) btn.dataset.candidate = "true";
   btn.setAttribute("aria-expanded", "false");
   const top = make("span", undefined, "item-top");
   top.append(
@@ -602,7 +605,7 @@ function renderGroups(s: Session) {
   }
   for (const g of s.view.groups) {
     if (g.status === "error" || !g.rows.length) continue;
-    const { box, body } = groupBox("found");
+    const { box, body } = groupBox(g.rows[0]!.candidate ? "candidate" : "found");
     const head = make("h3", undefined, "group-head");
     const sure = g.rows.filter((r) => !r.check).length;
     const check = g.rows.length - sure;
@@ -765,7 +768,7 @@ function placeMarks(s: Session, page: number) {
     if (!f) continue;
     // 見た目の枠（隠した所の大きさのまま）と、押す所（枠を中心に縦横とも 44px 以上）を分ける。
     // 枠を大きくすると、細い黒塗りの所が太い枠に見えるため。押す所は透明で、上に重ねる
-    const frame = make("div", undefined, `mark sev-${m.severity}`);
+    const frame = make("div", undefined, `mark sev-${m.severity}${m.candidate ? " mark-candidate" : ""}`);
     frame.id = `mark-frame-${m.no}`;
     frame.setAttribute("aria-hidden", "true");
     frame.append(make("span", String(m.no), "mark-no"));
@@ -1007,7 +1010,14 @@ function renderSummary(s: Session) {
   const v = s.view;
   setStatus(v.headline, v.tone);
   setStep(ui.stepCheck, "done");
-  ui.stepCheckNote.textContent = v.rows.length ? `${v.rows.length} か所 見つかりました` : v.clean ? "見つかりませんでした" : "調べられない所あり";
+  // 数は「見た目では分からない情報」だけ（見えている候補は入れない。見出しと同じ物差し）
+  ui.stepCheckNote.textContent = v.hidden
+    ? `${v.hidden} か所 見つかりました`
+    : v.candidates
+    ? `候補 ${v.candidates} か所`
+    : v.clean
+    ? "見つかりませんでした"
+    : "調べられない所あり";
 
   // 片付けは、検査ができた PDF ならいつでも押せる（見つからなくても、XMP・注釈のコメント・JavaScript なども外す）
   ui.actions.hidden = false;
@@ -1017,7 +1027,7 @@ function renderSummary(s: Session) {
   const password = s.pdfProblem === "password";
   ui.sanitizeNote.textContent = password
     ? "パスワードが要る PDF は、整えられません。"
-    : v.rows.length
+    : v.hidden
     ? "見えない情報を消した PDF を新しく作ります。元の PDF は変えません。"
     : "見つかった所はありませんが、見えない情報を消した PDF を作れます。元の PDF は変えません。";
   ui.sanitizeList.textContent =
@@ -1515,6 +1525,11 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.cleanCount.textContent =
     c.left === null ? `整える前 ${c.before} か所 → 読み直せませんでした` : `整える前 ${c.before} か所 → 読み直したあと ${c.left} か所`;
   ui.cleanCount.dataset.verdict = c.verdict;
+  // 見えている個人情報らしい字（候補）は、見えない情報とは別の行で、前と後を同じ物差しで（黒塗りにするかは本人が決める）
+  ui.cleanCandidates.textContent = c.candidatesBefore
+    ? `見えている個人情報らしい字：${c.candidatesBefore} か所 → ${c.candidatesAfter === null ? "読み直せませんでした" : `${c.candidatesAfter} か所`}（黒塗りするかは、あなたが決めます）`
+    : "";
+  ui.cleanCandidates.hidden = !c.candidatesBefore;
   ui.download.download = file.name;
   applySaveGate(saveGate(c));
   ui.downloadNote.textContent = `${file.name}（${file.pages} ページ・${formatBytes(file.bytes)}・${file.seconds}）。元の PDF は変えていません。`;

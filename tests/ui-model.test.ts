@@ -100,3 +100,39 @@ describe("画面の形", () => {
     expect(v.heavyPages).toEqual([1, 3]);
   });
 });
+
+describe("番号と数（2026-11-05 夜のレビュー §0）", () => {
+  const it6 = (y: number) => ({ pattern: "P6" as const, severity: "high" as const, title: `p6-${y}`, why: "", detail: "", page: 1, rect: [0, y, 10, y + 5] as [number, number, number, number] });
+  const it1 = (t: string) => ({ pattern: "P1" as const, severity: "medium" as const, title: t, why: "", detail: "", page: null, rect: null });
+  const it13 = (y: number) => ({ pattern: "P13" as const, severity: "medium" as const, title: `p13-${y}`, why: "", detail: "", page: 1, rect: [20, y, 40, y + 5] as [number, number, number, number] });
+  // ルールの順：文書情報（中）→ 個人情報の候補 → 見せかけの黒塗り（高）
+  const v = buildView(
+    summary([
+      rule({ ruleId: "p1-info", label: "文書情報", pattern: "P1", items: [it1("a"), it1("b")] }),
+      rule({ ruleId: "pii", label: "個人情報らしい字", pattern: "P13", items: [it13(50), it13(80)] }),
+      rule({ items: [it6(10), it6(60)] }),
+      rule({ ruleId: "p9-attach", label: "添付ファイル", pattern: "P9" }),
+    ]),
+  );
+  it("種類は、見えない情報の重い順 → 見えている候補 → 見つからなかった種類。番号は並べた順に上から 1, 2, 3…", () => {
+    expect(v.groups.map((g) => g.pattern)).toEqual(["P6", "P1", "P13", "P9"]);
+    const shown = v.groups.flatMap((g) => g.rows.map((r) => r.no));
+    expect(shown).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(v.rows.map((r) => r.no)).toEqual(shown);
+  });
+  it("ページの上の札の番号と、一覧の番号がそろう。候補の札には印が付く", () => {
+    const marks = v.pages[0]!.marks;
+    for (const m of marks) expect(v.rows.find((r) => r.no === m.no)!.title).toBe(m.title);
+    expect(marks.filter((m) => m.candidate).map((m) => m.no)).toEqual([5, 6]);
+  });
+  it("見出しの数は見えない情報だけ。候補は別の一文", () => {
+    expect([v.hidden, v.candidates]).toEqual([4, 2]);
+    expect(v.headline).toBe("見た目では分からない情報が、4 か所見つかりました。ほかに、見えている個人情報らしい字が 2 か所あります（黒塗りするかは、あなたが決めます）。");
+    expect(v.tone).toBe("problem");
+  });
+  it("候補だけのときは紅にしない（tone は neutral）。見えない情報は見つからなかったと言う", () => {
+    const only = buildView(summary([rule({ ruleId: "pii", label: "個人情報らしい字", pattern: "P13", items: [it13(50)] })]));
+    expect(only.tone).toBe("neutral");
+    expect(only.headline).toBe("見た目では分からない情報は、見つかりませんでした。見えている個人情報らしい字が 1 か所あります（黒塗りするかは、あなたが決めます）。");
+  });
+});
