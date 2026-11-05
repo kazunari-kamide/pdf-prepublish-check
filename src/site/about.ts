@@ -56,7 +56,7 @@ export const REMAINS: ReadonlyArray<{ pattern: string; title: string; text: stri
 
 /** 4 つの手順（検査のページの 4 段と同じ言葉） */
 export const STEPS: ReadonlyArray<{ name: string; text: string }> = [
-  { name: "置く", text: "PDF を選ぶか、画面に落とします。" },
+  { name: "選ぶ", text: "PDF を選びます（パソコンでは、画面に落としてもかまいません）。" },
   { name: "確かめる", text: "残り方の型ごとに、どこに・何が残っているかを日本語で示します。見つけた字は頭の数文字だけを見せ、残りは伏せます。" },
   { name: "整える", text: "見つけたものを消した PDF を作ります。自分で黒塗りする所を選ぶこともできます。" },
   {
@@ -235,7 +235,7 @@ function steps(): string {
   ).join("\n");
   return `      <section class="lp-section lp-section-sunken" id="lp-how" aria-labelledby="lp-how-title">
         <div class="lp-wrap">
-${head("lp-how", "手順", "置いて、確かめて、整えて、読み直す。", "見つけるだけで終わらせず、消えたことを確かめるところまで、検査のページ 1 枚で進みます。")}
+${head("lp-how", "手順", "選んで、確かめて、整えて、読み直す。", "見つけるだけで終わらせず、消えたことを確かめるところまで、検査のページ 1 枚で進みます。")}
         <ol class="lp-steps">
 ${items}
         </ol>
