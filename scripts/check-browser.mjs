@@ -395,7 +395,7 @@ async function checkOne(c, pdf) {
 
 // ---------------------------------------------------------------- サイトのページ
 
-/** dist/ の HTML から、サイトのページの場所を作る（index.html と、検索エンジンの確認のファイルは除く） */
+/** dist/ の HTML から、サイトのページの場所（.html なし。本番の .htaccess と同じに、vite preview が .html のファイルを返す）を作る（index.html と、検索エンジンの確認のファイルは除く） */
 function sitePagePaths() {
   const out = [];
   if (!existsSync(path.join(ROOT, "dist"))) return out;
@@ -403,7 +403,7 @@ function sitePagePaths() {
     for (const name of readdirSync(dir, { withFileTypes: true })) {
       const r = rel ? `${rel}/${name.name}` : name.name;
       if (name.isDirectory()) walk(path.join(dir, name.name), r);
-      else if (r.endsWith(".html") && r !== "index.html" && !/^google[0-9a-z]+\.html$/.test(r)) out.push(r.endsWith("/index.html") ? `/${r.slice(0, -"index.html".length)}` : `/${r}`);
+      else if (r.endsWith(".html") && r !== "index.html" && !/^google[0-9a-z]+\.html$/.test(r)) out.push(r.endsWith("/index.html") ? `/${r.slice(0, -"index.html".length)}` : `/${r.slice(0, -".html".length)}`);
     }
   };
   walk(path.join(ROOT, "dist"), "");

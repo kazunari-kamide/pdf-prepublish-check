@@ -23,7 +23,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { CLEAN_URL_RULES, OFFICIAL_ORIGIN } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 // 調べるフォルダは、テストのときだけ DIST_DIR で変えられる（tests/check-dist.test.ts）
@@ -81,6 +81,8 @@ if (htaccess !== null) {
   const notFound = htaccess.match(/^\s*ErrorDocument 404 \/(\S+)\s*$/m);
   if (!notFound) problems.push(".htaccess に ErrorDocument 404 がありません");
   else if (!existsSync(path.join(DIST, notFound[1]))) problems.push(`.htaccess の ErrorDocument 404 が指す ${notFound[1]} が、dist/ にありません`);
+  // .html なしの場所で開く書き換え（htaccess.ts の CLEAN_URL_RULES）が、そのままの並びで入っている
+  if (!htaccess.includes(CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)).join("\n"))) problems.push(".htaccess に、.html なしの場所で開く書き換え（htaccess.ts の CLEAN_URL_RULES）がありません");
 }
 
 // ---- すべての HTML（index.html と、サイトのページ）
@@ -123,6 +125,22 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
   }
   if (/<style\b/.test(text) || /\sstyle="/.test(text)) problems.push(`${rel} に直接書いた style があります`);
   if (/(src|href)="(https?:)?\/\//.test(text.replace(canonical, "").replace(githubLink, "<a"))) problems.push(`${rel} が外のサイトから読み込んでいます`);
+  // サイトのページの場所は .html なし（2026-11-05。本番は .htaccess の書き換えで .html のファイルを返す。htaccess.ts の CLEAN_URL_RULES）。
+  // リンク・canonical・og:url に .html 付きの場所が残っていたら止める（外のサイトの場所は見ない）
+  const htmlLinks = [...text.matchAll(/\s(?:href|content)="((?:https:\/\/[^/"]+)?\/[^"]*?\.html)(?:[?#][^"]*)?"/g)]
+    .map((m) => m[1])
+    .filter((u) => !/^https:\/\//.test(u) || u.startsWith(`${OFFICIAL_ORIGIN}/`));
+  if (htmlLinks.length) problems.push(`${rel} に、.html 付きのサイトの場所が ${htmlLinks.length} か所あります（${[...new Set(htmlLinks)].slice(0, 3).join("、")}。.html なしにそろえる）`);
+}
+
+// ---- sitemap.xml の場所も .html なし
+{
+  const sitemap = path.join(DIST, "sitemap.xml");
+  if (existsSync(sitemap)) {
+    const locs = [...readFileSync(sitemap, "utf8").matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    const withHtml = locs.filter((u) => u.endsWith(".html"));
+    if (withHtml.length) problems.push(`sitemap.xml に、.html 付きの場所が ${withHtml.length} か所あります（${withHtml.slice(0, 3).join("、")}）`);
+  }
 }
 
 // ---- assets/ のファイルは、名前に中身のハッシュが付いていること（.htaccess で 1 年そのまま使わせるため。htaccess.ts の CACHE_ASSETS）

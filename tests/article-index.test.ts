@@ -16,7 +16,7 @@ import { renderIndexPages, searchText, usedTags } from "../src/site/article-inde
 // @ts-expect-error 型のない JavaScript のファイル（ブラウザでそのまま読む）
 import { init, matches, normalize } from "../src/site/article-search.js";
 import { ARTICLES } from "../src/site/articles.ts";
-import { figureHtml, renderArticle } from "../src/site/render.ts";
+import { figureHtml, fileFor, renderArticle } from "../src/site/render.ts";
 import { TAGS, articleTags, tagPath } from "../src/site/tags.ts";
 import type { Article } from "../src/site/types.ts";
 
@@ -45,12 +45,12 @@ describe("タグ", () => {
 
   it("使われているタグごとに、スクリプトなしの一覧のページがあり、そのタグの記事だけを並べる", () => {
     for (const t of usedTags()) {
-      const page = files.get(tagPath(t).slice(1));
+      const page = files.get(fileFor(tagPath(t)));
       expect(page, t.slug).toBeDefined();
       expect(page).not.toMatch(/<script\b/);
       expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}${tagPath(t)}" />`);
       const hrefs = [...page!.matchAll(/<a class="card-head" href="([^"]+)"/g)].map((m) => m[1]);
-      const want = ARTICLES.filter((a) => articleTags(a).includes(t)).map((a) => `/articles/${a.slug}.html`);
+      const want = ARTICLES.filter((a) => articleTags(a).includes(t)).map((a) => `/articles/${a.slug}`);
       expect(hrefs.sort()).toEqual(want.sort());
       // いま見ているタグは、リンクにしない
       expect(page).toContain(`<span class="tag site-tag" aria-current="page">${t.label}（${want.length}）</span>`);
@@ -59,7 +59,7 @@ describe("タグ", () => {
 
   it("記事が1本もないタグのページは作らない。作ったタグのページは、検索に載せるページとして sitemap に入れる（#78 の決まり）", () => {
     for (const t of TAGS.filter((x) => !usedTags().includes(x))) {
-      expect(files.has(tagPath(t).slice(1))).toBe(false);
+      expect(files.has(fileFor(tagPath(t)))).toBe(false);
       expect(files.get("sitemap.xml")).not.toContain(tagPath(t));
     }
     for (const t of usedTags()) expect(files.get("sitemap.xml")).toContain(`<loc>${OFFICIAL_ORIGIN}${tagPath(t)}</loc>`);
@@ -68,7 +68,7 @@ describe("タグ", () => {
   it("タグのページの head：題は 20〜40 字・説明は 80〜120 字で、タグごとに違い、OGP の題・説明と同じ", () => {
     const titles = new Set<string>();
     for (const t of usedTags()) {
-      const head = files.get(tagPath(t).slice(1))!.split("</head>")[0]!;
+      const head = files.get(fileFor(tagPath(t)))!.split("</head>")[0]!;
       const title = head.match(/<title>([^<]+)<\/title>/)![1]!;
       const desc = head.match(/<meta name="description" content="([^"]+)"/)![1]!;
       expect([...title].length, title).toBeGreaterThanOrEqual(20);

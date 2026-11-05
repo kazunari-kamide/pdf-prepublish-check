@@ -8,6 +8,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { CLEAN_URL_RULES } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts", "check-dist.mjs");
@@ -30,6 +31,10 @@ ErrorDocument 404 /404.html
 <IfModule mod_headers.c>
   Header always set Content-Security-Policy "${headerCsp}"
   Header always set Strict-Transport-Security "max-age=86400"
+</IfModule>
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+${CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)).join("\n")}
 </IfModule>
 `;
 }
@@ -142,9 +147,15 @@ describe("check-dist のサイトのページ（site.ts）", () => {
   }
 
   it("同じ CSP と、公式の URL を指す canonical なら通す", () => {
-    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a.html">') }));
+    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a">') }));
     expect(r.out).not.toContain("問題：");
     expect(r.code).toBe(0);
+  });
+
+  it("サイトの場所が .html 付きのリンク・canonical は止める（場所は .html なし。2026-11-05）", () => {
+    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a.html"><a href="/privacy.html">') }));
+    expect(r.out).toContain("articles/a.html に、.html 付きのサイトの場所が 2 か所あります");
+    expect(r.code).toBe(1);
   });
 
   it("CSP の <meta> がないページは止める", () => {
