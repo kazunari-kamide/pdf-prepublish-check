@@ -18,17 +18,17 @@ const FONT = path.resolve(import.meta.dirname, "..", "..", "fixtures", "p6", "fo
 /**
  * drawn をページに描き、extra は描かずに書体にだけ入れる。
  * pdf-lib は部分埋め込みの書体の名前に「ABCDEF+」の印を付けないので、Word や Acrobat などと同じ形（KAKUUA+…）に書き換える。
- * tag: false なら書き換えない（部分埋め込みの印の無い書体の対照）
+ * tag: false なら書き換えない（pdf-lib のままの、印の無い部分埋め込み）。full: true なら、書体を全部埋め込む（印も付けない）
  */
-async function build(drawn: string, extra: string, opts: { tag?: boolean } = {}): Promise<Uint8Array> {
+async function build(drawn: string, extra: string, opts: { tag?: boolean; full?: boolean } = {}): Promise<Uint8Array> {
   const doc = await PDFDocument.create({ updateMetadata: false });
   doc.registerFontkit(fontkit);
-  const font = await doc.embedFont(readFileSync(FONT), { subset: true });
+  const font = await doc.embedFont(readFileSync(FONT), { subset: !opts.full });
   const page = doc.addPage([300, 200]);
   if (drawn) page.drawText(drawn, { x: 20, y: 100, size: 14, font, color: rgb(0, 0, 0) });
   if (extra) font.encodeText(extra);
   const first = await save(doc);
-  if (opts.tag === false) return first;
+  if (opts.tag === false || opts.full) return first;
   const again = await PDFDocument.load(first, { updateMetadata: false });
   for (const [, o] of again.context.enumerateIndirectObjects()) {
     if (!(o instanceof PDFDict)) continue;
@@ -70,11 +70,25 @@ export const CASES: Case[] = [
     build: () => build("お知らせ", "、・　"),
   },
   {
-    id: "fg-c03",
-    kind: "control",
-    description: "部分埋め込みの印（ABCDEF+）の無い書体は、全部を埋め込んだものとみなして見ない（余りがあっても出さない）",
-    leaks: [],
+    id: "fg-l04",
+    kind: "leak",
+    description: "部分埋め込みの印（ABCDEF+）の無い書体（pdf-lib のまま）でも、中身が部分埋め込みの形なら見る（1.2.0）。描かれていない「山田太郎様」の字形が残る",
+    leaks: ["leftover"],
     build: () => build("お知らせ", "山田太郎様", { tag: false }),
+  },
+  {
+    id: "fg-c05",
+    kind: "control",
+    description: "印の無い部分埋め込みで、ページで使う字形だけの書体（1.2.0）",
+    leaks: [],
+    build: () => build("お知らせします", "", { tag: false }),
+  },
+  {
+    id: "fg-c06",
+    kind: "control",
+    description: "印が無く、書体を全部埋め込んだもの（字の対応表 cmap・名前の表 name がある）は、全部の字形が余りになるので見ない（1.2.0）",
+    leaks: [],
+    build: () => build("お知らせ", "", { full: true }),
   },
   {
     id: "fg-l03",
