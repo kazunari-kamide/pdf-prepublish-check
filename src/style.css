@@ -1775,6 +1775,46 @@ progress {
   font-size: var(--text-small);
 }
 
+/*
+ * 1：結果が出ている間、「整える」の帯を画面の下に固定する（2026-11-06 本人：「固定で常に画面内に」）。
+ * 帯の部品の場所（結果の欄の中・注意書きのあと）は変えないので、キーボードで移る順と読み上げは今のまま。
+ * 帯が隠す分は空ける：ページの下の余白・ページの絵の欄（上に貼り付けている）の高さ・スクロールで見せる位置（scroll-padding）。
+ * 何も見つからないときの「念のため整える」（第 2 の形）は固定しない
+ */
+:root {
+  --band-space: 0px;
+}
+
+html:has(.workspace[data-state="result"] .actions:not([hidden]) #sanitize:not([data-weight="sub"])) {
+  --band-space: calc(var(--button-height-large) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: var(--band-space);
+}
+
+body {
+  padding-bottom: var(--band-space);
+}
+
+.workspace[data-state="result"] .actions:not([hidden]) #sanitize:not([data-weight="sub"]) {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  box-sizing: border-box;
+  width: auto;
+  min-height: var(--band-space);
+  margin: 0;
+  padding: var(--sp-3) max(var(--sp-5), env(safe-area-inset-right, 0px)) calc(var(--sp-3) + env(safe-area-inset-bottom, 0px)) max(var(--sp-5), env(safe-area-inset-left, 0px));
+  border-radius: 0;
+  box-shadow: 0 -10px 24px rgb(43 42 40 / 14%);
+}
+
+/* 上に貼り付けているページの絵の欄と縮小したページの列は、帯の高さの分だけ短くする（ページの絵の下の端・印を隠さない） */
+.workspace[data-state="result"] .stage,
+.workspace[data-state="result"] .thumbs {
+  max-height: calc(100dvh - 2 * var(--sp-4) - var(--band-space));
+}
+
 /* ---------------------------------------------------------------- 第 2 の形のボタン（枠だけ）：1 つの部品（2026-11-05 夜のレビュー 10）
    別の PDF にする・中身を見る・黒塗りに加える・候補をすべて加える・自分で黒塗りする所を選ぶ・外す・この欄を消す・報告書・小さくする・一覧へ戻る。
    押した形（aria-pressed）は、線の太さを変えず、内側の線と地の色で示す（押しても 1px 動かない） */
