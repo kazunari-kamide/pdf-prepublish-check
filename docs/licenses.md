@@ -36,6 +36,8 @@
 |---|---|---|---|---|---|
 | actions/checkout | v6.1.0（`d23441a48e516b6c34aea4fa41551a30e30af803` で固定） | MIT | コードを取り出す | 2026-11-04 | https://github.com/actions/checkout |
 | actions/setup-node | v6.5.0（`249970729cb0ef3589644e2896645e5dc5ba9c38` で固定） | MIT | Node を用意する | 2026-11-04 | https://github.com/actions/setup-node |
+| actions/upload-artifact | v7.0.2（`cf430e030ddbb5b0abf93d22962f4752f3646cd9` で固定） | MIT | ビルドのジョブから、dist/ を成果物として渡す | 2026-11-05 | https://github.com/actions/upload-artifact |
+| actions/download-artifact | v8.0.2（`9000827ccba6bdab643e8b6fd33ac0654aef8333` で固定） | MIT | 配信のジョブで、成果物を受け取る | 2026-11-05 | https://github.com/actions/download-artifact |
 | lftp | Ubuntu 24.04 の apt のもの | GPL-3.0-or-later | dist/ を FTPS で上げる（コマンドとして動かすだけで、コードは取り込まない） | 2026-11-04 | https://lftp.yar.ru/ |
 
 ## フォント・素材

@@ -27,8 +27,10 @@ const NEEDS_PASSWORD = new Set(["p5/p5-25-encrypted-user-password.pdf"]);
  * いまは無い：ウィジェットの無い欄の値（p5-07・p5-20 の P11）は片付け 0.7.0 で消すようになり、
  * ふつうの https のリンク（p9-03・p9-n02 の P12）は P12 1.2.0 で出さなくなったので、ここから外した。
  * 新しく分かっている残りができたら、ここに足す（数と型を書く）。
+ * P6 の合成 PDF の、消した字の字形（font-glyphs 1.2.0）も、片付け 0.8.0 で消すようになったので外した（下の注）。
  */
 const KNOWN_LEFT: Record<string, { left: number; pattern: string }> = {
+  // font-glyphs 1.2.0 で数えた「書体に消した字の形が残る」（p6 の 13 個）は、片付け 0.8.0 で字形を書体から外すようになったので、ここから外した。
 };
 
 describe("片付けてから読み直す（合成 PDF の全部）", () => {

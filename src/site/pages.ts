@@ -404,6 +404,30 @@ export function renderLicenses(o: RenderOptions, d: LicenseData): string {
   return layout(LICENSES_META, body, o);
 }
 
+// ---------------------------------------------------------------- 見つからないとき（404）
+
+/** 見つからないときに返すページ（.htaccess の ErrorDocument 404。htaccess.ts の NOT_FOUND_PAGE）。sitemap には入れない */
+export const NOT_FOUND_META: PageMeta = {
+  path: "/404.html",
+  title: "ページが見つかりません",
+  description: "お探しのページは見つかりませんでした。場所が変わったか、なくなった可能性があります。検査のページや記事の一覧から探してください。",
+};
+
+export const NOT_FOUND_BLOCKS: Block[] = [
+  {
+    heading: "探し方",
+    paragraphs: [
+      "入力した場所（URL）に、まちがいがないかを確かめてください。",
+      "公式のサイトは omamoripdf.com だけです。ほかの場所で、このページに似たものが出たときは、改変されている可能性があります。",
+    ],
+    links: [
+      { href: "/", label: "検査のページ" },
+      { href: ARTICLES_PATH, label: "記事の一覧" },
+      { href: FAQ_PATH, label: "よくある質問" },
+    ],
+  },
+];
+
 // ---------------------------------------------------------------- まとめ
 
 /** サイトの案内のページの場所（sitemap に足す） */
@@ -417,5 +441,6 @@ export function renderGuidePages(o: RenderOptions, licenses: LicenseData): Map<s
   pages.set(fileFor(TERMS_PATH), simplePage(TERMS_META, TERMS_META.description, TERMS_BLOCKS, o));
   pages.set(fileFor(CONTACT_PATH), simplePage(CONTACT_META, CONTACT_META.description, CONTACT_BLOCKS, o));
   pages.set(fileFor(LICENSES_PATH), renderLicenses(o, licenses));
+  pages.set(fileFor(NOT_FOUND_META.path), simplePage(NOT_FOUND_META, NOT_FOUND_META.description, NOT_FOUND_BLOCKS, o));
   return pages;
 }
