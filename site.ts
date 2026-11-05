@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// サイトのページ（記事の一覧・各記事・プライバシーの説明と、ライセンス・利用規約・お問い合わせ・よくある質問・公開前の自己点検）を、ビルドに入れる Vite のプラグイン。
+// サイトのページ（サービスの紹介・記事の一覧・各記事・プライバシーの説明と、ライセンス・利用規約・お問い合わせ・よくある質問・公開前の自己点検）を、ビルドに入れる Vite のプラグイン。
 // 中身と HTML の作り方は src/site/（render.ts・articles.ts・privacy.ts）。ここでは、次のことだけをする。
 // - ページの CSS（design/tokens.css ＋ src/site/site.css）を1つにつなぎ、中身のハッシュの名前で assets/ に置く
 // - HTML のページと、sitemap.xml・robots.txt を dist/ に置く（npm run build）
@@ -19,10 +19,11 @@ import { CONTACT_PAGE_FILE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "./htacces
 import { faviconHref, inlineMark } from "./logo.ts";
 import { buildFigures } from "./site-figures.ts";
 import { buildLicenses } from "./site-licenses.ts";
+import { renderAbout } from "./src/site/about.ts";
 import { renderIndexPages, usedTags } from "./src/site/article-index.ts";
 import { tagPath } from "./src/site/tags.ts";
 import { CONTACT_ERRORS_MARK, CONTACT_ERRORS_TOP_MARK, CONTACT_MESSAGE_MARK, CONTACT_TOKEN_FIELD, GUIDE_PATHS, TERMS_DIALOG_MARKER, renderContactResults, renderGuidePages, renderTermsDialog } from "./src/site/pages.ts";
-import { escapeHtml, renderSite, sitePaths } from "./src/site/render.ts";
+import { ABOUT_PATH, escapeHtml, fileFor, renderSite, sitePaths } from "./src/site/render.ts";
 import { articleTransitionNames } from "./src/site/motion.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
 import { INSPECTOR_HEAD, OG_IMAGE_PATH, headLines, type HeadInfo } from "./src/site/seo.ts";
@@ -44,6 +45,12 @@ export function siteCss(): string {
   const site = readFileSync(path.join(ROOT, "src", "site", "site.css"), "utf8");
   const motion = readFileSync(path.join(ROOT, "src", "site", "motion.css"), "utf8");
   return `${tokens}\n${sheet}\n${site}\n${motion}\n${articleTransitionNames()}`;
+}
+
+/** サービスの紹介のページ（/about）だけで、サイトの CSS の後に読む CSS（src/site/about.css）。名前に中身のハッシュを付ける */
+export function aboutCss(): { file: string; source: string } {
+  const source = readFileSync(path.join(ROOT, "src", "site", "about.css"), "utf8");
+  return { file: `assets/about-${createHash("sha256").update(source).digest("hex").slice(0, 10)}.css`, source };
 }
 
 export function siteCssFile(css = siteCss()): string {
@@ -147,6 +154,10 @@ export function siteFiles(): Map<string, string> {
   // 記事の一覧（検索のスクリプトを読む）と、タグごとの一覧のページ
   for (const [name, page] of renderIndexPages({ ...options, figures: figures.assets, searchScript: `/${search.file}` })) files.set(name, page);
   files.set(search.file, search.source);
+  // サービスの紹介のページ（LP）と、そのページだけの CSS
+  const about = aboutCss();
+  files.set(fileFor(ABOUT_PATH), renderAbout(options, `/${about.file}`));
+  files.set(about.file, about.source);
   const licenses = buildLicenses(ROOT);
   for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);
   for (const [name, text] of licenses.files) files.set(name, text);
