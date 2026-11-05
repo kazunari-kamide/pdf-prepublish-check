@@ -135,6 +135,23 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     }
   });
 
+  it("利用規約：定めた日・変え方（効き始める日を前もって知らせる）・準拠法があり、免責は故意・重過失のときに責任を負うと書く", () => {
+    const t = page("terms.html");
+    for (const s of ["2026年11月5日", "効き始める日より前に", "日本の法律に従って解釈します", "故意または重大な過失がある場合は、法律に従って責任を負います"]) expect(t, s).toContain(s);
+    // 契約の外の人（第三者）の損害まで免除する書き方はしない
+    expect(t).not.toContain("第三者に生じた損害");
+    expect(t).not.toContain("【定めた日");
+  });
+
+  it("プライバシー：PDF を入れたときにファイルを読み込む記録が残ることと、記録の使い方・お問い合わせの扱い・説明の変え方を書く", () => {
+    const p = files.get("privacy.html")!;
+    for (const s of ["検査に使うプログラムのファイルを、このサイトから読み込むことがあります", "過大な負担に対処すること", "不具合の原因を調べること", "お問い合わせに書いたこと", "この説明の変え方"]) {
+      expect(p, s).toContain(s);
+    }
+    // 「PDF を入れた」という操作が記録に残らない、とは言い切らない（ファイルの読み込みの記録は残りうる）
+    expect(p).not.toContain("PDF を入れた、などの画面での操作");
+  });
+
   it("お問い合わせ：Issues へのリンクだけで、PDF・個人情報を貼らない注意がある", () => {
     const c = page("contact.html");
     expect(c).toContain(`href="${REPO}/issues"`);
@@ -175,7 +192,7 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
     for (const name of ["@napi-rs/canvas", "@pdf-lib/fontkit", "vite", "vitest", "typescript", "subset-font", "@types/node", "actions/checkout", "lftp", "BIZ UDゴシック"]) {
       expect(l, name).not.toContain(`>${escapeHtml(name)}<`);
     }
-    // 全文のファイルも、並べた部品・書体とこの道具の分だけ
+    // 全文のファイルも、並べた部品・書体と当サービスの分だけ
     const listed = [...d.shipped, ...d.fonts].map((r) => r.textHref!.slice(1));
     expect([...licenses.files.keys()].sort()).toEqual([...listed, "licenses/AGPL-3.0.txt"].sort());
     expect([...files.keys()].filter((k) => k.startsWith("licenses/")).sort()).toEqual([...licenses.files.keys()].sort());
@@ -226,7 +243,7 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
     expect(githubRepo("https://gitlab.com/a/b")).toBeNull();
   });
 
-  it("ページに、この道具の AGPL-3.0・ソースの場所・部品の表が出る", () => {
+  it("ページに、当サービスの AGPL-3.0・ソースの場所・部品の表が出る", () => {
     const l = pages.get("licenses.html")!;
     expect(l).toContain("AGPL-3.0-only");
     expect(l).toContain('href="/licenses/AGPL-3.0.txt"');

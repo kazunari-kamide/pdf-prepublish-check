@@ -25,6 +25,7 @@ export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです�
 
 /** どのページの下にも置く、サイトの案内のリンク（検査のページ index.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
 export const FOOT_LINKS: ReadonlyArray<readonly [string, string]> = [
+  ["/", "検査のページ"],
   [ARTICLES_PATH, "記事の一覧"],
   [CHECKLIST_PATH, "公開前の自己点検"],
   [FAQ_PATH, "よくある質問"],
