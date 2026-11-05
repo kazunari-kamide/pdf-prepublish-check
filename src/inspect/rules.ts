@@ -612,6 +612,15 @@ const pii = defineRule<PiiReport>({
         pages: r.unreadable.pages,
       });
     }
+    // 字が 1 つもないページ（スキャンの画像だけなど）：個人情報らしい字は探せていない。「見つかりませんでした」と安心させないよう、
+    // 調べきれなかった所として知らせる（2026-11-06 本人の頼み。字のないスキャンで、緑の「見つかりませんでした」が出ていた）
+    if (r.noTextPages?.length) {
+      out.push({
+        kind: "no_text",
+        message: "このページには、字がありません（スキャンした画像だけのページなど）。画像の中の字は読まないため、個人情報らしい字は探せていません。",
+        pages: r.noTextPages,
+      });
+    }
     if (r.truncatedPages.length) {
       out.push({ kind: "partial", message: "このページは字が多すぎるため、個人情報らしい字を途中までしか探していません。", pages: r.truncatedPages });
     }

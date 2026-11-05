@@ -102,7 +102,7 @@ function partialReasons(rules: RuleResult[]): string[] {
       else if (n.kind === "unchecked_images") {
         images.push(...n.pages);
         if (!n.pages.length) imagesNoPage = true;
-      } else if (n.kind === "partial") other.add(n.message);
+      } else if (n.kind === "partial" || n.kind === "no_text") other.add(n.message);
     }
   }
   const out: string[] = [];

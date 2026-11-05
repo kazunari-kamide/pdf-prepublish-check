@@ -49,7 +49,8 @@ export type Item = {
 
 /** 知らせること（漏れではないが、利用者に伝えること） */
 /** info＝漏れとは言い切れず、知らせるだけのもの（XFA のフォーム・C2PA の来歴など。11/5 D） */
-export type NoticeKind = "decrypted" | "unchecked_images" | "skipped_pages" | "partial" | "info";
+/** no_text＝字が 1 つもないページ（個人情報らしい字を探せていない。2026-11-06 から） */
+export type NoticeKind = "decrypted" | "unchecked_images" | "skipped_pages" | "partial" | "info" | "no_text";
 /**
  * reason は、省いたページ（skipped_pages）と調べなかった画像（unchecked_images）のときだけ。
  * heavy＝図形が多すぎる（ページの絵も描かない）、unreadable＝読めなかった、

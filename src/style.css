@@ -241,12 +241,13 @@ body:has(#workspace[data-state="empty"]) .steps {
   display: none;
 }
 
-/* 大見出し（案 C）：丸ゴシックの 900・2.4rem（狭い画面 1.8rem）。線は引かない。日本語は文節で折り、行の長さをそろえる */
+/* 大見出し（案 C）：2.4rem（狭い画面 1.8rem）。線は引かない。日本語は文節で折り、行の長さをそろえる。
+   書体は、本文と同じ Noto Sans JP の太字（2026-11-06 本人が決定。丸ゴシックの 900 と見比べて選んだ） */
 .hero-title {
   margin: 0;
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-hero);
-  font-weight: var(--fw-display);
+  font-weight: 700;
   line-height: 1.35;
   letter-spacing: 0.01em;
   word-break: auto-phrase;

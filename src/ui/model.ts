@@ -68,6 +68,9 @@ export type ViewModel = {
   candidates: number;
   groups: Group[];
   notices: string[];
+  /** notices のうち、字が 1 つもないページのお知らせ（no_text）の数。読み込んだ直後の結論は緑にしないが、
+   *  整えたあとの読み直しの判定（clean-model）には数えない（整えると見えない字が消え、字のないページになるため） */
+  noTextNotices: number;
   unchecked: string[];
   pages: PageMarks[];
   /** 図形が多すぎるとして、どれかのルールが省いたページ（ページの絵も描かない） */
@@ -149,19 +152,20 @@ export function buildView(summary: InspectSummary): ViewModel {
   });
 
   // お知らせ：同じ文はまとめ、ページ番号を合わせる
-  const merged = new Map<string, { pages: number[]; problem: boolean }>();
+  const merged = new Map<string, { pages: number[]; problem: boolean; noText: boolean }>();
   for (const r of summary.rules) {
     for (const n of r.notices) {
       // 省いたページは、ルールごとに上限が違うので、どのルールが省いたかを添える
       const key = n.kind === "skipped_pages" ? `${r.label}（${r.pattern}）：${n.message}` : n.message;
       // 復号したこと・知らせるだけのもの（info。文字認識の層・XFA など）は、調べきれなかった所に数えない
-      const m = merged.get(key) ?? { pages: [], problem: n.kind !== "decrypted" && n.kind !== "info" };
+      const m = merged.get(key) ?? { pages: [], problem: n.kind !== "decrypted" && n.kind !== "info", noText: n.kind === "no_text" };
       m.pages.push(...n.pages);
       merged.set(key, m);
     }
   }
   const notices = [...merged.entries()].map(([msg, m]) => (m.pages.length ? `${msg}（ページ ${pagesText(m.pages)}）` : msg));
   const partial = [...merged.values()].some((m) => m.problem);
+  const noTextNotices = [...merged.values()].filter((m) => m.noText).length;
 
   const errors = summary.rules.filter((r) => r.status === "error");
   const unchecked = errors.map((r) => `${r.label}（${r.pattern}）：${r.message ?? "調べられませんでした。"}`);
@@ -222,5 +226,5 @@ export function buildView(summary: InspectSummary): ViewModel {
       ),
     ),
   ].sort((a, b) => a - b);
-  return { verdict, headline, tone, rows, hidden, candidates, groups, heavyPages, notices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
+  return { verdict, headline, tone, rows, hidden, candidates, groups, heavyPages, notices, noTextNotices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
 }
