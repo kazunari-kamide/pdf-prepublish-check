@@ -61,6 +61,13 @@
           <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
           <span class="sample-note">架空の申請書です（黒い四角の下に、架空の名前が残っています）。</span>
         </p>
+        <div class="limit-entry" id="limit-row">
+          <label class="limit-title" for="size-limit">提出のためにファイルを小さくする</label>
+          <select id="size-limit" aria-describedby="limit-note">
+            <option value="">上限を選ばない（ふつうの検査）</option>
+          </select>
+          <p class="limit-note" id="limit-note">提出先に容量の上限があるときは、先に上限を選んでから PDF を置いてください。いつもどおり確かめて整え、読み直したあとに、その大きさまで小さくします。</p>
+        </div>
 
         <div class="filebar" id="filebar" hidden>
           <span class="filebar-name" id="file-name"></span>
@@ -145,6 +152,7 @@
           <section id="compress" class="compress" aria-labelledby="compress-title" hidden>
             <h4 id="compress-title" tabindex="-1">ファイルを小さくする（必要なときだけ）</h4>
             <p class="compress-note">提出先に容量の上限があるときに使います。整えた PDF の画像を縮めて書き直します。字・図形は変えません。小さくしたあとも、もう一度最初から検査し直します。</p>
+            <p id="compress-limit" class="compress-limit" tabindex="-1" hidden></p>
             <fieldset class="compress-presets" id="compress-presets">
               <legend>画像の細かさ</legend>
             </fieldset>
