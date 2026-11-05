@@ -36,37 +36,37 @@ const PAGE_HEAD: Record<string, { title: string; description: string }> = {
     description:
       "PDF を公開・提出する前に知っておきたい、見た目では分からない情報の残り方（12 の型）と、正しいやり方の手順をまとめました。型ごとに、なぜ起きるのか・見分け方・直し方を説明しています。",
   },
-  "/privacy.html": {
+  "/privacy": {
     title: "プライバシーについて：PDF を送らない作り｜お守りPDF",
     description:
       "お守りPDF は、入れた PDF をどこにも送りません。このサイトが残す記録は、配信先のサーバーが残すものだけです。何が残り、何が残らないかを説明します。アクセス解析のタグは入れていません。",
   },
-  "/faq.html": {
+  "/faq": {
     title: "よくある質問：送らない仕組み・調べる範囲｜お守りPDF",
     description:
       "本当に PDF を送らないのか、何を調べるのか、黒塗りの直し方、「見つかりませんでした」の意味など、お守りPDF についてよく聞かれることをまとめました。使う前の疑問を確かめられます。",
   },
-  "/checklist.html": {
+  "/checklist": {
     title: "公開前の自己点検：PDF を出す前の確かめ｜お守りPDF",
     description:
       "PDF を公開・提出する前に、作る時・書き出す時・出す前の3つの段で確かめることを、型の番号（P1〜P12）に沿って並べました。印刷して使えます。見落としを減らすための目安の一覧です。",
   },
-  "/terms.html": {
+  "/terms": {
     title: "利用規約：無料・登録なしで使うときの決まり｜お守りPDF",
     description:
       "お守りPDF の利用規約です。無料・登録なしで、PDF はブラウザの中だけで読むこと、見つけられる範囲に限りがあること、禁止すること、変え方を書いています。使う前に一度お読みください。",
   },
-  "/licenses.html": {
+  "/licenses": {
     title: "ライセンス：AGPL-3.0 と使っている部品｜お守りPDF",
     description:
       "お守りPDF のライセンス（AGPL-3.0）とソースの場所、使っている部品・書体の名前・版・ライセンス・著作権の表示と、ライセンスの全文です。どの部品をどの条件で使っているかを確かめられます。",
   },
-  "/404.html": {
+  "/404": {
     title: "ページが見つかりません（404）｜お守りPDF",
     description:
       "お探しのページは見つかりませんでした。場所が変わったか、なくなった可能性があります。検査のページや記事の一覧から探してください。公式のサイトは omamoripdf.com だけです。",
   },
-  "/contact.html": {
+  "/contact": {
     title: "お問い合わせ：質問・不具合・弱点の知らせ方｜お守りPDF",
     description:
       "お守りPDF への質問・不具合・セキュリティの弱点の知らせは、このページのフォームだけで受け付けています。PDF や個人情報、見つかった字の中身は書かないでください。返事がほしいときだけ、メールアドレスを書いてください。",
@@ -87,7 +87,7 @@ const ARTICLE_EXTRA: Record<string, string> = {
  * 検索に載せないページ。カードを付けず `<meta name="robots" content="noindex">` にし、sitemap にも入れない（canonical は付ける）
  * （404.html：.htaccess の ErrorDocument が、どの場所でも返すページ。contact-send.php：お問い合わせを送ったあとの結果のページ。tests/site-head.test.ts）
  */
-export const NOINDEX_PATHS: ReadonlySet<string> = new Set(["/404.html", "/contact-send.php"]);
+export const NOINDEX_PATHS: ReadonlySet<string> = new Set(["/404", "/contact-send.php"]);
 
 export type HeadInfo = { path: string; title: string; description: string; type: "website" | "article"; noindex?: boolean };
 
@@ -96,7 +96,7 @@ export type HeadInfo = { path: string; title: string; description: string; type:
  * 題は 20〜40 字に収まる形を、長いほうから選ぶ（タグの名前の長さが違うため）。説明は 80〜120 字
  */
 function tagHead(meta: PageMeta): HeadInfo | null {
-  const m = meta.path.match(/^\/articles\/tags\/([a-z0-9-]+)\.html$/);
+  const m = meta.path.match(/^\/articles\/tags\/([a-z0-9-]+)$/);
   const tag = m ? tagBySlug(m[1]!) : undefined;
   if (!tag) return null;
   const n = ARTICLES.filter((a) => articleTags(a).includes(tag)).length;
@@ -117,7 +117,7 @@ export function headFor(meta: PageMeta): HeadInfo {
   if (tagged) return tagged;
   const page = PAGE_HEAD[meta.path];
   if (page) return { path: meta.path, ...page, type: "website", ...(NOINDEX_PATHS.has(meta.path) ? { noindex: true } : {}) };
-  const article = ARTICLES.find((a) => meta.path === `/articles/${a.slug}.html`);
+  const article = ARTICLES.find((a) => meta.path === `/articles/${a.slug}`);
   if (article) {
     const tail = article.pattern ? ARTICLE_TAIL.pattern : ARTICLE_TAIL.guide;
     const extra = ARTICLE_EXTRA[article.slug] ?? "";

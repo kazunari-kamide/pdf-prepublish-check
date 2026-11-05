@@ -374,8 +374,8 @@ export const FAQ_BLOCKS: Block[] = [
       "元のファイル（Word など）から作り直す場合は、黒い四角を重ねるのではなく、字そのものを消すか、墨消しの機能を使ってから PDF にしてください。",
     ],
     links: [
-      { href: `${ARTICLES_PATH}p6-fake-redaction.html`, label: "見せかけの黒塗り（P6）の解説" },
-      { href: `${ARTICLES_PATH}guide-acrobat-redaction.html`, label: "墨消しの手順" },
+      { href: `${ARTICLES_PATH}p6-fake-redaction`, label: "見せかけの黒塗り（P6）の解説" },
+      { href: `${ARTICLES_PATH}guide-acrobat-redaction`, label: "墨消しの手順" },
     ],
   },
   {
@@ -398,7 +398,7 @@ export const FAQ_BLOCKS: Block[] = [
     paragraphs: [
       "調べられます。スキャンの画像の上に黒い図形を重ねただけの黒塗りや、文字認識（OCR）で付いた字の層を見つけます。文字認識の層があるページは、お知らせとして示します。",
     ],
-    links: [{ href: `${ARTICLES_PATH}guide-scan.html`, label: "スキャンの書類の手順" }],
+    links: [{ href: `${ARTICLES_PATH}guide-scan`, label: "スキャンの書類の手順" }],
   },
   {
     heading: "PDF 以外のファイル（Word・Excel・写真）も調べられますか？",
@@ -406,7 +406,7 @@ export const FAQ_BLOCKS: Block[] = [
       "検査のページで調べられるのは、PDF だけです。手元で動かすコマンドの道具では、写真（JPEG・PNG・WebP）と今の Office（docx・xlsx・pptx）に残った情報を知らせるところまでできます（消すところは、まだできません）。",
       "Word などの元のファイルは、PDF にする前に、ファイルの情報（プロパティ）やコメント・変更の履歴を確かめてください。",
     ],
-    links: [{ href: `${ARTICLES_PATH}guide-word.html`, label: "Word から PDF にするときの手順" }],
+    links: [{ href: `${ARTICLES_PATH}guide-word`, label: "Word から PDF にするときの手順" }],
   },
   {
     heading: "ファイルを小さく（圧縮）できますか？",
@@ -574,7 +574,7 @@ export function renderLicenses(o: RenderOptions, d: LicenseData): string {
 
 /** 見つからないときに返すページ（.htaccess の ErrorDocument 404。htaccess.ts の NOT_FOUND_PAGE）。sitemap には入れない */
 export const NOT_FOUND_META: PageMeta = {
-  path: "/404.html",
+  path: "/404",
   title: "ページが見つかりません",
   description: "お探しのページは見つかりませんでした。場所が変わったか、なくなった可能性があります。検査のページや記事の一覧から探してください。",
 };

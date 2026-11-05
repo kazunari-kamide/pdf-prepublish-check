@@ -113,7 +113,7 @@ describe("依存の更新（dependabot.yml）", () => {
 describe("弱点の知らせ方・偽のサイト", () => {
   it("SECURITY.md は、お問い合わせのフォームだけを窓口にし、弱点の中身は書かせず、実物の PDF を送らせない", () => {
     const s = read("SECURITY.md");
-    expect(s).toContain("お問い合わせのページ（`https://omamoripdf.com/contact.html`）のフォーム");
+    expect(s).toContain("お問い合わせのページ（`https://omamoripdf.com/contact`）のフォーム");
     expect(s).toContain("弱点の詳しい中身は書かず、連絡先のメールアドレスだけ");
     expect(s).toContain("架空の名前・番号で作ったもの");
     // 本人が見ていない窓口（GitHub の Issues・非公開の報告）は案内しない（2026-11-05 本人が決定）

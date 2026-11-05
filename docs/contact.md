@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # お問い合わせのフォーム
 
-お問い合わせは、サイトのお問い合わせのページ（`/contact.html`）のフォームだけで受け付ける（2026-11-05 本人が決定）。GitHub の Issues・非公開の脆弱性の報告は、窓口として案内しない（本人が見ていないため）。
+お問い合わせは、サイトのお問い合わせのページ（`/contact`）のフォームだけで受け付ける（2026-11-05 本人が決定）。GitHub の Issues・非公開の脆弱性の報告は、窓口として案内しない（本人が見ていないため）。
 
 ## 作り
 
 ```
-/contact.html を開く（GET）
+/contact を開く（GET。/contact.html で来たら、.htaccess が /contact へ 301 で移す）
    │  .htaccess が中で contact-send.php へ回す（アドレスは変わらない）
    ▼
 contact-send.php：フォームのページを返す。隠れた欄 t に「開いた時刻と、secret で作った署名」を入れる
@@ -92,7 +92,7 @@ PHP が `public_html` の外のファイルを読めない設定（`open_basedir
 
 ## まだ確かめていないこと
 
-- Xserver の Apache で、`.htaccess` の `RewriteRule ^contact(\.html)?$ contact-send.php [L]` が効いて、`/contact.html` で PHP のフォーム（開いた時刻の印つき）が返るか。`check:live` が、印のほかは `dist/contact.html` と同じであることと、印が入っていることを確かめる（設定を置く前は、印が空だと表示する）。
+- Xserver の Apache で、`.htaccess` の `RewriteRule ^contact$ contact-send.php [L]` が効いて、`/contact` で PHP のフォーム（開いた時刻の印つき）が返るか。`check:live` が、印のほかは `dist/contact.html` と同じであることと、印が入っていることを確かめる（設定を置く前は、印が空だと表示する）。`/contact.html` が `/contact` へ 301 になることも確かめる。この書き換えは、`.html` なしの書き換え（`htaccess.ts` の `CLEAN_URL_RULES` の 2 つ目。`/contact` → `contact.html`）より前に置く（後ろだと、静かな `contact.html` が返る。`check:dist` が並びを確かめる）。
 
 - Xserver の Apache で、`<FilesMatch>` の中の `Header always set` が、上の `Header always set` を上書きするか（Apache の設定の重ね方では、`<Files>` は後から当てはまるので上書きする、と読んでいる。推測）。`check:live` で確かめる。
 - Xserver の前の nginx を通ったあと、PHP に渡る `REMOTE_ADDR` が利用者の接続元か（nginx の場所になっていると、迷惑防止の「同じ接続元」がサイト全体になり、60 秒に 1 通しか受け付けなくなる）。上の 5. の 2 通目で、ほかの回線（スマートフォンの回線など）から送って確かめる。

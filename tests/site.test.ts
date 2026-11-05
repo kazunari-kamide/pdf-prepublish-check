@@ -14,7 +14,7 @@ import { ARTICLES } from "../src/site/articles.ts";
 import { GUIDE_PATHS } from "../src/site/pages.ts";
 import { tagPath } from "../src/site/tags.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS } from "../src/site/privacy.ts";
-import { escapeHtml, renderArticle, sitePaths } from "../src/site/render.ts";
+import { escapeHtml, fileFor, renderArticle, sitePaths } from "../src/site/render.ts";
 import type { Section } from "../src/site/types.ts";
 
 const files = siteFiles();
@@ -95,10 +95,10 @@ describe("記事の数と形", () => {
 describe("ページの HTML", () => {
   it("記事のすべてと、一覧・プライバシー・サイトの案内のページ（tests/site-pages.test.ts）がある", () => {
     const names = html.map(([n]) => n);
-    expect(names).toEqual(expect.arrayContaining(["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...GUIDE_PATHS.map((p) => p.slice(1))]));
+    expect(names).toEqual(expect.arrayContaining(["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...GUIDE_PATHS.map((p) => fileFor(p))]));
     // 記事の場所にある HTML は、記事の一覧と記事と、タグごとの一覧のページ（tests/article-index.test.ts）だけ
     expect(names.filter((n) => n.startsWith("articles/")).sort()).toEqual(
-      ["articles/index.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...usedTags().map((t) => tagPath(t).slice(1))].sort(),
+      ["articles/index.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...usedTags().map((t) => fileFor(tagPath(t)))].sort(),
     );
   });
 
@@ -130,7 +130,7 @@ describe("ページの HTML", () => {
     for (const a of ARTICLES) {
       const page = files.get(`articles/${a.slug}.html`)!;
       expect(page, a.slug).toContain('aria-label="関係する記事"');
-      for (const r of a.related) expect(page, `${a.slug} → ${r}`).toContain(`href="/articles/${r}.html"`);
+      for (const r of a.related) expect(page, `${a.slug} → ${r}`).toContain(`href="/articles/${r}"`);
     }
   });
 

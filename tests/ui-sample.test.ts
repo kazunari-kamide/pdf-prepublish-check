@@ -20,3 +20,17 @@ describe("見本の PDF", () => {
     expect(SAMPLE_NAME).toContain("架空");
   });
 });
+
+describe("?sample=1 で開く", () => {
+  it("sample=1 のときだけ見本を読む。ほかの値・ほかの query は無視する", async () => {
+    const { wantsSample } = await import("../src/ui/sample");
+    expect(wantsSample("?sample=1")).toBe(true);
+    expect(wantsSample("?utm=x&sample=1")).toBe(true);
+    for (const s of ["", "?sample=0", "?sample=true", "?sample=", "?sample=1x", "?other=1", "?Sample=1"]) expect(wantsSample(s)).toBe(false);
+  });
+  it("アドレスから sample だけを外す（ほかの query と # は残す）", async () => {
+    const { withoutSample } = await import("../src/ui/sample");
+    expect(withoutSample("/", "?sample=1", "")).toBe("/");
+    expect(withoutSample("/", "?a=2&sample=1", "#x")).toBe("/?a=2#x");
+  });
+});

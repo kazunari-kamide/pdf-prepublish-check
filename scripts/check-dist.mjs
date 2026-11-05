@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { withFormActionSelf } from "../csp.ts";
-import { CONTACT_PAGE_FILE, CONTACT_REWRITE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { CLEAN_URL_RULES, CONTACT_PAGE_FILE, CONTACT_REWRITE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 // 調べるフォルダは、テストのときだけ DIST_DIR で変えられる（tests/check-dist.test.ts）
@@ -102,6 +102,8 @@ if (htaccess !== null) {
   const notFound = htaccess.match(/^\s*ErrorDocument 404 \/(\S+)\s*$/m);
   if (!notFound) problems.push(".htaccess に ErrorDocument 404 がありません");
   else if (!existsSync(path.join(DIST, notFound[1]))) problems.push(`.htaccess の ErrorDocument 404 が指す ${notFound[1]} が、dist/ にありません`);
+  // .html なしの場所で開く書き換え（htaccess.ts の CLEAN_URL_RULES）が、そのままの並びで入っている
+  if (!htaccess.includes(CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)).join("\n"))) problems.push(".htaccess に、.html なしの場所で開く書き換え（htaccess.ts の CLEAN_URL_RULES）がありません");
 }
 
 // ---- すべての HTML（index.html と、サイトのページ）
@@ -146,6 +148,22 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
   }
   if (/<style\b/.test(text) || /\sstyle="/.test(text)) problems.push(`${rel} に直接書いた style があります`);
   if (/(src|href)="(https?:)?\/\//.test(text.replace(canonical, "").replace(githubLink, "<a"))) problems.push(`${rel} が外のサイトから読み込んでいます`);
+  // サイトのページの場所は .html なし（2026-11-05。本番は .htaccess の書き換えで .html のファイルを返す。htaccess.ts の CLEAN_URL_RULES）。
+  // リンク・canonical・og:url に .html 付きの場所が残っていたら止める（外のサイトの場所は見ない）
+  const htmlLinks = [...text.matchAll(/\s(?:href|content)="((?:https:\/\/[^/"]+)?\/[^"]*?\.html)(?:[?#][^"]*)?"/g)]
+    .map((m) => m[1])
+    .filter((u) => !/^https:\/\//.test(u) || u.startsWith(`${OFFICIAL_ORIGIN}/`));
+  if (htmlLinks.length) problems.push(`${rel} に、.html 付きのサイトの場所が ${htmlLinks.length} か所あります（${[...new Set(htmlLinks)].slice(0, 3).join("、")}。.html なしにそろえる）`);
+}
+
+// ---- sitemap.xml の場所も .html なし
+{
+  const sitemap = path.join(DIST, "sitemap.xml");
+  if (existsSync(sitemap)) {
+    const locs = [...readFileSync(sitemap, "utf8").matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    const withHtml = locs.filter((u) => u.endsWith(".html"));
+    if (withHtml.length) problems.push(`sitemap.xml に、.html 付きの場所が ${withHtml.length} か所あります（${withHtml.slice(0, 3).join("、")}）`);
+  }
 }
 
 // ---- PHP は、お問い合わせの送り先 1 つだけ（docs/contact.md）。本物の設定・メールアドレスを配るものに入れない
@@ -157,9 +175,15 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
     const src = readFileSync(path.join(DIST, CONTACT_SEND_FILE), "utf8");
     if (/@@(PAGES|HEADERS)@@/.test(src)) problems.push(`${CONTACT_SEND_FILE} に、結果のページかヘッダーが差し込まれていません`);
     if (!src.includes("<!--CONTACT_MESSAGE-->")) problems.push(`${CONTACT_SEND_FILE} の送れなかったときのページに、理由を入れる印がありません`);
-    // フォームのページ（開いた時刻の印の欄・理由を入れる印）が入っていること。本番では .htaccess が contact.html をここへ回す
+    // フォームのページ（開いた時刻の印の欄・理由を入れる印）が入っていること。本番では .htaccess が /contact をここへ回す
     if (!src.includes(`name="t" value=""`) || !src.includes("<!--CONTACT_ERRORS-->")) problems.push(`${CONTACT_SEND_FILE} に、フォームのページ（開いた時刻の印の欄）が差し込まれていません`);
-    if (htaccess !== null && !htaccess.includes(`RewriteRule ${CONTACT_REWRITE}`)) problems.push(`.htaccess に、お問い合わせのページを ${CONTACT_SEND_FILE} へ回す書き換えがありません`);
+    // /contact を PHP へ回す書き換えは、.html なしの書き換え（/contact → contact.html）より前にあること（後ろだと、静かな contact.html が返る）
+    if (htaccess !== null) {
+      const at = htaccess.indexOf(`RewriteRule ${CONTACT_REWRITE}`);
+      const clean = htaccess.indexOf(CLEAN_URL_RULES[0]);
+      if (at < 0) problems.push(`.htaccess に、お問い合わせのページを ${CONTACT_SEND_FILE} へ回す書き換えがありません`);
+      else if (clean >= 0 && at > clean) problems.push(`.htaccess で、お問い合わせのページを ${CONTACT_SEND_FILE} へ回す書き換えが、.html なしの書き換えより後ろにあります（静かな contact.html が返ってしまう）`);
+    }
     const mail = src.match(/[\w.+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+/g)?.filter((m) => !/^[\w.+-]+@(example\.(invalid|com|org))$/.test(m)) ?? [];
     if (mail.length) problems.push(`${CONTACT_SEND_FILE} にメールアドレスらしい字があります（${mail.length} 件。届け先は public_html の外の設定に書く）`);
     if (!/^<\?php\n/.test(src) || /\?>\s*$/.test(src)) problems.push(`${CONTACT_SEND_FILE} が <?php で始まっていないか、?> で終わっています（前後に字が出るのを防ぐため）`);

@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>お守りPDF 通信を数える</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="box" id="box" data-tone="off">
+      <p class="head"><span class="mark" id="mark">－</span><span id="title">読み込んでいます</span></p>
+      <p class="value" id="value"></p>
+      <p class="detail" id="detail"></p>
+      <p class="note" id="note"></p>
+      <div class="actions">
+        <button type="button" id="reset">今から数え直す</button>
+        <button type="button" id="show" class="sub">ページの隅に出す</button>
+      </div>
+      <p class="help">「今から数え直す」を押すと、PDF を入れる前でも、押した時から数えます。数はこのタブを閉じると消えます。</p>
+      <h2>数え始めてからの要求（新しい順）</h2>
+      <ol class="list" id="list"></ol>
+      <p class="help" id="empty">まだありません。</p>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

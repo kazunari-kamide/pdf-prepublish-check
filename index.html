@@ -39,7 +39,10 @@
           <span class="step-note" id="step-verify-note">通れば保存できます</span>
         </li>
       </ol>
-      <p class="zero-send">当サービスでは、選んだ PDF をどこにも送信しません。</p>
+      <div class="band-end">
+        <p class="zero-send">当サービスでは、選んだ PDF をどこにも送信しません。</p>
+        <a class="about-link" href="/about">お守りPDF について</a>
+      </div>
     </header>
 
     <main class="workspace" id="workspace" data-state="empty">
@@ -53,11 +56,18 @@
           <span class="drop-note">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
           <input id="file" type="file" accept="application/pdf,.pdf" />
         </label>
-        <p class="terms-note" id="terms-note">ご利用の前に、<a href="/terms.html">利用規約</a>をご覧ください。</p>
+        <p class="terms-note" id="terms-note">ご利用の前に、<a href="/terms">利用規約</a>をご覧ください。</p>
         <p class="sample" id="sample-row">
           <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
           <span class="sample-note">架空の申請書です（黒い四角の下に、架空の名前が残っています）。</span>
         </p>
+        <div class="limit-entry" id="limit-row">
+          <label class="limit-title" for="size-limit">提出のためにファイルを小さくする</label>
+          <select id="size-limit" aria-describedby="limit-note">
+            <option value="">上限を選ばない（ふつうの検査）</option>
+          </select>
+          <p class="limit-note" id="limit-note">提出先に容量の上限があるときは、先に上限を選んでから PDF を置いてください。いつもどおり確かめて整え、読み直したあとに、その大きさまで小さくします。</p>
+        </div>
 
         <div class="filebar" id="filebar" hidden>
           <span class="filebar-name" id="file-name"></span>
@@ -142,6 +152,7 @@
           <section id="compress" class="compress" aria-labelledby="compress-title" hidden>
             <h4 id="compress-title" tabindex="-1">ファイルを小さくする（必要なときだけ）</h4>
             <p class="compress-note">提出先に容量の上限があるときに使います。整えた PDF の画像を縮めて書き直します。字・図形は変えません。小さくしたあとも、もう一度最初から検査し直します。</p>
+            <p id="compress-limit" class="compress-limit" tabindex="-1" hidden></p>
             <fieldset class="compress-presets" id="compress-presets">
               <legend>画像の細かさ</legend>
             </fieldset>
@@ -180,12 +191,12 @@
     <footer class="site-links" aria-label="サイトの案内">
       <a href="/">検査のページ</a>
       <a href="/articles/">記事の一覧</a>
-      <a href="/checklist.html">公開前の自己点検</a>
-      <a href="/faq.html">よくある質問</a>
-      <a href="/privacy.html">プライバシー</a>
-      <a href="/terms.html">利用規約</a>
-      <a href="/licenses.html">ライセンス</a>
-      <a href="/contact.html">お問い合わせ</a>
+      <a href="/checklist">公開前の自己点検</a>
+      <a href="/faq">よくある質問</a>
+      <a href="/privacy">プライバシー</a>
+      <a href="/terms">利用規約</a>
+      <a href="/licenses">ライセンス</a>
+      <a href="/contact">お問い合わせ</a>
       <p class="site-official">公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。</p>
       <p>このサイトは、開いた回数などを、配信先のサーバーの記録だけで数えます。PDF の中身やファイルの名前は、どこにも送りません。</p>
     </footer>

@@ -65,3 +65,43 @@ export function buildCompressView(
 export function compressedFileName(cleaned: string): string {
   return cleaned.replace(/\.pdf$/i, "") + "_小.pdf";
 }
+
+// ---------------------------------------------------------------- 提出のために小さくする入口（置き場の近くで、上限を先に選ぶ）
+// - 上限は「1MB＝1,000,000 バイト」で比べる（1,048,576 バイトより厳しい側。どちらの数え方の提出先でも収まるように）。
+// - 細かさは、まず「ふつう」、上限を超えたら「もっと小さく」の順に試す（「きれいに」は大きくなる側なので使わない）。
+// - 整えた PDF がもう上限に収まっていれば、小さくしない（画像を粗くする理由がないため）。
+
+export type SizeLimit = { mb: number; label: string; bytes: number };
+
+export const SIZE_LIMITS: readonly SizeLimit[] = [1, 2, 3, 5, 10].map((mb) => ({ mb, label: `${mb}MB 以下`, bytes: mb * 1000 * 1000 }));
+
+/** 画面の選択（option の value）から上限を引く。選ばない・知らない値は null（ふつうの検査） */
+export function sizeLimitFrom(value: string): SizeLimit | null {
+  return SIZE_LIMITS.find((l) => String(l.mb) === value) ?? null;
+}
+
+/** 上限に向けて試す細かさの順 */
+export const LIMIT_PRESET_ORDER: readonly CompressPreset["id"][] = ["normal", "small"];
+
+/** 整えた PDF の大きさと上限から、次に何をするか。fits＝小さくしなくてよい。try＝この細かさで小さくする。gaveUp＝試し切った */
+export function nextForLimit(size: number, limit: SizeLimit, tried: readonly CompressPreset["id"][]): { kind: "fits" } | { kind: "try"; preset: CompressPreset } | { kind: "gaveUp" } {
+  if (size <= limit.bytes) return { kind: "fits" };
+  const id = LIMIT_PRESET_ORDER.find((p) => !tried.includes(p));
+  const preset = id ? COMPRESS_PRESETS.find((p) => p.id === id) : undefined;
+  return preset ? { kind: "try", preset } : { kind: "gaveUp" };
+}
+
+/** 上限と比べるときの大きさ（上限と同じく 1MB＝1,000,000 バイトで。切り上げるので、上限を超えたのに上限以下の数に見えることはない） */
+export function limitBytes(n: number): string {
+  return `${(Math.ceil(n / 100_000) / 10).toFixed(1)} MB`;
+}
+
+/** 上限に収まったかの 1 文（小さくしたあと、または整えたあとの大きさで） */
+export function limitLine(size: number, limit: SizeLimit, compressed: boolean): string {
+  if (size <= limit.bytes) {
+    return compressed
+      ? `選んだ上限（${limit.label}）に収まりました（${limitBytes(size)}）。`
+      : `整えた PDF は ${limitBytes(size)} で、選んだ上限（${limit.label}）に収まっています。小さくしなくても出せます。`;
+  }
+  return `選んだ上限（${limit.label}）には収まりませんでした（${limitBytes(size)}）。画像のほかに、字や図形が多いと、これ以上は小さくなりません。分けて出せるかを、提出先にご相談ください。`;
+}

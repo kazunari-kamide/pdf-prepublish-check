@@ -8,7 +8,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CONTACT_REWRITE } from "../htaccess.ts";
+import { CLEAN_URL_RULES, CONTACT_REWRITE } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts", "check-dist.mjs");
@@ -42,7 +42,9 @@ ErrorDocument 404 /404.html
   </IfModule>
 </FilesMatch>
 <IfModule mod_rewrite.c>
+  RewriteEngine On
   RewriteRule ${CONTACT_REWRITE}
+${CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)).join("\n")}
 </IfModule>
 `;
 }
@@ -157,9 +159,15 @@ describe("check-dist のサイトのページ（site.ts）", () => {
   }
 
   it("同じ CSP と、公式の URL を指す canonical なら通す", () => {
-    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a.html">') }));
+    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a">') }));
     expect(r.out).not.toContain("問題：");
     expect(r.code).toBe(0);
+  });
+
+  it("サイトの場所が .html 付きのリンク・canonical は止める（場所は .html なし。2026-11-05）", () => {
+    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a.html"><a href="/privacy.html">') }));
+    expect(r.out).toContain("articles/a.html に、.html 付きのサイトの場所が 2 か所あります");
+    expect(r.code).toBe(1);
   });
 
   it("CSP の <meta> がないページは止める", () => {
@@ -297,6 +305,16 @@ describe("check-dist のお問い合わせのフォームのページ（開い�
     const r = run(dir);
     expect(r.code).toBe(1);
     expect(r.out).toContain("お問い合わせのページを contact-send.php へ回す書き換えがありません");
+  });
+
+  it("お問い合わせのページを PHP へ回す書き換えが、.html なしの書き換えより後ろにあれば止める（静かな contact.html が返るため）", () => {
+    const rule = `  RewriteRule ${CONTACT_REWRITE}\n`;
+    // 書き換えを、mod_rewrite の囲みのいちばん最後（.html なしの書き換えの後ろ）へ移す
+    const moved = fakeHtaccess(CSP_OK).replace(rule, "").replace(/<\/IfModule>\n$/, `${rule}</IfModule>\n`);
+    expect(moved.indexOf(rule)).toBeGreaterThan(moved.indexOf(CLEAN_URL_RULES[0]!));
+    const r = run(fakeDist(CSP_OK, {}, moved));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(".html なしの書き換えより後ろにあります");
   });
 
   it("PHP にフォームのページ（印の欄）が入っていなければ止める", () => {
