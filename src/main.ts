@@ -21,16 +21,18 @@ import type { TidyChoices } from "./sanitize/protocol";
 import type { PropertyKey, TidyPreflight } from "../sanitize/types.ts";
 import { buildEdits, CONSENT_TEXT, DATE_HINT, MODE_LABEL, PROPERTY_FIELDS, type PropertyChoice, type PropertyMode } from "./ui/tidy-model";
 import type { NotDoneItem } from "../sanitize/types.ts";
-import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET } from "./ui/compress-model";
+import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET, limitLine, nextForLimit, SIZE_LIMITS, sizeLimitFrom } from "./ui/compress-model";
+import type { CompressPreset, SizeLimit } from "./ui/compress-model";
 import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
-import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
 import { isOfficialHost, UNOFFICIAL_NOTE } from "./ui/official";
 import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, SPLIT_STEP_PX } from "./ui/compact";
 import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
+import { spreadBadges } from "./ui/badges";
+import { keepUnits } from "./ui/text";
 import { sampleFile, wantsSample, withoutSample } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
@@ -58,6 +60,9 @@ const ui = {
   workspace: el<HTMLElement>("workspace"),
   sample: el<HTMLButtonElement>("sample"),
   sampleRow: el<HTMLParagraphElement>("sample-row"),
+  limitRow: el<HTMLDetailsElement>("limit-row"),
+  sizeLimit: el<HTMLSelectElement>("size-limit"),
+  compressLimit: el<HTMLParagraphElement>("compress-limit"),
   stepPick: el<HTMLLIElement>("step-pick"),
   stepPickNote: el<HTMLSpanElement>("step-pick-note"),
   stepCheck: el<HTMLLIElement>("step-check"),
@@ -82,8 +87,12 @@ const ui = {
   progress: el<HTMLProgressElement>("progress"),
   verified: el<HTMLDivElement>("verified"),
   verifiedText: el<HTMLParagraphElement>("verified-text"),
+  verifiedScope: el<HTMLParagraphElement>("verified-scope"),
   clean: el<HTMLElement>("clean"),
   cleanCount: el<HTMLParagraphElement>("clean-count"),
+  cleanCandidates: el<HTMLParagraphElement>("clean-candidates"),
+  backToList: el<HTMLButtonElement>("back-to-list"),
+  filePage: el<HTMLSpanElement>("file-page"),
   download: el<HTMLAnchorElement>("download"),
   downloadNote: el<HTMLParagraphElement>("download-note"),
   saveNote: el<HTMLParagraphElement>("save-note"),
@@ -96,8 +105,9 @@ const ui = {
   saveConfirmBox: el<HTMLInputElement>("save-confirm-box"),
   notDone: el<HTMLDivElement>("not-done"),
   notDoneList: el<HTMLUListElement>("not-done-list"),
-  removed: el<HTMLDetailsElement>("removed"),
-  removedTitle: el<HTMLElement>("removed-title"),
+  removed: el<HTMLDivElement>("removed"),
+  cleanMore: el<HTMLDetailsElement>("clean-more"),
+  cleanTools: el<HTMLDetailsElement>("clean-tools"),
   removedGroups: el<HTMLDivElement>("removed-groups"),
   cleanNotes: el<HTMLUListElement>("clean-notes"),
   cleanScope: el<HTMLParagraphElement>("clean-scope"),
@@ -109,6 +119,8 @@ const ui = {
   actions: el<HTMLDivElement>("actions"),
   sanitize: el<HTMLButtonElement>("sanitize"),
   sanitizeNote: el<HTMLParagraphElement>("sanitize-note"),
+  sanitizeMore: el<HTMLDetailsElement>("sanitize-more"),
+  sanitizeList: el<HTMLParagraphElement>("sanitize-list"),
   pickTools: el<HTMLDivElement>("pick-tools"),
   pickToggle: el<HTMLButtonElement>("pick-toggle"),
   pickHelp: el<HTMLParagraphElement>("pick-help"),
@@ -135,6 +147,7 @@ const ui = {
   redactLeft: el<HTMLDivElement>("redact-left"),
   redactLeftList: el<HTMLUListElement>("redact-left-list"),
   scopeNote: el<HTMLParagraphElement>("scope-note"),
+  coverageSlot: el<HTMLDivElement>("coverage-slot"),
 };
 
 /** 縮小したページの絵を描く数の上限。超えた分は番号だけ出す【仮の値】 */
@@ -194,9 +207,15 @@ let compressedBlob: Blob | null = null;
 let compressUrl: string | null = null;
 /** 片付けて読み直した結果（小さくしたあとの読み直しと比べる） */
 let cleanedState: { view: ViewModel; notDone: NotDoneItem[]; name: string } | null = null;
+/** 提出のために小さくする入口で選んだ上限（PDF を置いたときの選択。選ばなければ null＝ふつうの検査） */
+let shrinkLimit: SizeLimit | null = null;
+
+/** 見つけられる範囲の一文（結果の下の知らせと、何も見つからないときの緑の箱で同じ文。CLAUDE.md §11-5b） */
+const SCOPE_NOTE = "見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。";
 
 function setStatus(text: string, tone: "neutral" | "ok" | "problem" = "neutral") {
-  ui.status.textContent = text;
+  delete ui.status.dataset.quiet;
+  ui.status.textContent = keepUnits(text);
   ui.status.dataset.tone = tone;
 }
 
@@ -281,7 +300,8 @@ function resetCompress() {
   ui.compressConfirmBox.checked = false;
   ui.compressRun.disabled = false;
   ui.compressLines.replaceChildren();
-  for (const part of [ui.compressHeadline, ui.compressSizes, ui.compressRecheck, ui.compressSaveNote]) part.textContent = "";
+  for (const part of [ui.compressHeadline, ui.compressSizes, ui.compressRecheck, ui.compressSaveNote, ui.compressLimit]) part.textContent = "";
+  ui.compressLimit.hidden = true;
 }
 
 /** 選べる3つの値（ラジオボタン。矢印キーで選べる） */
@@ -304,9 +324,18 @@ function chosenPreset() {
   return COMPRESS_PRESETS.find((p) => p.id === v) ?? DEFAULT_PRESET;
 }
 
-async function runCompress() {
+/**
+ * 小さくする。preset を渡したときは、その細かさを選んだ形にしてから小さくする（上限の入口から呼ぶとき）。
+ * 小さくしたあとの大きさ（changed＝縮めた画像があったか）を返す。止めた・失敗した・残りが増えた・保存できないときは null
+ */
+async function runCompress(preset?: CompressPreset): Promise<{ size: number; changed: boolean } | null> {
   const base = cleanedState;
-  if (busy || !cleanedBlob || !base) return;
+  if (busy || !cleanedBlob || !base) return null;
+  if (preset) {
+    const radio = ui.compressPresets.querySelector<HTMLInputElement>(`input[value="${preset.id}"]`);
+    if (radio) radio.checked = true;
+  }
+  let result: { size: number; changed: boolean } | null = null;
   busy = true;
   const gen = generation;
   resetCompress();
@@ -317,21 +346,21 @@ async function runCompress() {
   setStatus("ファイルを小さくしています…（小さくする前と後に、検査をかけています）");
   try {
     const out = await compressInWorker(await cleanedBlob.arrayBuffer(), chosenPreset());
-    if (gen !== generation) return;
+    if (gen !== generation) return null;
     ui.compressResult.hidden = false;
     if (out.kind === "timeout" || out.kind === "refused" || out.kind === "error") {
       const text = out.kind === "timeout" ? "時間がかかりすぎたため、小さくするのを止めました。整えた PDF はそのまま保存できます。" : out.message;
       ui.compressHeadline.textContent = text;
       setStatus(text, "problem");
-      return;
+      return null;
     }
     const v = buildCompressView(out.kind === "done" ? { status: "ok", ...out } : { status: "blocked", ...out });
     ui.compressHeadline.textContent = v.headline;
-    ui.compressSizes.textContent = v.sizes;
+    ui.compressSizes.textContent = keepUnits(v.sizes);
     ui.compressLines.replaceChildren(...v.lines.map((t) => make("li", t)));
     if (out.kind !== "done" || !out.changed) {
       setStatus(v.headline, v.kind === "blocked" ? "problem" : "neutral");
-      return;
+      return out.kind === "done" ? { size: out.sizeBefore, changed: false } : null;
     }
     // 小さくした PDF を、検査の入口に最初から入れ直す（片付けたあとと同じ。保存できるかは、この結果だけで決める）
     compressedBlob = new Blob([out.bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" });
@@ -341,7 +370,7 @@ async function runCompress() {
       ui.progress.value = p.done;
       setStatus(`小さくした PDF を、最初から検査し直しています…（${p.label}、${p.done + 1}/${p.total}）`);
     });
-    if (gen !== generation) return;
+    if (gen !== generation) return null;
     const afterSummary = re.kind === "done" && re.precheck.ok ? re.summary : null;
     const c = buildCleanView({ before: base.view, after: afterSummary ? buildView(afterSummary) : null, removed: [], notDone: base.notDone, decrypted: false });
     ui.compressRecheck.textContent = `小さくした PDF を最初から検査し直しました。${c.headline}`;
@@ -354,6 +383,7 @@ async function runCompress() {
     if (gate === "ok") unlockCompressDownload();
     else lockCompressDownload();
     setStatus(`${v.headline}${c.headline}`, gate === "blocked" ? "problem" : gate === "ok" ? "ok" : "neutral");
+    if (gate !== "blocked") result = { size: out.sizeAfter, changed: true };
   } catch {
     if (gen === generation) {
       ui.compressResult.hidden = false;
@@ -369,11 +399,45 @@ async function runCompress() {
       (ui.compressDownload.hidden ? ui.compressResult : ui.compressDownload).scrollIntoView({ block: "nearest" });
     } else if (gen === generation) ui.compressTitle.focus();
   }
+  return result;
+}
+
+/**
+ * 提出のために小さくする入口：整えて読み直したあと、選んだ上限に収まるまで「ふつう」→「もっと小さく」の順で小さくする。
+ * 整えた PDF がもう収まっていれば、小さくしない。結果は、小さくする欄のいちばん上の 1 文で知らせる
+ */
+async function shrinkToLimit(gen: number, limit: SizeLimit) {
+  if (!cleanedBlob) return;
+  // 小さくする所は「そのほかの操作」の開け閉めの中にある（#117）。入口で上限を選んだときは、結果が隠れないように開く
+  ui.cleanTools.open = true;
+  let size = cleanedBlob.size;
+  let compressed = false;
+  const tried: CompressPreset["id"][] = [];
+  const steps: string[] = [];
+  for (;;) {
+    const next = nextForLimit(size, limit, tried);
+    if (next.kind !== "try") break;
+    const last = COMPRESS_PRESETS.find((p) => p.id === tried.at(-1));
+    if (last) steps.push(`「${last.label}」では収まらなかったため、「${next.preset.label}」で小さくし直しました。`);
+    tried.push(next.preset.id);
+    const r = await runCompress(next.preset);
+    if (gen !== generation || r === null) return;
+    size = r.size;
+    compressed ||= r.changed;
+    if (!r.changed) break;
+  }
+  const text = [...steps, limitLine(size, limit, compressed)].join("");
+  ui.compressLimit.textContent = text;
+  ui.compressLimit.hidden = false;
+  // 読み直し（または小さくしたあとの読み直し）の一文は消さずに、後ろへ足す。色（tone）も、読み直しの結果のまま
+  const tone = ui.status.dataset.tone === "ok" || ui.status.dataset.tone === "problem" ? ui.status.dataset.tone : "neutral";
+  setStatus(`${ui.status.textContent ?? ""}${text}`, tone);
 }
 
 function clearResults() {
-  for (const part of [ui.noticeList, ui.groups, ui.thumbs, ui.marks]) part.replaceChildren();
-  for (const part of [ui.notices, ui.actions, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props, ui.ruleset]) part.hidden = true;
+  for (const part of [ui.noticeList, ui.groups, ui.coverageSlot, ui.thumbs, ui.marks]) part.replaceChildren();
+  for (const part of [ui.notices, ui.actions, ui.pickTools, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props, ui.ruleset, ui.backToList]) part.hidden = true;
+  for (const part of [ui.sanitizeMore, ui.cleanMore, ui.cleanTools]) part.open = false;
   ui.caption.textContent = "";
   delete ui.workspace.dataset.thumbs;
 }
@@ -411,10 +475,12 @@ function goHome() {
   reset();
   ui.workspace.dataset.state = "empty";
   ui.sampleRow.hidden = false;
+  ui.limitRow.hidden = false;
   setStep(ui.stepPick, "now");
   ui.stepPickNote.textContent = "PDF を置く";
   ui.fileName.textContent = "";
   ui.fileFacts.textContent = "";
+  ui.filePage.textContent = "";
   ui.input.value = "";
   setStatus("まだ PDF を選んでいません。");
   ui.input.focus();
@@ -425,14 +491,16 @@ function goHome() {
 
 const SEVERITY_MARK: Record<Row["severity"], string> = { high: "▲", medium: "■", low: "●" };
 
-/** 種類ごとの囲み：左に札（飾り。読み上げでは見出しを読む）、右に見出しと項目（案 E2。design/README.md） */
-function groupBox(fuda: string, kind: "found" | "scope"): { box: HTMLElement; body: HTMLDivElement } {
+/**
+ * 種類ごとの囲み：左に色の帯（飾り。字は出さない）、右に見出しと項目（案 E2。design/README.md）。
+ * 帯の字は見出しと同じことを言うので外した（2026-11-05 本人の画面のレビュー B4）
+ */
+/** found＝見えない情報の種類（紅）、candidate＝見えている個人情報らしい字の候補（知らせの形。紅にしない）、scope＝見た所・見なかった所 */
+function groupBox(kind: "found" | "candidate" | "scope"): { box: HTMLElement; body: HTMLDivElement } {
   const box = make("section", undefined, "group");
   box.dataset.status = kind;
-  const tag = make("span", fuda, "fuda");
-  tag.setAttribute("aria-hidden", "true");
   const body = make("div", undefined, "group-body");
-  box.append(tag, body);
+  box.append(body);
   return { box, body };
 }
 
@@ -442,6 +510,7 @@ function itemButton(r: Row): HTMLButtonElement {
   btn.id = `item-${r.no}`;
   btn.dataset.severity = r.severity;
   if (r.check) btn.dataset.check = "true";
+  if (r.candidate) btn.dataset.candidate = "true";
   btn.setAttribute("aria-expanded", "false");
   const top = make("span", undefined, "item-top");
   top.append(
@@ -454,7 +523,13 @@ function itemButton(r: Row): HTMLButtonElement {
   );
   // 閉じた形は 2 行（題の行と、場所・内訳の 1 行）。なぜ危ないかは、押して開いたときに出す（2026-11-05 本人の気づき）
   const where = r.page !== null ? `ページ ${r.page}` : "ファイル全体";
-  btn.append(top, make("span", `${where}・${compactDetail(r.detail)}`, "item-detail"), make("span", r.why, "item-why"));
+  btn.append(
+    top,
+    make("span", `${where}・${compactDetail(r.detail)}`, "item-detail"),
+    make("span", r.why, "item-why"),
+    // P の番号は作る側の言葉なので、見出しには出さず、開いたときの細かい所にだけ出す（2026-11-05 本人の画面のレビュー B3）
+    make("span", `種類の番号：${r.pattern}`, "item-why item-code"),
+  );
   btn.addEventListener("click", () => {
     // もう一度押すと閉じる。ほかの項目を押すと、そちらを開く
     const open = btn.getAttribute("aria-expanded") === "true" && session?.selected === r.no;
@@ -475,7 +550,7 @@ function revealBox(content: string, what: string, full?: () => HTMLElement): HTM
   const box = make("div", undefined, "reveal");
   const text = make("span", maskContent(content), "reveal-text");
   text.setAttribute("aria-live", "polite");
-  const btn = make("button", REVEAL_LABEL.closed, "reveal-toggle");
+  const btn = make("button", REVEAL_LABEL.closed, "reveal-toggle btn-sub");
   btn.type = "button";
   btn.setAttribute("aria-pressed", "false");
   btn.setAttribute("aria-label", `${what}の中身を見る`);
@@ -494,7 +569,7 @@ function revealBox(content: string, what: string, full?: () => HTMLElement): HTM
 
 /** 候補の行の「黒塗りに加える／外す」（押した状態を aria-pressed と字で示す） */
 function candidateButton(r: Row): HTMLButtonElement {
-  const b = make("button", undefined, "pick-candidate");
+  const b = make("button", undefined, "pick-candidate btn-sub");
   b.type = "button";
   b.dataset.candidate = String(r.no);
   b.addEventListener("click", () => {
@@ -532,19 +607,23 @@ function coverageText(c: CoverageRow, phase: Session["phase"]): string {
 }
 
 function renderGroups(s: Session) {
+  // 中身を伏せていることの一言は、結果の一番上に 1 回だけ（種類ごとに繰り返さない。2026-11-05 本人の画面のレビュー B2）
+  if (s.view.rows.some((r) => r.content)) {
+    ui.groups.append(make("p", `見つけた字の中身は、頭の数文字だけを出し、残りは伏せます。「中身を見る」で全部を出します（この端末のブラウザの中だけで、どこにも送りません）。${REVEAL_NOTE}`, "reveal-note"));
+  }
   for (const g of s.view.groups) {
     if (g.status === "error" || !g.rows.length) continue;
-    const { box, body } = groupBox(fudaLabel(g.label, g.pattern), "found");
+    const { box, body } = groupBox(g.rows[0]!.candidate ? "candidate" : "found");
     const head = make("h3", undefined, "group-head");
     const sure = g.rows.filter((r) => !r.check).length;
     const check = g.rows.length - sure;
-    head.append(make("span", `${g.label}（${g.pattern}）`, "group-name"));
-    head.append(make("span", [sure ? `${sure} 件` : "", check ? `確かめる ${check} 件` : ""].filter(Boolean).join("・"), "group-count"));
+    head.append(make("span", g.label, "group-name"));
+    head.append(make("span", keepUnits([sure ? `${sure} 件` : "", check ? `確かめる ${check} 件` : ""].filter(Boolean).join("・")), "group-count"));
     body.append(head);
     // 黒塗りの候補（個人情報らしい字）：片付ける前だけ、選んだ所に加えるボタンを付ける（キーボードでも選べる）
     const candidates = s.phase === "before" && !ui.pickTools.hidden ? g.rows.filter(isCandidate) : [];
     if (candidates.length) {
-      const all = make("button", "候補をすべて黒塗りに加える", "pick-all");
+      const all = make("button", "候補をすべて黒塗りに加える", "pick-all btn-sub");
       all.type = "button";
       all.addEventListener("click", () => {
         picks = addAllCandidates(picks, candidates);
@@ -553,7 +632,6 @@ function renderGroups(s: Session) {
       });
       body.append(all);
     }
-    if (g.rows.some((r) => r.content)) body.append(make("p", `見つけた字の中身は、頭の数文字だけを出しています。${REVEAL_NOTE}`, "reveal-note"));
     const list = make("ol", undefined, "items");
     for (const r of g.rows) {
       const li = make("li");
@@ -572,7 +650,7 @@ function renderGroups(s: Session) {
 
 /** 見た所・見なかった所：P1〜P12 と新しい型を1行ずつ、毎回並べる（調べていない理由も） */
 function renderCoverage(s: Session) {
-  const { box, body } = groupBox(FUDA_SCOPE, "scope");
+  const { box, body } = groupBox("scope");
   box.id = "coverage";
   const details = make("details", undefined, "coverage-details");
   const summary = make("summary", undefined, "coverage-summary");
@@ -582,7 +660,7 @@ function renderCoverage(s: Session) {
   details.append(
     make(
       "p",
-      "この版のルールで、どこまで調べたかを、型ごとに並べます。「調べた」は、決めた範囲を調べたという意味で、すべてを保証するものではありません。",
+      "この版のルールで、どこまで調べたかを、種類ごとに並べます。「調べた」は、決めた範囲を調べたという意味で、すべてを保証するものではありません。",
       "group-message",
     ),
   );
@@ -591,20 +669,21 @@ function renderCoverage(s: Session) {
     const li = make("li");
     li.dataset.state = c.state;
     if (c.found || c.check) li.dataset.found = "true";
-    li.append(make("span", `${c.name}（${c.key}）`, "coverage-name"), make("span", coverageText(c, s.phase), "coverage-state"));
+    li.append(make("span", c.name, "coverage-name"), make("span", coverageText(c, s.phase), "coverage-state"));
     for (const r of c.reasons) li.append(make("span", r, "coverage-reason"));
     list.append(li);
   }
   details.append(list);
   body.append(details);
-  ui.groups.append(box);
+  ui.coverageSlot.append(box);
 }
 
 // ---------------------------------------------------------------- 左：縮小した各ページ
 
 function renderThumbs(s: Session) {
   const pages = s.summary.pages.length ? s.summary.pages.map((p) => p.page) : Array.from({ length: s.pdf?.pageCount ?? 0 }, (_, i) => i + 1);
-  if (!pages.length) return;
+  // 1 ページだけなら縮小の列は出さず、ページの絵を広くする（2026-11-05 本人の画面のレビュー B6）
+  if (pages.length < 2) return;
   for (const n of pages) {
     const btn = make("button", undefined, "thumb");
     btn.type = "button";
@@ -656,8 +735,11 @@ async function drawThumbImages(s: Session) {
 // ---------------------------------------------------------------- 真ん中：大きなページ
 
 function sheetWidth(): number {
+  // 絵の欄（.sheet-wrap）が出ていれば、その中の幅（スクロールバーの分を除いた幅）に合わせる。まだ隠れているときは、
+  // PDF の欄の幅から、内側の余白とスクロールバーの分を差し引いた目安（横にはみ出さないように。2026-11-05 夜のレビュー 15）
+  const wrap = ui.sheetWrap.hidden ? 0 : ui.sheetWrap.clientWidth;
   const stage = ui.sheetWrap.parentElement;
-  const w = (stage?.clientWidth ?? SHEET_MAX_WIDTH) - 32;
+  const w = wrap > 0 ? wrap - 4 : (stage?.clientWidth ?? SHEET_MAX_WIDTH) - 72;
   return Math.max(240, Math.min(SHEET_MAX_WIDTH, w));
 }
 
@@ -667,6 +749,14 @@ function placeAt(e: HTMLElement, f: { left: number; top: number; width: number; 
   e.style.top = `${f.top * 100}%`;
   e.style.width = `${f.width * 100}%`;
   e.style.height = `${f.height * 100}%`;
+}
+
+/** 押す所の位置：CSS の変数で渡し、大きさの下限（44px）は CSS で決める（.mark-hit） */
+function hitAt(e: HTMLElement, f: { left: number; top: number; width: number; height: number }) {
+  e.style.setProperty("--x", `${f.left * 100}%`);
+  e.style.setProperty("--y", `${f.top * 100}%`);
+  e.style.setProperty("--w", `${f.width * 100}%`);
+  e.style.setProperty("--h", `${f.height * 100}%`);
 }
 
 function placeMarks(s: Session, page: number) {
@@ -687,13 +777,23 @@ function placeMarks(s: Session, page: number) {
   for (const m of s.marksByPage.get(page)?.marks ?? []) {
     const f = toFraction(box, m.rect);
     if (!f) continue;
-    const mark = make("button", undefined, `mark sev-${m.severity}`);
+    // 見た目の枠（隠した所の大きさのまま）と、押す所（枠を中心に縦横とも 44px 以上）を分ける。
+    // 枠を大きくすると、細い黒塗りの所が太い枠に見えるため。押す所は透明で、上に重ねる
+    const frame = make("div", undefined, `mark sev-${m.severity}${m.candidate ? " mark-candidate" : ""}`);
+    frame.id = `mark-frame-${m.no}`;
+    frame.setAttribute("aria-hidden", "true");
+    frame.append(make("span", String(m.no), "mark-no"));
+    placeAt(frame, f);
+    const mark = make("button", undefined, "mark-hit");
     mark.type = "button";
     mark.id = `mark-${m.no}`;
-    mark.append(make("span", String(m.no), "mark-no"));
     mark.setAttribute("aria-label", `番号 ${m.no}：${m.title}`);
-    if (s.selected === m.no) mark.classList.add("is-selected");
-    placeAt(mark, f);
+    if (s.selected === m.no) {
+      mark.classList.add("is-selected");
+      frame.classList.add("is-selected");
+    }
+    hitAt(mark, f);
+    ui.marks.append(frame);
     mark.addEventListener("click", () => {
       if (picking) return; // 選んでいる間は、枠を押しても動かない（ドラッグを邪魔しない）
       const item = document.getElementById(`item-${m.no}`);
@@ -704,6 +804,24 @@ function placeMarks(s: Session, page: number) {
     ui.marks.append(mark);
   }
   placePicks(s, page);
+  spreadMarkBadges();
+}
+
+/**
+ * ページの絵の上の番号の札を、重ならないように横へずらす（見つかった所の番号の順 → 消した所 → 自分で選んだ所の順に、
+ * 先の札ほど動かさない）。札の位置は描いたあとの大きさで測る（絵の幅で変わるため、描き直すたびに測り直す）
+ */
+function spreadMarkBadges() {
+  const all = [...ui.marks.querySelectorAll<HTMLElement>(".mark-no")];
+  for (const b of all) b.style.transform = "";
+  const kind = (b: HTMLElement) => (b.parentElement?.classList.contains("mark-done") ? 1 : b.parentElement?.classList.contains("mark-pick") ? 2 : 0);
+  const order = [...all].sort((a, b) => kind(a) - kind(b));
+  const rects = order.map((b) => b.getBoundingClientRect());
+  if (!rects.some((r) => r.width > 0)) return;
+  const dx = spreadBadges(rects.map((r) => ({ x: r.left, y: r.top, w: r.width, h: r.height })));
+  order.forEach((b, i) => {
+    if (dx[i]) b.style.transform = `translateX(${dx[i]}px)`;
+  });
 }
 
 function markSelected(no: number | null) {
@@ -711,6 +829,7 @@ function markSelected(no: number | null) {
   for (const e of document.querySelectorAll(".is-selected")) e.classList.remove("is-selected");
   if (no === null) return;
   document.getElementById(`mark-${no}`)?.classList.add("is-selected");
+  document.getElementById(`mark-frame-${no}`)?.classList.add("is-selected");
   document.getElementById(`item-${no}`)?.classList.add("is-selected");
   // 選んだ項目だけを開く（ページの上の枠を押したときも、その項目の説明が開く）
   for (const e of document.querySelectorAll<HTMLElement>(".item[aria-expanded]")) e.setAttribute("aria-expanded", String(e.id === `item-${no}`));
@@ -722,7 +841,16 @@ async function showPage(page: number, selectNo: number | null) {
   s.current = page;
   s.selected = selectNo;
   for (const t of ui.thumbs.querySelectorAll(".thumb")) t.removeAttribute("aria-current");
-  document.getElementById(`thumb-${page}`)?.setAttribute("aria-current", "page");
+  const thumb = document.getElementById(`thumb-${page}`);
+  thumb?.setAttribute("aria-current", "page");
+  // 縮小の列の中だけをスクロールして、今のページの縮小を見せる（ページ全体は動かさない）
+  if (thumb && ui.thumbs.scrollHeight > ui.thumbs.clientHeight) {
+    // 縮小の列は貼り付け（sticky）なので、縮小の offsetTop は列の中の位置
+    const top = thumb.offsetParent === ui.thumbs ? thumb.offsetTop : thumb.offsetTop - ui.thumbs.offsetTop;
+    if (top < ui.thumbs.scrollTop || top + thumb.offsetHeight > ui.thumbs.scrollTop + ui.thumbs.clientHeight) ui.thumbs.scrollTop = top - 8;
+  }
+  const total = s.summary.pages.length;
+  ui.filePage.textContent = total > 1 ? `ページ ${page} / ${total}` : "";
 
   const box = s.boxes.get(page);
   const size = box ? viewSize(box) : { width: 595, height: 842 };
@@ -778,10 +906,25 @@ async function showPage(page: number, selectNo: number | null) {
   ui.renderNote.hidden = note === "";
 }
 
+/** 縦に積む狭い画面か（結果の欄が上、ページの絵がずっと下にある形） */
+const stacked = () => getComputedStyle(ui.workspace).flexDirection === "column";
+
 async function select(r: Row) {
   if (r.page !== null && session) await showPage(r.page, r.hasRect ? r.no : null);
   markSelected(r.no);
+  // 狭い画面では、ページの絵が結果のずっと下にあるので、押した所の枠まで動かす。絵の下に「一覧へ戻る」を出す
+  if (r.hasRect && stacked()) {
+    document.getElementById(`mark-frame-${r.no}`)?.scrollIntoView({ block: "center" });
+    ui.backToList.dataset.no = String(r.no);
+    ui.backToList.hidden = false;
+  }
 }
+
+ui.backToList.addEventListener("click", () => {
+  const item = document.getElementById(`item-${ui.backToList.dataset.no ?? ""}`);
+  item?.scrollIntoView({ block: "center" });
+  item?.focus();
+});
 
 // ---------------------------------------------------------------- プロパティの一覧（値を出してよいのは、ここだけ）
 
@@ -836,7 +979,7 @@ function renderProperties(s: Session) {
   body.append(
     make(
       "p",
-      `欄の値は、頭の数文字だけを出しています。「中身を見る」で全部を出します（このパソコンの画面の中だけで、外には出ません）。${REVEAL_NOTE}団体名らしい語には、全部を出したときに印を付けています（形で拾うだけなので、見落としや関係のない語もあります）。`,
+      `欄の値は、頭の数文字だけを出しています。「中身を見る」で全部を出します（この端末のブラウザの中だけで、外には出ません）。${REVEAL_NOTE}団体名らしい語には、全部を出したときに印を付けています（形で拾うだけなので、見落としや関係のない語もあります）。`,
       "props-note",
     ),
   );
@@ -855,7 +998,7 @@ function renderProperties(s: Session) {
   }
   // その場で「消す」へ案内する（片付ける前で、片付けられるときだけ）
   if (count && s.phase === "before" && !ui.sanitize.disabled) {
-    const go = make("button", "この欄を消す（「整える」へ）", "props-go");
+    const go = make("button", "この欄を消す（「整える」へ）", "props-go btn-sub");
     go.type = "button";
     go.addEventListener("click", () => {
       ui.actions.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -877,7 +1020,7 @@ function renderRuleset(s: Session) {
   const r = buildRulesetView(s.summary.rules);
   const body = make("div", undefined, "ruleset-body");
   if (r.recent.length) {
-    body.append(make("h4", "最近足した型"));
+    body.append(make("h4", "最近足した種類"));
     body.append(make("ul", undefined, "ruleset-list"));
     body.lastElementChild!.append(...r.recent.map((t) => make("li", t)));
   }
@@ -898,7 +1041,7 @@ function renderInspection(s: Session) {
   renderGroups(s);
   renderProperties(s);
   renderRuleset(s);
-  ui.scopeNote.hidden = false;
+  ui.scopeNote.hidden = s.view.clean && s.phase === "before";
 
   renderThumbs(s);
   ui.workspace.dataset.thumbs = ui.thumbs.hidden ? "none" : "some";
@@ -920,27 +1063,50 @@ function renderSummary(s: Session) {
   const v = s.view;
   setStatus(v.headline, v.tone);
   setStep(ui.stepCheck, "done");
-  ui.stepCheckNote.textContent = v.rows.length ? `${v.rows.length} か所 見つかりました` : v.clean ? "見つかりませんでした" : "調べられない所あり";
+  // 数は「見た目では分からない情報」だけ（見えている候補は入れない。見出しと同じ物差し）
+  ui.stepCheckNote.textContent = v.hidden
+    ? keepUnits(`${v.hidden} か所 見つかりました`)
+    : v.candidates
+    ? keepUnits(`候補 ${v.candidates} か所`)
+    : v.clean
+    ? "見つかりませんでした"
+    : "調べられない所あり";
 
   // 片付けは、検査ができた PDF ならいつでも押せる（見つからなくても、XMP・注釈のコメント・JavaScript なども外す）
   ui.actions.hidden = false;
   ui.sanitize.disabled = s.original === null || s.pdfProblem === "password";
   renderTidySummary();
-  ui.sanitizeNote.textContent = s.pdfProblem === "password"
+  // 説明は 1 行だけ。消す対象の列挙とプロパティの扱いは「整えると消すもの」を開いて読む（2026-11-05 本人の画面のレビュー B1）
+  const password = s.pdfProblem === "password";
+  ui.sanitizeNote.textContent = password
     ? "パスワードが要る PDF は、整えられません。"
-    : v.rows.length
-    ? "「整える」では、見えない情報を消します（黒塗りの下の字・見えない字・作成者などの欄・前の版の残り・添付ファイル・注釈・JavaScript など）。整えた PDF を新しく作り、元の PDF は変えません。"
-    : "見つかった所はありませんが、「整える」で、XMP メタデータ・注釈のコメント・JavaScript などの見えない情報を消した PDF を作れます。元の PDF は変えません。";
+    : v.hidden
+    ? "見えない情報を消した PDF を新しく作ります。元の PDF は変えません。"
+    : "見つかった所はありませんが、見えない情報を消した PDF を作れます。元の PDF は変えません。";
+  ui.sanitizeList.textContent =
+    "黒塗りの下の字・見えない字・作成者などの欄・XMP メタデータ・前の版の残り・添付ファイル・注釈とコメント・JavaScript などを消します。";
+  ui.sanitizeMore.hidden = password;
+  // 「提出のためにファイルを小さくする」の入口から来たとき（B の #116）：上限まで小さくすることを、1 行の説明に足す
+  if (shrinkLimit) ui.sanitizeNote.textContent += `整えて読み直したあとに、選んだ上限（${shrinkLimit.label}）まで小さくします。`;
   // 自分で黒塗りする所を選ぶ：片付けられて、ページの絵と形があるときだけ
   ui.pickTools.hidden = ui.sanitize.disabled || !s.pdf || s.summary.pagesUnreadable;
   ui.pickHelpCandidates.hidden = !v.rows.some(isCandidate);
   setStep(ui.stepClean, v.rows.length ? "now" : "todo");
   ui.stepCleanNote.textContent = "「整える」を押します";
 
-  // 何も見つからなかったときの札（片付けたあとの「全部緑」は renderCleaned）
+  // 何も見つからなかったときの札（片付けたあとの「全部緑」は renderCleaned）。
+  // 同じ意味の文を 2 回出さない：上の状態の文は見た目では隠し（読み上げには残す）、緑の箱 1 つにする。
+  // 「見つけられるのは、ここに並べた種類だけ」も、この箱の続きに入れて 1 つの塊にする（2026-11-05 夜のレビュー 7）
+  const checkedKinds = v.coverage.filter((c) => c.state === "checked").length;
   ui.verified.dataset.state = v.clean ? "clean" : "none";
-  ui.verifiedText.textContent = v.clean ? "調べた項目では、見つかりませんでした。" : "";
+  ui.verifiedText.textContent = v.clean ? `調べた ${checkedKinds} 種類では、見つかりませんでした。` : "";
+  ui.verifiedScope.textContent = v.clean ? SCOPE_NOTE : "";
   ui.verified.hidden = !v.clean;
+  if (v.clean) ui.status.dataset.quiet = "true";
+  ui.scopeNote.hidden = v.clean;
+  // 何も見つからないときは、「整える」を主のボタンから第 2 の形に下げる（公開してよいのか、整えるべきかで迷わせない）
+  ui.sanitize.dataset.weight = v.clean ? "sub" : "main";
+  ui.sanitize.textContent = v.clean ? "念のため整える（プロパティなどを消した写しを作る）" : "整える";
 
   renderInspection(s);
   // 押したボタン（見本の PDF で試す など）が隠れてフォーカスが行き場を失ったときは、結果の見出しへ移す
@@ -976,14 +1142,14 @@ function makeSession(
 }
 
 function renderOutcome(outcome: InspectOutcome, base: Pick<Session, "generation" | "fileName" | "original" | "sha256" | "byteLength" | "pdf" | "pdfProblem">) {
-  const seconds = `${(outcome.elapsedMs / 1000).toFixed(1)} 秒`;
   if (outcome.kind === "timeout") return fail("時間がかかりすぎたため、検査を止めました。画面はそのまま使えます。");
   if (outcome.kind === "error") return fail(outcome.message);
   if (!outcome.precheck.ok) return fail(outcome.precheck.message);
   if (!outcome.summary) return fail("検査の結果を受け取れませんでした。");
   const summary = outcome.summary;
   const pages = summary.pagesUnreadable ? "ページの数 不明" : `${summary.pages.length} ページ`;
-  ui.fileFacts.textContent = `${pages}・${formatBytes(outcome.precheck.byteLength)}・${seconds}`;
+  // かかった秒は帯に出さない（利用者には要らない。帯を 1 行に収めるため。夜のレビュー 16）
+  ui.fileFacts.textContent = keepUnits(`${pages}・${formatBytes(outcome.precheck.byteLength)}`);
   session = makeSession(summary, { ...base, phase: "before" });
   renderSummary(session);
 }
@@ -1000,12 +1166,16 @@ async function handle(file: File) {
   reset();
   ui.workspace.dataset.state = "working";
   ui.sampleRow.hidden = true;
+  ui.limitRow.hidden = true;
+  shrinkLimit = sizeLimitFrom(ui.sizeLimit.value);
   setStep(ui.stepPick, "done");
   ui.stepPickNote.textContent = "置きました";
   setStep(ui.stepCheck, "now");
   ui.stepCheckNote.textContent = "確かめています";
   ui.fileName.textContent = file.name;
+  ui.fileName.title = file.name;
   ui.fileFacts.textContent = "";
+  ui.filePage.textContent = "";
   ui.filebar.hidden = false;
   setStatus("確かめています…");
   ui.progress.hidden = false;
@@ -1060,6 +1230,12 @@ async function loadPreflight(gen: number, bytes: Uint8Array) {
   tidyPre = r && r.status === "ok" ? r : null;
   renderTidyEditor();
   renderConsent();
+  // 提出のために小さくする入口で、何も見つからなければ、そのまま整えて小さくする所まで進む。
+  // 同意が要る PDF（PDF/A の印・電子署名）や、自分で黒塗りする所を選んでいる間は、本人が「整える」を押すのを待つ
+  if (shrinkLimit && session.view.clean && ui.consent.hidden && !ui.sanitize.disabled && picks.length === 0 && !picking) {
+    setStatus(`見つかった所はありませんでした。選んだ上限（${shrinkLimit.label}）まで小さくするため、続けて整えます…`, "ok");
+    void runSanitize();
+  }
 }
 
 /** プロパティの一覧の上に、8 つの項目ごとの「消す／そのまま／書き直す」を出す（既定は消す） */
@@ -1279,7 +1455,7 @@ function renderPicks() {
   ui.pickList.replaceChildren(
     ...picks.map((p, i) => {
       const li = make("li");
-      const rm = make("button", "外す", "pick-remove");
+      const rm = make("button", "外す", "pick-remove btn-sub");
       rm.type = "button";
       rm.setAttribute("aria-label", `選んだ所 ${i + 1}（ページ ${p.page}）を外す`);
       rm.addEventListener("click", () => {
@@ -1395,7 +1571,10 @@ function redactBlocked(s: Session, retry: Uint8Array | null, leftovers: Paramete
 function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages: number; seconds: string }) {
   ui.workspace.dataset.phase = "after";
   ui.actions.hidden = true;
-  setStatus(c.headline, c.verdict === "clean" ? "ok" : c.verdict === "left" ? "problem" : "neutral");
+  ui.pickTools.hidden = true;
+  // 通ったときは、上の文で「0 件」を言わず、下の「整える前 N か所 → 読み直したあと 0 か所」だけにする（2026-11-05 本人の画面のレビュー C1）。
+  // 残っている・言い切れないときは、上の文がそれを知らせるので残す
+  setStatus(c.verdict === "clean" ? "" : c.headline, c.verdict === "clean" ? "ok" : c.verdict === "left" ? "problem" : "neutral");
 
   setStep(ui.stepClean, "done");
   ui.stepCleanNote.textContent = "整えました";
@@ -1404,35 +1583,57 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
     ui.stepVerifyNote.textContent = "残り 0 件・保存できます";
   } else {
     setStep(ui.stepVerify, "now");
-    ui.stepVerifyNote.textContent = c.left === null ? "読み直せませんでした" : c.left > 0 ? `${c.left} か所 残っています` : "消えたと言い切れない所があります";
+    ui.stepVerifyNote.textContent = c.left === null ? "読み直せませんでした" : c.left > 0 ? keepUnits(`${c.left} か所 残っています`) : "消えたと言い切れない所があります";
   }
 
   ui.cleanCount.textContent =
     c.left === null ? `整える前 ${c.before} か所 → 読み直せませんでした` : `整える前 ${c.before} か所 → 読み直したあと ${c.left} か所`;
+  ui.cleanCount.textContent = keepUnits(ui.cleanCount.textContent ?? "");
   ui.cleanCount.dataset.verdict = c.verdict;
+  // 見えている個人情報らしい字（候補）は、見えない情報とは別の行で、前と後を同じ物差しで（黒塗りにするかは本人が決める）
+  ui.cleanCandidates.textContent = c.candidatesBefore
+    ? keepUnits(`見えている個人情報らしい字：${c.candidatesBefore} か所 → ${c.candidatesAfter === null ? "読み直せませんでした" : `${c.candidatesAfter} か所`}（黒塗りするかは、あなたが決めます）`)
+    : "";
+  ui.cleanCandidates.hidden = !c.candidatesBefore;
   ui.download.download = file.name;
   applySaveGate(saveGate(c));
-  ui.downloadNote.textContent = `${file.name}（${file.pages} ページ・${formatBytes(file.bytes)}・${file.seconds}）。元の PDF は変えていません。`;
+  ui.downloadNote.textContent = keepUnits(`${file.name}（${file.pages} ページ・${formatBytes(file.bytes)}・${file.seconds}）。元の PDF は変えていません。`);
 
   ui.notDoneList.replaceChildren(...c.notDone.map((t) => make("li", t)));
   ui.notDone.hidden = c.notDone.length === 0;
 
-  const total = c.removed.reduce((n, g) => n + g.total, 0);
-  ui.removedTitle.textContent = `取り除いたもの（${total} 件）`;
-  ui.removedGroups.replaceChildren(
-    ...c.removed.map((g) => {
-      const box = make("section", undefined, "removed-group");
-      box.append(make("h4", `${g.name}（${g.pattern}）　${g.total} 件`), make("ul"));
+  // 消したものは、見つかった種類・念のため消したもの・自分で選んだ所に分け、全部の合計は出さない。
+  // 「3 か所見つかった」のに「5 件消した」と並ぶと、数が合わないように見えるため（2026-11-05 本人の画面のレビュー C2）
+  const removedSection = (title: string, groups: typeof c.removed, note?: string) => {
+    const sec = make("section", undefined, "removed-section");
+    sec.append(make("h4", title));
+    if (note) sec.append(make("p", note, "removed-note"));
+    for (const g of groups) {
+      const box = make("div", undefined, "removed-group");
+      box.append(make("h5", `${g.name}　${g.total} 件`), make("ul"));
       box.querySelector("ul")!.append(...g.lines.map((t) => make("li", t)));
-      return box;
-    }),
-  );
-  ui.removed.hidden = total === 0;
+      sec.append(box);
+    }
+    return sec;
+  };
+  const foundGroups = c.removed.filter((g) => !g.self && g.found);
+  const extraGroups = c.removed.filter((g) => !g.self && !g.found);
+  const selfGroups = c.removed.filter((g) => g.self);
+  const sections: HTMLElement[] = [];
+  if (foundGroups.length) {
+    const many = foundGroups.some((g) => g.total !== g.seen);
+    sections.push(removedSection("見つかった種類で消したもの", foundGroups, many ? "1 か所に、消すものが複数あることがあります（例：1 つの欄と、その写し）。そのため、見つかった数と消した数は同じになりません。" : undefined));
+  }
+  if (selfGroups.length) sections.push(removedSection("自分で選んで黒塗りした所", selfGroups));
+  if (extraGroups.length) sections.push(removedSection("念のため消したもの（確かめた画面には出ていない種類）", extraGroups));
+  ui.removedGroups.replaceChildren(...sections);
+  ui.removed.hidden = sections.length === 0;
 
   const notes = [...c.notes, ...c.propertyLines.map((t) => `プロパティ：${t}`)];
   ui.cleanNotes.replaceChildren(...notes.map((t) => make("li", t)));
   ui.cleanNotes.hidden = notes.length === 0;
   ui.cleanScope.textContent = c.scope;
+  ui.cleanScope.hidden = c.scope === "";
   ui.clean.hidden = false;
 
   ui.clean.dataset.verdict = c.verdict;
@@ -1442,7 +1643,8 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.verified.hidden = true;
   ui.resultTitle.textContent = "読み直した結果（種類ごと）";
   ui.fileName.textContent = file.name;
-  ui.fileFacts.textContent = `整えた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`;
+  ui.fileName.title = file.name;
+  ui.fileFacts.textContent = keepUnits(`整えた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`);
 }
 
 /** 型ごとの、片付ける前と読み直したあとの数（11/5 B の 6） */
@@ -1452,7 +1654,7 @@ function renderBeforeAfter(before: ViewModel, after: ViewModel | null) {
     ...rows.map((r) => {
       const li = make("li");
       if (r.after) li.dataset.left = "true";
-      li.append(make("span", `${r.name}（${r.key}）`, "ba-name"), make("span", `${r.before} → ${r.after === null ? "読み直せなかった" : r.after}`, "ba-count"));
+      li.append(make("span", r.name, "ba-name"), make("span", `${r.before} → ${r.after === null ? "読み直せなかった" : r.after}`, "ba-count"));
       return li;
     }),
   );
@@ -1573,6 +1775,8 @@ async function runSanitize() {
   } finally {
     busy = false;
   }
+  // 提出のために小さくする入口：読み直しが通って、小さくする欄が出たときだけ、続けて小さくする
+  if (gen === generation && shrinkLimit && !ui.compress.hidden) await shrinkToLimit(gen, shrinkLimit);
 }
 
 ui.sanitize.addEventListener("click", () => void runSanitize());
@@ -1581,8 +1785,16 @@ ui.saveConfirmBox.addEventListener("change", () => {
   else lockDownload();
 });
 // 押せない形のときは、押しても何もしない（href がないので、もともと保存は起きない。念のため止める）
+/** 保存を押したあとの一言（保存しても画面が変わらず、済んだのか分からないため。2026-11-05 夜のレビュー 19） */
+const SAVED_NOTE = "✓ 保存しました（ダウンロードのフォルダ）。公開する前に、保存した PDF をもう一度ここに入れると、念のため確かめられます。";
+
 ui.download.addEventListener("click", (e) => {
-  if (ui.download.getAttribute("aria-disabled") === "true") e.preventDefault();
+  if (ui.download.getAttribute("aria-disabled") === "true") {
+    e.preventDefault();
+    return;
+  }
+  ui.saveNote.textContent = SAVED_NOTE;
+  ui.saveNote.dataset.gate = "saved";
 });
 
 ui.compressRun.addEventListener("click", () => void runCompress());
@@ -1592,7 +1804,12 @@ ui.compressConfirmBox.addEventListener("change", () => {
   else lockCompressDownload();
 });
 ui.compressDownload.addEventListener("click", (e) => {
-  if (ui.compressDownload.getAttribute("aria-disabled") === "true") e.preventDefault();
+  if (ui.compressDownload.getAttribute("aria-disabled") === "true") {
+    e.preventDefault();
+    return;
+  }
+  ui.compressSaveNote.textContent = SAVED_NOTE;
+  ui.compressSaveNote.dataset.gate = "saved";
 });
 
 
@@ -1607,19 +1824,24 @@ if (!isOfficialHost(location.hostname)) {
   note.hidden = false;
 }
 
+// 提出のために小さくする入口の上限（compress-model.ts の SIZE_LIMITS から並べる）
+for (const l of SIZE_LIMITS) {
+  const o = make("option", `上限 ${l.label}`);
+  o.value = String(l.mb);
+  ui.sizeLimit.append(o);
+}
+
 ui.sample.addEventListener("click", () => {
   const file = sampleFile();
   if (file) void handle(file);
 });
-
-// 「別の PDF を選ぶ」：結果のあとは置き場（とファイルの欄）が隠れるので、ボタンからファイルの欄を開く（Tab で行けるように）
-el<HTMLButtonElement>("file-again").addEventListener("click", () => ui.input.click());
 
 ui.input.addEventListener("change", () => {
   const file = ui.input.files?.[0];
   if (file) void handle(file);
 });
 
+// 「別の PDF にする」：最初の画面に戻り、そこで置く・選ぶ・見本を試す（「別の PDF を選ぶ」と 1 つにまとめた。2026-11-05 本人の画面のレビュー B7）
 el<HTMLButtonElement>("go-home").addEventListener("click", goHome);
 
 // 画面のどこに落としても受け取る（結果を見ている間も）。画面の外に落としたファイルを、ブラウザが開いてしまわないようにもする。

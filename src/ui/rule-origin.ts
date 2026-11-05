@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // ルール・型の出どころの札。見つける段（Claude Code が公開 PDF を読み、今のルールで捕まらない漏れ方を見つけた回）から来た型だけに、
-// 「このルール：Claude が公開 PDF から見つけ、人が確かめて取り入れました（PR #N）」と出す。最初から人が書いたルール・型には出さない。
+// 「この種類は、Claude が公開 PDF から見つけ、人が確かめて加えました（PR #N）」と出す。最初から人が書いたルール・型には出さない。
 //
 // 表は、docs/evolution.md・git log・PR の本文で、見つける段から来たと書いてあるものだけ（2026-11-05 に調べた）。
 // 分からないものは載せない（推測で PR の番号を付けない）。
@@ -60,7 +60,9 @@ export function ruleOrigin(ruleId: string, kind: string | undefined): RuleOrigin
   return e ? { pr: e.pr } : null;
 }
 
-export const ORIGIN_TEXT = "このルール：Claude が公開 PDF から見つけ、人が確かめて取り入れました";
+/** 「ルール」「型」は作る側の言葉なので、「この種類は」と言う（2026-11-05 本人の画面のレビュー B3） */
+export const ORIGIN_TEXT = "この種類は、Claude が公開 PDF から見つけ、人が確かめて加えました";
+export const ORIGIN_MARK = "Claude が発見";
 
 /** リポジトリの場所の形を確かめる（GitHub の「持ち主/名前」だけ。問い合わせ・#・それより深い道は受けない） */
 export function parseRepo(raw: string | null | undefined): string | null {

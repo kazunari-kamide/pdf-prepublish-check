@@ -2,7 +2,7 @@
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import { cspForMeta, securityHeaders } from "./csp.ts";
-import { buildHtaccess } from "./htaccess.ts";
+import { CHECK_PAGE_FILE, buildHtaccess } from "./htaccess.ts";
 import { logoPlugin } from "./logo.ts";
 import { sitePages } from "./site.ts";
 
@@ -36,6 +36,9 @@ function htaccess(): Plugin {
 }
 
 export default defineConfig({
+  // 検査のページは check.html（/check で開く。htaccess.ts の CHECK_PAGE_RULES）。index.html はないので、
+  // ない場所を index.html で返す動き（spa）にしない（本番と同じに、ない場所は見つからないにする）
+  appType: "mpa",
   // sitePages：記事の一覧・各記事・プライバシーの説明のページ（src/site/）を dist/ に置く
   // logoPlugin：見出しのロゴマークとファビコンを、design/logo/ の SVG から差し込む（logo.ts）
   plugins: [logoPlugin(), cspMeta(), htaccess(), sitePages()],
@@ -45,6 +48,7 @@ export default defineConfig({
     // 古いブラウザ向けの「先読みの補い」は fetch を使うので入れない（通信の仕組みをコードに残さない）
     modulePreload: { polyfill: false },
     sourcemap: false,
+    rollupOptions: { input: CHECK_PAGE_FILE },
   },
   worker: {
     format: "es",

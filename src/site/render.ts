@@ -6,6 +6,10 @@
 // - ページには、スクリプトを入れない。読み込むのは、同じサイトの CSS 1つだけ。
 // - サイトの場所（https の公式の URL）は、呼ぶ側から受け取る（htaccess.ts の OFFICIAL_ORIGIN）。ここには書かない。
 
+import { CHECK_PATH, CONTACT_SEND_FILE } from "../../htaccess.ts";
+
+/** 検査のページの場所（htaccess.ts の CHECK_PATH。/ はハッカソンの間だけ、ここへ 302） */
+export const INSPECTOR_PATH = CHECK_PATH;
 import { ARTICLES } from "./articles.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS, PRIVACY_TITLE } from "./privacy.ts";
 import { SITE_NAME, headFor, headLines } from "./seo.ts";
@@ -13,22 +17,25 @@ import type { Article, FigureAsset, PageMeta, Section } from "./types.ts";
 
 export { SITE_NAME };
 export const ARTICLES_PATH = "/articles/";
-export const PRIVACY_PATH = "/privacy.html";
+export const PRIVACY_PATH = "/privacy";
 // サイトの案内のページ（中身は pages.ts）
-export const LICENSES_PATH = "/licenses.html";
-export const TERMS_PATH = "/terms.html";
-export const CONTACT_PATH = "/contact.html";
-export const FAQ_PATH = "/faq.html";
-export const CHECKLIST_PATH = "/checklist.html";
-/** サービス紹介のページ（持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（index.html。tests/site-pages.test.ts） */
+export const LICENSES_PATH = "/licenses";
+export const TERMS_PATH = "/terms";
+export const CONTACT_PATH = "/contact";
+/** お問い合わせのフォームの送り先（PHP。server/contact-send.php から site.ts が作る。検索には載せない） */
+export const CONTACT_SEND_PATH = `/${CONTACT_SEND_FILE}`;
+export const FAQ_PATH = "/faq";
+export const CHECKLIST_PATH = "/checklist";
+/** サービスの紹介のページ（LP。中身は about.ts。持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（check.html。tests/site-pages.test.ts）。ファイルは about.html（fileFor） */
 export const ABOUT_PATH = "/about";
 
-/** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
-export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。";
+/** どのページの下にも置く、公式のサイトの場所の1文（検査のページ check.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
+export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com です。ソースコードは公開しています。";
 
-/** どのページの下にも置く、サイトの案内のリンク（検査のページ index.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
+/** どのページの下にも置く、サイトの案内のリンク（検査のページ check.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
 export const FOOT_LINKS: ReadonlyArray<readonly [string, string]> = [
-  ["/", "検査のページ"],
+  [INSPECTOR_PATH, "検査のページ"],
+  [ABOUT_PATH, "お守りPDF について"],
   [ARTICLES_PATH, "記事の一覧"],
   [CHECKLIST_PATH, "公開前の自己点検"],
   [FAQ_PATH, "よくある質問"],
@@ -53,23 +60,66 @@ export interface RenderOptions {
   repoUrl?: string | null;
   /** 記事の図（site.ts が src/site/figures/ から assets/ に置いたもの）。鍵は記事の slug。ない記事は、図の場所を出さない */
   figures?: ReadonlyMap<string, FigureAsset>;
+  /** 参照元の決まり（<meta name="referrer">）。ふだんは no-referrer。お問い合わせのページだけ csp.ts の CONTACT_REFERRER */
+  referrer?: string;
   /** 記事の一覧のページで読み込む、検索のスクリプトの場所（site.ts が置いたもの）。なければ、検索の欄を出さない */
   searchScript?: string;
+  /** 記事の一覧の見出しまわりの 3D の飾り（scene：three.js で描くファイル、loader：あとから読む役。どちらも /assets/ の中） */
+  hero?: { scene: string; loader: string };
 }
 
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-export const articlePath = (a: Article) => `${ARTICLES_PATH}${a.slug}.html`;
+export const articlePath = (a: Article) => `${ARTICLES_PATH}${a.slug}`;
 
-/** dist/ の中のファイルの名前（先頭の / なし）。/articles/ は articles/index.html */
+/**
+ * dist/ の中のファイルの名前（先頭の / なし）。/articles/ は articles/index.html、/privacy は privacy.html。
+ * サイトのページの場所は .html なし（2026-11-05）。本番は .htaccess の書き換えで、.html のファイルを返す（htaccess.ts）
+ */
 export function fileFor(path: string): string {
-  return (path.endsWith("/") ? `${path}index.html` : path).replace(/^\//, "");
+  return (path.endsWith("/") ? `${path}index.html` : `${path}.html`).replace(/^\//, "");
+}
+
+/** dist/ の中の HTML のファイルの名前から、サイトの場所（.html なし）を作る。fileFor の逆 */
+export function pathForFile(file: string): string {
+  const f = file.replace(/^\//, "");
+  if (f === "index.html") return "/";
+  if (f.endsWith("/index.html")) return `/${f.slice(0, -"index.html".length)}`;
+  return `/${f.replace(/\.html$/, "")}`;
+}
+
+/** layout に足せるもの（サービスの紹介のページ about.ts だけが使う。上の帯・下の帯は、どのページも同じ形） */
+export interface LayoutExtra {
+  /** body に足す class（site の後ろに付ける） */
+  bodyClass?: string;
+  /** サイトの CSS の後に読む、そのページだけの CSS の場所（同じサイトの assets/ の中） */
+  extraCssHref?: string;
+}
+
+/** 上の帯の案内（どのページにも同じ並び。検査のページへは、ロゴと右端の「PDF を確かめる」から行く） */
+export const NAV_LINKS: ReadonlyArray<readonly [string, string]> = [
+  [ABOUT_PATH, "お守りPDF について"],
+  [ARTICLES_PATH, "記事の一覧"],
+  [FAQ_PATH, "よくある質問"],
+  [PRIVACY_PATH, "プライバシー"],
+];
+
+/** リンクの並び。今いるページ（current）へのリンクにだけ aria-current="page" を付ける（上の帯・下の帯） */
+function linksHtml(links: ReadonlyArray<readonly [string, string]>, current: string): string {
+  return links
+    .map(([href, label]) => `        <a href="${escapeHtml(href)}"${href === current ? ' aria-current="page"' : ""}>${escapeHtml(label)}</a>`)
+    .join("\n");
+}
+
+/** 上の帯の案内のリンク（今いるページの場所を渡すと、そのリンクに印を付ける） */
+export function siteNavLinks(current = ""): string {
+  return linksHtml(NAV_LINKS, current);
 }
 
 /** どのページにも共通の枠（CSP・題・説明・canonical・上の帯・下の帯）。中身の HTML は body */
-export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
+export function layout(meta: PageMeta, body: string, o: RenderOptions, x: LayoutExtra = {}): string {
   const e = escapeHtml;
   return `<!doctype html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
@@ -78,29 +128,29 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${e(o.csp)}" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="referrer" content="no-referrer" />
+    <meta name="referrer" content="${e(o.referrer ?? "no-referrer")}" />
     ${headLines(headFor(meta), o.origin, e)}
     <link rel="icon" href="${e(o.favicon ?? "data:,")}" />
-    <link rel="stylesheet" href="${e(o.cssHref)}" />
+    <link rel="stylesheet" href="${e(o.cssHref)}" />${x.extraCssHref ? `
+    <link rel="stylesheet" href="${e(x.extraCssHref)}" />` : ""}
   </head>
-  <body class="site">
+  <body class="site${x.bodyClass ? ` ${e(x.bodyClass)}` : ""}">
     <header class="site-band">
-      <a class="site-brand" href="/">${o.brandMark ?? ""}${e(SITE_NAME)}</a>
+      <a class="site-brand" href="${INSPECTOR_PATH}">${o.brandMark ?? ""}${e(SITE_NAME)}</a>
       <nav class="site-nav" aria-label="サイトの案内">
-        <a href="/">検査のページ</a>
-        <a href="${ARTICLES_PATH}">記事の一覧</a>
-        <a href="${PRIVACY_PATH}">プライバシー</a>
+${siteNavLinks(meta.path)}
       </nav>
+      <a class="site-band-cta" href="${INSPECTOR_PATH}">PDF を確かめる</a>
     </header>
     <main class="site-main">
 ${body}
     </main>
     <footer class="site-foot">
       <nav class="site-foot-links" aria-label="サイトの案内（下）">
-${FOOT_LINKS.map(([href, label]) => `        <a href="${href}">${e(label)}</a>`).join("\n")}
+${linksHtml(FOOT_LINKS, meta.path)}
       </nav>
       <p class="site-official">${e(OFFICIAL_NOTE)}</p>
-      <p>PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</p>
+      <p>PDF はこの端末のブラウザの中だけで読みます。どこにも送りません。</p>
     </footer>
   </body>
 </html>
@@ -127,8 +177,8 @@ export function renderSectionAt(s: Section, level: 2 | 3): string {
 /** 記事の最後に置く、検査のページへのつなぎ */
 export function toInspector(): string {
   return `      <aside class="site-cta" aria-label="検査のページへ">
-        <p>手元の PDF に、この記事のようなものが残っていないかを確かめられます。PDF は、このパソコンのブラウザの中だけで読みます。</p>
-        <p><a class="site-cta-link" href="/">検査のページで確かめる</a></p>
+        <p>手元の PDF に、この記事のようなものが残っていないかを確かめられます。PDF は、この端末のブラウザの中だけで読みます。</p>
+        <p><a class="site-cta-link" href="${INSPECTOR_PATH}">検査のページで確かめる</a></p>
         <p class="site-note">見つけられるのは、検査のページに並べた種類だけです。すべての漏れを見つけられるわけではありません。</p>
       </aside>`;
 }
@@ -203,9 +253,9 @@ export function renderPrivacy(o: RenderOptions): string {
   return layout(PRIVACY_META, body, o);
 }
 
-/** 検索エンジンに知らせるページの一覧（トップ・記事の一覧・各記事・プライバシー） */
+/** 検索エンジンに知らせるページの一覧（トップ・サービスの紹介・記事の一覧・各記事・プライバシー） */
 export function sitePaths(): string[] {
-  return ["/", ARTICLES_PATH, ...ARTICLES.map(articlePath), PRIVACY_PATH];
+  return [INSPECTOR_PATH, ABOUT_PATH, ARTICLES_PATH, ...ARTICLES.map(articlePath), PRIVACY_PATH];
 }
 
 /** 記事・プライバシーの HTML のページを作る（記事の一覧とタグのページは article-index.ts）。鍵は dist/ の中のファイルの名前 */

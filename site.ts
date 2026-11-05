@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// サイトのページ（記事の一覧・各記事・プライバシーの説明と、ライセンス・利用規約・お問い合わせ・よくある質問・公開前の自己点検）を、ビルドに入れる Vite のプラグイン。
+// サイトのページ（サービスの紹介・記事の一覧・各記事・プライバシーの説明と、ライセンス・利用規約・お問い合わせ・よくある質問・公開前の自己点検）を、ビルドに入れる Vite のプラグイン。
 // 中身と HTML の作り方は src/site/（render.ts・articles.ts・privacy.ts）。ここでは、次のことだけをする。
 // - ページの CSS（design/tokens.css ＋ src/site/site.css）を1つにつなぎ、中身のハッシュの名前で assets/ に置く
 // - HTML のページと、sitemap.xml・robots.txt を dist/ に置く（npm run build）
@@ -11,18 +11,19 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import type { Plugin } from "vite";
+import { build as viteBuild, type Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
-import { OFFICIAL_ORIGIN } from "./htaccess.ts";
+import { CHECK_PAGE_FILE, CHECK_PATH, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, LICENSE_TEXTS_DIR, OFFICIAL_ORIGIN, OLD_LICENSE_TEXTS_DIR } from "./htaccess.ts";
 import { faviconHref, inlineMark } from "./logo.ts";
 import { buildFigures } from "./site-figures.ts";
 import { buildLicenses } from "./site-licenses.ts";
+import { renderAbout } from "./src/site/about.ts";
 import { renderIndexPages, usedTags } from "./src/site/article-index.ts";
 import { tagPath } from "./src/site/tags.ts";
-import { GUIDE_PATHS, TERMS_DIALOG_MARKER, renderGuidePages, renderTermsDialog } from "./src/site/pages.ts";
-import { escapeHtml, renderSite, sitePaths } from "./src/site/render.ts";
+import { CONTACT_ERRORS_MARK, CONTACT_ERRORS_TOP_MARK, CONTACT_MESSAGE_MARK, CONTACT_TOKEN_FIELD, GUIDE_PATHS, TERMS_DIALOG_MARKER, renderContactResults, renderGuidePages, renderTermsDialog } from "./src/site/pages.ts";
+import { ABOUT_PATH, escapeHtml, fileFor, renderSite, sitePaths } from "./src/site/render.ts";
 import { articleTransitionNames } from "./src/site/motion.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
 import { INSPECTOR_HEAD, OG_IMAGE_PATH, headLines, type HeadInfo } from "./src/site/seo.ts";
@@ -44,6 +45,12 @@ export function siteCss(): string {
   const site = readFileSync(path.join(ROOT, "src", "site", "site.css"), "utf8");
   const motion = readFileSync(path.join(ROOT, "src", "site", "motion.css"), "utf8");
   return `${tokens}\n${sheet}\n${site}\n${motion}\n${articleTransitionNames()}`;
+}
+
+/** サービスの紹介のページ（/about）だけで、サイトの CSS の後に読む CSS（src/site/about.css）。名前に中身のハッシュを付ける */
+export function aboutCss(): { file: string; source: string } {
+  const source = readFileSync(path.join(ROOT, "src", "site", "about.css"), "utf8");
+  return { file: `assets/about-${createHash("sha256").update(source).digest("hex").slice(0, 10)}.css`, source };
 }
 
 export function siteCssFile(css = siteCss()): string {
@@ -95,12 +102,77 @@ export function searchScript(): { file: string; source: string } {
   return { file: `assets/article-search-${createHash("sha256").update(source).digest("hex").slice(0, 10)}.js`, source };
 }
 
+/**
+ * 記事の一覧の見出しまわりの 3D の飾り（2026-11-05 本人が承認）。
+ * - loader：あとから 3D を読む小さな役（src/site/site-3d.js。そのまま置く）
+ * - scene：three.js で形を組み立てて描くファイル（src/site/omamori-3d-scene.js を、three.js と一緒に束ねて縮めたもの）
+ * scene の名前は、元のファイルと three.js の版から決める（束ねる前に、HTML に書く名前が要るため）
+ */
+export function heroScripts(): { loader: { file: string; source: string }; scene: { file: string; entry: string } } {
+  const loader = readFileSync(path.join(ROOT, "src", "site", "site-3d.js"), "utf8");
+  const entry = path.join(ROOT, "src", "site", "omamori-3d-scene.js");
+  const three = JSON.parse(readFileSync(path.join(ROOT, "node_modules", "three", "package.json"), "utf8")) as { version: string };
+  const sceneHash = createHash("sha256").update(readFileSync(entry, "utf8")).update(`three@${three.version}`).digest("hex").slice(0, 10);
+  return {
+    loader: { file: `assets/site-3d-${createHash("sha256").update(loader).digest("hex").slice(0, 10)}.js`, source: loader },
+    scene: { file: `assets/omamori-3d-${sceneHash}.js`, entry },
+  };
+}
+
+/** 3D の飾りの scene を、three.js と一緒に 1 つの ES モジュールに束ねて縮める（ビルドと、開発のサーバーで使う） */
+export async function buildHeroScene(entry = heroScripts().scene.entry): Promise<string> {
+  const out = await viteBuild({
+    configFile: false,
+    logLevel: "silent",
+    publicDir: false,
+    build: {
+      write: false,
+      minify: true,
+      target: "es2022",
+      emptyOutDir: false,
+      lib: { entry, formats: ["es"], fileName: () => "omamori-3d.js" },
+    },
+  });
+  const outputs = (Array.isArray(out) ? out : [out]) as Array<{ output?: Array<{ type: string; code?: string }> }>;
+  const chunk = outputs.flatMap((o) => o.output ?? []).find((c) => c.type === "chunk");
+  if (!chunk?.code) throw new Error("3D の飾り（omamori-3d-scene.js）を束ねられませんでした");
+  return chunk.code;
+}
+
 /** dist/ に置く字でないファイル（記事の図）。鍵は dist/ の中の名前 */
 export function siteBinaryFiles(): Map<string, Uint8Array> {
   return buildFigures().files;
 }
 
-/** dist/ に置くファイル（HTML・sitemap.xml・robots.txt・CSS・検索のスクリプト）。鍵は dist/ の中の名前 */
+/** PHP の一重引用符の文字列にする（\ と ' だけを逃がす。ほかの字はそのまま） */
+export function phpString(s: string): string {
+  return `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
+/**
+ * お問い合わせの送り先（dist/contact-send.php）。server/contact-send.php に、フォーム・受け付けた・送れなかったのページの HTML を差し込む。
+ * ヘッダー（csp.ts の contactHeaders）は .htaccess だけが付ける（PHP でも付けると、同じヘッダーが 2 つになるおそれがあるため）。
+ * 届け先などの本物の設定は入れない（public_html の外の contact-config.php に、本人が置く。docs/contact.md）
+ */
+export function contactSendPhp(pages: { form: string; done: string; error: string }): string {
+  const source = readFileSync(path.join(ROOT, "server", "contact-send.php"), "utf8").replace(/\r\n/g, "\n");
+  if (!pages.error.includes(CONTACT_MESSAGE_MARK)) throw new Error("送れなかったときのページに、理由を入れる印がありません");
+  // フォームのページ（静かな contact.html と同じもの）に、PHP が中身を入れる印が 1 つずつあること
+  for (const mark of [CONTACT_ERRORS_MARK, CONTACT_ERRORS_TOP_MARK, CONTACT_TOKEN_FIELD]) {
+    if (pages.form.split(mark).length !== 2) throw new Error(`お問い合わせのページに「${mark}」が 1 つだけあるはずです`);
+  }
+  const arr = (entries: Array<[string, string]>) => `[\n${entries.map(([k, v]) => `    ${phpString(k)} => ${phpString(v)},`).join("\n")}\n]`;
+  const fill = (text: string, mark: string, value: string) => {
+    const line = `= []; // ${mark}`;
+    if (text.split(line).length !== 2) throw new Error(`server/contact-send.php に「${line}」が 1 つだけあるはずです`);
+    // 置きかえる字は関数で渡す（文字列で渡すと、HTML の中の $& や $' が、置きかえの記号として化けるため）
+    return text.replace(line, () => `= ${value};`);
+  };
+  const out = fill(source, "@@PAGES@@", arr([["form", pages.form], ["done", pages.done], ["error", pages.error]]));
+  return out.replace("// dist/contact-send.php を直接書き換えない。", () => "// これは npm run build で作ったファイル。直接書き換えない（もとは server/contact-send.php）。");
+}
+
+/** dist/ に置くファイル（HTML・sitemap.xml・robots.txt・CSS・検索のスクリプト・お問い合わせの送り先の PHP）。鍵は dist/ の中の名前 */
 export function siteFiles(): Map<string, string> {
   const css = siteCss();
   const cssFile = siteCssFile(css);
@@ -116,12 +188,23 @@ export function siteFiles(): Map<string, string> {
     brandMark: inlineMark("mark", "site-brand-mark"), // 帯は白の地（design/sheet.md）なので、明るい地のマーク
   };
   const files = renderSite({ ...options, figures: figures.assets });
-  // 記事の一覧（検索のスクリプトを読む）と、タグごとの一覧のページ
-  for (const [name, page] of renderIndexPages({ ...options, figures: figures.assets, searchScript: `/${search.file}` })) files.set(name, page);
+  // 記事の一覧（検索のスクリプトと、3D の飾りの読み込み役を読む）と、タグごとの一覧のページ
+  const hero = heroScripts();
+  const heroOption = { scene: `/${hero.scene.file}`, loader: `/${hero.loader.file}` };
+  for (const [name, page] of renderIndexPages({ ...options, figures: figures.assets, searchScript: `/${search.file}`, hero: heroOption })) files.set(name, page);
   files.set(search.file, search.source);
+  files.set(hero.loader.file, hero.loader.source); // scene は束ねるのに時間がかかるので、generateBundle と開発のサーバーで作る
+  // サービスの紹介のページ（LP）と、そのページだけの CSS
+  const about = aboutCss();
+  files.set(fileFor(ABOUT_PATH), renderAbout(options, `/${about.file}`));
+  files.set(about.file, about.source);
   const licenses = buildLicenses(ROOT);
   for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);
   for (const [name, text] of licenses.files) files.set(name, text);
+  // 送り先の PHP。フォームのページは、静かな contact.html と 1 バイトも違わないもの（check-live が照らす）
+  const contactPage = files.get(CONTACT_PAGE_FILE);
+  if (contactPage === undefined) throw new Error(`${CONTACT_PAGE_FILE} がありません`);
+  files.set(CONTACT_SEND_FILE, contactSendPhp({ form: contactPage, ...renderContactResults(options) }));
   files.set("sitemap.xml", renderSitemap());
   files.set("robots.txt", renderRobots());
   files.set(cssFile, css);
@@ -141,7 +224,7 @@ export function verificationMeta(code = GOOGLE_SITE_VERIFICATION): { name: strin
  */
 export function withTermsDialog(html: string, repo: string | null = repoUrl()): string {
   const count = html.split(TERMS_DIALOG_MARKER).length - 1;
-  if (count !== 1) throw new Error(`index.html に利用規約のダイアログの目印 ${TERMS_DIALOG_MARKER} が 1 つではありません（${count} 個）`);
+  if (count !== 1) throw new Error(`${CHECK_PAGE_FILE} に利用規約のダイアログの目印 ${TERMS_DIALOG_MARKER} が 1 つではありません（${count} 個）`);
   return html.replace(TERMS_DIALOG_MARKER, () => renderTermsDialog({ repoUrl: repo }));
 }
 
@@ -155,6 +238,64 @@ const TYPES: Record<string, string> = {
   ".png": "image/png",
 };
 
+function isFile(p: string): boolean {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export type CleanUrlRoute = { kind: "redirect"; location: string } | { kind: "temporary"; location: string } | { kind: "rewrite"; url: string } | null;
+
+/**
+ * 本番の .htaccess の書き換え（htaccess.ts の CLEAN_URL_RULES）と同じ決まりで、場所をどう扱うかを決める。
+ * exists は、dist/ の中のファイルの名前（先頭の / なし）があるか。
+ * - / は検査のページ（/check）へ 302（kind: "temporary"）。/check/ と、前の検査のページの /index.html は /check へ 301（htaccess.ts の CHECK_PAGE_RULES）
+ * - .html 付き（index.html・googleXXXX.html を除く）で、ファイルがあれば、.html なしへ 301（? のあとはそのまま）
+ * - .html なしで、同じ名前の .html があれば、そのファイルで返す（アドレスはそのまま）
+ */
+export function cleanUrlRoute(rawUrl: string, exists: (file: string) => boolean): CleanUrlRoute {
+  const q = rawUrl.indexOf("?");
+  const pathname = q < 0 ? rawUrl : rawUrl.slice(0, q);
+  const query = q < 0 ? "" : rawUrl.slice(q);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const file = decoded.replace(/^\/+/, "");
+  // ライセンスの全文の前の場所（htaccess.ts の LICENSE_TEXTS_RULES と同じ）
+  if (file === `${OLD_LICENSE_TEXTS_DIR}/`) return { kind: "redirect", location: `/${OLD_LICENSE_TEXTS_DIR}${query}` };
+  if (file.startsWith(`${OLD_LICENSE_TEXTS_DIR}/`)) {
+    const name = file.slice(OLD_LICENSE_TEXTS_DIR.length + 1);
+    if (!name.includes("/") && name.endsWith(".txt")) return { kind: "redirect", location: `/${LICENSE_TEXTS_DIR}/${name}${query}` };
+  }
+  // 検査のページ（htaccess.ts の CHECK_PAGE_RULES と同じ）
+  if (file === "") return { kind: "temporary", location: `${CHECK_PATH}${query}` };
+  if (file === `${CHECK_PATH.slice(1)}/` || file === "index.html") return { kind: "redirect", location: `${CHECK_PATH}${query}` };
+  if (decoded.endsWith(".html")) {
+    if (/(^|\/)index\.html$/.test(decoded) || /^\/google[0-9a-z]+\.html$/.test(decoded) || !exists(file)) return null;
+    return { kind: "redirect", location: `${pathname.replace(/^\/+/, "/").replace(/\.html$/, "")}${query}` };
+  }
+  if (file === "" || decoded.endsWith("/") || exists(file) || !exists(`${file}.html`)) return null;
+  return { kind: "rewrite", url: `${pathname}.html${query}` };
+}
+
+function cleanUrlMiddleware(exists: (file: string) => boolean) {
+  return (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(): void }, next: () => void) => {
+    const route = cleanUrlRoute(req.url ?? "/", exists);
+    if (route?.kind === "redirect" || route?.kind === "temporary") {
+      res.statusCode = route.kind === "redirect" ? 301 : 302;
+      res.setHeader("Location", route.location);
+      return res.end();
+    }
+    if (route?.kind === "rewrite") req.url = route.url;
+    next();
+  };
+}
+
 export function sitePages(): Plugin {
   return {
     name: "omamori-site-pages",
@@ -164,7 +305,7 @@ export function sitePages(): Plugin {
         const meta = verificationMeta();
         // 検査のページの題・説明・canonical・OGP・X のカード（中身は src/site/seo.ts）
         const head = headLines(INSPECTOR_HEAD_INFO, OFFICIAL_ORIGIN, escapeHtml);
-        if (!/<title>[^<]*<\/title>/.test(html)) throw new Error("index.html に <title> がありません（題・説明を入れる場所）");
+        if (!/<title>[^<]*<\/title>/.test(html)) throw new Error(`${CHECK_PAGE_FILE} に <title> がありません（題・説明を入れる場所）`);
         // 検査のページの出どころの札（src/ui/rule-origin.ts）が PR へのリンクに使う、リポジトリの場所。分からなければ入れない（札は字だけになる）
         const repo = repoUrl();
         const tags = [
@@ -174,12 +315,19 @@ export function sitePages(): Plugin {
         return { html: withTermsDialog(html).replace(/<title>[^<]*<\/title>/, head), tags };
       },
     },
-    generateBundle() {
+    async generateBundle() {
       for (const [fileName, source] of siteFiles()) this.emitFile({ type: "asset", fileName, source });
+      this.emitFile({ type: "asset", fileName: heroScripts().scene.file, source: await buildHeroScene() });
       this.emitFile({ type: "asset", fileName: OG_IMAGE_PATH.slice(1), source: ogImage() });
       for (const [fileName, source] of siteBinaryFiles()) this.emitFile({ type: "asset", fileName, source });
     },
+    // vite preview（check:browser・check:layout が開く）でも、本番の .htaccess と同じに、.html なしの場所でページを返す
+    configurePreviewServer(server) {
+      const dist = path.join(ROOT, "dist");
+      server.middlewares.use(cleanUrlMiddleware((file) => isFile(path.join(dist, file))));
+    },
     configureServer(server) {
+      server.middlewares.use(cleanUrlMiddleware((file) => file === CHECK_PAGE_FILE || siteFiles().has(file)));
       server.middlewares.use((req, res, next) => {
         const url = (req.url ?? "/").split("?")[0] ?? "/";
         const name = url.endsWith("/") ? `${url}index.html` : url;
@@ -188,7 +336,17 @@ export function sitePages(): Plugin {
           return res.end(ogImage());
         }
         const key = name.replace(/^\//, "");
-        const body = name === "/index.html" ? undefined : (siteFiles().get(key) ?? siteBinaryFiles().get(key));
+        if (key === heroScripts().scene.file) {
+          buildHeroScene().then(
+            (code) => {
+              res.setHeader("Content-Type", TYPES[".js"] ?? "text/javascript");
+              res.end(code);
+            },
+            (err: unknown) => next(err),
+          );
+          return;
+        }
+        const body = name === `/${CHECK_PAGE_FILE}` ? undefined : (siteFiles().get(key) ?? siteBinaryFiles().get(key));
         if (body === undefined) return next();
         res.setHeader("Content-Type", TYPES[path.extname(name)] ?? "application/octet-stream");
         res.end(body);

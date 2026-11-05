@@ -10,6 +10,7 @@
 // - 深刻度は【仮】。P6 の「高」だけが docs/prd.md §3-5 で決まっている。ほかは PR の「決めてほしいこと」に書く。
 
 import { detectP1Info, type P1InfoReport } from "../../rules/p1-info/index.ts";
+import { INFO_LABEL } from "../../sanitize/field-labels.ts";
 import { detectP5Revisions, type P5Compare, type P5Kind, type P5Part, type P5Report } from "../../rules/p5-revisions/index.ts";
 import { detectP6Text, type P6TextReport } from "../../rules/p6-text/index.ts";
 import { DEFAULT_SETTINGS as P6_SETTINGS } from "../../rules/p6-text/settings.ts";
@@ -337,12 +338,13 @@ const p7 = defineRule<P7Report>({
 
 // ---------------------------------------------------------------- P1 文書情報
 
+// 欄の名前は、段ごとにそろえて 1 つの表から引く（sanitize/field-labels.ts）
 const P1_KEY: Record<string, string> = {
-  Title: "タイトル",
-  Author: "作成者",
-  Subject: "件名",
-  Keywords: "キーワード",
-  Creator: "作成したソフト",
+  Title: INFO_LABEL.Title,
+  Author: INFO_LABEL.Author,
+  Subject: INFO_LABEL.Subject,
+  Keywords: INFO_LABEL.Keywords,
+  Creator: INFO_LABEL.Creator,
 };
 
 const p1 = defineRule<P1InfoReport>({
@@ -998,7 +1000,7 @@ const altText = defineRule<AltReport>({
 
 // ---------------------------------------------------------------- 文書情報と XMP の食い違い
 
-const DIFF_FIELD: Record<string, string> = { Title: "タイトル", Author: "作成者", Subject: "件名", Keywords: "キーワード", Creator: "作成したソフト", Producer: "PDF に変換したソフト" };
+const DIFF_FIELD: Record<string, string> = { ...P1_KEY, Producer: INFO_LABEL.Producer };
 
 const infoXmpDiff = defineRule<DiffReport>({
   id: "props-diff",

@@ -122,7 +122,8 @@ function svg(title: string, body: string): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${esc(FONT)}" role="img">`,
     `<title>${esc(title)}</title>`,
-    `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="${C.surface}" stroke="${C.line}" stroke-width="2"/>`,
+    // 外枠は描かない（枠は使う側の CSS だけが描く。札の縁・記事の図の枠と二重にならないように。site.css）
+    `<rect width="${W}" height="${H}" fill="${C.surface}"/>`,
     body,
     `</svg>`,
     "",

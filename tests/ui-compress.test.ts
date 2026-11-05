@@ -79,3 +79,28 @@ describe("片付けの Worker の中身：小さくする", () => {
     expect(r).toEqual({ type: "refused", message: "画像を書き直す道具を読み込めなかったため、小さくできません。" });
   });
 });
+
+describe("提出のために小さくする入口（上限を先に選ぶ）", async () => {
+  const { SIZE_LIMITS, sizeLimitFrom, nextForLimit, limitLine, limitBytes } = await import("../src/ui/compress-model");
+  const three = sizeLimitFrom("3")!;
+  it("上限は 1MB＝1,000,000 バイトで数え、3MB 以下がある。知らない値は null", () => {
+    expect(three.bytes).toBe(3_000_000);
+    expect(SIZE_LIMITS.map((l) => l.mb)).toContain(3);
+    for (const v of ["", "4", "3MB", "abc"]) expect(sizeLimitFrom(v)).toBeNull();
+  });
+  it("収まっていれば小さくしない。超えていれば「ふつう」→「もっと小さく」→あきらめる", () => {
+    expect(nextForLimit(3_000_000, three, [])).toEqual({ kind: "fits" });
+    const a = nextForLimit(3_000_001, three, []);
+    expect(a.kind === "try" && a.preset.id).toBe("normal");
+    const b = nextForLimit(4_000_000, three, ["normal"]);
+    expect(b.kind === "try" && b.preset.id).toBe("small");
+    expect(nextForLimit(4_000_000, three, ["normal", "small"])).toEqual({ kind: "gaveUp" });
+  });
+  it("上限の近くでも、上限と同じ数え方で大きさを書く（収まらないのに 3.0 MB 以下に見せない）", () => {
+    expect(limitBytes(3_000_000)).toBe("3.0 MB");
+    expect(limitBytes(3_000_001)).toBe("3.1 MB");
+    expect(limitLine(3_050_000, three, true)).toContain("収まりませんでした");
+    expect(limitLine(2_400_000, three, false)).toContain("小さくしなくても出せます");
+    expect(limitLine(2_400_000, three, true)).toContain("収まりました（2.4 MB）");
+  });
+});

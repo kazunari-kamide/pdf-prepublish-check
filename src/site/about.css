@@ -1,0 +1,1138 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * サービスの紹介のページ（/about。src/site/about.ts）だけの見た目。サイトの CSS（tokens.css・sheet.css・site.css・motion.css）の後に読む。
+ * - 値は design/tokens.css と design/sheet.css の変数を使う。新しく決めるのは、このページの幅だけ。
+ * - 立体感は、サイトのページ（#108。design/sheet.md の「立体感」）にそろえる：置いてある物は --shadow-rest、
+ *   指を置くと --lift-* だけ浮いて --shadow-lift、押すと --shadow-press。札（ピル）は .site-tag と同じ形（--shadow-pill）。
+ *   動きを減らす設定では、浮く動きを出さない（影と形は残す）。
+ * - 朱は「危ない所」と、検査のページへのボタンだけに使う。ほかは墨と白。
+ * - 動きは CSS だけ（スクリプトなし）。動きを減らす設定（prefers-reduced-motion: reduce）では、動き・傾きを止め、最初から見える形にする。
+ * - スクロールに合わせた動き（animation-timeline: view()）は、使えるブラウザだけ。使えないブラウザでは、最初から見える形のまま。
+ * - 外から何も読み込まない（CLAUDE.md §2-1）。
+ */
+
+.site-lp {
+  --site-width: var(--site-frame); /* このページは、本文の欄も帯（72rem。どのページも同じ）と同じ幅にとる */
+}
+
+.site-lp .site-main {
+  max-width: none;
+  padding: 0;
+  color: var(--text-strong);
+}
+
+/* 上の帯：広い画面では、上に留める（どこからでも検査のページへ 1 回で行ける）。字を大きくした狭い画面では、場所を取りすぎるので留めない */
+@media (min-width: 60rem) {
+  .site-lp .site-band {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+}
+
+/* ページの中の区画へ飛んだとき、上に留めた帯に見出しが隠れないように（上の帯の形は、サイトのどのページとも同じ。site.css） */
+@media (min-width: 60rem) {
+  .site-lp [id] {
+    scroll-margin-top: 6rem;
+  }
+}
+
+/* ---- 区画の枠 */
+.lp-wrap {
+  max-width: var(--site-width);
+  margin-inline: auto;
+  padding-inline: var(--site-gutter);
+}
+
+.lp-narrow {
+  max-width: 48rem;
+}
+
+.lp-section {
+  padding-block: var(--sp-8);
+}
+
+.lp-section-sunken {
+  background: var(--surface-subtle);
+  border-block: var(--bw-1) solid var(--line-hair);
+}
+
+.lp-section h2 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-h1);
+  color: var(--text-strong);
+}
+
+.lp-section h3 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-h3);
+}
+
+.lp-section p {
+  margin: 0 0 var(--sp-3);
+}
+
+/* 区画の見出しの上の小さなラベル（和文） */
+.lp-label {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.lp-label::before {
+  content: "";
+  display: inline-block;
+  width: 1.5rem;
+  height: 2px;
+  margin-right: var(--sp-2);
+  vertical-align: middle;
+  background: var(--line-strong);
+}
+
+.lp-lead {
+  max-width: var(--measure);
+  margin-bottom: var(--sp-6);
+  color: var(--text-muted);
+}
+
+.lp-more {
+  margin-top: var(--sp-5);
+  font-weight: var(--fw-strong);
+}
+
+/* ---- ボタン（主：朱の地。副：墨の線） */
+.lp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0 0;
+}
+
+.site .lp-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--button-height-large);
+  padding: 0 var(--sp-5);
+  border: var(--bw-2) solid transparent;
+  border-radius: var(--radius-m);
+  font-weight: var(--fw-strong);
+  text-decoration: none;
+  box-shadow: var(--shadow-rest);
+  transition:
+    transform var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out),
+    background-color var(--dur-hover);
+}
+
+/* 指を置くと少し浮き、押すと沈む（サイトの主のボタン .site-cta-link と同じ動き） */
+.site .lp-button:hover {
+  transform: translateY(var(--lift-pill));
+  box-shadow: var(--shadow-lift);
+}
+
+.site .lp-button:active {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-press);
+}
+
+.site .lp-button-primary {
+  background: var(--beni-700);
+  color: var(--text-on-strong);
+}
+
+.site .lp-button-primary:hover {
+  background: var(--beni-800);
+}
+
+.site .lp-button-secondary {
+  border-color: var(--line-strong);
+  background: var(--surface-card);
+  color: var(--text-strong);
+}
+
+.site .lp-button-secondary:hover {
+  background: var(--surface-subtle);
+}
+
+/* ---- ファーストビュー */
+.lp-hero {
+  padding-block: var(--sp-8);
+  overflow: hidden;
+}
+
+.lp-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  align-items: center;
+  gap: var(--sp-7);
+}
+
+.site-lp .lp-hero h1 {
+  margin: 0 0 var(--sp-4);
+  font-size: clamp(var(--fs-h1), 4vw, 2.6rem);
+  line-height: 1.35;
+  word-break: keep-all; /* 語の途中で折らず、<wbr> の所で折る（入らないときだけ、どこでも折る） */
+  overflow-wrap: anywhere;
+}
+
+.lp-hero-sub {
+  max-width: var(--measure);
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.lp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 札（ピル）：サイトのタグ（.site-tag。#108）と同じ形。押せないので、浮く動きは付けない */
+.lp-chips li,
+.lp-card-no {
+  border: var(--bw-1) solid var(--ink-300);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(var(--surface-card), var(--ink-50));
+  box-shadow: var(--shadow-pill);
+  color: var(--text-strong);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
+  line-height: 1.6;
+}
+
+.lp-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+}
+
+.lp-chips li::before {
+  content: "✓";
+  color: var(--ok);
+}
+
+/* ---- 紙の束（飾り）。下の紙 2 枚は ::before・::after。いちばん上の紙に黒い帯 */
+.lp-hero-art {
+  display: flex;
+  justify-content: center;
+  perspective: 900px;
+}
+
+.lp-stack {
+  position: relative;
+  width: min(100%, 18rem);
+  aspect-ratio: 210 / 297; /* A4 の縦横 */
+  transform-style: preserve-3d;
+}
+
+.lp-stack-open {
+  transform: rotateX(8deg) rotateY(-12deg);
+}
+
+.lp-stack::before,
+.lp-stack::after,
+.lp-paper {
+  position: absolute;
+  inset: 0;
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-s);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-rest);
+}
+
+.lp-stack::before,
+.lp-stack::after {
+  content: "";
+}
+
+.lp-stack::before {
+  transform: translate(14px, 14px);
+}
+
+.lp-stack::after {
+  transform: translate(7px, 7px);
+}
+
+.lp-paper {
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 9%;
+  padding: 14% 12%;
+}
+
+.lp-paper-line {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ink-200);
+}
+
+.lp-paper-line:nth-child(3n) {
+  width: 70%;
+}
+
+.lp-paper-bar {
+  display: block;
+  height: 14px;
+  background: var(--ink-900);
+}
+
+.lp-paper-bar-short {
+  width: 60%;
+}
+
+/* 下の紙：薄い字の行と「作成者」の札（見た目の下に、別の層がある） */
+.lp-paper-under {
+  z-index: 1;
+  background: var(--surface-subtle);
+}
+
+.lp-paper-under .lp-paper-line {
+  background: var(--beni-200);
+}
+
+.lp-paper-tag {
+  align-self: flex-end;
+  margin-top: auto;
+  padding: 2px var(--sp-2);
+  border: var(--bw-1) solid var(--danger-line);
+  border-radius: var(--radius-s);
+  background: var(--danger-bg);
+  color: var(--text-danger);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
+}
+
+.lp-paper-top {
+  z-index: 2;
+  transform-origin: 0% 100%;
+  /* 動きを減らす設定・動きのない時：最初から少し開いて、下の紙がのぞく */
+  transform: rotate(-7deg) translate(-8%, -9%);
+}
+
+/* 閉じた紙の束（最後の区画。整えて閉じた PDF）：上の紙はずらさず、下の紙の札も見せない */
+.lp-stack-closed {
+  width: min(100%, 9rem);
+}
+
+.lp-stack-closed .lp-paper-top {
+  transform: none;
+}
+
+.lp-stack-closed .lp-paper-bar {
+  background: var(--ink-200);
+}
+
+.lp-stack-closed .lp-paper-tag {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ページを開いて 1 回だけ、上の紙が持ち上がって傾く。指を置くと、もう少し開く */
+  .lp-stack-open .lp-paper-top {
+    animation: lp-lift-paper 900ms 300ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    transition: transform 300ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  .lp-hero-art:hover .lp-paper-top {
+    transform: rotate(-10deg) translate(-12%, -12%);
+  }
+
+  .lp-stack-open {
+    transition: transform 400ms ease;
+  }
+
+  .lp-hero-art:hover .lp-stack-open {
+    transform: rotateX(4deg) rotateY(-6deg);
+  }
+}
+
+@keyframes lp-lift-paper {
+  from {
+    transform: none;
+  }
+}
+
+/* ---- 残り方のカード（置いてある影 → 指を置くと手に取った影。右上の角がめくれて、朱の薄い色がのぞく） */
+.lp-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: var(--sp-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-card {
+  position: relative;
+  padding: var(--sp-5);
+  border: var(--bw-1) solid var(--line-default); /* 記事の札（.site-cards > li.card）と同じ縁 */
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-rest);
+  transition:
+    transform var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out);
+}
+
+/* めくれた角：0 の大きさの箱の右と下の枠で、三角を 2 つ作る（右上は下地の色＝切れた所、左下は朱の薄い色＝めくれた紙の裏） */
+.lp-card::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0;
+  border-color: transparent var(--surface-page) var(--beni-100) transparent;
+  transition: border-width var(--dur-hover) var(--ease-out);
+}
+
+.lp-card:hover,
+.lp-card:focus-within {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(var(--lift-card));
+}
+
+.lp-card:hover::after,
+.lp-card:focus-within::after {
+  border-width: 0 2.25rem 2.25rem 0;
+}
+
+.lp-card-no {
+  display: inline-block;
+  min-width: 2.6em;
+  padding: 0 var(--sp-2);
+  text-align: center;
+}
+
+.lp-card h3 a {
+  text-decoration: none;
+}
+
+/* カードのどこを押しても、題のリンクへ */
+.lp-card h3 a::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-l);
+}
+
+.lp-card h3 a:hover {
+  text-decoration: underline;
+}
+
+.lp-card p:last-child {
+  margin-bottom: 0;
+  color: var(--text-muted);
+}
+
+/* ---- 4 つの手順：丸い番号と、それをつなぐ線 */
+.lp-steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 番号をつなぐ線（番号の真ん中の高さ） */
+.lp-steps::before {
+  content: "";
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  right: 1.5rem;
+  height: var(--bw-2);
+  background: var(--ok);
+  transform-origin: left;
+}
+
+.lp-step {
+  position: relative;
+}
+
+.lp-step-no {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: var(--sp-3);
+  border: var(--bw-2) solid var(--ok);
+  border-radius: 50%;
+  background: var(--ok);
+  color: var(--text-on-strong);
+  font-weight: var(--fw-strong);
+  font-size: var(--fs-h3);
+}
+
+.lp-step p {
+  color: var(--text-muted);
+}
+
+/* ---- 送らない仕組み */
+.lp-trust-grid,
+.lp-loop-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-7);
+}
+
+.lp-trust-grid h3 {
+  margin-top: var(--sp-5);
+}
+
+.lp-verify {
+  margin: 0 0 var(--sp-4);
+  padding-left: var(--sp-5);
+}
+
+.lp-verify li,
+.lp-facts li {
+  margin-bottom: var(--sp-2);
+}
+
+.lp-facts {
+  margin: 0 0 var(--sp-4);
+  padding-left: var(--sp-5);
+  color: var(--text-muted);
+}
+
+.lp-diagram {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+
+.lp-diagram-site {
+  align-self: center;
+  padding: var(--sp-2) var(--sp-4);
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-card);
+  font-weight: var(--fw-strong);
+}
+
+/* 矢印はサイト → 箱の向きだけ（矢印は真ん中、説明の字は右に寄せる） */
+.lp-diagram-arrow {
+  position: relative;
+  margin: 0;
+  padding: var(--sp-2) 0 var(--sp-3) calc(50% + var(--sp-4));
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.lp-diagram-arrow::before {
+  content: "↓";
+  position: absolute;
+  left: calc(50% - 0.5em);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--fs-h2);
+  color: var(--text-strong);
+}
+
+.lp-diagram-box {
+  padding: var(--sp-5);
+  border: var(--bw-2) solid var(--ok-line);
+  border-radius: var(--radius-l);
+  background: var(--midori-100);
+  box-shadow: var(--shadow-rest);
+}
+
+.lp-diagram-name {
+  margin: 0 0 var(--sp-3);
+  font-weight: var(--fw-strong);
+  color: var(--text-ok);
+}
+
+.lp-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: lp-flow;
+}
+
+.lp-flow li {
+  padding: var(--sp-1) var(--sp-3);
+  border: var(--bw-1) solid var(--ok-line);
+  border-radius: var(--radius-m);
+  background: var(--surface-card);
+  font-weight: var(--fw-strong);
+}
+
+.lp-flow li + li::before {
+  content: "→ ";
+  color: var(--text-muted);
+  font-weight: var(--fw-body);
+}
+
+/* 箱から外への矢印はない。点線で「送らない」を示す（動かさない） */
+.lp-diagram-none {
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-3);
+  border: var(--bw-2) dashed var(--line-control);
+  border-radius: var(--radius-m);
+  text-align: center;
+  font-weight: var(--fw-strong);
+}
+
+.lp-diagram-none::before {
+  content: "✕ ";
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 箱の中の札が、順に 1 回だけ、ゆっくり光る */
+  .lp-flow li {
+    animation: lp-glow 1.2s ease both;
+  }
+
+  .lp-flow li:nth-child(2) {
+    animation-delay: 0.5s;
+  }
+
+  .lp-flow li:nth-child(3) {
+    animation-delay: 1s;
+  }
+
+  .lp-flow li:nth-child(4) {
+    animation-delay: 1.5s;
+  }
+
+  .lp-flow li:nth-child(5) {
+    animation-delay: 2s;
+  }
+}
+
+@keyframes lp-glow {
+  40% {
+    background: var(--midori-200);
+  }
+}
+
+/* ---- 調べる型：札の格子。指を置くかフォーカスで、1 文の説明が出る */
+.lp-patterns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-6);
+  padding: 0;
+  list-style: none;
+}
+
+.lp-pattern {
+  position: relative;
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-card);
+}
+
+.lp-pattern a {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  text-decoration: none;
+  font-weight: var(--fw-strong);
+}
+
+.lp-pattern-no {
+  flex: none;
+  min-width: 2.6em;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.lp-pattern-text {
+  margin: 0;
+  padding: 0 var(--sp-3) var(--sp-3);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+/* 指が使える画面では、説明は札の下に重ねて出す（ふだんは隠す。キーボードのフォーカスでも出る） */
+@media (hover: hover) {
+  .lp-pattern-text {
+    position: absolute;
+    z-index: 3;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    padding: var(--sp-2) var(--sp-3);
+    border: var(--bw-1) solid var(--line-default);
+    border-radius: var(--radius-m);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-lift);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 150ms ease,
+      visibility 150ms;
+  }
+
+  .lp-pattern:hover .lp-pattern-text,
+  .lp-pattern:focus-within .lp-pattern-text {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* 見つけられないもの：点線の枠。色は変えない（あおらない） */
+.lp-cannot {
+  max-width: 48rem;
+  padding: var(--sp-5);
+  border: var(--bw-2) dashed var(--line-control);
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
+}
+
+.lp-cannot ul {
+  margin: 0 0 var(--sp-3);
+  padding-left: var(--sp-5);
+}
+
+.lp-cannot p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- 良くし続ける仕組み：4 段を輪に並べ、輪の上を小さな点がゆっくり回る */
+.lp-loop-art {
+  position: relative;
+}
+
+.lp-loop {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  position: relative;
+}
+
+.lp-loop-item {
+  padding: var(--sp-4);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-rest);
+}
+
+/* 輪は 1 → 2 → 4 → 3 の順に回るので、並びを入れ替えて、時計回りにする（読む順は HTML のまま 1〜4） */
+.lp-loop-item:nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.lp-loop-item:nth-child(4) {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.lp-loop-item p {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.lp-loop-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: var(--sp-2);
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
+  font-weight: var(--fw-strong);
+}
+
+/* ④ だけ緑：人が確かめる */
+.lp-loop-human {
+  border: var(--bw-2) solid var(--ok-line);
+  background: var(--ok-bg);
+}
+
+.lp-loop-human .lp-loop-no {
+  background: var(--ok);
+}
+
+.lp-loop-ring {
+  position: absolute;
+  inset: 12%;
+  border: var(--bw-2) dashed var(--line-default);
+  border-radius: 50%;
+}
+
+.lp-loop-dot {
+  position: absolute;
+  top: -6px;
+  left: calc(50% - 5px);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-900);
+}
+
+@supports (offset-path: border-box) {
+  .lp-loop-dot {
+    top: 0;
+    left: 0;
+    offset-path: border-box;
+    offset-anchor: center;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-loop-dot {
+      animation: lp-orbit 24s linear infinite;
+    }
+  }
+}
+
+@keyframes lp-orbit {
+  from {
+    offset-distance: 0%;
+  }
+
+  to {
+    offset-distance: 100%;
+  }
+}
+
+/* ---- 使う場面：影なしの枠線だけ（残り方のカードと見分ける） */
+.lp-scenes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: var(--sp-4);
+  margin: 0 0 var(--sp-5);
+  padding: 0;
+  list-style: none;
+}
+
+.lp-scene {
+  padding: var(--sp-5);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
+}
+
+.lp-icon {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: var(--sp-3);
+  color: var(--text-strong);
+}
+
+.lp-scene p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.lp-dev {
+  max-width: var(--measure);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+/* ---- よくある質問 */
+.lp-faq-item {
+  border-bottom: var(--bw-1) solid var(--line-default);
+}
+
+.lp-faq-item:first-of-type {
+  border-top: var(--bw-1) solid var(--line-default);
+}
+
+.lp-faq-item summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: var(--sp-4) 0;
+  font-weight: var(--fw-strong);
+  list-style: none;
+}
+
+.lp-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+/* 開く・閉じるの印（形でも示す：＋ と −） */
+.lp-faq-item summary::before {
+  content: "＋";
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: 50%;
+  font-size: var(--fs-small);
+}
+
+.lp-faq-item[open] summary::before {
+  content: "−";
+}
+
+.lp-faq-body {
+  padding: 0 0 var(--sp-4) calc(1.75rem + var(--sp-3));
+  color: var(--text-muted);
+}
+
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-faq-item {
+      interpolate-size: allow-keywords;
+    }
+
+    .lp-faq-item::details-content {
+      block-size: 0;
+      overflow: hidden;
+      transition:
+        block-size 250ms ease,
+        content-visibility 250ms allow-discrete;
+    }
+
+    .lp-faq-item[open]::details-content {
+      block-size: auto;
+    }
+  }
+}
+
+/* ---- 最後の案内：墨の地に白い字（ここだけ色を反転して「終わり」を示す） */
+.lp-closing {
+  padding-block: var(--sp-8);
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
+}
+
+.lp-closing-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6);
+}
+
+.lp-closing h2 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-h1);
+}
+
+.lp-closing p {
+  margin: 0;
+}
+
+.lp-closing .lp-actions {
+  margin-top: var(--sp-5);
+}
+
+.lp-closing h2,
+.lp-section h2 {
+  word-break: keep-all; /* 語の途中で折らず、<wbr> の所で折る（入らないときだけ、どこでも折る） */
+  overflow-wrap: anywhere;
+}
+
+.site .lp-closing a.lp-closing-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-on-strong);
+  font-weight: var(--fw-strong);
+}
+
+/* 墨の地の上では、フォーカスの印を白にする（墨の印は見えないため） */
+.site .lp-closing :focus-visible {
+  outline-color: #ffffff;
+  box-shadow: none;
+}
+
+.lp-closing .lp-stack::before,
+.lp-closing .lp-stack::after,
+.lp-closing .lp-paper {
+  border-color: var(--ink-600);
+}
+
+/* ---- スクロールで、カード・手順が順に出る（使えるブラウザだけ。使えないブラウザでは最初から見える） */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-card,
+    .lp-step,
+    .lp-scene,
+    .lp-loop-item {
+      animation: lp-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+
+    /* 1 枚ずつ、少しずつずれて出る */
+    .lp-cards > :nth-child(3n + 2),
+    .lp-steps > :nth-child(2),
+    .lp-scenes > :nth-child(2) {
+      animation-range: entry 8% entry 68%;
+    }
+
+    .lp-cards > :nth-child(3n),
+    .lp-steps > :nth-child(3),
+    .lp-scenes > :nth-child(3) {
+      animation-range: entry 16% entry 76%;
+    }
+
+    .lp-steps > :nth-child(4),
+    .lp-scenes > :nth-child(4) {
+      animation-range: entry 24% entry 84%;
+    }
+
+    /* 番号をつなぐ線が、左から伸びる */
+    .lp-steps::before {
+      animation: lp-grow linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 45%;
+    }
+  }
+}
+
+@keyframes lp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes lp-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* ---- 狭い画面（スマホ・字を大きくしたとき） */
+@media (max-width: 56rem) {
+  .lp-hero-grid,
+  .lp-trust-grid,
+  .lp-loop-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-6);
+  }
+
+  .lp-stack-open {
+    width: min(60%, 12rem);
+  }
+
+  .lp-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 線は縦に（番号の真ん中を通る） */
+  .lp-steps::before {
+    top: 1.5rem;
+    bottom: 1.5rem;
+    left: calc(1.5rem - 1px);
+    right: auto;
+    width: var(--bw-2);
+    height: auto;
+    transform-origin: top;
+  }
+
+  .lp-step {
+    padding-left: calc(3rem + var(--sp-4));
+  }
+
+  .lp-step-no {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+}
+
+@media (max-width: 40rem) {
+  .lp-section,
+  .lp-hero,
+  .lp-closing {
+    padding-block: var(--sp-7);
+  }
+
+  .lp-loop {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-loop-item:nth-child(3),
+  .lp-loop-item:nth-child(4) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .lp-loop-ring,
+  .lp-closing .lp-stack {
+    display: none;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (max-width: 56rem) and (prefers-reduced-motion: no-preference) {
+    .lp-steps::before {
+      animation-name: lp-grow-down;
+    }
+  }
+}
+
+@keyframes lp-grow-down {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+/* 動きを減らす設定：動き・傾きをすべて止める（紙の束は、少し開いた静止画のまま） */
+@media (prefers-reduced-motion: reduce) {
+  .site-lp *,
+  .site-lp *::before,
+  .site-lp *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .lp-stack-open {
+    transform: none;
+  }
+
+  .site .lp-button:hover,
+  .site .lp-button:active,
+  .lp-card:hover,
+  .lp-card:focus-within {
+    transform: none;
+  }
+}
+
+@media print {
+  .lp-hero-art,
+  .lp-closing,
+  .lp-loop-ring {
+    display: none;
+  }
+
+  .lp-section-sunken {
+    background: none;
+  }
+}

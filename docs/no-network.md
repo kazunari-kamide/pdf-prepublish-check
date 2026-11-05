@@ -10,12 +10,14 @@
 - PDF を入れた後にも、同じサイトへの要求はある（検査の Worker・PDF.js のファイルを読み込むため）。中身は配信しているファイルの読み込みだけで、PDF は入らない。層 4 は、この数も「PDF を入れた後」として分けて出す。
 - 捨てた案：Cloudflare Web Analytics のスクリプトを入れる。読み込みの時とページを離れる時に送るため、PDF を入れた後にも送られる。スクリプトの版を固定できず（SRI が使えない）、`connect-src 'none'`（PDF.js の例外の条件）も崩れる。
 - 検索エンジンの確認（Google Search Console）は、トップページの `<meta>` か、`public/` に置く確認のファイルで行う（`src/site/search-console.ts`）。検索エンジンがサイトを読みに来たときに見るだけで、ブラウザからの通信は増えない。
+- 記事の一覧のページの見出しまわりに、3D の飾りを置く（2026-11-05 本人が承認）。はじめは CSS の版を出し、小さな読み込み役（`src/site/site-3d.js`）が、ページを読み終えて手が空いてから、同じサイトの `/assets/omamori-3d-<ハッシュ>.js`（`src/site/omamori-3d-scene.js` を three.js と一緒に束ねたもの）を `import()` で読む。形はコードで組み立て、モデル・画像・書体のファイルは読まない。束ねたものに通信の仕組み（`fetch`・`XMLHttpRequest` など）は入っていない（層 2 で見る）。動きを減らす設定の人と、WebGL が使えない端末では読まない。サイトのページで許すスクリプトは、記事の一覧のページの検索のスクリプトと、この読み込み役の 2 つだけ（`scripts/check-dist.mjs`）。
+- **お問い合わせのページ（`/contact`）だけ、利用者が「送る」を押したときに、書いた中身を同じサイトの PHP（`/contact-send.php`）へ送る**（2026-11-05 本人が決定）。ブラウザのふつうのフォームの送信で、スクリプトは使わない。送り先は同じサイトだけで、ほかの会社のサービス（フォームの代行・reCAPTCHA・解析）は使わない。PHP は中身を運営者へのメール 1 通にするだけ。このページと送り先だけ、CSP の `form-action` を `'self'` にする（ほかは `'none'` のまま。`connect-src 'none'` も変えない）。検査のページ（`/`）とその CSP は変えない。決まりと手順は `docs/contact.md`。
 - SNS などに貼るリンクに付ける `utm_source` は、ページのスクリプトでは読まない。サーバーの記録に残る URL の一部として数えるだけ（書き方は README）。
 
 | 層 | 何を見るか | どこで |
 |---|---|---|
-| 1. 自分たちのコード | `src/`・`rules/`・`index.html` に、`fetch`・`XMLHttpRequest`・`WebSocket`・`sendBeacon`・外の URL・`innerHTML`・`eval` がないこと | `tests/no-network.test.ts`（`npm test`） |
-| 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` に `connect-src 'none'` があること。サイトのページ（記事・プライバシー）を含む、すべての HTML に同じ CSP があり、スクリプトを直接書かず、外から読み込まないこと（公式の URL を指す canonical だけは許す） | `scripts/check-dist.mjs`（`npm run build` の最後） |
+| 1. 自分たちのコード | `src/`・`rules/`・`check.html`（検査のページ）に、`fetch`・`XMLHttpRequest`・`WebSocket`・`sendBeacon`・外の URL・`innerHTML`・`eval` がないこと | `tests/no-network.test.ts`（`npm test`） |
+| 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` に `connect-src 'none'` があること。サイトのページ（記事・プライバシー）を含む、すべての HTML に同じ CSP があり（お問い合わせのページだけは、`form-action 'self'` だけが違う CSP）、スクリプトを直接書かず、外から読み込まないこと（公式の URL を指す canonical だけは許す） | `scripts/check-dist.mjs`（`npm run build` の最後） |
 | 3. CSP | ページ全体の読み込み先と送り先を絞る（`connect-src 'none'`、`img-src 'self' data: blob:` など） | `csp.ts` |
 | 4. 本物のブラウザ | 合成 PDF を入れて、ページを開いてから閉じるまでの要求を「最初の表示」と「PDF を入れた後」に分けて数え、どちらも外への要求が0件であること。サイトのページも1つずつ開き、外への要求が0件であること | `scripts/check-browser.mjs`（`npm run check:browser`） |
 

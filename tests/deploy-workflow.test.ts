@@ -69,7 +69,9 @@ describe("配信の手順（deploy.yml）", () => {
     const cmds = runs(deploy).join("\n");
     expect(cmds).not.toMatch(/\bnpm\b|\bnpx\b/);
     expect(cmds).toContain("node scripts/check-live.mjs");
-    expect(cmds).toContain("node scripts/check-browser.mjs --url https://omamoripdf.com/");
+    // 本番では、検査のページ（/check。2026-11-05 に / から移した）を開く
+    expect(cmds).toContain("node scripts/check-browser.mjs --url https://omamoripdf.com/check");
+    expect(cmds).not.toMatch(/--url https:\/\/omamoripdf\.com\/(\s|$)/);
   });
 
   it("本番の確かめのスクリプトは、npm で入れる部品を読み込まない（vite は手元の preview のときだけ、あとから読む）", () => {
@@ -111,11 +113,16 @@ describe("依存の更新（dependabot.yml）", () => {
 });
 
 describe("弱点の知らせ方・偽のサイト", () => {
-  it("SECURITY.md は、GitHub の非公開の報告を使うよう書き、実物の PDF を送らせない", () => {
+  it("SECURITY.md は、お問い合わせのフォームだけを窓口にし、弱点の中身は本文に書いてもらい、メールアドレスを必ず書かせ、実物の PDF を送らせない", () => {
     const s = read("SECURITY.md");
-    expect(s).toContain("private vulnerability reporting");
-    expect(s).toContain("公開の Issue には書かないでください");
+    expect(s).toContain("お問い合わせのページ（`https://omamoripdf.com/contact`）のフォーム");
+    expect(s).toContain("弱点の詳しい中身を本文に書いて");
+    expect(s).toContain("メールアドレスは必ず書いてください。");
+    expect(s).toContain("直すまでの間、中身を公開しないでください");
+    expect(s).not.toContain("連絡先のメールアドレスだけ");
     expect(s).toContain("架空の名前・番号で作ったもの");
+    // 本人が見ていない窓口（GitHub の Issues・非公開の報告）は案内しない（2026-11-05 本人が決定）
+    for (const f of ["SECURITY.md", "README.md"]) expect(read(f), f).not.toMatch(/private vulnerability reporting|Report a vulnerability|Issue/);
   });
   it("偽のサイトの文書は、公式の URL と、知らせる窓口・ひな形を書く", () => {
     const f = read("docs/fake-sites.md");

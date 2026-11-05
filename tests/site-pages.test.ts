@@ -9,8 +9,8 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { cspForMeta } from "../csp.ts";
-import { NOT_FOUND_PAGE, OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { CONTACT_REFERRER, cspForContactMeta, cspForMeta } from "../csp.ts";
+import { LICENSE_TEXTS_DIR, NOT_FOUND_PAGE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 import { SHIPPED_FONT_DIR, SHIPPED_ROOTS, buildLicenses, copyrightLines, githubRepo, tableUnder } from "../site-licenses.ts";
 import { renderSitemap, repoUrl, siteCss, siteFiles } from "../site.ts";
 import {
@@ -27,7 +27,7 @@ import {
   TERMS_META,
   renderGuidePages,
 } from "../src/site/pages.ts";
-import { ABOUT_PATH, FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor } from "../src/site/render.ts";
+import { ABOUT_PATH, FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor, pathForFile } from "../src/site/render.ts";
 import type { Section } from "../src/site/types.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -50,7 +50,8 @@ describe("ページの形", () => {
   });
 
   it("404 のページは、.htaccess の ErrorDocument が指す場所にあり、検査のページ・記事の一覧へつながる", () => {
-    expect(NOT_FOUND_PAGE).toBe(NOT_FOUND_META.path);
+    // ErrorDocument が指すのはファイル（/404.html）。ページの場所は .html なし（/404）
+    expect(NOT_FOUND_PAGE).toBe(`/${fileFor(NOT_FOUND_META.path)}`);
     const p = pages.get("404.html")!;
     expect(p).toContain("ページが見つかりません");
     expect(p).toContain('href="/articles/"');
@@ -61,16 +62,17 @@ describe("ページの形", () => {
   it("どのページの下の帯にも、公式のサイトの場所の1文がある（検査のページも同じ文）", () => {
     for (const [name, page] of pages) expect(page, name).toContain(`<p class="site-official">${escapeHtml(OFFICIAL_NOTE)}</p>`);
     for (const [name, page] of files) if (name.endsWith(".html")) expect(page, name).toContain(escapeHtml(OFFICIAL_NOTE));
-    expect(read("index.html")).toContain(`<p class="site-official">${OFFICIAL_NOTE}</p>`);
+    expect(read("check.html")).toContain(`<p class="site-official">${OFFICIAL_NOTE}</p>`);
   });
 
   for (const [name, page] of pages) {
     it(`${name}：題・説明・canonical・CSP があり、検査のページへつながり、スクリプトがない`, () => {
       expect(page).toMatch(/<title>[^<]+｜お守りPDF<\/title>/);
       expect(page).toMatch(/<meta name="description" content="[^"]{20,}" \/>/);
-      expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/${name}" />`);
-      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspForMeta)}" />`);
-      expect(page).toContain('href="/"');
+      expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}${pathForFile(name)}" />`);
+      // お問い合わせのページだけ、form-action 'self' だけが違う CSP（docs/contact.md）
+      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(name === "contact.html" ? cspForContactMeta : cspForMeta)}" />`);
+      expect(page).toContain('href="/check"');
       expect(page).not.toMatch(/<script\b|\sstyle=|\son[a-z]+=/);
       // 下の帯に、サイトの案内のリンクが全部ある
       for (const [href] of FOOT_LINKS) expect(page).toContain(`href="${href}"`);
@@ -96,7 +98,7 @@ describe("ページの形", () => {
   it("リポジトリの場所が分からないときは、GitHub のリンクを出さず、文だけにする", () => {
     const none = renderGuidePages({ ...opts, repoUrl: null }, licenses.data);
     for (const [name, page] of none) expect(page, name).not.toContain("https://github.com/example-owner");
-    expect(none.get("contact.html")).toContain("GitHub の Issues を開く（場所は、公式のサイトのこのページで示します）");
+    expect(none.get("terms.html")).toContain("ソースコード（GitHub）（場所は、公式のサイトのこのページで示します）");
   });
 });
 
@@ -145,18 +147,55 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
 
   it("プライバシー：PDF を入れたときにファイルを読み込む記録が残ることと、記録の使い方・お問い合わせの扱い・説明の変え方を書く", () => {
     const p = files.get("privacy.html")!;
-    for (const s of ["検査に使うプログラムのファイルを、このサイトから読み込むことがあります", "過大な負担に対処すること", "不具合の原因を調べること", "お問い合わせに書いたこと", "この説明の変え方"]) {
+    for (const s of ["検査に使うプログラムのファイルを、このサイトから読み込むことがあります", "過大な負担に対処すること", "不具合の原因を調べること", "お問い合わせで受け取るもの", "この説明の変え方"]) {
       expect(p, s).toContain(s);
     }
     // 「PDF を入れた」という操作が記録に残らない、とは言い切らない（ファイルの読み込みの記録は残りうる）
     expect(p).not.toContain("PDF を入れた、などの画面での操作");
   });
 
-  it("お問い合わせ：Issues へのリンクだけで、PDF・個人情報を貼らない注意がある", () => {
+  it("お問い合わせ：同じサイトの送り先へのフォームだけ。GitHub・メールの窓口は出さない", () => {
     const c = page("contact.html");
-    expect(c).toContain(`href="${REPO}/issues"`);
-    expect(c).toContain("PDF を、添付しないでください");
-    expect(c).not.toMatch(/mailto:/);
+    expect(c.match(/<form\b[^>]*>/g)).toEqual(['<form class="site-form" method="post" action="/contact-send.php" accept-charset="UTF-8">']);
+    expect(c).not.toMatch(/github\.com|issues|advisories|mailto:/i);
+    expect(c).toContain(`<meta name="referrer" content="${CONTACT_REFERRER}" />`);
+  });
+
+  it("お問い合わせ：種類と本文は必ず、メールアドレスは任意、名前の欄はない。人には見えない欄がある", () => {
+    const c = page("contact.html");
+    const radios = c.match(/<input type="radio" name="kind" value="(\w+)" required \/>/g) ?? [];
+    expect(radios).toHaveLength(4);
+    for (const label of ["質問", "不具合", "セキュリティの弱点", "その他"]) expect(c).toContain(`<span>${label}`);
+    // 画面でも、サーバーと同じ決まり（10〜4000 字・URL は 2 つまで）を出す
+    expect(c).toMatch(/<textarea id="contact-body" name="body" rows="8" minlength="10" maxlength="4000" required aria-describedby="contact-body-hint"><\/textarea>/);
+    expect(c).toContain("（必ず書く。10〜4000 字）");
+    expect(c).toContain("URL は 2 つまで。同じ本文は、続けて送れません。");
+    // ページを開いた時刻の印の欄（静かなページでは空。本番は PHP が入れる）と、送れなかったときの理由を入れる印
+    expect(c).toContain('<input type="hidden" name="t" value="" />');
+    expect(c).toContain("<!--CONTACT_ERRORS-->");
+    expect(c).toMatch(/<input id="contact-email" name="email" type="email" maxlength="254"/);
+    expect(c).not.toMatch(/name="email"[^>]*required/);
+    expect(c).not.toMatch(/name="(name|namae|full_?name)"/);
+    expect(c).toContain("（返事がほしいときだけ）");
+    // 人には見えない欄：読み上げから外し、Tab でも止まらない
+    // 名前は意味のないもの（website などにすると、自動入力が埋めて、正しい送信が捨てられる）
+    expect(c).toMatch(/<div class="site-form-trap" aria-hidden="true">[\s\S]*<input id="contact-hp_x7q" name="hp_x7q" type="text" tabindex="-1" autocomplete="off" \/>/);
+    expect(c).not.toMatch(/name="website"/);
+    expect(siteCss()).toMatch(/\.site-form-trap \{[^}]*left: -10000px/);
+  });
+
+  it("お問い合わせ：フォームのすぐ上に「書かないで」の注意、セキュリティの弱点には「中身を書き、メールアドレスも必ず」", () => {
+    const c = page("contact.html");
+    const warn = c.indexOf('<p class="site-form-warn"><span aria-hidden="true">▲ </span>PDF や個人情報、見つかった字の中身は書かないでください。</p>');
+    expect(warn).toBeGreaterThan(0);
+    expect(c.indexOf("<form")).toBeGreaterThan(warn);
+    // 注意とフォームの間に、ほかの段落を挟まない
+    expect(c.slice(warn + 1, c.indexOf("<form"))).not.toMatch(/<p\b/);
+    expect(c).toMatch(/セキュリティの弱点<span class="site-form-hint">何が起きるか・再現の手順・ブラウザの種類と版を書いてください。メールアドレスも必ず書いてください。<\/span>/);
+    // セキュリティの弱点の節：中身を本文に書いてよい。メールアドレスは必ず。架空の名前・番号で再現し、直すまで公開しない（2026-11-05 本人が決定）
+    for (const s of ["弱点の詳しい中身を本文に書いて", "メールアドレスを必ず書いてください", "架空の名前・番号で作ったもの", "実在の人名・団体名は書かないでください", "直すまでの間は、中身を公開しないでください"]) expect(c, s).toContain(s);
+    expect(c).not.toContain("連絡先だけ");
+    expect(c).not.toContain("フォームには書かないでください");
   });
 
   it("よくある質問：10 問以上。送らないこと・サーバーの記録・「見つからなかった」の意味を答える", () => {
@@ -169,9 +208,9 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     const f = page("faq.html");
     expect(f).not.toContain("小さくする機能はありません");
     expect(f).toContain("「ファイルを小さくする」");
-    expect(read("index.html")).toContain("ファイルを小さくする（必要なときだけ）");
+    expect(read("check.html")).toContain("ファイルを小さくする（必要なときだけ）");
     // 画面の手順は「整える」。サイトのページで「片付ける」と書くと、画面のどこを押すのか分からなくなる
-    expect(read("index.html")).toMatch(/<span class="step-name">[^<]*<span class="visually-hidden">3 <\/span>整える<\/span>/);
+    expect(read("check.html")).toMatch(/<span class="step-name">[^<]*<span class="visually-hidden">3 <\/span>整える<\/span>/);
     for (const [name, p] of pages) expect(p, name).not.toMatch(/片付け/);
     expect(files.get("privacy.html")).not.toMatch(/片付け/);
   });
@@ -190,8 +229,8 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
   const lock = JSON.parse(read("package-lock.json")).packages;
   const md = read("docs/licenses.md");
 
-  it("npm の部品は、pdf-lib・pdfjs-dist と pdf-lib の依存だけで、package-lock.json と同じ版・ライセンス", () => {
-    expect(d.shipped.map((r) => r.name).sort()).toEqual(["@pdf-lib/standard-fonts", "@pdf-lib/upng", "pako", "pdf-lib", "pdfjs-dist", "tslib"]);
+  it("npm の部品は、pdf-lib・pdfjs-dist・three（記事の一覧の 3D の飾り）と pdf-lib の依存だけで、package-lock.json と同じ版・ライセンス", () => {
+    expect(d.shipped.map((r) => r.name).sort()).toEqual(["@pdf-lib/standard-fonts", "@pdf-lib/upng", "pako", "pdf-lib", "pdfjs-dist", "three", "tslib"]);
     for (const r of d.shipped) {
       expect(r.version, r.name).toBe(lock[`node_modules/${r.name}`].version);
       expect(r.license, r.name).toBe(lock[`node_modules/${r.name}`].license);
@@ -205,8 +244,8 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
     }
     // 全文のファイルも、並べた部品・書体と当サービスの分だけ
     const listed = [...d.shipped, ...d.fonts].map((r) => r.textHref!.slice(1));
-    expect([...licenses.files.keys()].sort()).toEqual([...listed, "licenses/AGPL-3.0.txt"].sort());
-    expect([...files.keys()].filter((k) => k.startsWith("licenses/")).sort()).toEqual([...licenses.files.keys()].sort());
+    expect([...licenses.files.keys()].sort()).toEqual([...listed, `${LICENSE_TEXTS_DIR}/AGPL-3.0.txt`].sort());
+    expect([...files.keys()].filter((k) => k.startsWith(`${LICENSE_TEXTS_DIR}/`)).sort()).toEqual([...licenses.files.keys()].sort());
   });
 
   it("書体は、docs/licenses.md で置き場所が src/assets/ のもの（画面の書体）だけ", () => {
@@ -229,9 +268,9 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
       const name = r.textHref!.slice(1);
       expect(files.get(name), name).toBe(licenses.files.get(name));
     }
-    expect(files.get("licenses/pdf-lib-1.17.1.txt")).toBe(read("node_modules/pdf-lib/LICENSE.md"));
-    expect(files.get("licenses/Noto-Sans-JP-OFL.txt")).toBe(read("src/assets/fonts/OFL.txt"));
-    expect(files.get("licenses/AGPL-3.0.txt")).toBe(read("LICENSE"));
+    expect(files.get(`${LICENSE_TEXTS_DIR}/pdf-lib-1.17.1.txt`)).toBe(read("node_modules/pdf-lib/LICENSE.md"));
+    expect(files.get(`${LICENSE_TEXTS_DIR}/Noto-Sans-JP-OFL.txt`)).toBe(read("src/assets/fonts/OFL.txt"));
+    expect(files.get(`${LICENSE_TEXTS_DIR}/AGPL-3.0.txt`)).toBe(read("LICENSE"));
   });
 
   it("著作権の表示は、ライセンスの文にある行だけ（作らない）", () => {
@@ -257,9 +296,9 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
   it("ページに、当サービスの AGPL-3.0・ソースの場所・部品の表が出る", () => {
     const l = pages.get("licenses.html")!;
     expect(l).toContain("AGPL-3.0-only");
-    expect(l).toContain('href="/licenses/AGPL-3.0.txt"');
+    expect(l).toContain(`href="/${LICENSE_TEXTS_DIR}/AGPL-3.0.txt"`);
     expect(l).toContain(`href="${REPO}"`);
-    expect(l).toContain('href="/licenses/Noto-Sans-JP-OFL.txt"');
+    expect(l).toContain(`href="/${LICENSE_TEXTS_DIR}/Noto-Sans-JP-OFL.txt"`);
     expect(l).toContain(escapeHtml("Copyright 2014-2021 Adobe"));
     expect(l).toContain("開発・テスト・配信にだけ使う道具は、このサイトのファイルに入らないので並べていません");
   });
@@ -270,7 +309,8 @@ describe("配るものに入る部品（SHIPPED_ROOTS）が、コードの読み
     const list = (dir: string): string[] =>
       readdirSync(dir).flatMap((n) => {
         const p = path.join(dir, n);
-        return statSync(p).isDirectory() ? list(p) : /\.ts$/.test(n) ? [p] : [];
+        // .js も見る（サイトの 3D の飾り src/site/omamori-3d-scene.js が three を読むため）
+        return statSync(p).isDirectory() ? list(p) : /\.(ts|js)$/.test(n) ? [p] : [];
       });
     // Node でだけ動く所（sanitize/node・sanitize/check）は、配るものに入らない
     const files = ["src", "rules", "sanitize"].flatMap((d) => list(path.join(ROOT, d))).filter((f) => !/[\\/]sanitize[\\/](node|check)[\\/]/.test(f));
@@ -286,12 +326,48 @@ describe("配るものに入る部品（SHIPPED_ROOTS）が、コードの読み
   });
 });
 
-describe("検査のページ（index.html）", () => {
-  const html = read("index.html");
+describe("検査のページ（check.html）", () => {
+  const html = read("check.html");
   it("下の帯のリンクは、サイトのページの下の帯と同じ並び", () => {
     const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
-    const links = [...foot.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]);
+    const links = [...foot.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]);
     expect(links).toEqual(FOOT_LINKS.map(([h, l]) => [h, l]));
+    // このページ（検査のページ）へのリンクだけ、今いるページの印（D3）
+    expect([...foot.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1])).toEqual(["/check"]);
+  });
+
+  it("最初の画面：概要（見出し 1 つ・具体例の 1 文・札 3 つ）と進み具合を、ヘッダーの外（2 列の上）に置く。送らないことの一文は置き場の中の 1 か所だけ", () => {
+    const band = html.match(/<header class="band">[\s\S]*?<\/header>/)![0];
+    expect(band).not.toContain('class="steps"');
+    expect(band).not.toMatch(/<h1\b/);
+    const guide = html.match(/<div class="guide" id="guide">[\s\S]*?<\/ol>\s*<\/div>/)![0];
+    expect(guide).toContain('<h1 class="hero-title">公開する前に、<wbr />PDF の「見えない残り」を消す</h1>');
+    expect(guide).toContain("黒塗りの下の字、作った人の名前、前の版などを見つけて消し、消えたかを読み直して確かめます。");
+    const chips = guide.match(/<ul class="hero-chips"[\s\S]*?<\/ul>/)![0];
+    expect([...chips.matchAll(/<li>([^<]+)<\/li>/g)].map((m) => m[1])).toEqual(["どこにも送らない", "無料", "登録なし"]);
+    expect(guide).toContain('<ol class="steps" aria-label="手順">');
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html.indexOf('id="guide"')).toBeLessThan(html.indexOf('id="workspace"'));
+    const main = html.match(/<main[\s\S]*?<\/main>/)![0];
+    expect(main.match(/どこにも送りません/g)).toHaveLength(1);
+    expect(band).not.toContain("送信しません");
+  });
+
+  it("置き場：主の操作は「PDF を選ぶ」。端末を「パソコン」と言わない。本文から紹介のページの「残り方」へ 1 本", () => {
+    const drop = html.match(/<label id="drop"[\s\S]*?<\/label>/)![0];
+    expect(drop.indexOf('class="drop-pick"')).toBeLessThan(drop.indexOf('class="drop-title"'));
+    expect(html).not.toContain("このパソコンのブラウザ");
+    expect(html).toContain("この端末のブラウザの中だけで読みます。");
+    const sample = html.match(/<p class="sample" id="sample-row">[\s\S]*?<\/p>/)![0];
+    expect(sample).toContain(`<a class="about-more" href="${ABOUT_PATH}#lp-remains">どんなものが残る？</a>`);
+  });
+
+  it("提出のために小さくする入口：見本のすぐ下に、開けて選ぶ上限（既定は「選ばない」＝ふつうの検査）", () => {
+    const entry = html.match(/<details class="limit-entry" id="limit-row">[\s\S]*?<\/details>/)![0];
+    expect(entry).toContain("<summary>提出先の容量に合わせて小さくしたいとき</summary>");
+    expect(entry).toContain('<label class="limit-title" for="size-limit">容量の上限</label>');
+    expect([...entry.matchAll(/<option value="([^"]*)">/g)].map((m) => m[1])).toEqual([""]);
+    expect(html.indexOf('id="limit-row"')).toBeGreaterThan(html.indexOf('id="sample-row"'));
   });
 
   it("上の帯に、サービス紹介のページへのリンクを 1 つだけ置く", () => {
@@ -301,7 +377,7 @@ describe("検査のページ（index.html）", () => {
 
   it("書体と部品のライセンスは、下の帯のライセンスのページへのリンクで示す（結果の欄の一文は、2026-11-05 本人の指示で外した）", () => {
     const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
-    expect(foot).toContain('<a href="/licenses.html">');
+    expect(foot).toContain('<a href="/licenses">');
     expect(html).not.toContain("© 2014-2021 Adobe");
   });
 });

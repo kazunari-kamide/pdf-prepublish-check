@@ -8,12 +8,17 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { CHECK_PAGE_RULES, CLEAN_URL_RULES, CONTACT_REWRITE, LICENSE_TEXTS_RULES } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts", "check-dist.mjs");
 const PDFJS = path.join(ROOT, "node_modules", "pdfjs-dist", "build");
-const CSP_OK = "default-src &#39;self&#39;; connect-src &#39;none&#39;; script-src &#39;self&#39;";
-const CSP_OPEN = "default-src &#39;self&#39;; script-src &#39;self&#39;";
+const CSP_OK = "default-src &#39;self&#39;; connect-src &#39;none&#39;; script-src &#39;self&#39;; form-action &#39;none&#39;";
+const CSP_OPEN = "default-src &#39;self&#39;; script-src &#39;self&#39;; form-action &#39;none&#39;";
+/** お問い合わせのページの CSP（form-action だけ 'self'） */
+const contactCsp = (csp: string) => csp.replace("form-action &#39;none&#39;", "form-action &#39;self&#39;");
+/** お問い合わせの送り先の PHP の作りもの（check-dist が見る形だけ） */
+const FAKE_PHP = `<?php\n$PAGES = ['form' => '<!--CONTACT_ERRORS--><input type="hidden" name="t" value="" />', 'error' => '<!--CONTACT_MESSAGE-->'];\n`;
 
 let dirs: string[] = [];
 afterEach(() => {
@@ -31,6 +36,18 @@ ErrorDocument 404 /404.html
   Header always set Content-Security-Policy "${headerCsp}"
   Header always set Strict-Transport-Security "max-age=86400"
 </IfModule>
+<FilesMatch "^(contact\\.html|contact-send\\.php)$">
+  <IfModule mod_headers.c>
+    Header always set Content-Security-Policy "${headerCsp.replace("form-action 'none'", "form-action 'self'")}"
+  </IfModule>
+</FilesMatch>
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ${CONTACT_REWRITE}
+${LICENSE_TEXTS_RULES.map((l) => `  ${l}`).join("\n")}
+${CHECK_PAGE_RULES.map((l) => `  ${l}`).join("\n")}
+${CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)).join("\n")}
+</IfModule>
 `;
 }
 
@@ -43,13 +60,15 @@ function fakeDist(
   dirs.push(dir);
   mkdirSync(path.join(dir, "assets"));
   writeFileSync(
-    path.join(dir, "index.html"),
+    path.join(dir, "check.html"),
     `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><script type="module" src="/assets/index-Ab12Cd34.js"></script></head><body></body></html>`,
   );
   writeFileSync(path.join(dir, "assets", "index-Ab12Cd34.js"), "console.log(1);\n");
   if (htaccess !== null) writeFileSync(path.join(dir, ".htaccess"), htaccess);
-  // 自前の 404 のページ（.htaccess の ErrorDocument が指す）。index.html と同じ CSP
+  // 自前の 404 のページ（.htaccess の ErrorDocument が指す）。check.html と同じ CSP
   writeFileSync(path.join(dir, "404.html"), `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body></body></html>`);
+  // お問い合わせの送り先（docs/contact.md）
+  writeFileSync(path.join(dir, "contact-send.php"), FAKE_PHP);
   for (const [name, v] of Object.entries(files)) {
     const to = path.join(dir, "assets", name);
     if (typeof v === "string") writeFileSync(to, v);
@@ -126,6 +145,30 @@ describe("check-dist の .htaccess（docs/deploy.md）", () => {
     expect(r.code).toBe(1);
     expect(r.out).toContain("AddType text/javascript .mjs がありません");
   });
+
+  it("/ を検査のページ（/check）へ 302 で移す規則がない・.html なしの書き換えより後ろなら止める（2026-11-05）", () => {
+    const ht = fakeHtaccess(CSP_OK);
+    const rule = "  RewriteRule ^$ /check [R=302,L]\n";
+    expect(ht).toContain(rule);
+    const missing = run(fakeDist(CSP_OK, {}, ht.replace(rule, "")));
+    expect(missing.code).toBe(1);
+    expect(missing.out).toContain("/ を検査のページ（/check）へ移す規則（htaccess.ts の CHECK_PAGE_RULES）がありません");
+    const block = `${CHECK_PAGE_RULES.map((l) => `  ${l}`).join("\n")}\n`;
+    // 規則を、.html なしの書き換えのあと（rewrite の区切りの最後）へ動かす
+    const moved = ht.replace(block, "");
+    const end = moved.lastIndexOf("</IfModule>");
+    const late = run(fakeDist(CSP_OK, {}, `${moved.slice(0, end)}${block}${moved.slice(end)}`));
+    expect(late.code).toBe(1);
+    expect(late.out).toContain("/ を検査のページへ移す規則が、.html なしの書き換えより後ろにあります");
+  });
+
+  it("検査のページ（check.html）がなければ止める", () => {
+    const dir = fakeDist(CSP_OK, {});
+    rmSync(path.join(dir, "check.html"));
+    const r = run(dir);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("検査のページ（check.html）がありません");
+  });
 });
 
 describe("check-dist のサイトのページ（site.ts）", () => {
@@ -142,9 +185,23 @@ describe("check-dist のサイトのページ（site.ts）", () => {
   }
 
   it("同じ CSP と、公式の URL を指す canonical なら通す", () => {
-    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a.html">') }));
+    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a">') }));
     expect(r.out).not.toContain("問題：");
     expect(r.code).toBe(0);
+  });
+
+  it("サイトの場所が .html 付きのリンク・canonical は止める（場所は .html なし。2026-11-05）", () => {
+    const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a.html"><a href="/privacy.html">') }));
+    expect(r.out).toContain("articles/a.html に、.html 付きのサイトの場所が 2 か所あります");
+    expect(r.code).toBe(1);
+  });
+
+  it("ページと同じ名前のフォルダは止める（本番で /x が /x/ へ移って 403 になる。2026-11-05 の /licenses）", () => {
+    const r = run(withPages({ "guide.html": page(CSP_OK, ""), "guide/a.txt": "x" }));
+    expect(r.out).toContain("ページと同じ名前のフォルダがあります（guide.html）");
+    expect(r.code).toBe(1);
+    const ok = run(withPages({ "guide.html": page(CSP_OK, ""), "guide-texts/a.txt": "x" }));
+    expect(ok.out).not.toContain("ページと同じ名前のフォルダ");
   });
 
   it("CSP の <meta> がないページは止める", () => {
@@ -153,10 +210,10 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     expect(r.out).toContain("articles/a.html に CSP の <meta> がありません");
   });
 
-  it("CSP が index.html と違うページは止める", () => {
+  it("CSP が check.html（検査のページ）と違うページは止める", () => {
     const r = run(withPages({ "privacy.html": page(CSP_OPEN) }));
     expect(r.code).toBe(1);
-    expect(r.out).toContain("privacy.html の CSP が、index.html の CSP と食い違っています");
+    expect(r.out).toContain("privacy.html の CSP が、check.html の CSP と食い違っています");
   });
 
   it("ほかのサイトを指す canonical や、外のスクリプトは止める", () => {
@@ -172,16 +229,16 @@ describe("check-dist のサイトのページ（site.ts）", () => {
   });
 
   it("GitHub へ移る <a> のリンクは通し、GitHub から読み込む <img> などは止める", () => {
-    const good = run(withPages({ "contact.html": page(CSP_OK, '<a href="https://github.com/o/r/issues">Issues</a>') }));
+    const good = run(withPages({ "licenses.html": page(CSP_OK, '<a href="https://github.com/o/r">ソース</a>') }));
     expect(good.code).toBe(0);
     const bad = run(
       withPages({
-        "contact.html": page(CSP_OK, '<img src="https://github.com/o/r/x.png">'),
+        "licenses.html": page(CSP_OK, '<img src="https://github.com/o/r/x.png">'),
         "faq.html": page(CSP_OK, '<a href="https://example.invalid/">x</a>'),
       }),
     );
     expect(bad.code).toBe(1);
-    expect(bad.out).toContain("contact.html が外のサイトから読み込んでいます");
+    expect(bad.out).toContain("licenses.html が外のサイトから読み込んでいます");
     expect(bad.out).toContain("faq.html が外のサイトから読み込んでいます");
   });
 
@@ -192,7 +249,7 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     const r1 = run(good);
     expect(r1.out).not.toContain("問題：");
     expect(r1.code).toBe(0);
-    expect(r1.out).toContain("articles/index.html（検索のスクリプト assets/article-search-0123456789.js を読み込む");
+    expect(r1.out).toContain("articles/index.html（検索のスクリプト assets/article-search-0123456789.js。サイトのページの例外）");
 
     const bad = withPages({
       "articles/index.html": page(CSP_OK, `${tag}<script type="module" src="/assets/other-0123456789.js"></script>`),
@@ -210,6 +267,34 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     expect(missing.out).toContain("assets/article-search-0123456789.js が、dist/ にありません");
   });
 
+  it("記事の一覧のページの 3D の飾り：読み込み役 1 つと、それが読む描画（data-scene）だけを通す（2026-11-05 本人が承認）", () => {
+    const loader = '<script type="module" src="/assets/site-3d-0123456789.js"></script>';
+    const hero = '<div class="site-hero" data-scene="/assets/omamori-3d-abcdef0123.js"></div>';
+    const good = withPages({ "articles/index.html": page(CSP_OK, `${hero}${loader}`) });
+    writeFileSync(path.join(good, "assets", "site-3d-0123456789.js"), "export const x = 1;\n");
+    writeFileSync(path.join(good, "assets", "omamori-3d-abcdef0123.js"), "export function mount() { return true; }\n");
+    const r1 = run(good);
+    expect(r1.out).not.toContain("問題：");
+    expect(r1.code).toBe(0);
+    expect(r1.out).toContain("3D の飾りの読み込み役 assets/site-3d-0123456789.js");
+    expect(r1.out).toContain("3D の描画（読み込み役があとから読む） assets/omamori-3d-abcdef0123.js");
+
+    // 読み込み役が 2 つ・ほかのページに置く・描画に eval・data-scene がほかの場所を指す
+    const bad = withPages({
+      "articles/index.html": page(CSP_OK, `${hero}${loader}${loader}`),
+      "faq.html": page(CSP_OK, loader),
+      "terms.html": page(CSP_OK, '<div data-scene="https://example.com/x.js"></div>'),
+    });
+    writeFileSync(path.join(bad, "assets", "site-3d-0123456789.js"), "export const x = 1;\n");
+    writeFileSync(path.join(bad, "assets", "omamori-3d-abcdef0123.js"), "eval(location.hash);\n");
+    const r2 = run(bad);
+    expect(r2.code).toBe(1);
+    expect(r2.out).toContain("articles/index.html にスクリプトがあります");
+    expect(r2.out).toContain("faq.html にスクリプトがあります");
+    expect(r2.out).toContain("terms.html の data-scene が");
+    expect(r2.out).toContain("assets/omamori-3d-abcdef0123.js に、字を HTML として解釈させる書き方か eval があります");
+  });
+
   it("検索エンジンの確認のファイルは、決まった1行のときだけ通す", () => {
     const good = run(withPages({ "google0123abcd.html": "google-site-verification: google0123abcd.html\n" }));
     expect(good.code).toBe(0);
@@ -217,5 +302,88 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     const bad = run(withPages({ "google0123abcd.html": "google-site-verification: google0123abcd.html\n<script>x</script>" }));
     expect(bad.code).toBe(1);
     expect(bad.out).toContain("中身が決まった1行ではありません");
+  });
+});
+
+describe("check-dist のお問い合わせ（docs/contact.md）", () => {
+  const page = (csp: string) => `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body></body></html>`;
+  const withContact = (csp: string, extra: Record<string, string> = {}) => {
+    const dir = fakeDist(CSP_OK, {});
+    writeFileSync(path.join(dir, "contact.html"), page(csp));
+    for (const [name, text] of Object.entries(extra)) writeFileSync(path.join(dir, name), text);
+    return dir;
+  };
+
+  it("お問い合わせのページは、form-action 'self' だけが違う CSP なら通す", () => {
+    const r = run(withContact(contactCsp(CSP_OK)));
+    expect(r.out).not.toContain("問題：");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("contact-send.php（お問い合わせの送り先の PHP。ただ 1 つ）");
+  });
+
+  it("お問い合わせのページが、ほかのページと同じ CSP（form-action 'none'）や、ゆるめた CSP なら止める", () => {
+    for (const csp of [CSP_OK, contactCsp(CSP_OK).replace("connect-src &#39;none&#39;; ", "")]) {
+      const r = run(withContact(csp));
+      expect(r.code).toBe(1);
+      expect(r.out).toContain("contact.html の CSP が、check.html の CSP と食い違っています");
+    }
+  });
+
+  it("ほかのページが form-action 'self' なら止める", () => {
+    const dir = withContact(contactCsp(CSP_OK), { "privacy.html": page(contactCsp(CSP_OK)) });
+    const r = run(dir);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("privacy.html の CSP が、check.html の CSP と食い違っています");
+  });
+
+  it(".htaccess にお問い合わせの <FilesMatch> がない・ほかのファイルにも当たるなら止める", () => {
+    const none = run(fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace(/<FilesMatch[\s\S]*<\/FilesMatch>\n/, "")));
+    expect(none.code).toBe(1);
+    expect(none.out).toContain("お問い合わせのページの CSP（<FilesMatch>）がありません");
+    const wide = run(fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace('"^(contact\\.html|contact-send\\.php)$"', '"\\.(html|php)$"')));
+    expect(wide.code).toBe(1);
+    expect(wide.out).toContain("ほかのファイルにも当たるか");
+  });
+
+  it("PHP は送り先の 1 つだけ。本物の設定・メールアドレス・差し込み忘れは止める", () => {
+    const extra = run(withContact(contactCsp(CSP_OK), { "contact-config.php": "<?php return [];\n" }));
+    expect(extra.code).toBe(1);
+    expect(extra.out).toContain("contact-config.php を配るものに入れています");
+    const mail = run(withContact(contactCsp(CSP_OK), { "contact-send.php": FAKE_PHP + "// owner@not-a-real-site.invalid\n" }));
+    expect(mail.code).toBe(1);
+    expect(mail.out).toContain("メールアドレスらしい字があります");
+    const raw = run(withContact(contactCsp(CSP_OK), { "contact-send.php": "<?php\n$PAGES = []; // @@PAGES@@\n" }));
+    expect(raw.code).toBe(1);
+    expect(raw.out).toContain("差し込まれていません");
+    const gone = withContact(contactCsp(CSP_OK));
+    rmSync(path.join(gone, "contact-send.php"));
+    expect(run(gone).out).toContain("dist/ に contact-send.php がありません");
+  });
+});
+
+describe("check-dist のお問い合わせのフォームのページ（開いた時刻の印）", () => {
+  it(".htaccess に、お問い合わせのページを PHP へ回す書き換えがなければ止める", () => {
+    const dir = fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace(`  RewriteRule ${CONTACT_REWRITE}\n`, ""));
+    const r = run(dir);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("お問い合わせのページを contact-send.php へ回す書き換えがありません");
+  });
+
+  it("お問い合わせのページを PHP へ回す書き換えが、.html なしの書き換えより後ろにあれば止める（静かな contact.html が返るため）", () => {
+    const rule = `  RewriteRule ${CONTACT_REWRITE}\n`;
+    // 書き換えを、mod_rewrite の囲みのいちばん最後（.html なしの書き換えの後ろ）へ移す
+    const moved = fakeHtaccess(CSP_OK).replace(rule, "").replace(/<\/IfModule>\n$/, `${rule}</IfModule>\n`);
+    expect(moved.indexOf(rule)).toBeGreaterThan(moved.indexOf(CLEAN_URL_RULES[0]!));
+    const r = run(fakeDist(CSP_OK, {}, moved));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(".html なしの書き換えより後ろにあります");
+  });
+
+  it("PHP にフォームのページ（印の欄）が入っていなければ止める", () => {
+    const dir = fakeDist(CSP_OK, {});
+    writeFileSync(path.join(dir, "contact-send.php"), "<?php\n$PAGES = ['error' => '<!--CONTACT_MESSAGE-->'];\n");
+    const r = run(dir);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("フォームのページ（開いた時刻の印の欄）が差し込まれていません");
   });
 });

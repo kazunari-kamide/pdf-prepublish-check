@@ -6,15 +6,16 @@
 // - 使わない言い方（断定・「初めて」など）と、外の URL を書かない
 
 import { describe, expect, it } from "vitest";
-import { cspForMeta } from "../csp.ts";
+import { cspForContactMeta, cspForMeta } from "../csp.ts";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
-import { renderRobots, renderSitemap, searchScript, siteFiles, verificationMeta } from "../site.ts";
+import { heroScripts, renderRobots, renderSitemap, searchScript, siteFiles, verificationMeta } from "../site.ts";
 import { usedTags } from "../src/site/article-index.ts";
 import { ARTICLES } from "../src/site/articles.ts";
 import { GUIDE_PATHS } from "../src/site/pages.ts";
 import { tagPath } from "../src/site/tags.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS } from "../src/site/privacy.ts";
-import { escapeHtml, renderArticle, sitePaths } from "../src/site/render.ts";
+import { ABOUT_PATH, FOOT_LINKS, NAV_LINKS, escapeHtml, fileFor, pathForFile, renderArticle, sitePaths } from "../src/site/render.ts";
+import { FIGURES, figureSvg } from "../site-figures-draw.ts";
 import type { Section } from "../src/site/types.ts";
 
 const files = siteFiles();
@@ -95,10 +96,10 @@ describe("記事の数と形", () => {
 describe("ページの HTML", () => {
   it("記事のすべてと、一覧・プライバシー・サイトの案内のページ（tests/site-pages.test.ts）がある", () => {
     const names = html.map(([n]) => n);
-    expect(names).toEqual(expect.arrayContaining(["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...GUIDE_PATHS.map((p) => p.slice(1))]));
+    expect(names).toEqual(expect.arrayContaining(["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...GUIDE_PATHS.map((p) => fileFor(p))]));
     // 記事の場所にある HTML は、記事の一覧と記事と、タグごとの一覧のページ（tests/article-index.test.ts）だけ
     expect(names.filter((n) => n.startsWith("articles/")).sort()).toEqual(
-      ["articles/index.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...usedTags().map((t) => tagPath(t).slice(1))].sort(),
+      ["articles/index.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...usedTags().map((t) => fileFor(tagPath(t)))].sort(),
     );
   });
 
@@ -107,19 +108,43 @@ describe("ページの HTML", () => {
       expect(page).toMatch(/<title>[^<]+｜お守りPDF<\/title>/);
       expect(page).toMatch(/<meta name="description" content="[^"]{20,}" \/>/);
       expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/`);
-      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspForMeta)}" />`);
-      // スクリプトを持たない。例外は1つだけ：記事の一覧のページの、検索のスクリプト（2026-11-05 本人が決定。src/site/article-search.js）
+      // お問い合わせのページだけ、form-action 'self'（同じサイトへのフォームの送信）だけが違う CSP（docs/contact.md）
+      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(name === "contact.html" ? cspForContactMeta : cspForMeta)}" />`);
+      // スクリプトを持たない。例外は記事の一覧のページだけ：検索のスクリプト（2026-11-05 本人が決定）と、3D の飾りの読み込み役（2026-11-05 本人が承認）
       const scripts = page.match(/<script\b[^>]*>/g) ?? [];
-      if (name === "articles/index.html") expect(scripts).toEqual([`<script type="module" src="/${searchScript().file}">`]);
+      if (name === "articles/index.html")
+        expect(scripts).toEqual([`<script type="module" src="/${searchScript().file}">`, `<script type="module" src="/${heroScripts().loader.file}">`]);
       else expect(scripts).toEqual([]);
       expect(page).not.toMatch(/\sstyle=/);
       expect(page).not.toMatch(/\son[a-z]+=/);
       // 外を指すのは canonical と、GitHub へ移る <a> のリンクだけ
       expect(page.replace(/<link rel="canonical" href="[^"]+" \/>/, "").replace(/<a href="https:\/\/github\.com\/[^"]*"/g, "<a")).not.toMatch(/(src|href)="(https?:)?\/\//);
       // 検査のページ（/）へつながる
-      expect(page).toContain('href="/"');
+      expect(page).toContain('href="/check"');
     });
   }
+
+  it("上の帯・下の帯は、どのページも同じ形：案内 4 つ・右端に検査のページへのボタン・下に紹介のページ。今いるページだけに aria-current", () => {
+    for (const [name, page] of html) {
+      const band = page.split('<header class="site-band">')[1]!.split("</header>")[0]!;
+      const nav = band.split('<nav class="site-nav"')[1]!.split("</nav>")[0]!;
+      expect([...nav.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), name).toEqual(NAV_LINKS.map(([h, l]) => [h, l]));
+      expect(band, name).toContain('<a class="site-band-cta" href="/check">PDF を確かめる</a>');
+      const here = pathForFile(name);
+      const current = [...page.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1]);
+      const expected = [...NAV_LINKS, ...FOOT_LINKS].filter(([h]) => h === here).map(([h]) => h);
+      expect(current, name).toEqual(expected);
+    }
+    expect(FOOT_LINKS.map(([h]) => h)).toContain(ABOUT_PATH);
+  });
+
+  it("記事の図は、図の中に枠を描かない（枠は CSS だけ。二重にしない）", () => {
+    for (const slug of Object.keys(FIGURES)) expect(figureSvg(slug).split("</title>")[1]!.trimStart(), slug).toMatch(/^<rect width="640" height="360" fill="#[0-9a-f]{6}"\/>/i);
+    const css = [...files].find(([n]) => /^assets\/site-[0-9a-f]{10}\.css$/.test(n))![1];
+    // 札の縁を薄い値で上書きしない。札の図を拡大しない
+    expect(css).not.toMatch(/border(-[a-z]+)?(-color)?:[^;]*rgb\(43 42 40 \/ 8%\)/);
+    expect(css).not.toMatch(/card-figure\s*\{[^}]*scale\(/);
+  });
 
   it("記事の最後に、検査のページへのつなぎがある", () => {
     for (const a of ARTICLES) expect(files.get(`articles/${a.slug}.html`)).toContain("検査のページで確かめる");
@@ -129,7 +154,7 @@ describe("ページの HTML", () => {
     for (const a of ARTICLES) {
       const page = files.get(`articles/${a.slug}.html`)!;
       expect(page, a.slug).toContain('aria-label="関係する記事"');
-      for (const r of a.related) expect(page, `${a.slug} → ${r}`).toContain(`href="/articles/${r}.html"`);
+      for (const r of a.related) expect(page, `${a.slug} → ${r}`).toContain(`href="/articles/${r}"`);
     }
   });
 
@@ -145,12 +170,18 @@ describe("ページの HTML", () => {
     expect(page).toContain("&lt;b&gt;&#39;");
   });
 
-  it("CSS は中身のハッシュの名前で1つだけ置き、どのページもそれを読む", () => {
+  it("CSS は中身のハッシュの名前で1つだけ置き、どのページもそれを読む（サービスの紹介のページだけ、その後にもう1つ読む）", () => {
     const css = [...files.keys()].filter((n) => n.endsWith(".css"));
-    expect(css).toHaveLength(1);
-    expect(css[0]).toMatch(/^assets\/site-[0-9a-f]{10}\.css$/);
-    for (const [, page] of html) expect(page).toContain(`href="/${css[0]}"`);
-    expect(files.get(css[0]!)).toContain("--color-base");
+    const site = css.filter((n) => /^assets\/site-[0-9a-f]{10}\.css$/.test(n));
+    const about = css.filter((n) => /^assets\/about-[0-9a-f]{10}\.css$/.test(n));
+    expect(site).toHaveLength(1);
+    expect(about).toHaveLength(1);
+    expect(css).toHaveLength(2);
+    for (const [, page] of html) expect(page).toContain(`href="/${site[0]}"`);
+    expect(files.get(site[0]!)).toContain("--color-base");
+    for (const [name, page] of html) expect(page.includes(`href="/${about[0]}"`), name).toBe(name === "about.html");
+    const aboutPage = files.get("about.html")!;
+    expect(aboutPage.indexOf(`href="/${site[0]}"`)).toBeLessThan(aboutPage.indexOf(`href="/${about[0]}"`));
   });
 });
 

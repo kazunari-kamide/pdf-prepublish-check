@@ -1,0 +1,252 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>お守りPDF</title>
+    <!-- アイコンは data: の形で差し込む（/favicon.ico への要求をなくす。logo.ts が design/logo/mark-small.svg から作る） -->
+    <link rel="icon" href="omamori:favicon" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/site/links.css" />
+  </head>
+  <body>
+    <a class="skip" href="#results">結果へ移る</a>
+    <!-- PDF を画面の上へ持ってきている間だけ、画面全体に「ここに落とす」を出す（見た目は置き場の .drop[data-over] と同じ） -->
+    <div id="drop-anywhere" class="drop-anywhere" aria-hidden="true" hidden>
+      <span class="drop-title">ここに落とすと、この PDF を確かめます</span>
+      <span class="drop-note">PDF はこの端末のブラウザの中だけで読みます。どこにも送りません。</span>
+    </div>
+    <p id="unofficial" class="unofficial" role="alert" hidden></p>
+    <header class="band">
+      <p class="brand"><!--omamori:mark-->お守りPDF</p>
+      <a class="about-link" href="/about">お守りPDF について</a>
+    </header>
+
+    <!-- 概要と進み具合（2026-11-05 本人が承認したトップの直し）。左右 2 列の上に置く。
+         概要（見出し・具体例の 1 文・札 3 つ）は、PDF を読み込む前だけ。進み具合（手順）は、読み込んだあとだけ（src/style.css） -->
+    <div class="guide" id="guide">
+      <div class="hero" id="hero">
+        <h1 class="hero-title">公開する前に、<wbr />PDF の「見えない残り」を消す</h1>
+        <p class="hero-lead">黒塗りの下の字、作った人の名前、前の版などを見つけて消し、消えたかを読み直して確かめます。</p>
+        <ul class="hero-chips" aria-label="約束">
+          <li>どこにも送らない</li>
+          <li>無料</li>
+          <li>登録なし</li>
+        </ul>
+      </div>
+      <ol class="steps" aria-label="手順">
+        <li id="step-pick" data-state="now" aria-current="step">
+          <span class="step-no" aria-hidden="true">1</span><span class="step-name"><span class="visually-hidden">1 </span>選ぶ</span>
+          <span class="step-note" id="step-pick-note">PDF を置く</span>
+        </li>
+        <li id="step-check" data-state="todo">
+          <span class="step-no" aria-hidden="true">2</span><span class="step-name"><span class="visually-hidden">2 </span>確かめる</span>
+          <span class="step-note" id="step-check-note">まだです</span>
+        </li>
+        <li id="step-clean" data-state="todo">
+          <span class="step-no" aria-hidden="true">3</span><span class="step-name"><span class="visually-hidden">3 </span>整える</span>
+          <span class="step-note" id="step-clean-note">まだです</span>
+        </li>
+        <li id="step-verify" data-state="todo">
+          <span class="step-no" aria-hidden="true">4</span><span class="step-name"><span class="visually-hidden">4 </span>読み直す</span>
+          <span class="step-note" id="step-verify-note">通れば保存できます</span>
+        </li>
+      </ol>
+    </div>
+
+    <main class="workspace" id="workspace" data-state="empty">
+      <nav class="thumbs" id="thumbs" aria-label="ページの一覧" hidden></nav>
+
+      <section class="stage" aria-labelledby="stage-title">
+        <h2 id="stage-title" class="visually-hidden">ページ</h2>
+
+        <!-- 枠全体を押せる。ブラウザの「ファイルを選択／選択されていません」は見せず（欄は残し、Tab で届く）、ボタンの見た目は「PDF を選ぶ」1 つ（A3）。
+             送らないことの一文は、ファイルを渡すこの枠の中の 1 か所だけ（A2） -->
+        <label id="drop" class="drop" for="file">
+          <span class="drop-pick" aria-hidden="true">PDF を選ぶ</span>
+          <span class="drop-title">またはここに置く</span>
+          <span class="drop-note">この端末のブラウザの中だけで読みます。どこにも送りません。</span>
+          <input id="file" class="drop-input" type="file" accept="application/pdf,.pdf" />
+        </label>
+        <!-- 枠のすぐ下に、控えめな入口を 2 つ（A5）。規約の 1 行は、その下に小さな字で -->
+        <p class="sample" id="sample-row">
+          <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
+          <span class="sample-note">（架空の申請書）</span>
+          <a class="about-more" href="/about#lp-remains">どんなものが残る？</a>
+        </p>
+        <details class="limit-entry" id="limit-row">
+          <summary>提出先の容量に合わせて小さくしたいとき</summary>
+          <div class="limit-body">
+            <label class="limit-title" for="size-limit">容量の上限</label>
+            <select id="size-limit" aria-describedby="limit-note">
+              <option value="">上限を選ばない（ふつうの検査）</option>
+            </select>
+            <p class="limit-note" id="limit-note">上限を選んでから PDF を置くと、いつもどおり確かめて整え、読み直したあとに、その大きさまで小さくします。</p>
+          </div>
+        </details>
+        <p class="terms-note" id="terms-note">ご利用の前に、<a href="/terms">利用規約</a>をご覧ください。</p>
+
+        <div class="filebar" id="filebar" hidden>
+          <span class="filebar-name" id="file-name"></span>
+          <span class="filebar-facts" id="file-facts"></span>
+          <span class="filebar-page" id="file-page"></span>
+          <!-- 1 つにまとめた（2026-11-05 本人の画面のレビュー B7）。最初の画面に戻り、そこで置く・選ぶ・見本を試す。
+               帯が 2 行にならないよう、字を短くした（夜のレビュー 16） -->
+          <button id="go-home" class="filebar-again btn-sub" type="button" aria-label="別の PDF にする（最初の画面に戻る）">別の PDF</button>
+        </div>
+
+        <figure class="sheet-wrap" id="sheet-wrap" hidden>
+          <div class="sheet" id="sheet">
+            <canvas id="sheet-canvas" aria-hidden="true"></canvas>
+            <div class="marks" id="marks"></div>
+          </div>
+          <figcaption id="sheet-caption"></figcaption>
+        </figure>
+        <!-- 狭い画面（縦に積むとき）だけ：項目を押して絵へ動いたあと、押した項目へ戻る（2026-11-05 夜のレビュー 6） -->
+        <button id="back-to-list" class="btn-sub back-to-list" type="button" hidden>一覧へ戻る</button>
+        <p class="render-note" id="render-note" hidden></p>
+      </section>
+
+      <!-- PDF の欄と結果の欄のあいだの仕切り（つまんで動かす・左右の矢印キー。幅の広い画面で、結果を見ているときだけ） -->
+      <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="PDF の欄と結果の欄の幅（左右の矢印キーで動かせます）" aria-valuemin="0" aria-valuemax="100" tabindex="0"></div>
+
+      <aside class="results" id="results" tabindex="-1" aria-labelledby="result-title">
+        <h2 id="result-title" tabindex="-1">種類ごとの結果</h2>
+        <p id="status" role="status" aria-live="polite">まだ PDF を選んでいません。</p>
+        <progress id="progress" max="1" value="0" aria-label="進み具合" hidden></progress>
+
+        <!-- 何も見つからないときの結論（緑の箱）。「念のため整える」より先に読めるよう、ボタンの上に置く（2026-11-05 夜のレビュー 7） -->
+        <div id="verified" class="verified" data-state="none" hidden>
+          <p id="verified-text"></p>
+          <p id="verified-scope" class="verified-scope"></p>
+        </div>
+        <div id="actions" class="actions" hidden>
+          <div id="consent" class="consent" hidden></div>
+          <button id="sanitize" type="button" aria-describedby="sanitize-note tidy-summary">整える</button>
+          <p id="sanitize-note"></p>
+          <!-- 消す対象の列挙とプロパティの扱いは、開けて読む（2026-11-05 本人の画面のレビュー B1） -->
+          <details id="sanitize-more" class="sanitize-more">
+            <summary>整えると消すもの</summary>
+            <p id="sanitize-list" class="sanitize-list"></p>
+            <p id="tidy-summary" class="tidy-summary"></p>
+          </details>
+          <div id="redact-left" class="not-done" hidden>
+            <h3>▲ 読み直しで残っていた所</h3>
+            <ul id="redact-left-list"></ul>
+          </div>
+        </div>
+
+
+        <section id="clean" class="clean" aria-labelledby="clean-title" hidden>
+          <h3 id="clean-title" tabindex="-1">整えた結果</h3>
+          <p id="clean-count" class="clean-count"></p>
+          <p id="clean-candidates" class="clean-candidates" hidden></p>
+          <a id="download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="save-note">整えた PDF を保存する</a>
+          <p id="save-note" class="save-note"></p>
+          <label id="save-confirm" class="save-confirm" hidden>
+            <input id="save-confirm-box" type="checkbox" />
+            <span>言い切れない所があると分かったうえで保存する</span>
+          </label>
+          <p id="download-note" class="download-note"></p>
+          <div id="not-done" class="not-done" hidden>
+            <h4>▲ 消せなかった所</h4>
+            <ul id="not-done-list"></ul>
+          </div>
+          <!-- 保存のボタンが主役。ほかは開けて読む 2 つにまとめる（2026-11-05 本人の画面のレビュー C3） -->
+          <details id="clean-more" class="clean-more">
+            <summary>くわしい内容</summary>
+            <div id="before-after" class="before-after" hidden>
+              <h4>種類ごとの数（整える前 → 読み直したあと）</h4>
+              <ul id="before-after-list"></ul>
+            </div>
+            <div id="removed" class="removed">
+              <div id="removed-groups"></div>
+            </div>
+            <ul id="clean-notes" class="clean-notes" hidden></ul>
+            <p id="clean-scope" class="clean-scope"></p>
+          </details>
+          <details id="clean-tools" class="clean-more">
+            <summary>そのほかの操作（報告書・小さくする）</summary>
+            <a id="report-download" class="report-download btn-sub" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
+            <label id="report-contents" class="save-confirm" hidden>
+              <input id="report-contents-box" type="checkbox" />
+              <span>見つけた字の中身も、報告書に入れる（初めは入れません。入れたら、取り扱いに気をつけてください）</span>
+            </label>
+            <p class="report-note">前後の SHA-256・消した所と字数・調べた範囲を、文字だけで残します。字の中身は、上で選んだときだけ入れます。ファイル名は載せません。</p>
+
+            <section id="compress" class="compress" aria-labelledby="compress-title" hidden>
+              <h4 id="compress-title" tabindex="-1">ファイルを小さくする（必要なときだけ）</h4>
+              <p class="compress-note">提出先に容量の上限があるときに使います。整えた PDF の画像を縮めて書き直します。字・図形は変えません。小さくしたあとも、もう一度最初から検査し直します。</p>
+              <p id="compress-limit" class="compress-limit" tabindex="-1" hidden></p>
+              <fieldset class="compress-presets" id="compress-presets">
+                <legend>画像の細かさ</legend>
+              </fieldset>
+              <button id="compress-run" class="compress-run btn-sub" type="button">小さくする</button>
+              <div id="compress-result" class="compress-result" hidden>
+                <p id="compress-headline" class="compress-headline" tabindex="-1"></p>
+                <p id="compress-sizes" class="compress-sizes"></p>
+                <ul id="compress-lines" class="compress-lines"></ul>
+                <p id="compress-recheck" class="compress-recheck"></p>
+                <a id="compress-download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="compress-save-note" hidden>小さくした PDF を保存する</a>
+                <p id="compress-save-note" class="save-note"></p>
+                <label id="compress-confirm" class="save-confirm" hidden>
+                  <input id="compress-confirm-box" type="checkbox" />
+                  <span>言い切れない所があると分かったうえで保存する</span>
+                </label>
+              </div>
+            </section>
+          </details>
+        </section>
+
+        <div id="notices" class="notices" hidden>
+          <h3>お知らせ</h3>
+          <ul id="notice-list"></ul>
+        </div>
+
+        <div id="groups" class="groups"></div>
+
+        <div id="pick-tools" class="pick-tools" hidden>
+          <button id="pick-toggle" class="pick-toggle btn-sub" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
+          <p id="pick-help" class="pick-help" hidden>ページの絵の上を、黒塗りしたい所の角から角へ、ドラッグしてください。キーボードでは、ページの絵に移って Enter で枠を出し、矢印キーで動かし、Shift と矢印キーで大きさを変え、Enter で決めます（Esc でやめます）。選んだ所は、墨の点線の枠で出ます。</p>
+          <p id="pick-help-candidates" class="pick-help" hidden>個人情報の候補から選ぶ：上の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します。</p>
+          <div id="picks" class="picks" hidden>
+            <p id="pick-count" aria-live="polite"></p>
+            <ul id="pick-list"></ul>
+          </div>
+        </div>
+
+        <!-- 誠実さを伝える一文。結果の一覧のすぐ下に、埋もれさせずに出す（2026-11-05 本人の画面のレビュー B8） -->
+        <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。</p>
+
+        <div id="coverage-slot"></div>
+
+        <details id="props" class="props" hidden></details>
+
+        <details id="ruleset" class="ruleset" hidden></details>
+
+      </aside>
+    </main>
+
+    <!-- サイトの部分（持ち場 G）：サイトの案内のリンク。並びは src/site/render.ts の FOOT_LINKS と同じ（tests/site-pages.test.ts）。ページの中身は src/site/、ビルドは site.ts -->
+    <footer class="site-links" aria-label="サイトの案内">
+      <a href="/check" aria-current="page">検査のページ</a>
+      <a href="/about">お守りPDF について</a>
+      <a href="/articles/">記事の一覧</a>
+      <a href="/checklist">公開前の自己点検</a>
+      <a href="/faq">よくある質問</a>
+      <a href="/privacy">プライバシー</a>
+      <a href="/terms">利用規約</a>
+      <a href="/licenses">ライセンス</a>
+      <a href="/contact">お問い合わせ</a>
+      <p class="site-official">公式のサイトは omamoripdf.com です。ソースコードは公開しています。</p>
+      <p>このサイトは、開いた回数などを、配信先のサーバーの記録だけで数えます。PDF の中身やファイルの名前は、どこにも送りません。</p>
+    </footer>
+
+    <!-- 利用規約のダイアログ。ビルドの時（開発サーバーでも）に site.ts が src/site/pages.ts の renderTermsDialog から作って入れる（通信をせずに読めるように） -->
+    <!-- terms-dialog -->
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

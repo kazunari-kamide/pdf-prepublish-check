@@ -8,25 +8,33 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2) var(--space-5);
-  padding: var(--space-4) var(--space-5);
+  gap: 0 var(--space-5);
+  padding: var(--space-3) var(--space-5);
   border-top: 1px solid var(--color-line);
   font-size: var(--text-small);
   color: var(--color-muted);
 }
 
 .site-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min); /* 押せる高さ 44px（指でも押しやすく） */
   color: var(--color-base);
   text-underline-offset: 0.2em;
 }
 
 .site-links p {
   flex-basis: 100%;
-  margin: 0;
+  margin: var(--space-1) 0 0;
 }
 
-/* 公式のサイトの場所の1文（サイトのページの下の帯と同じ文。src/site/render.ts の OFFICIAL_NOTE） */
+/* 公式のサイトの場所の1文（サイトのページの下の帯と同じ文。src/site/render.ts の OFFICIAL_NOTE）。警告に見えないよう、ふつうの太さ・補足の色（D2） */
 .site-links .site-official {
-  color: var(--color-base);
-  font-weight: bold;
+  font-weight: normal;
+}
+
+/* 今いるページ（このページでは「検査のページ」）：下線を外して太字に（aria-current="page" でも伝える。D3） */
+.site-links a[aria-current="page"] {
+  font-weight: 700;
+  text-decoration: none;
 }

@@ -20,9 +20,9 @@
 1. 確かめのスクリプトのためにコードを取り出し、Node を用意する。**npm は動かさない**（`check-live` と `check-browser` は、`node:` の部品と `csp.ts`・`htaccess.ts` しか読まない。`check-browser` は、手元の `vite preview` を立てるときだけ `vite` を読む）
 2. 成果物を受け取る。受け取った中身が食い違えば止める（`digest-mismatch: error`）
 3. ハッシュを照らす：一覧のハッシュが①の出力と同じこと、`dist/` のファイルが一覧と1つも違わないこと、一覧にないファイルがないこと
-4. `lftp` で `dist/` を FTPS で上げる。先に `assets/` を足し、あとで `index.html`・`.htaccess` を上げて、`dist/` にないものを消す（`mirror -R --delete`）
+4. `lftp` で `dist/` を FTPS で上げる。先に `assets/` を足し、あとで `check.html`（検査のページ）・`.htaccess` を上げて、`dist/` にないものを消す（`mirror -R --delete`）
 5. `node scripts/check-live.mjs`：本番のヘッダー・ファイルの種類・中身を確かめる
-6. `node scripts/check-browser.mjs --url https://omamoripdf.com/`：本番を本物のブラウザで開き、外への要求が0件かを確かめる（docs/no-network.md の層 4）
+6. `node scripts/check-browser.mjs --url https://omamoripdf.com/check`：本番の検査のページを本物のブラウザで開き、外への要求が0件かを確かめる（docs/no-network.md の層 4）
 
 5 か 6 で合わなければ、配信は済んでいても、ジョブは失敗になる。失敗したら、本番の状態をすぐ確かめる。
 
@@ -68,8 +68,15 @@ HSTS は、一度ブラウザに覚えさせると、期間が切れるまで取
 6. `preload`（ブラウザに最初から組み込ませる）：取り消しに数か月かかる。1〜5 が済み、ドメインを長く使うと決めてから、本人が決める。
 
 延ばすときは `htaccess.ts` の `HSTS` と、`tests/htaccess.test.ts` の期待を直す（`check-live` は `HSTS` の値と照らす）。縮めるときも同じ（ただし、すでに覚えたブラウザは、前の期間が切れるまで忘れない）。
-- `index.html` の `<meta>` の CSP も残す。ヘッダーの CSP は、`<meta>` の CSP に `frame-ancestors 'none'`（`<meta>` では効かない）を足しただけで、ほかは同じ値。2つの CSP は両方とも効くが、値が同じなので食い違わない。`.htaccess` が効かなかったときの守りにもなる。食い違いは `scripts/check-dist.mjs` が止める。
+- `check.html`（検査のページ）の `<meta>` の CSP も残す。ヘッダーの CSP は、`<meta>` の CSP に `frame-ancestors 'none'`（`<meta>` では効かない）を足しただけで、ほかは同じ値。2つの CSP は両方とも効くが、値が同じなので食い違わない。`.htaccess` が効かなかったときの守りにもなる。食い違いは `scripts/check-dist.mjs` が止める。
 - Xserver の「HTTPS転送設定」は、`public_html` の `.htaccess` に転送の行を書く仕組みなので（推測。Xserver のマニュアルで確かめていない）、配信のたびに上書きされても転送が消えないよう、同じ転送を `.htaccess` に書いている。
+
+## お問い合わせのフォーム（PHP）
+
+- `dist/contact-send.php` は、配信で `public_html/` に上がる（ほかのファイルと同じ）。届け先などの本物の設定（`contact-config.php`）と迷惑防止の記録（`contact-data/`）は、`public_html` の **1 つ上**に本人が置く。配信用の FTP アカウントはそこに入れないので、配信（`mirror --delete`）で消えたり上書きされたりしない。
+- お問い合わせのページの場所は `/contact`（`/contact.html` は 301 で移す）。`.htaccess` が `/contact` を中で `contact-send.php` へ回し、PHP がフォームを返す。
+- `.htaccess` は、`contact.html` と `contact-send.php` にだけ、CSP の `form-action 'self'` と `Referrer-Policy: same-origin` を返す（`<FilesMatch>`。値は `csp.ts` の `contactHeaders`）。
+- 決まり・本人がすること（送信元のアドレス・SPF・DKIM・設定のファイルの置き方）は `docs/contact.md`。
 
 ## 開いた回数の数え方（アクセス解析）
 
@@ -89,13 +96,15 @@ HSTS は、一度ブラウザに覚えさせると、期間が切れるまで取
 
 手元でも動かせる（先に `npm run build` で、配信したものと同じ `dist/` を作る）。
 
-- トップページの `csp.ts` のヘッダーが、同じ値で1つずつ付いている（サーバーが別の値を足して二重になっても止まる）
+- 検査のページ（`/check`）の `csp.ts` のヘッダーが、同じ値で1つずつ付いている（サーバーが別の値を足して二重になっても止まる）
+- `/` が `/check` へ 302 で移る（`?sample=1` などの `?` のあとも引き継ぐ）。302 の応答にも、同じヘッダーと `Strict-Transport-Security` が付いている。`/check/`・`/check.html`・前の `/index.html` は `/check` へ 301（2026-11-05 に検査のページを `/` から `/check` へ移した。`/` はハッカソンのあとに別の機能を置くので、ブラウザが覚える 301 にしない）
 - サイトのページ（記事の一覧・記事1つ・プライバシー）も 200 で返り、同じヘッダーが付いている
-- トップページが、外のサイトからスクリプトを読み込んでいない
-- https の応答に `Strict-Transport-Security`（`htaccess.ts` の `HSTS`）が付いている。`Cache-Control` が、トップページは `no-cache`、`assets/` のファイルは `max-age=31536000, immutable`
+- 検査のページが、外のサイトからスクリプトを読み込んでいない
+- https の応答に `Strict-Transport-Security`（`htaccess.ts` の `HSTS`）が付いている。`Cache-Control` が、検査のページは `no-cache`、`assets/` のファイルは `max-age=31536000, immutable`
 - 見つからない場所（一番上と `assets/` の中）が、404 で、自前の 404 のページ（`dist/404.html` と同じ中身）を、同じヘッダー・`no-cache` で返す。`assets/` を開いても、ファイルの一覧が出ない
 - `.mjs` が `text/javascript`、`.wasm` が `application/wasm` で返る（今は `.wasm` を配っていないので、省いたと表示する）
-- `dist/` のファイルが本番と1バイトも違わない。`.htaccess` は外から読めない
+- お問い合わせのページと `contact-send.php` だけ、`form-action 'self'` の CSP と `same-origin` の参照元の決まり。`/contact` と `contact-send.php` は、PHP のソースを出さずにフォームを返し、中身は `dist/contact.html` と開いた時刻の印だけが違う。`/contact.html` は `/contact` へ 301
+- `dist/` のファイルが本番と1バイトも違わない（`contact-send.php` と `contact.html` は、PHP が返すので上で別に照らす）。`.htaccess` は外から読めない
 - `http://` と `www` つきは、301 で `https://omamoripdf.com/` へ（`www` の名前が引けないときは、省いたと表示する）
 
 ## まだ確かめていないこと

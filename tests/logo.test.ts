@@ -41,13 +41,13 @@ describe("ロゴの SVG", () => {
 });
 
 describe("ページへの差し込み", () => {
-  const index = readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const index = readFileSync(path.join(ROOT, "check.html"), "utf8");
 
-  it("index.html の目印が、マークとファビコンに置き換わり、目印が残らない", () => {
+  it("check.html の目印が、マークとファビコンに置き換わり、目印が残らない", () => {
     const html = injectLogo(index);
     expect(html).not.toContain(MARK_PLACEHOLDER);
     expect(html).not.toContain(FAVICON_PLACEHOLDER);
-    expect(html).toContain('<h1 class="brand"><svg class="brand-mark" aria-hidden="true" focusable="false" ');
+    expect(html).toContain('<p class="brand"><svg class="brand-mark" aria-hidden="true" focusable="false" ');
     expect(html).toContain('<link rel="icon" href="data:image/svg+xml,');
   });
 
@@ -63,7 +63,7 @@ describe("ページへの差し込み", () => {
 
   it("サイトのページの白の帯に、明るい地用のマークとファビコンが入る（帯は白の地。design/sheet.md）", () => {
     const page = siteFiles().get("privacy.html") ?? "";
-    expect(page).toContain('<a class="site-brand" href="/"><svg class="site-brand-mark" aria-hidden="true"');
+    expect(page).toContain('<a class="site-brand" href="/check"><svg class="site-brand-mark" aria-hidden="true"');
     expect(page).toContain(inlineMark("mark", "site-brand-mark"));
     expect(page).not.toContain('stroke="#fbfaf7"'); // 墨の地用のマーク（紐が白っぽい）は、白の帯では見えにくい
     expect(page).toContain('<link rel="icon" href="data:image/svg+xml,');
@@ -75,7 +75,7 @@ describe("ページへの差し込み", () => {
       expect(pages.map(([n]) => n), must).toContain(must);
     }
     for (const [name, page] of pages) {
-      expect(page, name).toContain('<a class="site-brand" href="/"><svg class="site-brand-mark" aria-hidden="true"');
+      expect(page, name).toContain('<a class="site-brand" href="/check"><svg class="site-brand-mark" aria-hidden="true"');
       expect(page, name).toContain(`<link rel="icon" href="${faviconHref().replace(/&/g, "&amp;")}" />`);
     }
   });

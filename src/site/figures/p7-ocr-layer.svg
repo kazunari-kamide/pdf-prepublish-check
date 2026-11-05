@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family="'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', Meiryo, sans-serif" role="img">
 <title>スキャンした画像の上に、見えない文字の層が重なっている</title>
-<rect x="1" y="1" width="638" height="358" rx="12" fill="#ffffff" stroke="#d9d4ca" stroke-width="2"/>
+<rect width="640" height="360" fill="#ffffff"/>
 <text x="40" y="64" font-size="26" fill="#2b2a28" font-weight="700" text-anchor="start">重なっている層</text><polygon points="80,110 340,110 410,160 150,160" fill="#f7e9e8" stroke="#a3201b" stroke-width="3" stroke-dasharray="8 6"/><text x="430" y="150" font-size="26" fill="#a3201b" font-weight="700" text-anchor="start">見えない字</text><polygon points="80,200 340,200 410,250 150,250" fill="#efece6" stroke="#8a857c" stroke-width="3"/><text x="430" y="240" font-size="24" fill="#57534e" font-weight="500" text-anchor="start">スキャンの画像</text><rect x="80" y="290" width="244" height="42" rx="21" fill="#a3201b"/><text x="202" y="317" font-size="24" fill="#ffffff" font-weight="700" text-anchor="middle">選ぶと文字が取れる</text>
 </svg>

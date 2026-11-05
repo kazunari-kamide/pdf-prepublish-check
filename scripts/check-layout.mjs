@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検査の画面（dist/ の index.html）を、いろいろな画面の大きさで本物のブラウザに開き、
+// 検査の画面（dist/ の check.html。/check で開く）を、いろいろな画面の大きさで本物のブラウザに開き、
 // 見本の PDF で「入れる → 結果 → 黒塗りする所を選ぶ → 片付ける・読み直す → 小さくする → 保存」を通して、
 // 崩れを数える。黒塗りする所は、片付ける前にしか選べないので、片付けるの前に置く。
 // 見本の PDF には画像がなく、小さくしても変わらないため、大きな画像のある架空の PDF（ここで作る）でも、
@@ -33,6 +33,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { CHECK_PAGE_FILE, CHECK_PATH } from "../htaccess.ts";
 import { createCanvas } from "@napi-rs/canvas";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { preview } from "vite";
@@ -72,7 +73,7 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === "--self-test") selfTest = true;
   else if (args[i] === "--only") only = args[++i].split(",");
 }
-if (!selfTest && !existsSync(path.join(ROOT, "dist", "index.html"))) {
+if (!selfTest && !existsSync(path.join(ROOT, "dist", CHECK_PAGE_FILE))) {
   console.error("dist/ がありません。先に npm run build を実行してください。");
   process.exit(1);
 }
@@ -105,7 +106,7 @@ try {
     exitCode = await runSelfTest(cdp);
   } else {
     server = await preview({ root: ROOT, logLevel: "silent", preview: { host: "127.0.0.1", port: 0, strictPort: false, open: false } });
-    const appUrl = server.resolvedUrls.local[0];
+    const appUrl = new URL(CHECK_PATH, server.resolvedUrls.local[0]).href;
     const longPdf = await makeLongNamePdf();
     const scanPdf = await makeScanPdf();
     const results = [];
