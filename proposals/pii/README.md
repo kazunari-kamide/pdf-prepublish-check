@@ -12,7 +12,7 @@ CLAUDE.md §2-3 に従い、`fixtures/` に入れるものの案を、ここに�
 proposals/pii/
   fixtures/pii/build.mjs            合成 PDF と正解データを作るスクリプト（フォントは fixtures/p6/fonts/ を読む）
   fixtures/pii/*.pdf                合成 PDF（16 個）
-  fixtures/pii/*.expected.json      正解データ（漏れ 47 件、漏れでないもの 75 件）
+  fixtures/pii/*.expected.json      正解データ（漏れ 48 件、漏れでないもの 76 件）
   fixtures/pii/index.md, hashes.txt 一覧と SHA-256（build.mjs が書く）
   fixtures/pii/README.md            正解データの形
 ```
@@ -37,3 +37,4 @@ node fixtures/pii/build.mjs && git status --short fixtures   # 何も変わら�
 
 - `node proposals/pii/fixtures/pii/build.mjs` を3回続けて実行し、`hashes.txt` が3回とも同じだった。
 - `npm run eval:pii`：検出 47 件中 47 件、誤検知 75 件中 0 件（直す前の数は docs/evolution.md）。
+- 2026-11-05：pii-09-email に、例示用のドメインのアドレスを2件（漏れ1件・記入例の対照1件）足した。見ないで作るテスト集（T95 の c-email）が、例示用のドメインのアドレスを漏れとして作っていて、この案ではその形を作っていなかった（漏れは `.test`、対照は `example.com` で作っていた）ため。足したあと、作り直しを3回続けて `hashes.txt` が同じだった。`npm run eval:pii`：直す前 48 件中 47 件・誤検知 76 件中 0 件 → 直したあと 48 件中 48 件・76 件中 0 件

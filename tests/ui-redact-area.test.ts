@@ -1,13 +1,35 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 自分で黒塗りする所の座標（src/inspect/view.ts の fromFraction）と、仮のつなぎ（src/sanitize/redact.ts）。
+// 自分で黒塗りする画面のつなぎ（11/5 B の 9）。
+// - 画面の箱をページの座標に戻す（src/inspect/view.ts の fromFraction）
+// - 片付けの Worker の中身（src/sanitize/job.ts）が、選んだ所があれば片付けの redact（sanitize/redact.ts）を呼ぶ
+// - 個人情報の候補（P13【仮】）から選んだ所が、片付けた PDF を検査し直すと消えている
+// 合成 PDF（tests/helpers/redact-pdfs.ts。中身はすべて架空）を使う。
 
-import { PDFArray, PDFDict, PDFDocument, PDFName, StandardFonts } from "pdf-lib";
 import { describe, expect, it } from "vitest";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PageBox, Rect } from "../src/inspect/report";
+import { inspectAll } from "../src/inspect/inspect";
 import { fromFraction, toFraction } from "../src/inspect/view";
-import { addRedactAreas } from "../src/sanitize/redact";
+import { sanitizeJob } from "../src/sanitize/job";
+import { buildView } from "../src/ui/model";
+import { buildBlockedView, isCandidate, toAreas, toggleCandidate, type PickedArea } from "../src/ui/picks";
 import { sanitizePdf } from "../sanitize/index.ts";
+import { buildPdf, imageJpeg, latinAt } from "./helpers/redact-pdfs.ts";
+import { HEAVY_TIMEOUT } from "./helpers/timeout.ts";
+
+/** PDF.js で取り出せる字（ページごとにつなげたもの）。片付けと別の読み方で確かめる */
+async function textOf(bytes: Uint8Array): Promise<string[]> {
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false, verbosity: 0 });
+  const doc = await task.promise;
+  const out: string[] = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    out.push(tc.items.map((it) => ("str" in it ? it.str : "")).join(""));
+  }
+  await task.destroy();
+  return out;
+}
 
 describe("画面の箱をページの座標に戻す", () => {
   for (const rotate of [0, 90, 180, 270] as const) {
@@ -20,43 +42,66 @@ describe("画面の箱をページの座標に戻す", () => {
   }
 });
 
-describe("自分で黒塗りする所を、墨消しの注釈として足す（仮のつなぎ）", () => {
-  it("選んだページに /Redact の注釈を足す。ページの範囲の外は数えない", async () => {
-    const doc = await PDFDocument.create();
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    doc.addPage([600, 800]).drawText("SAMPLE", { x: 100, y: 700, font, size: 20 });
-    const r = await addRedactAreas(await doc.save(), [
-      { page: 1, rect: [90, 690, 200, 725] },
-      { page: 9, rect: [0, 0, 10, 10] },
-    ]);
-    expect(r.status).toBe("ok");
-    if (r.status !== "ok") return;
-    expect(r.added).toBe(1);
-    const out = await PDFDocument.load(r.bytes);
-    const annots = out.getPage(0).node.lookup(PDFName.of("Annots"), PDFArray);
-    const a = annots.lookup(0, PDFDict);
-    expect(a.lookup(PDFName.of("Subtype"))).toEqual(PDFName.of("Redact"));
+describe("片付けの Worker の中身：選んだ所があれば redact を呼ぶ", () => {
+  it("選んだ所の字は取り出せなくなり、選んでいない所の字は残る", { timeout: HEAVY_TIMEOUT }, async () => {
+    const bytes = await buildPdf(() => ({ pages: [{ content: latinAt(100, 200, "HIDEME") + latinAt(100, 100, "KEEP") }] }));
+    const r = await sanitizeJob(bytes, [{ page: 1, rect: [95, 195, 160, 215] }]);
+    expect(r.type).toBe("sanitized");
+    if (r.type !== "sanitized") return;
+    expect(r.removed.some((x) => x.kind === "redacted_text")).toBe(true);
+    expect(r.removed.filter((x) => x.kind === "redaction_box")).toHaveLength(1);
+    const [text] = await textOf(r.bytes);
+    expect(text).not.toContain("HIDEME");
+    expect(text).toContain("KEEP");
   });
 
-  it("PDF でなければ、足さずに断る", async () => {
-    const r = await addRedactAreas(new Uint8Array([1, 2, 3]), [{ page: 1, rect: [0, 0, 1, 1] }]);
-    expect(r.status).toBe("refused");
+  it("何も選ばないときは、ふつうの片付けと同じ PDF になる", async () => {
+    const bytes = await buildPdf(() => ({ pages: [{ content: latinAt(100, 200, "SAMPLE") }] }));
+    const r = await sanitizeJob(bytes, []);
+    const s = await sanitizePdf(bytes);
+    expect(r.type).toBe("sanitized");
+    if (r.type !== "sanitized" || s.status !== "ok") throw new Error("片付けられませんでした");
+    expect(Buffer.from(r.bytes).equals(Buffer.from(s.bytes))).toBe(true);
+  });
+
+  it("選んだ所の下の JPEG を塗れないとき（画像の道具なし）は、PDF を返さず、何がどこに残ったかを返す", async () => {
+    const bytes = await buildPdf(async (doc) => ({ pages: [{ content: "q 200 0 0 100 100 50 cm /Im1 Do Q\n", images: [await imageJpeg(doc.context, 200, 100)] }] }));
+    const r = await sanitizeJob(bytes, [{ page: 1, rect: [150, 80, 250, 120] }]);
+    expect(r.type).toBe("redact_blocked");
+    if (r.type !== "redact_blocked") return;
+    expect("bytes" in r).toBe(false);
+    const v = buildBlockedView(r.leftovers, r.notDone);
+    expect(v.headline).toMatch(/保存できるファイルは作っていません/);
+    expect(v.lines.length).toBeGreaterThan(0);
+    expect(v.lines.every((l) => /ページ 1/.test(l))).toBe(true);
+  });
+
+  it("ページの外を選んだときは、断って理由を返す", async () => {
+    const bytes = await buildPdf(() => ({ pages: [{ content: latinAt(100, 200, "SAMPLE") }] }));
+    const r = await sanitizeJob(bytes, [{ page: 9, rect: [0, 0, 10, 10] }]);
+    expect(r).toEqual({ type: "refused", message: "選んだ場所のページが、この PDF にありません。" });
   });
 });
 
-describe("仮のつなぎ＋片付けで、選んだ所の下の字が消える", () => {
-  it("選んだ所の字を消し、墨消しを適用したと報告する。選んでいない所の字は残す", async () => {
-    const doc = await PDFDocument.create();
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const page = doc.addPage([600, 800]);
-    page.drawText("HIDEME", { x: 100, y: 700, font, size: 20 });
-    page.drawText("KEEP", { x: 100, y: 400, font, size: 20 });
-    const r = await addRedactAreas(await doc.save(), [{ page: 1, rect: [90, 690, 200, 725] }]);
-    if (r.status !== "ok") throw new Error("refused");
-    const out = await sanitizePdf(r.bytes);
-    if (out.status !== "ok") throw new Error("sanitize failed");
-    expect(out.removed.some((x) => x.kind === "redaction_applied")).toBe(true);
-    const chars = out.removed.filter((x) => x.kind === "covered_text").reduce((n, x) => n + x.count, 0);
-    expect(chars).toBe(6);
+describe("個人情報の候補（P13【仮】）から選んで黒塗りする", () => {
+  it("候補を選んで片付けると、検査し直したとき、その候補は見つからない", { timeout: HEAVY_TIMEOUT }, async () => {
+    // 架空のメールアドレスと携帯の番号（Helvetica で描く）。予約された見本の形（example.com・000-…）は候補にならないので使わない
+    const bytes = await buildPdf(() => ({ pages: [{ content: latinAt(50, 200, "ritsu@kakuu.test") + latinAt(50, 170, "TEL 090-0274-1883") + latinAt(50, 100, "KEEP") }] }));
+    const before = buildView(await inspectAll(bytes));
+    const candidates = before.rows.filter(isCandidate);
+    expect(candidates.length).toBeGreaterThan(0);
+    let picks: PickedArea[] = [];
+    for (const c of candidates) picks = toggleCandidate(picks, c);
+    expect(picks.map((p) => p.candidate)).toEqual(candidates.map((c) => c.no));
+
+    const r = await sanitizeJob(bytes, toAreas(picks));
+    expect(r.type).toBe("sanitized");
+    if (r.type !== "sanitized") return;
+    const after = buildView(await inspectAll(r.bytes));
+    expect(after.rows.filter((x) => x.pattern === "P13")).toHaveLength(0);
+    expect(r.removed.filter((x) => x.kind === "redaction_box")).toHaveLength(picks.length);
+    const [text] = await textOf(r.bytes);
+    expect(text).not.toMatch(/ritsu|kakuu|0274|1883/);
+    expect(text).toContain("KEEP");
   });
 });

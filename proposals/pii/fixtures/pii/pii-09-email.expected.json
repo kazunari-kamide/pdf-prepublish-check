@@ -28,6 +28,19 @@
       ],
       "confidence": "high",
       "chars": 25
+    },
+    {
+      "id": "pii-09-email#3",
+      "type": "email",
+      "page": 1,
+      "rect": [
+        93,
+        614.68,
+        225,
+        625.67
+      ],
+      "confidence": "check",
+      "chars": 24
     }
   ],
   "negatives": [
@@ -62,6 +75,17 @@
         638.68,
         181,
         649.67
+      ]
+    },
+    {
+      "id": "pii-09-email#n4",
+      "kind": "sample",
+      "page": 1,
+      "rect": [
+        98.5,
+        590.68,
+        230.5,
+        601.67
       ]
     }
   ]

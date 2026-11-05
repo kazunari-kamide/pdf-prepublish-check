@@ -8,7 +8,8 @@
 import { describe, expect, it } from "vitest";
 import type { NotDoneItem, RemovedItem } from "../sanitize/types.ts";
 import type { InspectSummary, RuleResult } from "../src/inspect/report";
-import { buildCleanView, cleanedFileName, saveGate, MAX_LINES_PER_GROUP } from "../src/ui/clean-model";
+import { buildCleanView, cleanedFileName, saveGate, MAX_LINES_PER_GROUP, patternWithName, SELF_GROUP_NAME } from "../src/ui/clean-model";
+import { RULES } from "../src/inspect/rules";
 import { buildView } from "../src/ui/model";
 import { scopeCaveats } from "../src/ui/scope";
 
@@ -66,7 +67,9 @@ describe("片付けた結果", () => {
     const c = buildCleanView({ before: buildView(found), after: buildView(broken), removed, notDone: [], decrypted: false });
     expect(c.verdict).toBe("unsure");
     expect(c.scope).toContain("見せかけの黒塗り（P6）");
-    expect(c.scope).not.toContain("文書情報（P1）");
+    // 調べたのは P6 だけ。P1 は「片付けたが、読み直しでは調べていない」の側に名前で出る
+    expect(c.scope).toMatch(/^読み直しで調べたのは 見せかけの黒塗り（P6） です。/);
+    expect(c.scope).toContain("文書情報（P1）・スクリプト・外部動作（P12） は片付けましたが");
   });
 
   it("読み直せなかったら、残っていないとは言わない", () => {
@@ -79,7 +82,7 @@ describe("片付けた結果", () => {
     const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: true });
     expect(c.removed.map((g) => g.pattern)).toEqual(["P6", "P1", "P12"]);
     expect(c.removed[0]!.lines).toEqual(["黒い四角の下に残っていた字（4 字）（ページ 1）"]);
-    expect(c.scope).toContain("P12 は片付けましたが、読み直しでは調べていません");
+    expect(c.scope).toContain("スクリプト・外部動作（P12） は片付けましたが、読み直しでは調べていません");
     expect(c.notes[0]).toContain("暗号化");
     expect(c.doneMarks).toEqual([{ page: 1, rect: [10, 10, 50, 20], label: "黒い四角の下に残っていた字（4 字）" }]);
   });
@@ -157,5 +160,39 @@ describe("読み直しの範囲の文", () => {
     ]);
     const c = buildCleanView({ before: buildView(found), after: buildView(after), removed: [], notDone: [], decrypted: false });
     expect(c.scope).toBe("読み直しで調べたのは 隠れたテキスト（P7）・ファイルパス・内部ホスト名（P4） です。");
+  });
+});
+
+describe("型の名前（「P11（P11）」と番号を重ねない）", () => {
+  it("読み直しで調べた型は、P10・P11 も名前で出す", () => {
+    const after = buildView(summary([rule({ pattern: "P10", label: "画像の位置情報など" }), rule({ pattern: "P11", label: "フォームの入力値" })]));
+    const c = buildCleanView({ before: buildView(empty), after, removed: [], notDone: [], decrypted: false });
+    expect(c.scope).toContain("画像の位置情報など（P10）");
+    expect(c.scope).toContain("フォームの入力値（P11）");
+    expect(c.scope).not.toMatch(/(P\d+)（）/);
+  });
+
+  it("いまの一覧（RULES）の型は、どれも名前がある", () => {
+    for (const r of RULES) {
+      if (!/^P\d+$/.test(r.pattern)) continue;
+      expect(patternWithName(r.pattern), r.pattern).not.toBe(r.pattern);
+    }
+  });
+
+  it("名前の分からない型は、番号だけにする", () => {
+    expect(patternWithName("P99")).toBe("P99");
+  });
+});
+
+describe("自分で選んだ所の黒塗り", () => {
+  it("片付けの redact が返した所は、見せかけの黒塗りの片付けと分けて、先頭に並べる", () => {
+    const self: RemovedItem[] = [
+      { pattern: "P6", kind: "redacted_text", label: "選んだ所の字（3 字）を消しました", count: 3, page: 1, rect: [10, 10, 40, 20] },
+      { pattern: "P6", kind: "redaction_box", label: "選んだ所に黒い四角を描きました", count: 1, page: 1, rect: [10, 10, 40, 20] },
+    ];
+    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed: [...removed, ...self], notDone: [], decrypted: false });
+    expect(c.removed[0]).toMatchObject({ name: SELF_GROUP_NAME, self: true, total: 2 });
+    expect(c.removed.find((g) => g.pattern === "P6" && !g.self)?.total).toBe(1);
+    expect(c.doneMarks.filter((m) => m.label.startsWith("選んだ所"))).toHaveLength(2);
   });
 });

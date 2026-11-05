@@ -7,7 +7,7 @@
 
 import type { NotDoneItem, RemovedItem } from "../../sanitize/types.ts";
 import type { CoverageRow } from "./coverage";
-import { PATTERN_NAME } from "./clean-model";
+import { patternWithName } from "./clean-model.ts";
 
 export type ProcessReportInput = {
   /** 報告を作った日（YYYY-MM-DD）。時刻は載せない */
@@ -78,12 +78,12 @@ export function buildProcessReport(input: ProcessReportInput): string {
   for (const r of input.removed) {
     const where = r.page !== undefined ? `ページ ${r.page}` : "ファイル全体";
     const unit = CHAR_KINDS.has(r.kind) ? `${r.count} 字` : `${r.count}`;
-    lines.push(`- ${PATTERN_NAME[r.pattern]}（${r.pattern}）／${where}／${r.label}／数：${unit}`);
+    lines.push(`- ${patternWithName(r.pattern)}／${where}／${r.label}／数：${unit}`);
   }
   lines.push("");
   lines.push("■ 片付けられなかった所");
   if (!input.notDone.length) lines.push("- ありません。");
-  for (const n of input.notDone) lines.push(`- ${PATTERN_NAME[n.pattern]}（${n.pattern}）／${n.page !== undefined ? `ページ ${n.page}` : "ファイル全体"}／${n.label}`);
+  for (const n of input.notDone) lines.push(`- ${patternWithName(n.pattern)}／${n.page !== undefined ? `ページ ${n.page}` : "ファイル全体"}／${n.label}`);
   lines.push("");
   lines.push("■ 調べた範囲（片付ける前）");
   for (const c of before.coverage) lines.push(coverageLine(c));

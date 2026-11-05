@@ -16,13 +16,14 @@ import type { PageBox, InspectSummary } from "./inspect/report";
 import { inspectInWorker } from "./inspect/run";
 import { fromFraction, toFraction, viewSize } from "./inspect/view";
 import { PdfView, RenderTimeout } from "./render/pdf-view";
-import { MAX_REDACT_AREAS, type RedactArea } from "./sanitize/areas";
+import { MAX_REDACT_AREAS } from "./sanitize/areas";
 import { sanitizeInWorker } from "./sanitize/run";
 import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
 import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
 import { orgSegments } from "./ui/org-words";
+import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
 import { sampleFile } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex } from "./ui/process-report";
@@ -100,6 +101,8 @@ const ui = {
   picks: el<HTMLDivElement>("picks"),
   pickCount: el<HTMLParagraphElement>("pick-count"),
   pickList: el<HTMLUListElement>("pick-list"),
+  redactLeft: el<HTMLDivElement>("redact-left"),
+  redactLeftList: el<HTMLUListElement>("redact-left-list"),
   scopeNote: el<HTMLParagraphElement>("scope-note"),
 };
 
@@ -205,7 +208,8 @@ function reset() {
   clearPicks();
   ui.pickTools.hidden = true;
   releaseDownload();
-  for (const part of [ui.notDoneList, ui.removedGroups, ui.cleanNotes]) part.replaceChildren();
+  for (const part of [ui.notDoneList, ui.removedGroups, ui.cleanNotes, ui.redactLeftList]) part.replaceChildren();
+  ui.redactLeft.hidden = true;
   ui.clean.hidden = true;
   ui.filebar.hidden = true;
   ui.progress.hidden = true;
@@ -254,6 +258,27 @@ function itemButton(r: Row): HTMLButtonElement {
   return btn;
 }
 
+/** 候補の行の「黒塗りに加える／外す」（押した状態を aria-pressed と字で示す） */
+function candidateButton(r: Row): HTMLButtonElement {
+  const b = make("button", undefined, "pick-candidate");
+  b.type = "button";
+  b.dataset.candidate = String(r.no);
+  b.addEventListener("click", () => {
+    picks = toggleCandidate(picks, r);
+    renderPicks();
+    if (session) placeMarks(session, session.current);
+  });
+  syncCandidateButton(b, r.no);
+  return b;
+}
+
+function syncCandidateButton(b: HTMLElement, no: number) {
+  const on = picks.some((p) => p.candidate === no);
+  b.setAttribute("aria-pressed", String(on));
+  b.textContent = on ? "✓ 黒塗りに加えました（外す）" : "黒塗りに加える";
+  b.setAttribute("aria-label", on ? `候補 ${no} を、黒塗りする所から外す` : `候補 ${no} を、黒塗りする所に加える`);
+}
+
 /** 「見た所・見なかった所」の1行の、状態の言葉（形の印つき。色だけにしない） */
 function coverageText(c: CoverageRow, phase: Session["phase"]): string {
   const parts: string[] = [];
@@ -282,10 +307,23 @@ function renderGroups(s: Session) {
     head.append(make("span", `${g.label}（${g.pattern}）`, "group-name"));
     head.append(make("span", [sure ? `${sure} 件` : "", check ? `確かめる ${check} 件` : ""].filter(Boolean).join("・"), "group-count"));
     body.append(head);
+    // 黒塗りの候補（個人情報らしい字）：片付ける前だけ、選んだ所に加えるボタンを付ける（キーボードでも選べる）
+    const candidates = s.phase === "before" && !ui.pickTools.hidden ? g.rows.filter(isCandidate) : [];
+    if (candidates.length) {
+      const all = make("button", "候補をすべて黒塗りに加える", "pick-all");
+      all.type = "button";
+      all.addEventListener("click", () => {
+        picks = addAllCandidates(picks, candidates);
+        renderPicks();
+        if (session) placeMarks(session, session.current);
+      });
+      body.append(all);
+    }
     const list = make("ol", undefined, "items");
     for (const r of g.rows) {
       const li = make("li");
       li.append(itemButton(r));
+      if (candidates.some((c) => c.no === r.no)) li.append(candidateButton(r));
       list.append(li);
     }
     body.append(list);
@@ -750,7 +788,7 @@ async function handle(file: File) {
 // ---------------------------------------------------------------- 自分で黒塗りする所を選ぶ（11/5 B の 9）
 
 /** 選んだ所（片付ける前の PDF のページの座標）。片付けるときに、片付けの Worker へ渡す */
-let picks: RedactArea[] = [];
+let picks: PickedArea[] = [];
 let picking = false;
 
 function setPicking(on: boolean) {
@@ -774,12 +812,13 @@ function renderPicks() {
         renderPicks();
         if (session) placeMarks(session, session.current);
       });
-      li.append(make("span", `選んだ所 ${i + 1}：ページ ${p.page}`), rm);
+      li.append(make("span", pickLabel(p, i)), rm);
       return li;
     }),
   );
   ui.picks.hidden = picks.length === 0;
-  ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「片付ける」を押すと、見つかった所といっしょに黒塗りします。下の字は消します）`;
+  for (const b of ui.groups.querySelectorAll<HTMLElement>("[data-candidate]")) syncCandidateButton(b, Number(b.dataset.candidate));
+  ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「片付ける」を押すと、見つかった所といっしょに黒塗りします。下の字・画像・注釈も消します）${picks.length >= MAX_REDACT_AREAS ? `。一度に選べるのは ${MAX_REDACT_AREAS} か所までです` : ""}`;
   if (s && s.phase === "before" && !ui.sanitize.disabled) {
     ui.sanitize.textContent = picks.length ? `片付ける（選んだ ${picks.length} か所も黒塗り）` : "片付ける";
   }
@@ -857,6 +896,27 @@ function cleanFailed(text: string) {
   ui.sanitizeNote.textContent = text;
 }
 
+/**
+ * 自分で黒塗りした PDF を、保存の前に読み直したら残りが見つかった（片付けの redact の blocked）。
+ * PDF は返ってこないので、保存の場面に進まない。何がどこに残ったかを並べ、選び直してもう一度片付けられるようにする
+ */
+function redactBlocked(s: Session, retry: Uint8Array | null, leftovers: Parameters<typeof buildBlockedView>[0], notDone: Parameters<typeof buildBlockedView>[1]) {
+  const v = buildBlockedView(leftovers, notDone);
+  setStatus(v.headline, "problem");
+  setStep(ui.stepClean, "now");
+  ui.stepCleanNote.textContent = "保存できる形にできませんでした";
+  ui.progress.hidden = true;
+  ui.sanitizeNote.textContent = "選んだ所を見直して（外す・選び直す）、もう一度「片付ける」を押せます。";
+  // 「見つかりませんでした」の緑の札は、片付ける前の検査の結果。止められた今は出さない（全部緑と見誤らせない）
+  ui.verified.hidden = true;
+  ui.redactLeftList.replaceChildren(...v.lines.map((t) => make("li", t)));
+  ui.redactLeft.hidden = v.lines.length === 0;
+  s.original = retry;
+  ui.sanitize.disabled = retry === null;
+  ui.sanitize.textContent = picks.length ? `片付ける（選んだ ${picks.length} か所も黒塗り）` : "片付ける";
+  ui.pickTools.hidden = retry === null;
+}
+
 function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages: number; seconds: string }) {
   ui.workspace.dataset.phase = "after";
   ui.actions.hidden = true;
@@ -929,18 +989,22 @@ async function runSanitize() {
   const original = s.original;
   s.original = null;
   ui.sanitize.disabled = true;
+  ui.redactLeft.hidden = true;
   setStep(ui.stepClean, "now");
   ui.stepCleanNote.textContent = "片付けています";
   setStatus("片付けています…");
   ui.progress.removeAttribute("value"); // どこまで進んだか分からないので、動いていることだけを示す
   ui.progress.hidden = false;
   try {
-    const areas = picks.slice();
+    const areas = toAreas(picks);
+    // 自分で黒塗りした PDF が読み直しで止められたら、選び直してもう一度片付けられるよう、元の写しを持っておく
+    const retry = areas.length ? original.slice() : null;
     setPicking(false);
     ui.pickTools.hidden = true;
     const out = await sanitizeInWorker(original.buffer as ArrayBuffer, undefined, areas);
     if (gen !== generation) return;
     if (out.kind === "timeout") return cleanFailed("時間がかかりすぎたため、片付けを止めました。画面はそのまま使えます。");
+    if (out.kind === "blocked") return redactBlocked(s, retry, out.leftovers, out.notDone);
     if (out.kind !== "done") return cleanFailed(out.message);
 
     setStep(ui.stepClean, "done");

@@ -3,7 +3,7 @@
 // 検査の前の確かめ。中身を組み立てる前に、PDF として扱ってよいかだけを軽く見る。
 // 入ってくるファイルは、壊れている・巨大・細工されている前提で扱う（CLAUDE.md §11-3）。
 
-import { HEADER_SEARCH_BYTES, MAX_FILE_BYTES } from "./limits";
+import { HEADER_SEARCH_BYTES, MAX_FILE_BYTES } from "./limits.ts";
 
 export type PrecheckResult =
   | { ok: true; version: string; byteLength: number }
