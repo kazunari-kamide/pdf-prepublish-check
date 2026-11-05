@@ -121,7 +121,40 @@ jobs:
 - SARIF を上げない場合は、`--format text` にして最後の手順を外します。結果は Actions の記録に出ます（型・数・場所とファイルの場所だけ）。
 - SARIF の結果には行の番号がありません（PDF には行がないため）。ページは `logicalLocations` と `properties.page` に入れています。
 
+## Claude Code から頼む（確かめのスキル）
+
+このリポジトリには、Claude Code のスキル `omamori-check`（`.claude/skills/omamori-check/SKILL.md`）を置いています。Claude Code に「提出前にこの PDF を確かめて」と頼むと、Claude が手元でこの道具を動かし、結果を平易な言葉で伝えます。検査は利用者のパソコンの中で動き、こちらのサービスは何も受け取りません。
+
+### 使い方
+
+1. このリポジトリを取り出し、一番上のフォルダで `npm ci` をします（Node 22.12 以上）。
+2. 同じフォルダで Claude Code を開きます。
+3. 次のどちらかで頼みます。
+   - `/omamori-check <ファイルやフォルダ>`
+   - 「提出前に、この PDF を確かめて：<ファイルの場所>」のような普通の言葉（Claude がスキルを選びます）
+
+Claude は、最初にデータの設定のこと（下の「会話に入るもの」）を伝え、次のコマンドだけを動かします。
+
+```
+node cli/omamori.ts check <ファイルやフォルダ> --format json --fail-on never
+```
+
+- スキルは、このコマンドの形だけを、確認なしで動かせるように前もって許しています（`allowed-tools`。Bash と PowerShell の両方）。ほかの操作は、ふだんの Claude Code の許可の設定のとおりに確認が出ます。
+- 結果は、ファイルごとの段階（高い危険／確認してほしい所／調べられなかった所／見つからない）、見つかった型・数・ページ、調べられなかった所、直し方の順に伝えます。直すのは、ブラウザの検査器（https://omamoripdf.com/ ）か、作ったソフトの墨消しの機能です。
+- Git Bash から `claude -p "/omamori-check …"` のように動かすと、先頭の `/` がパスに書き換えられ、スキルとして呼ばれないことがあります。そのときは `MSYS_NO_PATHCONV=1` を付けるか、Claude Code の入力欄で打ちます。
+
+### 会話に入るもの・入らないもの
+
+| 会話に入るもの | 会話に入れないもの |
+|---|---|
+| 段階、型（見せかけの黒塗り・文書情報など）、数（字数・個数）、場所（ページ・覆いの箱・シートのセル）、決まった説明の文、調べたファイルの場所（フォルダを渡したときは中のファイルの名前も） | PDF の中の字、黒塗りの下の字、欄の値、添付の中身と名前、シートの名前 |
+
+- スキルは、Claude にファイルそのものを開かせない（Read で読まない、`pdftotext` などで中身を取り出さない）よう決めています。黒塗りの下に何があるかを頼まれても伝えず、利用者が自分の閲覧ソフトでページを確かめるよう案内します。
+- **これは Claude への決まりで、仕組みで止めるものではありません**（`allowed-tools` は前もって許すだけで、ほかの道具を止めません）。仕組みでも止めたい場合は、自分の Claude Code の設定（`.claude/settings.local.json` など）の `permissions.deny` に、`"Read(*.pdf)"`（今のフォルダの下の、どの深さの PDF も）のように足してください。止まるのは、Claude の組み込みのファイルの道具（Read・Grep など）と、Claude Code が見分けるシェルのファイルのコマンド（`cat`・`head`・`sed` など）です。スクリプトの中でファイルを開くもの（Python や Node のスクリプトなど）は止まりません（公式の説明「Configure permissions」 https://code.claude.com/docs/en/permissions 。OS の段で止めるには sandbox を使う）。この道具も Node のスクリプトなので、この設定のままで動きます。
+- 個人のプラン（Free・Pro・Max・Ultra）では、設定によって会話が Claude の改善（学習）に使われることがあります。設定は https://claude.ai/settings/data-privacy-controls で確かめられます。Team・Enterprise・API などの法人向けの契約では、扱いが異なります（根拠：Claude Code の公式の説明「Data usage」 https://code.claude.com/docs/en/data-usage 。2026-11-05 に確かめた）。
+- ファイルの名前に人の名前などが入っている場合は、名前を変えてから渡すか、ファイルを1つずつ渡してください（ファイルの場所は会話に入るため）。
+
 ## ほかの入口との関係
 
-- 調べる中身は `cli/inspect-pdf.ts`（Node の API を使わない）。画面の Worker と同じ `inspectAll`（`src/inspect/inspect.ts`）を呼び、結果の形を並べ替えるだけです。Claude Code のスキル／MCP 版を作るときも、これを呼べば同じ検査になります（いまはスキル／MCP 版はありません）。
+- 調べる中身は `cli/inspect-pdf.ts`（Node の API を使わない）。画面の Worker と同じ `inspectAll`（`src/inspect/inspect.ts`）を呼び、結果の形を並べ替えるだけです。確かめのスキル（上）は、このコマンドの道具を呼ぶだけなので、画面・CI と同じ検査になります。MCP 版はまだありません。
 - 画面のコードは Vite で動かすので、相対の import に拡張子がありません。Node で読むため、`cli/resolve-ts.ts` のフックで、見つからないときだけ `.ts` を足して探します。
