@@ -10,7 +10,7 @@
 // - 深刻度は【仮】。P6 の「高」だけが docs/prd.md §3-5 で決まっている。ほかは PR の「決めてほしいこと」に書く。
 
 import { detectP1Info, type P1InfoReport } from "../../rules/p1-info/index.ts";
-import { detectP5Revisions, type P5Kind, type P5Part, type P5Report } from "../../rules/p5-revisions/index.ts";
+import { detectP5Revisions, type P5Compare, type P5Kind, type P5Part, type P5Report } from "../../rules/p5-revisions/index.ts";
 import { detectP6Text, type P6TextReport } from "../../rules/p6-text/index.ts";
 import { DEFAULT_SETTINGS as P6_SETTINGS } from "../../rules/p6-text/settings.ts";
 import { detectP7Hidden, type P7Reason, type P7Report } from "../../rules/p7-hidden/index.ts";
@@ -156,7 +156,12 @@ const p6 = defineRule<P6TextReport>({
 /** P6 の1件を画面の形にする。confidence: check は、断定しない言葉で出す（「確かめてください」） */
 export function p6Item(f: P6TextReport["findings"][number]): Item {
   const cover = `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`;
-  const base = { pattern: "P6" as const, severity: "high" as const, kind: f.layer, page: f.page, rect: f.rect, ...contentOf("text" in f ? f.text : undefined) };
+  // 「高」は、覆いの下に拾えるもの（字、または取り出せる画像の中身）があると言い切れるときだけ。
+  // 例外：読み解けない画像の上に濃い四角を重ねたもの（スキャン画像の上の黒塗りの型）は、確かめが要っても「高」。
+  // 図形の層とそのほかの「確かめてください」は「中」（実物の公開 PDF で、注釈の四角や塗りの誤検知が「高」で多く出たため。2026-11-05 本人が決定）【仮】
+  const darkOverUnreadable = f.layer === "image" && f.reason === "under_unreadable" && f.tone === "dark";
+  const severity = (f.layer !== "vector" && f.confidence !== "check") || darkOverUnreadable ? ("high" as const) : ("medium" as const);
+  const base = { pattern: "P6" as const, severity, kind: f.layer, page: f.page, rect: f.rect, ...contentOf("text" in f ? f.text : undefined) };
   const check = f.confidence === "check" ? { confidence: "check" as const } : {};
   if (f.layer === "text" && f.coverTone === "opaque") {
     // 白・灰・色の不透明な覆い（検出ルール 1.11.0 から）。覆いの下の字は、色によらず見せかけの黒塗りとして出す【文言は仮】
@@ -304,7 +309,9 @@ const p7 = defineRule<P7Report>({
       const v = P7_VISIBLE_KIND[f.reason];
       return {
         pattern: "P7",
-        severity: v?.severity ?? "high", // 【仮】
+        // 字の報告は、読める本文が隠れているとき（検出ルール 1.5.0 の readable）だけ「高」。
+        // 表の体裁・罫線・飾りのような、まとまって出る型は「中」（実物の公開 PDF で「高」の誤検知が多かったため。2026-11-05）【仮】
+        severity: f.readable === false ? "medium" : (v?.severity ?? "high"),
         title: v?.title ?? "見えない字が残っています",
         why: v?.why ?? "画面では見えませんが、検索やコピーで取り出せます。",
         detail: f.reason === "image_off_page" || f.reason === "image_clipped" ? P7_REASON[f.reason] : `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
@@ -381,6 +388,13 @@ const P5_PART: Record<P5Part, string> = {
   other: "そのほかの部品",
 };
 
+const P5_SEVERITY: Record<P5Compare, "high" | "medium" | "low"> = { differs: "high", uncompared: "medium", same: "low" };
+const P5_WHY: Record<P5Compare, string> = {
+  differs: "見た目は新しい版でも、修正する前の内容を取り出せます。今の版にない内容が入っています。",
+  uncompared: "見た目は新しい版でも、修正する前の内容を取り出せます。今の版と同じ内容かは、比べられませんでした。",
+  same: "今の版と同じ内容ですが、修正する前の版としてファイルの中に残っています。気になるときは「整える」で消せます。",
+};
+
 const p5 = defineRule<P5Report>({
   id: "p5-revisions",
   label: "旧版の残存",
@@ -390,9 +404,9 @@ const p5 = defineRule<P5Report>({
     const items: Item[] = r.findings.map((f) =>
       f.kind === "unused_form"
         ? {
-            // 資源にあるが描かれない部品（検出ルール 1.3.0 から）【文言は仮】
+            // 資源にあるが描かれない部品（検出ルール 1.3.0 から）【文言は仮】。前の版との違いを比べられないので「中」（2026-11-05 本人が決定）
             pattern: "P5" as const,
-            severity: "high" as const,
+            severity: "medium" as const,
             title: "ページに描かれない部品に、字が入っています",
             why: "ページの部品として登録されていますが画面には出ないため、気づかないまま、中の字を取り出せます。",
             detail: P5_KIND.unused_form,
@@ -401,9 +415,10 @@ const p5 = defineRule<P5Report>({
           }
         : {
       pattern: "P5" as const,
-      severity: "high" as const, // 【仮】
+      // 今の版にない字が残っているときだけ「高」。今の版と同じ中身なら「低」、比べられなければ「中」（検出ルール 1.4.0 の compare。2026-11-05）【仮】
+      severity: P5_SEVERITY[f.compare ?? "uncompared"],
       title: `修正する前の版の「${P5_KIND[f.kind] ?? "中身"}」が、ファイルの中に残っています`,
-      why: "見た目は新しい版でも、修正する前の内容を取り出せます。",
+      why: P5_WHY[f.compare ?? "uncompared"],
       detail: [f.revision !== null ? `${f.revision}番目の版` : "どの版か分からない部分", f.chars !== undefined ? `${f.chars}字` : ""]
         .filter(Boolean)
         .join("／"),
