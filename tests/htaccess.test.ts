@@ -33,9 +33,11 @@ describe(".htaccess", () => {
 describe(".htaccess の守り（HSTS・埋め込み・キャッシュ・404）", () => {
   const text = buildHtaccess();
 
-  it("HSTS は https の応答だけに、1 日から始める（includeSubDomains・preload はまだ付けない）", () => {
+  it("HSTS は条件を付けずに、1 日から始める（includeSubDomains・preload はまだ付けない）", () => {
     expect(HSTS).toBe("max-age=86400");
-    expect(text).toContain(`Header always set Strict-Transport-Security "${HSTS}" "expr=%{HTTPS} == 'on'"`);
+    // 配信先では %{HTTPS} が真にならず、条件を付けると本番で付かなかった（docs/deploy.md）
+    expect(text).toMatch(new RegExp(`^  Header always set Strict-Transport-Security "${HSTS}"$`, "m"));
+    expect(text).not.toMatch(/Strict-Transport-Security[^\n]*expr=/);
     expect(text).not.toMatch(/includeSubDomains|preload/);
   });
 
