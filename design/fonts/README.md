@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# 同梱の書体（Noto Sans JP）
+# 同梱の書体（本文：Noto Sans JP・見出し：Zen Maru Gothic）
 
 画面の書体は、外から読み込まず、リポジトリに同梱する（CLAUDE.md §2-1・§6）。2026-11-05 本人が決定：**元のファイルをリポジトリに入れ、ここから字を絞って作る**（誰が作り直しても、同じものになるように。CLAUDE.md §11-4）。
 
@@ -37,6 +37,49 @@ npm run fonts:check   # 作り直したものが、リポジトリのものと1�
 - **ライセンスの文を一緒に配る**（OFL FAQ 2.4）：`OFL.txt` を書体と同じ所に置き、画面の結果の欄のいちばん下から開けるようにした（「書体：Noto Sans JP（© 2014-2021 Adobe。字を絞って同梱。SIL Open Font License 1.1）」）。2026-11-05 から、著作権の表示とライセンスの文は、ライセンスのページ（`/licenses.html`。ビルドの時に `site-licenses.ts` が作り、文は `dist/licenses/Noto-Sans-JP-OFL.txt` に置く）にまとめ、画面にはそのページへのリンクを1行だけ置く。
 - **AGPL-3.0 のプログラムと一緒に配ってよい**（OFL FAQ 1.2・1.3：書体は書体のライセンスのまま、ほかのソフトと一緒に配れる）。書体を自分のサイトから配るのもよい（OFL FAQ 2.1）。
 - 書体だけを売らない（OFL の条件 1）。このリポジトリでは売らない。
+
+## 見出しの書体：Zen Maru Gothic（2026-11-05 夜。案 C）
+
+本人が決定：**見出しだけ**に使い（太さは 700・900）、本文は Noto Sans JP のまま。**見出しで使う字だけに絞る**（重さを測ってから本人が選んだ）。
+
+### 元のファイル（`source/zen-maru-gothic/`）
+
+google/fonts のリポジトリの、コミット `92503f07b74eab956c1abf4956fbf46170716caa`（`ofl/zenmarugothic/` の最後の更新。2026-03-12）から、手を加えずに取った（2026-11-05 夜、本人が承認）。
+
+| ファイル | 大きさ | SHA-256 |
+|---|---|---|
+| `ZenMaruGothic-Bold.ttf` | 3,779,008 バイト | `fe24426b9c8b5523a0146a8235c8674eccf0493af354a53ec895c3596d9eb745` |
+| `ZenMaruGothic-Black.ttf` | 3,710,324 バイト | `6bd74fe76cd39ee0ec18775c3661d845343fb3f6f8fa09a3076638417baf741f` |
+| `OFL.txt` | 4,402 バイト | `2a20cf7ce1909d8ee1e949095d340f7d7656705f7c810a2d6faf56800ad0cb3d` |
+| `METADATA.pb` | 2,612 バイト | `ca7003349939baf51b9d493fc556be2a02bcae9adf954750b64968aeb0bef784` |
+
+- 版：1.001（name 5 の値は `Version 1.001`）。字の数（cmap）は 7,812。
+- ライセンス：SIL Open Font License 1.1。著作権は「Copyright 2021 The Zen Maru Gothic Project Authors」。**予約された名前（Reserved Font Name）の指定はない**（`OFL.txt` の 1 行目に書かれていない）。
+
+### 作り方
+
+```
+npm run build           # ページを作る
+npm run fonts:headings  # dist/ の h1〜h3 の字を集め、design/fonts/heading-chars.txt を書き直す（前の一覧の字は残す）
+npm run fonts:build     # 書体を作り直す（見出しの書体は、一覧の字だけ）
+npm run fonts:check     # 1 バイトも違わないかを確かめる
+```
+
+- 字：`heading-chars.txt` の字だけ。中身は、いつも入れる字（半角の英数と記号・ひらがな・カタカナ・よく使う記号）と、ビルドしたページの h1〜h3 の字。2026-11-05 夜は 471 字。
+- 一覧はリポジトリに入れる。同じ一覧と同じ元からは、同じファイルができる（`fonts:check` で確かめる）。
+- **ビルドのたびに**、h1〜h3 の字が一覧にあるかを `scripts/check-dist.mjs` が確かめ、漏れていたら止める（漏れた字は本文の書体で出てしまうため）。止まったら、上の順に作り直す。
+- 画面のスクリプトが後から作る見出し（検査のページの結果など）の漢字は、一覧にないことがある。そのときは本文の書体で出る（字は消えない）。
+- できたもの（`src/assets/fonts/zen-maru-gothic/`）：
+
+| ファイル | 字 | 大きさ | SHA-256 |
+|---|---|---|---|
+| `ZenMaruGothic-Bold-subset.woff2` | 471 | 71,084 バイト | `408ed3ee94da8aa75e9af6c84df3d8b29fcc65e588ffe49274586a0639c05c5c` |
+| `ZenMaruGothic-Black-subset.woff2` | 471 | 69,756 バイト | `c29df92339cbafd9989168e91e0123b7bbed2fd6f64b8dc831cb0e4565c4ba9b` |
+
+- 比べたもの（2026-11-05 夜に測った）：Shift_JIS の 7,488 字で作ると、Bold 1,580,972 バイト・Black 1,560,284 バイト（2 つで 3,141,256 バイト）。見出しの字だけにすると、2 つで 140,840 バイト（約 22 分の 1）。
+- 2026-11-05 夜、同じ PC で 2 回作り、1 バイトも違わなかった。
+- `@font-face` は `design/fonts.css` にだけ書く（検査のページとサイトのページで共通）。書体の名前は「Zen Maru Gothic Omamori」、変数は `--font-display`（`design/tokens.css`）。
+- ライセンスの文は、配る書体の横（`src/assets/fonts/zen-maru-gothic/OFL.txt`）に置き、ライセンスのページ（`/licenses.html`）に並べる（`docs/licenses.md` の「フォント・素材」から `site-licenses.ts` が作る）。
 
 ## 中の名前について（気づいたこと）
 
