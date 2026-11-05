@@ -29,7 +29,7 @@ AddType application/wasm .wasm
 ErrorDocument 404 /404.html
 <IfModule mod_headers.c>
   Header always set Content-Security-Policy "${headerCsp}"
-  Header always set Strict-Transport-Security "max-age=86400" "expr=%{HTTPS} == 'on'"
+  Header always set Strict-Transport-Security "max-age=86400"
 </IfModule>
 `;
 }
