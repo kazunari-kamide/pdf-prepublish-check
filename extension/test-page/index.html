@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  拡張機能の確かめ用のページ（手元だけ）。わざと要求を出して、拡張機能の数が増えることを見る。
+  宛先は、このページを出している手元のサーバー（127.0.0.1）と、同じサーバーを localhost の名前で呼んだもの（別のサイトとして扱われる）だけ。
+  外のサーバーには何も送らない。開き方は extension/README.md。
+-->
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>通信を数える：確かめのページ</title>
+    <style>
+      body { font-family: "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", sans-serif; font-size: 18px; margin: 32px; color: #2b2a28; background: #fbfaf7; }
+      button { display: block; min-height: 44px; margin: 8px 0; padding: 0 16px; font: inherit; border: 2px solid #2b2a28; border-radius: 8px; background: #fff; cursor: pointer; }
+      #log { font-size: 14px; color: #57534e; }
+    </style>
+  </head>
+  <body>
+    <h1>通信を数える：確かめのページ</h1>
+    <p>宛先は手元のサーバーだけです。押すたびに、拡張機能の数が増えるはずです。</p>
+    <button type="button" id="signal">PDF を入れたことにする（data-omamori-pdf を変える）</button>
+    <button type="button" id="post">同じサイトへ POST（本文 1000 B）</button>
+    <button type="button" id="cross">別のサイト（localhost）へ POST（本文 2000 B）</button>
+    <button type="button" id="beacon">sendBeacon（本文 300 B）</button>
+    <button type="button" id="image">画像の URL に字をつけて読み込む（? つき）</button>
+    <button type="button" id="load">同じサイトの部品を読み込む（? なしの GET。「読み込み」に数える）</button>
+    <ol id="log"></ol>
+    <script type="module" src="test.js"></script>
+  </body>
+</html>

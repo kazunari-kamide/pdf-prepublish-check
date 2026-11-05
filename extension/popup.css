@@ -1,0 +1,50 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* 色は design/tokens.css と同じ値（tests/extension.test.ts で確かめる） */
+:root {
+  --color-base: #2b2a28;
+  --color-accent: #a3201b;
+  --color-ok: #2f6f5e;
+  --color-paper: #fbfaf7;
+  --color-line: #d9d4ca;
+  --color-muted: #57534e;
+  --color-focus: #ffd43d;
+}
+body {
+  margin: 0;
+  width: 420px;
+  background: var(--color-paper);
+  color: var(--color-base);
+  font-family: "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+p { margin: 0; }
+.box { padding: 16px 18px; border-top: 6px solid var(--color-muted); }
+.box[data-tone="zero"] { border-top-color: var(--color-ok); }
+.box[data-tone="sent"] { border-top-color: var(--color-accent); }
+.head { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 26px; padding: 0 6px; box-sizing: border-box; border-radius: 999px;
+  background: var(--color-muted); color: #ffffff; font-weight: 700;
+}
+.box[data-tone="zero"] .mark { background: var(--color-ok); }
+.box[data-tone="sent"] .mark { background: var(--color-accent); }
+.value { font-size: 40px; font-weight: 700; line-height: 1.2; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.box[data-tone="sent"] .value { color: var(--color-accent); }
+.detail { font-size: 18px; font-weight: 700; }
+.note, .help { color: var(--color-muted); font-size: 13px; margin-top: 6px; }
+.actions { display: flex; gap: 8px; margin-top: 12px; }
+button {
+  min-height: 44px; padding: 0 14px; border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer;
+  border: 2px solid var(--color-base); background: var(--color-base); color: #ffffff;
+}
+button.sub { background: #ffffff; color: var(--color-base); }
+button:focus-visible { outline: 4px solid #000000; outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-focus); }
+h2 { font-size: 14px; margin: 16px 0 6px; padding-top: 10px; border-top: 1px solid var(--color-line); }
+.list { margin: 0; padding: 0; list-style: none; max-height: 220px; overflow: auto; font-size: 12px; }
+.list li { display: grid; grid-template-columns: 4.5em 1fr auto; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--color-line); }
+.list .kind { font-weight: 700; }
+.list li[data-kind="sent"] .kind { color: var(--color-accent); }
+.list .where { overflow-wrap: anywhere; }
