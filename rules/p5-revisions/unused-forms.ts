@@ -7,7 +7,8 @@
 // 描く入口：ページの中身（資源は親から受け継ぐ）、注釈の見た目（/AP の N・R・D）、模様（Pattern）の中身、Type3 の字の形。
 // 入口のどれかを読めなかったときは、何も数えない（呼んでいるのに読めなかっただけの部品を、描かれないと誤らないため）。
 
-import { PDFArray, PDFDict, PDFName, PDFRawStream, PDFRef, PDFStream, decodePDFRawStream, type PDFObject } from "pdf-lib";
+import { PDFArray, PDFDict, PDFName, PDFRawStream, PDFRef, PDFStream, type PDFObject } from "pdf-lib";
+import { decodeStream } from "../shared/inflate-limit.ts";
 import { operations, nameArg } from "../shared/content-lexer.ts";
 
 const N = (s: string) => PDFName.of(s);
@@ -23,7 +24,7 @@ function dictOf(resolve: Resolve, o: PDFObject | undefined): PDFDict | undefined
 }
 
 function decode(s: PDFStream): Uint8Array {
-  return s instanceof PDFRawStream ? decodePDFRawStream(s).decode() : s.getContents();
+  return decodeStream(s);
 }
 
 /**

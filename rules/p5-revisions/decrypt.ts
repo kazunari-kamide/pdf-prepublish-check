@@ -8,7 +8,8 @@
 // オブジェクトストリームは、暗号化されたまま pdf-lib に開かせると壊れる。そのため、読む前に /ObjStm の名前を
 // 同じ長さの別名（MASKED_OBJSTM）に置き換えておき（maskObjectStreams）、解いてからこのファイルで開く（expandObjectStream）。
 
-import { PDFContext, PDFDict, PDFName, PDFNumber, PDFObjectParser, PDFRawStream, PDFRef, decodePDFRawStream, type PDFObject } from "pdf-lib";
+import { PDFContext, PDFDict, PDFName, PDFNumber, PDFObjectParser, PDFRawStream, PDFRef, type PDFObject } from "pdf-lib";
+import { decodeStream, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import { MASKED_OBJSTM, decryptContext, type DecryptResult } from "../shared/decrypt.ts";
 
 const OBJSTM = new TextEncoder().encode("/ObjStm");
@@ -102,8 +103,9 @@ export function expandObjectStream(stream: PDFRawStream, limit: number): Array<{
   if (!(n instanceof PDFNumber) || !(first instanceof PDFNumber)) return out;
   let data: Uint8Array;
   try {
-    data = decodePDFRawStream(stream).decode();
-  } catch {
+    data = decodeStream(stream);
+  } catch (e) {
+    rethrowIfInflateLimit(e);
     return out;
   }
   const head = new TextDecoder("latin1").decode(data.subarray(0, first.asNumber()));

@@ -26,10 +26,10 @@ import {
   PDFRawStream,
   PDFStream,
   PDFString,
-  decodePDFRawStream,
   type PDFContext,
   type PDFObject,
 } from "pdf-lib";
+import { decodeStream, inflateCap, isInflateLimitError, peelOuterFilters } from "../rules/shared/inflate-limit.ts";
 import { apply, type Matrix } from "../rules/p6-text/geometry.ts";
 import type { SanCover } from "./geometry.ts";
 import { coverContains } from "./geometry.ts";
@@ -170,8 +170,7 @@ function colorModel(ctx: PDFContext, cs: PDFObject | undefined, spaces: PDFDict 
       if (!base || base.kind !== "direct" || !(hv instanceof PDFNumber)) return null;
       let lookup: Uint8Array | null = null;
       if (lk instanceof PDFString || lk instanceof PDFHexString) lookup = lk.asBytes();
-      else if (lk instanceof PDFRawStream) lookup = decodePDFRawStream(lk).decode();
-      else if (lk instanceof PDFStream) lookup = lk.getContents();
+      else if (lk instanceof PDFStream) lookup = decodeStream(lk);
       if (!lookup) return null;
       return { kind: "indexed", base: base.comps, hival: Math.max(0, Math.min(255, Math.floor(hv.asNumber()))), lookup, baseCmyk: base.cmyk };
     }
@@ -440,9 +439,10 @@ export async function burnImage(ctx: PDFContext, stream: PDFStream, colorSpaces:
 
   let data: Uint8Array;
   try {
-    data = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
-  } catch {
-    return { ok: false, reason: "broken" };
+    data = decodeStream(stream);
+  } catch (e) {
+    // 解くと大きすぎる（圧縮の爆弾など）：途中で止めた。塗れないので「大きすぎる」として片付けられなかった所にする
+    return { ok: false, reason: isInflateLimitError(e) ? "too_large" : "broken" };
   }
   const parms = decodeParms(ctx, d);
   if (parms) {
@@ -483,6 +483,8 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
   }
   const png = predictor >= 10;
   const srcRowLen = L.rowLen + (png ? 1 : 0);
+  // 流して塗るときも、解く大きさは 1 つの流れの上限まで（rules/shared/inflate-limit.ts）
+  if (srcRowLen * L.height > inflateCap()) return { ok: false, reason: "too_large" };
   const bpp = Math.max(1, Math.ceil((L.comps * L.bpc) / 8));
   const painter = makePainter(L, ctm, covers);
 
@@ -493,6 +495,8 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
   const outChunks: Uint8Array[] = [];
   // 壊れた圧縮で途中で止まっても、捕まえない失敗（unhandled rejection）を出さないよう、両方に catch をつけておく
   let failed = false;
+  // 要る行を読み終えたら、残りは解かずに止める（辞書の大きさより大きく膨らむ流れで、余りをためないため）
+  let enough = false;
   const collect = (async () => {
     for await (const c of cs.readable as unknown as AsyncIterable<Uint8Array>) outChunks.push(c);
   })().catch(() => {
@@ -504,7 +508,7 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
     for (let i = 0; i < contents.length; i += FEED_BYTES) await dw.write(contents.subarray(i, i + FEED_BYTES));
     await dw.close();
   })().catch(() => {
-    failed = true;
+    if (!enough) failed = true;
   });
 
   const BATCH_ROWS = Math.max(1, Math.floor((4 << 20) / L.rowLen));
@@ -545,6 +549,10 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
           batch = new Uint8Array(BATCH_ROWS * L.rowLen);
           inBatch = 0;
         }
+      }
+      if (y >= L.height) {
+        enough = true;
+        break;
       }
       carry = buf.slice(at);
     }
@@ -598,7 +606,8 @@ async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFD
   let pdf: Uint8Array;
   try {
     const one = await PDFDocument.create({ updateMetadata: false });
-    const copy = PDFObjectCopier.for(ctx, one.context).copy(stream) as PDFStream;
+    // 外側の圧縮は、上限つきでこちらで解いてから渡す（PDF.js には解く大きさの上限を渡せないため）
+    const copy = PDFObjectCopier.for(ctx, one.context).copy(peelOuterFilters(stream)) as PDFStream;
     // 名前で呼ぶ色空間（リソースの /ColorSpace の中のもの）は、中身に置き換える
     const cs = d.get(PDFName.of("ColorSpace"));
     if (cs instanceof PDFName && colorSpaces?.get(cs)) copy.dict.set(PDFName.of("ColorSpace"), PDFObjectCopier.for(ctx, one.context).copy(colorSpaces.get(cs)!));
@@ -610,8 +619,8 @@ async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFD
     page.node.set(PDFName.of("Resources"), one.context.obj({ XObject: { I: ref } }));
     page.node.set(PDFName.of("Contents"), one.context.register(one.context.stream("q 1 0 0 1 0 0 cm /I Do Q")));
     pdf = await one.save({ useObjectStreams: false });
-  } catch {
-    return { ok: false, reason: "broken" };
+  } catch (e) {
+    return { ok: false, reason: isInflateLimitError(e) ? "too_large" : "broken" };
   }
   let decoded: DecodedImage | null;
   try {

@@ -25,14 +25,15 @@ import {
   PDFStream,
   PDFString,
   PDFXRefStreamParser,
-  decodePDFRawStream,
-} from "pdf-lib";
+  } from "pdf-lib";
+import { InflateLimitError, beginLoadMeter, decodeStream, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { unusedForms } from "./unused-forms.ts";
 import { decryptDefinitions, expandObjectStream, hasEncryptMarker, isMaskedObjStm, maskObjectStreams, unmaskObjectStream } from "./decrypt.ts";
 
 export const RULE_ID = "p5-revisions";
-export const RULE_VERSION = "1.3.0";
+// 1.3.1：解くと大きすぎるオブジェクトストリーム（圧縮の爆弾）で止まったら、黙って中身を落とさず「大きすぎるため調べていません」にする
+export const RULE_VERSION = "1.3.1";
 
 export type P5Where = "superseded" | "free" | "unreferenced" | "orphan";
 /** unused_form（1.3.0 から）＝いまの版のページの資源にあるが、どこからも描かれない部品（Form XObject）で、字を描く命令を持つもの */
@@ -228,7 +229,13 @@ async function collect(bytes: Uint8Array): Promise<{ defs: Def[]; sections: Sect
     };
   };
 
-  await parser.parseDocument();
+  // 読み込みの間に、オブジェクトストリームなどを解く大きさの上限で止まったら、黙って中身を落とさずに投げる（inflate-limit.ts）
+  const meter = beginLoadMeter();
+  try {
+    await parser.parseDocument();
+  } finally {
+    if (meter.end().tripped) throw new InflateLimitError("stream");
+  }
   return { defs, sections };
 }
 
@@ -281,8 +288,9 @@ function textOf(o: PDFObject | undefined): string | null {
   if (o instanceof PDFStream) {
     // /RC などがストリームのとき
     try {
-      return o instanceof PDFRawStream ? latin1.decode(decodePDFRawStream(o).decode()) : "";
-    } catch {
+      return o instanceof PDFRawStream ? latin1.decode(decodeStream(o)) : "";
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       return "";
     }
   }
@@ -409,8 +417,9 @@ function classify(
       if (o.contents.length > LIMITS.streamBytes) return { counted: false, kind: "content", reason: "unreadable_stream" };
       let raw: Uint8Array;
       try {
-        raw = decodePDFRawStream(o).decode();
-      } catch {
+        raw = decodeStream(o);
+      } catch (e) {
+        rethrowIfInflateLimit(e);
         return { counted: false, kind: "content", reason: "unreadable_stream" };
       }
       const text = latin1.decode(raw);
@@ -541,6 +550,7 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
   try {
     ({ defs, sections } = await collect(encryptedFile ? maskObjectStreams(bytes) : bytes));
   } catch (e) {
+    rethrowIfInflateLimit(e);
     const message = e instanceof TooMany ? "オブジェクトか版が多すぎるため、調べるのをやめました。" : "PDF として読めませんでした。";
     return { ...base, status: "error", error: { code: "unreadable", message } };
   }
@@ -678,8 +688,9 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
     if (!d || !(d.obj instanceof PDFRawStream) || d.obj.contents.length > LIMITS.streamBytes) continue;
     let text: string;
     try {
-      text = latin1.decode(decodePDFRawStream(d.obj).decode());
-    } catch {
+      text = latin1.decode(decodeStream(d.obj));
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       continue;
     }
     if (!hasTextOperators(text)) continue;

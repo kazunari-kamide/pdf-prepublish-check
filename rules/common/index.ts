@@ -17,11 +17,11 @@ import {
   PDFRef,
   PDFStream,
   PDFString,
-  decodePDFRawStream,
   type PDFContext,
   type PDFDocument,
   type PDFObject,
 } from "pdf-lib";
+import { decodeStreamUpTo, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import { operations } from "../shared/content-lexer.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { readFont, type FontInfo } from "../shared/fonts.ts";
@@ -94,9 +94,10 @@ export function streamData(stream: PDFStream, maxBytes: number): Uint8Array | nu
   try {
     const raw = stream instanceof PDFRawStream ? stream.contents : stream.getContents();
     if (raw.length > maxBytes) return null;
-    const out = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : raw;
-    return out.length > maxBytes ? null : out;
-  } catch {
+    // 上限までだけ解く（途中で止める）。ファイルの合計の上限で止めたときは、投げ直す（「読めない」にしない）
+    return decodeStreamUpTo(stream, maxBytes);
+  } catch (e) {
+    rethrowIfInflateLimit(e);
     return null;
   }
 }

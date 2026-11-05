@@ -31,6 +31,7 @@ import { detectUnusedImages, type UnusedImageReport } from "../../rules/unused-i
 import { detectP2Parts, type P2PartsFinding, type P2PartsReport } from "../../rules/p2-parts/index.ts";
 import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
+import { INFLATE_LIMIT_MESSAGE, isInflateLimitError } from "../../rules/shared/inflate-limit.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
 
 /** ルールに渡す道具。imageDecoder＝pdf-lib で解けない画像（JPEG など）を解く道具（Worker が PDF.js で作る） */
@@ -77,7 +78,14 @@ function defineRule<R extends BaseReport>(meta: {
     label: meta.label,
     pattern: meta.pattern,
     async run(bytes, ctx = {}) {
-      const report = await meta.detect(bytes, ctx);
+      let report: R;
+      try {
+        report = await meta.detect(bytes, ctx);
+      } catch (e) {
+        // 解くと大きすぎる所で止めた（圧縮の爆弾など）：「見つかりませんでした」にせず、調べられなかった項目にする
+        if (!isInflateLimitError(e)) throw e;
+        return { ruleId: meta.id, ruleVersion: "", label: meta.label, pattern: meta.pattern, status: "error", message: INFLATE_LIMIT_MESSAGE, items: [], notices: [] };
+      }
       const base = { ruleId: report.rule.id, ruleVersion: report.rule.version, label: meta.label, pattern: meta.pattern };
       if (report.status === "error") {
         return { ...base, status: "error", message: report.error?.message ?? "調べられませんでした。", items: [], notices: [] };
@@ -97,13 +105,16 @@ const DECRYPTED: Notice = {
 
 const SKIPPED_HEAVY = "このページは図形が多すぎるため、検査を省きました。";
 const SKIPPED_UNREADABLE = "このページは読めなかったため、検査を省きました。";
+const SKIPPED_TOO_LARGE = "このページは、解くと大きすぎる中身があるため、検査を省きました。";
 
 function skippedNotices(skipped: Array<{ page: number; reason: string }>): Notice[] {
-  const heavy = skipped.filter((s) => s.reason !== "unreadable_page").map((s) => s.page);
+  const tooLarge = skipped.filter((s) => s.reason === "stream_too_large").map((s) => s.page);
   const broken = skipped.filter((s) => s.reason === "unreadable_page").map((s) => s.page);
+  const heavy = skipped.filter((s) => s.reason !== "unreadable_page" && s.reason !== "stream_too_large").map((s) => s.page);
   const out: Notice[] = [];
   if (heavy.length) out.push({ kind: "skipped_pages", message: SKIPPED_HEAVY, pages: heavy, reason: "heavy" });
   if (broken.length) out.push({ kind: "skipped_pages", message: SKIPPED_UNREADABLE, pages: broken, reason: "unreadable" });
+  if (tooLarge.length) out.push({ kind: "skipped_pages", message: SKIPPED_TOO_LARGE, pages: tooLarge, reason: "too_large" });
   return out;
 }
 
@@ -128,6 +139,7 @@ const p6 = defineRule<P6TextReport>({
         kind: "unchecked_images",
         message: "このページの画像は、大きすぎるため調べていません。黒く塗った画像や、画像の上の黒い四角があっても、ここでは見つけられません。",
         pages: large,
+        reason: "too_large",
       });
     }
     if (other.length) {
@@ -179,6 +191,16 @@ export function p6Item(f: P6TextReport["findings"][number]): Item {
           why: "上から重ねただけなので、下の字を選んでコピーできます。",
           detail: `${cover}／残っている字：${f.chars}字`,
         };
+  }
+  if (f.layer === "vector") {
+    // 図形の層（検出ルール 1.13.0 から）：白い四角の注釈の下に、線や形で描いた字が残っているかもしれない。いつも「確かめてください」【文言は仮】
+    return {
+      ...base,
+      ...check,
+      title: "白い四角の注釈の下に、線や形で描いた字が残っているかもしれません",
+      why: "字を図形として描いた上に、白い四角を重ねただけなら、注釈を消すと下の字が見えます。罫線や図の場合もあるため、言い切れません。確かめてください。",
+      detail: `覆っているもの：注釈（白）／下にある図形：${f.paths}個`,
+    };
   }
   const box = f.tone === "light" ? "白い四角" : "黒い四角";
   if (f.reason === "under_unreadable") {
@@ -254,8 +276,9 @@ const P7_VISIBLE_KIND: Partial<Record<P7Reason, { title: string; why: string; se
   },
   // 見えない所に置いた画像（検出ルール 1.2.0 から）。字ではないので、字の数は出さない
   image_off_page: {
-    title: "ページの外に、画像が置かれています",
-    why: "画面や印刷には出ませんが、画像を取り出すと中身が見えます。消し忘れの画像でないか、確かめてください。",
+    // 検出ルール 1.4.0 から、大部分（見える所が半分以下）がページの外にはみ出した画像も含む
+    title: "ページの外に、画像の全部か大部分が置かれています",
+    why: "ページの外の部分は画面や印刷には出ませんが、画像を取り出すと見えます。消し忘れの画像でないか、確かめてください。",
     severity: "medium",
   },
   image_clipped: {
@@ -563,7 +586,9 @@ const pii = defineRule<PiiReport>({
       ...contentOf((f as { text?: string }).text),
     })),
   notices: (r) => {
-    const out = skippedNotices(r.skippedPages.map((s) => ({ page: s.page, reason: s.reason === "unreadable_page" ? "unreadable_page" : "heavy" })));
+    const out = skippedNotices(
+      r.skippedPages.map((s) => ({ page: s.page, reason: s.reason === "unreadable_page" || s.reason === "stream_too_large" ? s.reason : "heavy" })),
+    );
     if (r.unreadable.pages.length) {
       out.push({
         kind: "partial",

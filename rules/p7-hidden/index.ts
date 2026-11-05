@@ -20,8 +20,8 @@ import {
   PDFRawStream,
   PDFRef,
   PDFStream,
-  decodePDFRawStream,
-} from "pdf-lib";
+  } from "pdf-lib";
+import { decodeStream, isInflateLimitError, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import { operations, type Op, type Tok } from "../shared/content-lexer.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { readFont, type FontInfo } from "../shared/fonts.ts";
@@ -36,7 +36,8 @@ import { readPattern, readShading, tileRange, type PatternPaint } from "../share
 const MAX_PATTERN_TILES = 64;
 
 export const RULE_ID = "p7-hidden";
-export const RULE_VERSION = "1.3.0";
+// 1.4.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
+export const RULE_VERSION = "1.4.1";
 
 export type P7Reason =
   | "hidden_layer"
@@ -79,9 +80,17 @@ export const DEFAULT_SETTINGS = {
   mergeGapMax: 1.0,
   /**
    * 見えない所に置いた画像（1.2.0 から）：見える範囲（ページの箱と切り抜き）に入る面積の割合がこれ以下なら「大部分を切り抜いた画像」。
-   * 0 ならページの外の画像。写真のふちを落とすだけの切り抜き（9 割ほど見える）は出さない【仮の値】
+   * 0 ならページの外の画像。写真のふちを落とすだけの切り抜き（9 割ほど見える）は出さない。
+   * 1.4.0 で 0.25 → 0.5（見つける段の3回目：ページの外に 69% はみ出した画像を見逃していた。2026-11-05、人の決定）
    */
-  imageVisibleFractionMax: 0.25,
+  imageVisibleFractionMax: 0.5,
+  /**
+   * 見える割合がこれより大きく imageVisibleFractionMax 以下の画像（1.4.0 で広げた幅）は、見えない所の画素を読み、
+   * 明るさのばらつき（標準偏差）が imageHiddenUniformStdMax 未満なら出さない（一色の余白・背景がはみ出しただけ）。
+   * 読めない画像は出す。これ以下の画像は 1.3.0 までと同じく、画素を見ずに出す
+   */
+  imageUniformCheckAbove: 0.25,
+  imageHiddenUniformStdMax: 0.05,
   /** 見えない所に置いた画像として調べる、画像の画素の数の下限（小さな飾り・線の画像は見ない）【仮の値】 */
   imageMinPixels: 1024,
 };
@@ -107,7 +116,7 @@ export type P7Report = {
   error?: { code: "empty" | "unreadable" | "encrypted"; message: string };
   pages: number | null;
   findings: P7Finding[];
-  skippedPages: Array<{ page: number; reason: "too_many_operations" | "unreadable_page" }>;
+  skippedPages: Array<{ page: number; reason: "too_many_operations" | "unreadable_page" | "stream_too_large" }>;
   /** 見えないが P7 では数えなかった字の数。p6＝濃い覆いの下（P6 で数える）、ocrLayer＝画像と重なる見えない字（文字認識の層） */
   excluded: { p6: number; ocrLayer: number };
   /** 文字認識の層（スキャン画像の上の見えない字）があるページ（1.1.0 から）。危険の発見には数えず、お知らせに使う */
@@ -334,7 +343,7 @@ function contentBytes(ctx: PDFContext, contents: PDFObject | undefined): Uint8Ar
   const parts: Uint8Array[] = [];
   const push = (o: PDFObject | undefined) => {
     const s = o instanceof PDFRef ? ctx.lookup(o) : o;
-    if (s instanceof PDFRawStream) parts.push(decodePDFRawStream(s).decode());
+    if (s instanceof PDFRawStream) parts.push(decodeStream(s));
   };
   if (v instanceof PDFArray) for (let i = 0; i < v.size(); i++) push(v.get(i));
   else push(v);
@@ -722,8 +731,9 @@ class PageScanner {
             const fres = dictOf(ctx, xo.dict.get(PDFName.of("Resources"))) ?? resources;
             let data2: Uint8Array;
             try {
-              data2 = decodePDFRawStream(xo).decode();
-            } catch {
+              data2 = decodeStream(xo);
+            } catch (e) {
+              rethrowIfInflateLimit(e);
               break;
             }
             forms.add(xo);
@@ -817,6 +827,32 @@ class ImagePixels {
     }
     return out;
   }
+  /**
+   * 画像の見えない所（visible の外）の明るさの標準偏差（1.4.0 から）。画像の上に 24×24 の点を置いて測る。
+   * 読めない画像・見えない所の点が 8 つより少ないときは null
+   */
+  hiddenStd(im: Img, visible: Rect): number | null {
+    const r = this.read(im);
+    if (!r) return null;
+    const { reader } = r;
+    const n = 24;
+    const lums: number[] = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const u = (i + 0.5) / n;
+        const v = (j + 0.5) / n;
+        const [x, y] = apply(im.m, u, v);
+        if (x >= visible[0] && x <= visible[2] && y >= visible[1] && y <= visible[3]) continue;
+        const px = Math.min(reader.width - 1, Math.floor(u * reader.width));
+        const py = Math.min(reader.height - 1, Math.floor((1 - v) * reader.height));
+        const p = reader.at(px, py);
+        if (p.lum !== null && p.alpha >= 0.5) lums.push(p.lum);
+      }
+    }
+    if (lums.length < 8) return null;
+    const mean = lums.reduce((a, b) => a + b, 0) / lums.length;
+    return Math.sqrt(lums.reduce((a, b) => a + (b - mean) ** 2, 0) / lums.length);
+  }
   /** 画像全体のうち濃い画素の割合（P6 と同じ数え方）。読めない画像は null */
   darkFraction(im: Img): number | null {
     const r = this.read(im);
@@ -829,7 +865,7 @@ class ImagePixels {
 type Judged = { reason: P7Reason } | { excluded: "p6" | "ocr" } | null;
 
 /** 見えない所に置いた画像か（1.2.0 から）。表示しない層の中・型抜き・小さな画像・ふつうでない置き方は見ない */
-function hiddenImage(im: Img, view: Rect, s: P7Settings): "image_off_page" | "image_clipped" | null {
+function hiddenImage(im: Img, view: Rect, s: P7Settings, pixels: ImagePixels): "image_off_page" | "image_clipped" | null {
   if (!im.stream || im.hidden || im.alpha < s.coverAlphaMin) return null;
   const isMask = im.stream.dict.lookup(PDFName.of("ImageMask"));
   if (isMask instanceof PDFBool && isMask.asBoolean()) return null;
@@ -841,7 +877,14 @@ function hiddenImage(im: Img, view: Rect, s: P7Settings): "image_off_page" | "im
   const vis = intersect(intersect(im.box, view), im.clip ?? im.box);
   const frac = area(vis) / whole;
   if (frac <= 0) return area(intersect(im.box, view)) <= 0 ? "image_off_page" : "image_clipped";
-  return frac <= s.imageVisibleFractionMax ? "image_clipped" : null;
+  if (frac > s.imageVisibleFractionMax) return null;
+  if (frac > s.imageUniformCheckAbove) {
+    // 1.4.0 で広げた幅：見えない所が一色なら、余白・背景がはみ出しただけとみて出さない
+    const std = pixels.hiddenStd(im, vis);
+    if (std !== null && std < s.imageHiddenUniformStdMax) return null;
+  }
+  // ページの箱だけで大部分が隠れるなら、ページの外にはみ出した画像（1.4.0 から。切り抜きより先に、こちらの名前にする）
+  return area(intersect(im.box, view)) / whole <= s.imageVisibleFractionMax ? "image_off_page" : "image_clipped";
 }
 
 function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], pixels: ImagePixels, s: P7Settings): Judged {
@@ -1112,11 +1155,14 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
       if (ocrChars > 0) report.ocrLayerPages.push(pageNo);
       // 見えない所に置いた画像（1.2.0 から）：ページの外、または切り抜きで大部分を隠した画像。字の模様などが残っていても、見た目では分からない
       for (const im of scanner.images) {
-        const f = hiddenImage(im, view, settings);
+        const f = hiddenImage(im, view, settings, pixels);
         if (f) report.findings.push({ pattern: "P7", page: pageNo, reason: f, rect: padRect(im.box), chars: 0 });
       }
     } catch (e) {
-      report.skippedPages.push({ page: pageNo, reason: e instanceof TooManyOperations ? "too_many_operations" : "unreadable_page" });
+      report.skippedPages.push({
+        page: pageNo,
+        reason: e instanceof TooManyOperations ? "too_many_operations" : isInflateLimitError(e) ? "stream_too_large" : "unreadable_page",
+      });
     }
   });
   return report;

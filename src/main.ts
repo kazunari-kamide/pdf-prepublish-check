@@ -725,7 +725,8 @@ async function showPage(page: number, selectNo: number | null) {
   let note = "";
   if (s.heavy.has(page)) {
     clear();
-    note = "このページは図形が多すぎるため、絵を描いていません（検査も省きました）。";
+    // heavy には、解くと大きすぎる中身のあるページも入る（src/ui/model.ts の heavyPages）。理由ごとの文は右の「お知らせ」に出る
+    note = "このページは、図形が多すぎるか、解くと大きすぎる中身があるため、絵を描いていません（検査も省きました）。";
   } else if (!s.pdf) {
     clear();
     note =
