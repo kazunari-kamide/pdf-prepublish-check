@@ -25,7 +25,7 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { contactHeaders, securityHeaders } from "../csp.ts";
+import { checkHeaders, contactHeaders, securityHeaders } from "../csp.ts";
 import { CACHE_ASSETS, CACHE_DEFAULT, CHECK_PAGE_FILE, CHECK_PATH, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, HSTS, LICENSE_TEXTS_DIR, NOT_FOUND_PAGE, OFFICIAL_HOST, OLD_LICENSE_TEXTS_DIR } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -65,6 +65,8 @@ async function get(url, method = "GET") {
 }
 
 // ---- 検査のページ（/check）のヘッダー。つながるまで少し待つ（配信の直後のため）
+// 検査のページだけ、CSP の connect-src が 'self'（PDF.js が /pdfjs/ の部品を読むため。2026-11-06 本人が決定。csp.ts の checkHeaders）。
+// ほかのヘッダーは、ほかのページと同じ
 let top = null;
 for (let i = 0; i < 6 && !top; i++) {
   try {
@@ -76,7 +78,7 @@ for (let i = 0; i < 6 && !top; i++) {
 }
 if (top) {
   if (top.status !== 200) problems.push(`${checkUrl.href} が ${top.status} を返しました（200 のはず）`);
-  for (const [name, want] of Object.entries(securityHeaders)) {
+  for (const [name, want] of Object.entries(checkHeaders)) {
     const got = top.headers.get(name);
     if (got === null) problems.push(`ヘッダー ${name} がありません`);
     else if (got !== want) problems.push(`ヘッダー ${name} の値が違います（二重に付いている場合も、ここで止まります）\n      本番：${got}\n      期待：${want}`);
