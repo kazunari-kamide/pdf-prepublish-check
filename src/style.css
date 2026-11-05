@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /*
- * 画面の見た目。値は design/tokens.css の変数だけを使う（決まりは design/README.md。2026-11-05 から案 E2「お守りの札」）。
+ * 画面の見た目。値は design/tokens.css の変数だけを使う（決まりは design/sheet.md。2026-11-05 夜から案 C「色の面で分ける」）。
+ * 案 C：枠をやめ、色の面 1 段で分ける。面の中に面・枠・カードを重ねない。面の中の区切りは白の 2px の線だけ。
  * 書体は外から読み込まない（CLAUDE.md §2-1）。危ない所は色だけで示さない（番号・形・文字でも示す）。
  * WCAG 2.2 の AA を目標にする（フォーカスが見える・押せる所は 44px 以上・幅 320px で横にはみ出さない）。
  */
@@ -74,6 +75,16 @@ h4 {
   letter-spacing: 0;
 }
 
+/* 見出しの書体（案 C）：丸ゴシックは、ページに書いてある見出し（h1・h2 と、決まった字の h3）だけに使う。
+   画面のスクリプトが作る種類の見出し（.group-head）は、字が見出しの書体の一覧にない場合があるので、本文の書体の太字のまま
+   （一覧にない字だけが本文の書体になり、1 つの見出しに 2 つの書体が混ざるのを避ける。design/sheet.md「案 C」の字） */
+h1,
+h2,
+.clean h3 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-sub);
+}
+
 button {
   font: inherit;
   color: inherit;
@@ -124,26 +135,31 @@ select {
   top: var(--space-2);
 }
 
-/* ---------------------------------------------------------------- 上：ロゴとページへのリンクだけの軽い帯（2026-11-05 本人の画面のレビュー 1-1） */
-
-.band {
-  display: flex;
-  flex-wrap: wrap;
+/* ---------------------------------------------------------------- 上の帯（案 C。サイトのページの src/site/site.css の .site-band と同じ形・同じ値）
+ * 検査のページはサイトの CSS を読まないので、同じ決まりをここに書く（design/sheet.md「案 C」の上の帯）。直すときは両方そろえる。
+ * 白の地・下の線なし。案内はピル（高さ 44px 以上・太字・下線もマーカーもなし）。検査のページなので「PDF を確かめる」は置かない */
+.site-band {
+  --band-frame: 72rem; /* サイトの --site-frame と同じ幅 */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-2) var(--space-5);
-  padding: var(--space-2) var(--space-5);
-  background: var(--surface-card);
-  border-bottom: var(--bw-2) solid var(--line-strong);
+  gap: var(--sp-2) var(--sp-5);
+  padding: var(--sp-4) max(var(--sp-5), calc((100% - var(--band-frame)) / 2 + var(--sp-5)));
+  background: var(--surface-page);
+  color: var(--text-strong);
 }
 
-.brand {
-  display: flex;
+.site-brand {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-family: var(--font-head);
+  gap: var(--sp-2);
+  min-height: var(--target-min);
+  font-family: var(--font-display);
   font-size: var(--text-h2);
-  font-weight: 700; /* ロゴの字は太字（サイトのページの .site-brand と同じ。同梱の書体は 700 まで） */
+  font-weight: var(--fw-display-sub);
+  letter-spacing: 0.04em;
+  color: inherit;
+  text-decoration: none;
   white-space: nowrap;
 }
 
@@ -154,26 +170,70 @@ select {
   height: var(--logo-header);
 }
 
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius-pill);
+  color: var(--text-strong);
+  font-weight: var(--fw-strong);
+  text-decoration: none;
+  word-break: keep-all;
+}
+
+.site-nav a:hover {
+  background: var(--face-kinari);
+}
+
 /*
- * 概要と進み具合：左右 2 列の上（作業する場所のすぐ上）。2026-11-05 本人が承認したトップの直し。
- * - 概要（見出し・具体例の 1 文・札 3 つ）は、PDF を読み込む前だけ出す。
- * - 進み具合（手順）は、読み込んだあとだけ出す（読み込む前は「まだです」ばかりで、置き場と「選ぶ」が重なるため）。
- *   :has が使えないブラウザでは、今までどおり両方出る。
+ * 頭と作業する所（.page）：読み込む前だけ、左に概要・右に置き場の 2 列（案 C の見本「/check の読み込む前」）。
+ * - 概要（見出し・具体例の 1 文・範囲の 1 行・札 3 つ）は、PDF を読み込む前だけ出す。
+ * - 進み具合（手順）は、読み込んだあとだけ、控えめな 1 行で出す（2026-11-05 夜 本人が決定）。
+ *   :has が使えないブラウザでは、今までどおり両方出て、1 列に積む。
  */
+.page {
+  --gut: var(--sp-5); /* 左右の余白。狭い画面で、色の面をこの分だけ外へ広げて端いっぱいにする */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.page:has(> .workspace[data-state="empty"]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  align-items: center;
+  align-content: start;
+  gap: var(--sp-7);
+  width: min(100%, 72rem);
+  margin-inline: auto;
+  padding: var(--sp-6) var(--gut) var(--sp-7);
+}
+
 .guide {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-5) var(--space-5) 0;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--gut) 0;
 }
 
-/* 置き場（幅 48rem、真ん中）と同じ列にそろえる（左に寄せると、置き場と軸がずれるため） */
+.page:has(> .workspace[data-state="empty"]) .guide,
+.page:has(> .workspace[data-state="empty"]) .workspace {
+  padding: 0;
+}
+
 .hero {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  width: min(100%, 48rem);
-  margin-inline: auto;
+  gap: var(--sp-4);
 }
 
 body:has(#workspace:not([data-state="empty"])) .hero,
@@ -181,28 +241,38 @@ body:has(#workspace[data-state="empty"]) .steps {
   display: none;
 }
 
-/* 見出し：日本語は文節で折り、行の長さをそろえる（使えないブラウザでは、ふつうに折る） */
+/* 大見出し（案 C）：丸ゴシックの 900・2.4rem（狭い画面 1.8rem）。線は引かない。日本語は文節で折り、行の長さをそろえる */
 .hero-title {
   margin: 0;
-  font-family: var(--font-head);
-  font-size: clamp(var(--text-h1), 3.2vw, 2.1rem);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: var(--text-hero);
+  font-weight: var(--fw-display);
   line-height: 1.35;
+  letter-spacing: 0.01em;
   word-break: auto-phrase;
   text-wrap: balance;
 }
 
 .hero-lead {
   margin: 0;
-  color: var(--color-muted);
+  max-width: 40em;
+  color: var(--text-muted);
   text-wrap: pretty;
 }
 
-/* 札（ピル）：サイトのタグ（.site-tag）と、紹介のページの札と同じ形。押せないので、浮く動きは付けない */
+/* 見つけられる範囲の 1 行（言い切らない。札のすぐ上） */
+.hero-scope {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+/* 約束の札：緑の面のピル（押せないので、浮く動きも枠も付けない）。前の印は緑の丸（色だけでなく、字でも約束を言う） */
 .hero-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--sp-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -211,42 +281,43 @@ body:has(#workspace[data-state="empty"]) .steps {
 .hero-chips li {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  border: var(--bw-1) solid var(--ink-300);
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-4) var(--sp-1) var(--sp-3);
   border-radius: var(--radius-pill);
-  background: linear-gradient(var(--surface-card), var(--ink-50));
-  box-shadow: var(--shadow-pill);
-  font-size: var(--text-small);
-  font-weight: 700;
+  background: var(--face-midori);
+  color: var(--midori-800);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
   line-height: 1.6;
 }
 
 .hero-chips li::before {
-  content: "✓";
-  color: var(--color-ok);
+  content: "";
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--ok);
 }
 
+/* 手順：読み込んだあとだけ、控えめな 1 行（地も枠もない。今の段だけ墨の丸と太字、済んだ段は緑の ✓） */
 .steps {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--sp-1) var(--sp-4);
 }
 
 .steps li {
   display: grid;
   grid-template-columns: auto auto;
   grid-template-rows: auto auto;
-  column-gap: var(--space-2);
+  column-gap: var(--sp-2);
   align-items: center;
   min-height: var(--target-min);
-  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--surface-subtle);
-  border: var(--bw-1) solid var(--line-default);
+  color: var(--text-muted);
 }
 
 /* 番号の丸。済んだ段は ✓ にする（字でも「置きました」などの一言で示す） */
@@ -257,8 +328,8 @@ body:has(#workspace[data-state="empty"]) .steps {
   width: 1.8rem;
   height: 1.8rem;
   border-radius: var(--radius-full);
-  border: 1px solid var(--color-control-line);
-  background: var(--color-surface);
+  background: var(--face-kinari);
+  color: var(--text-strong);
   font-weight: 700;
   font-size: var(--text-small);
 }
@@ -270,24 +341,17 @@ body:has(#workspace[data-state="empty"]) .steps {
 }
 
 .step-note {
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
   line-height: 1.3;
-  color: var(--color-muted);
 }
 
 .steps li[data-state="now"] {
-  background: var(--color-base);
-  color: var(--color-on-dark);
+  color: var(--text-strong);
 }
 
 .steps li[data-state="now"] .step-no {
-  background: var(--color-on-dark);
-  color: var(--color-base);
-  border-color: var(--color-on-dark);
-}
-
-.steps li[data-state="now"] .step-note {
-  color: var(--color-on-dark);
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
 }
 
 /* 説明は、今いる段にだけ出す（A4）。ほかの段は名前だけ。ただし「④ 通れば保存できます」は、まだのうちも出す。
@@ -316,8 +380,7 @@ body:has(#workspace[data-state="empty"]) .steps {
 }
 
 .steps li[data-state="done"] .step-no {
-  background: var(--color-ok);
-  border-color: var(--color-ok);
+  background: var(--ok);
   color: transparent;
   position: relative;
 }
@@ -331,24 +394,14 @@ body:has(#workspace[data-state="empty"]) .steps {
   color: var(--color-on-dark);
 }
 
-/* サービス紹介のページへのリンク（上の帯の右端。目立たせない） */
-.about-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--target-min);
-  margin-left: auto;
-  font-size: var(--text-small);
-  color: var(--color-muted);
-}
-
 /* ---------------------------------------------------------------- 3つの段 */
 
 .workspace {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, var(--width-thumbs)) minmax(0, 1fr) auto minmax(0, var(--results-w, var(--width-results)));
-  gap: var(--space-4);
-  padding: var(--space-4);
+  gap: var(--sp-5);
+  padding: var(--sp-4) var(--gut) var(--sp-6);
   min-height: 0;
 }
 
@@ -366,8 +419,8 @@ body:has(#workspace[data-state="empty"]) .steps {
 }
 
 .workspace[data-state="empty"] .stage {
-  background: none;
-  padding: 0;
+  align-items: stretch;
+  gap: var(--sp-2);
 }
 
 .workspace[data-state="result"][data-thumbs="none"] {
@@ -423,10 +476,10 @@ body:has(#workspace[data-state="empty"]) .steps {
   display: block;
   width: 100%;
   min-height: var(--target-min);
-  padding: var(--space-1);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  padding: var(--sp-1);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: var(--face-kinari);
   cursor: pointer;
   text-align: center;
 }
@@ -445,8 +498,9 @@ body:has(#workspace[data-state="empty"]) .steps {
   height: auto;
 }
 
+/* 今のページ：墨の内側の線（太さを変えないので、押しても動かない）と、読み上げには aria-current */
 .thumb[aria-current="page"] {
-  border: var(--border-mark) solid var(--color-base);
+  box-shadow: inset 0 0 0 var(--border-mark) var(--line-strong);
 }
 
 .thumb-no {
@@ -470,10 +524,8 @@ body:has(#workspace[data-state="empty"]) .steps {
 
 /* ---------------------------------------------------------------- 真ん中：大きなページ */
 
+/* ページの欄：台の面は敷かない（白い地に、紙と影 1 つ。案 C） */
 .stage {
-  background: var(--color-sunken);
-  border-radius: var(--radius-panel);
-  padding: var(--space-5);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -512,24 +564,20 @@ body:has(#workspace[data-state="empty"]) .steps {
   overflow-y: auto;
 }
 
+/* 置き場：紅の面 1 枚（枠なし）。面全体を押せる。中は「PDF を選ぶ」・「またはここに置く」・送らないことの一文を真ん中に縦に */
 .drop {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-3) var(--space-5);
-  width: min(100%, 48rem);
-  margin-top: var(--space-4);
-  padding: var(--space-6);
-  background: var(--color-surface);
-  border: var(--border-strong) dashed var(--color-control-line);
-  border-radius: var(--radius-panel);
+  justify-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-7) var(--sp-6);
+  background: var(--face-beni);
+  border-radius: var(--radius-face);
+  text-align: center;
   cursor: pointer;
 }
 
 .drop:has(input:focus-visible) {
-  border-style: solid;
-  border-color: var(--line-strong);
   outline: var(--bw-focus) solid var(--focus-ring);
   outline-offset: var(--focus-gap);
 }
@@ -545,16 +593,14 @@ body:has(#workspace[data-state="empty"]) .steps {
   box-shadow: var(--shadow-press);
 }
 
+/* 持ってきている間：面の内側に紅の線（線の太さで面が動かない） */
 .drop[data-over="true"] {
-  border-style: solid;
-  border-color: var(--color-accent);
-  background: var(--color-accent-tint);
+  box-shadow: inset 0 0 0 var(--bw-2) var(--danger);
 }
 
 /* 「またはここに置く」：主ボタンの横の補足。指で操作する端末（置けない）では出さない */
 .drop-title {
   font-weight: 700;
-  color: var(--color-muted);
 }
 
 @media (pointer: coarse) {
@@ -567,12 +613,12 @@ body:has(#workspace[data-state="empty"]) .steps {
 .drop-pick {
   display: inline-flex;
   align-items: center;
-  justify-self: start;
-  max-width: 100%; /* 字を大きくした狭い画面でも、枠からはみ出さない（入らなければ折る） */
+  justify-content: center;
+  max-width: 100%; /* 字を大きくした狭い画面でも、面からはみ出さない（入らなければ折る） */
   min-height: var(--button-height-large);
-  padding: var(--space-1) var(--space-6);
-  border-radius: var(--radius-m);
-  background: var(--beni-700);
+  padding: var(--sp-1) var(--sp-6);
+  border-radius: var(--radius-control);
+  background: var(--danger);
   color: var(--text-on-strong);
   font-size: var(--fs-h3);
   font-weight: 700;
@@ -596,15 +642,30 @@ body:has(#workspace[data-state="empty"]) .steps {
 
 /* 送らないことの一文（ファイルを渡すこの枠の中の 1 か所だけ。A2）。前の印は ✓（「○」は選んでいないラジオボタンに見えるため。A7） */
 .drop-note {
-  grid-column: 1 / -1;
-  font-size: var(--text-small);
-  color: var(--color-muted);
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  font-size: var(--fs-small);
+  text-align: left;
+  word-break: auto-phrase; /* 「ませ／ん」のように語の途中で折らない */
+  text-wrap: balance;
 }
 
+/* 印は緑の丸に白の ✓（字でも「どこにも送りません」と言う） */
 .drop-note::before {
-  content: "✓ ";
-  color: var(--color-ok);
+  content: "✓";
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-top: 0.2em;
+  border-radius: 50%;
+  background: var(--ok);
+  color: var(--text-on-strong);
+  font-size: 0.75rem;
   font-weight: 700;
+  line-height: 1;
 }
 
 /* ブラウザの「ファイルを選択／選択されていません」は見せない。欄は残し、Tab で届く（フォーカスの印は枠に出す） */
@@ -625,20 +686,31 @@ body:has(#workspace[data-state="empty"]) .steps {
 
 /* 利用規約へのリンク（置き場の下に 1 行。同意のチェックは足さない。2026-11-05 本人が決めた） */
 .terms-note {
-  width: min(100%, 48rem);
-  margin: var(--space-2) 0 0;
-  font-size: var(--text-small);
-  color: var(--color-muted);
+  margin: 0;
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
 }
 
-/* リンクの色は、ほかの下線のリンク（下の帯・見本）と同じ墨にそろえる（ブラウザの既定の青にしない） */
-.terms-note a {
-  color: var(--color-base);
-  text-underline-offset: 0.2em;
+/* 本文の中のリンク（案 C）：太字＋黄のマーカー（字の下半分の帯）。下線は引かない。色だけに頼らない（design/sheet.md「案 C」の強調・リンク） */
+.terms-note a,
+.sample-button span,
+.about-more span,
+.origin-text a {
+  color: var(--text-strong);
+  font-weight: var(--fw-strong);
+  text-decoration: none;
+  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
-.terms-note a:hover {
-  text-decoration-thickness: 2px;
+/* 押せる所に乗ったとき：帯を字の上の方まで広げる（色を変えずに形で示す） */
+.terms-note a:hover,
+.sample-button:hover span,
+.about-more:hover span,
+.origin-text a:hover {
+  background: linear-gradient(transparent 25%, var(--marker-ki) 25%, var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
 }
 
 /*
@@ -735,14 +807,15 @@ body:has(.terms-dialog[open]) {
 }
 
 /* 見本の PDF で試す：枠のすぐ下に、文字のリンクくらいの目立たせ方（A5）。押せる高さは 44px を保つ */
+/* 見本の PDF で試す：面の外、すぐ下に、マーカーのリンクくらいの目立たせ方（A5）。押せる高さは 44px を保つ
+   （箱は 44px、マーカーは中の字の span にだけ引く） */
 .sample {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 var(--space-1);
-  width: min(100%, 48rem);
-  margin: var(--space-2) 0 0;
-  font-size: var(--text-small);
+  gap: 0 var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  padding-inline: var(--sp-2);
 }
 
 .sample-button {
@@ -750,21 +823,16 @@ body:has(.terms-dialog[open]) {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-base);
+  color: var(--text-strong);
   font: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+  font-weight: var(--fw-strong);
   cursor: pointer;
 }
 
-.sample-button:hover {
-  text-decoration-thickness: 2px;
-}
-
 .sample-note {
-  color: var(--color-muted);
-  margin-right: var(--space-3);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  margin-right: var(--sp-3);
 }
 
 /* 紹介のページの「残り方」へ 1 本（見本と同じ目立たせ方） */
@@ -772,36 +840,45 @@ body:has(.terms-dialog[open]) {
   display: inline-flex;
   align-items: center;
   min-height: var(--target-min);
-  color: var(--color-base);
-  font-weight: 700;
-  text-underline-offset: 0.2em;
-}
-
-.about-more:hover {
-  text-decoration-thickness: 2px;
+  color: var(--text-strong);
+  text-decoration: none;
 }
 
 /* 提出先の容量に合わせて小さくする入口：見本のリンクのすぐ下に、開けて選ぶ形（見本と同じくらいの控えめさ） */
 .limit-entry {
-  width: min(100%, 48rem);
   margin: 0;
-  font-size: var(--text-small);
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-small);
 }
 
 /* 脇の入口なので、小さな灰色の 1 行にする（見本や主ボタンと競わせない。機能はそのまま） */
+/* 脇の入口なので、マーカーは引かず、補足の色の 1 行（見本や主ボタンと競わせない）。開け閉めの印（▶▼）で押せると分かる */
 .limit-entry summary {
   display: inline-flex;
   align-items: center;
+  gap: var(--sp-1);
   min-height: var(--target-min);
-  color: var(--color-muted);
+  color: var(--text-muted);
   font-weight: 400;
-  text-decoration: underline;
-  text-decoration-color: var(--line-control);
-  text-underline-offset: 0.2em;
+  list-style: none;
 }
 
+.limit-entry summary::-webkit-details-marker {
+  display: none;
+}
+
+.limit-entry summary::before {
+  content: "▶";
+  font-size: 0.8em;
+}
+
+.limit-entry[open] summary::before {
+  content: "▼";
+}
+
+.limit-entry summary:hover,
 .limit-entry[open] summary {
-  color: var(--color-base);
+  color: var(--text-strong);
 }
 
 .limit-body {
@@ -809,8 +886,9 @@ body:has(.terms-dialog[open]) {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
-  padding: var(--space-2) 0 var(--space-1) var(--space-4);
-  border-left: var(--bw-2) solid var(--line-default);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-l);
+  background: var(--face-kinari);
 }
 
 /* 閉じているときは、中身をはっきり隠す（閉じた details の中身にも箱の大きさが残り、押せる所の重なりに数えられるため） */
@@ -829,8 +907,8 @@ body:has(.terms-dialog[open]) {
   min-height: var(--target-min);
   max-width: 100%;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-control-line);
-  background: var(--color-surface);
+  border: var(--bw-1) solid var(--line-control);
+  background: var(--surface-card);
   color: var(--color-base);
   font: inherit;
 }
@@ -847,10 +925,9 @@ body:has(.terms-dialog[open]) {
   align-items: center;
   gap: var(--space-2) var(--space-4);
   width: 100%;
-  background: var(--color-surface);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-panel);
-  padding: var(--space-2) var(--space-4);
+  background: var(--face-kinari);
+  border-radius: var(--radius-pill);
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-5);
 }
 
 /* 帯は 1 行に（ボタンが 2 行目に落ちないように。2026-11-05 夜のレビュー 16）。入りきらないときは、ファイル名の方を「…」で切る
@@ -991,39 +1068,74 @@ body:has(.terms-dialog[open]) {
   text-align: center;
 }
 
+/* 知らせ（案 C）：生成りの面＋「ｉ」の印＋字（枠・左の太い線はやめた） */
 .render-note {
   margin: 0;
   max-width: 40rem;
-  border: var(--bw-1) solid var(--info);
-  border-left-width: var(--bw-accent);
-  border-radius: var(--radius-m);
-  background: var(--info-bg);
+  border-radius: var(--radius-l);
+  background: var(--face-kinari);
   padding: var(--pad-box-y) var(--pad-box-x);
-  padding-left: var(--pad-box-x-accent);
-  font-size: var(--text-small);
+  font-size: var(--fs-small);
+}
+
+.render-note::before {
+  content: "ｉ ";
+  font-weight: 700;
 }
 
 /* ---------------------------------------------------------------- 右：種類ごとの結果 */
 
+/* 結果の欄：欄そのものは面を持たない。中に面を 1 枚ずつ縦に並べる（結果の面・整えた結果の面・見た所・プロパティ） */
 .results {
   align-self: start;
-  background: var(--surface-card);
-  border: var(--bw-1) solid var(--line-default);
-  border-radius: var(--radius-l);
-  padding: var(--space-5) var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
   min-width: 0;
+}
+
+/*
+ * 結果の面（案 C）：面は 1 段だけ。中は行と白の 2px の区切りだけで、面・枠・カードを重ねない（design/sheet.md「案 C」の面）。
+ * 面の色は中身で変わる：見えない情報が見つかった＝紅、何も見つからない＝緑、それ以外（読んでいる途中・候補だけ）＝生成り。
+ * 色だけでなく、見出しの下の状態の一文（「！」「✓」）と、項目の番号の丸・「▲ 高」でも示す。
+ * 「整える」は、この面の下の端いっぱいの紅の帯（面の一部。別の面ではない）
+ */
+.result-face {
+  --face-pad: var(--sp-5);
+  --face-line: var(--bw-2) solid var(--surface-page); /* 面の中の区切り：白の 2px */
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--sp-5) var(--face-pad) var(--face-pad);
+  border-radius: var(--radius-face);
+  background: var(--face-kinari);
+}
+
+.result-face:has(.group[data-status="found"]) {
+  background: var(--face-beni);
+}
+
+.result-face:has(> .verified[data-state="clean"]:not([hidden])) {
+  background: var(--face-midori);
+}
+
+/* 面の中のまとまり（お知らせ・種類・範囲の一文・自分で選ぶ・整える）は、白の 2px の線で区切る */
+.result-face > .notices,
+.result-face > .groups > .group,
+.result-face > .scope-note,
+.result-face > .pick-tools,
+.result-face > .actions {
+  border-top: var(--face-line);
 }
 
 .results:focus {
   outline: none;
 }
 
+/* 節の見出し（案 C）：丸ゴシックの 700・1.3rem。線は引かない */
 .results h2 {
-  font-size: var(--fs-h1);
-  /* 大見出し：下に墨の 2px の線 */
-  margin: 0 0 var(--sp-3);
-  padding-bottom: var(--sp-2);
-  border-bottom: var(--bw-2) solid var(--line-strong);
+  font-size: var(--fs-h2);
+  margin: 0 0 var(--sp-1);
 }
 
 #status {
@@ -1052,7 +1164,7 @@ body:has(.terms-dialog[open]) {
 }
 
 #status[data-tone="problem"] {
-  color: var(--color-accent);
+  color: var(--danger);
 }
 
 #status[data-tone="problem"]::before {
@@ -1060,7 +1172,7 @@ body:has(.terms-dialog[open]) {
 }
 
 #status[data-tone="ok"] {
-  color: var(--color-ok);
+  color: var(--ok);
 }
 
 /* 印は置き場の側（.drop-note）とそろえて ✓（「◯」は選んでいないラジオボタンに見えるため。A7） */
@@ -1074,14 +1186,9 @@ progress {
   accent-color: var(--color-base);
 }
 
+/* お知らせ（省いたページなど）：面の中の 1 段。「ｉ」の印と太字の題で示す（枠・地は持たない） */
 .notices {
-  margin: var(--space-3) 0;
-  border: var(--bw-1) solid var(--info);
-  border-left-width: var(--bw-accent);
-  border-radius: var(--radius-m);
-  padding: var(--pad-box-y) var(--pad-box-x);
-  padding-left: var(--pad-box-x-accent);
-  background: var(--info-bg);
+  padding: var(--sp-3) 0;
 }
 
 .notices h3 {
@@ -1097,22 +1204,10 @@ progress {
 
 /* 種類ごとの囲み：枠の色は 1 つ。強調は左の辺を太くするだけ（design/sheet.md「枠」。角丸の枠に色の違う帯を足さない。
    2026-11-05 夜のレビュー 3）。狭い画面でも同じ形（上の帯にしない） */
+/* 種類ごとのまとまり（案 C）：囲み・枠はやめ、結果の面の中の 1 段にする。種類の間は白の 2px の線（上の .result-face）。
+   見えている個人情報らしい字（候補）は、紅にせず「ｉ」の印（黒塗りにするかは本人が決める。2026-11-05 夜のレビュー §0） */
 .group {
-  margin-top: var(--sp-3);
-  border: var(--bw-1) solid var(--line-default);
-  border-radius: var(--radius-l);
-  background: var(--surface-card);
-}
-
-.group[data-status="found"] {
-  border-color: var(--danger-line);
-  border-left-width: var(--bw-accent);
-}
-
-/* 見えている個人情報らしい字（候補）：紅にせず、知らせの形（墨の太い左の辺・「ｉ」の印）。黒塗りにするかは本人が決める（2026-11-05 夜のレビュー §0） */
-.group[data-status="candidate"] {
-  border-color: var(--line-strong);
-  border-left-width: var(--bw-accent);
+  padding: var(--sp-3) 0 var(--sp-1);
 }
 
 .group[data-status="candidate"] .group-name::before {
@@ -1121,13 +1216,6 @@ progress {
 
 .group-body {
   min-width: 0;
-  padding: var(--pad-box-y) var(--pad-box-x);
-}
-
-/* 左の辺が太い囲みは、太い分を差し引いて、字の左端をほかの箱とそろえる */
-.group[data-status="found"] > .group-body,
-.group[data-status="candidate"] > .group-body {
-  padding-left: var(--pad-box-x-accent);
 }
 
 .group-head {
@@ -1146,13 +1234,10 @@ progress {
   white-space: nowrap;
 }
 
+/* 見つかった数：紅の太字（地の札にしない。面の上に面を重ねないため） */
 .group[data-status="found"] .group-count {
-  min-width: 2.6rem;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--color-accent-tint);
-  color: var(--color-accent);
-  text-align: center;
+  color: var(--danger);
+  font-weight: 700;
 }
 
 
@@ -1212,7 +1297,7 @@ progress {
 }
 
 .coverage-list li + li {
-  border-top: 1px solid var(--color-line);
+  border-top: var(--bw-2) solid var(--surface-page);
 }
 
 .coverage-state {
@@ -1241,11 +1326,19 @@ progress {
 }
 
 /* プロパティの一覧：値を出してよいのは、ここだけ。団体名らしい語は、紅の下線と薄い紅の地（色だけにしない） */
+/* 見た所・見なかった所／プロパティ：生成りの面 1 枚ずつ（中に枠を置かない。行の間は白の 2px） */
+#coverage-slot .group,
 .props {
-  margin-top: var(--space-3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-panel);
-  background: var(--color-surface);
+  border-radius: var(--radius-l);
+  background: var(--face-kinari);
+}
+
+#coverage-slot .group {
+  padding: var(--sp-2) var(--pad-box-x) var(--sp-2);
+}
+
+#coverage-slot:empty {
+  display: none;
 }
 
 .props summary {
@@ -1279,7 +1372,7 @@ progress {
   grid-template-columns: minmax(7rem, 38%) minmax(0, 1fr);
   gap: var(--space-2);
   padding: var(--space-1) 0;
-  border-top: 1px solid var(--color-line);
+  border-top: var(--bw-2) solid var(--surface-page);
 }
 
 .prop-row dt {
@@ -1293,8 +1386,8 @@ progress {
 }
 
 .prop-org {
-  background: var(--color-accent-tint);
-  color: var(--color-accent);
+  background: var(--surface-page);
+  color: var(--danger);
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
@@ -1318,8 +1411,8 @@ progress {
 
 /* ルールの版：結果の下に、閉じた形で控えめに */
 .ruleset {
-  margin-top: var(--space-3);
-  font-size: var(--text-small);
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-small);
 }
 
 .ruleset summary {
@@ -1362,9 +1455,7 @@ progress {
 }
 
 .pick-tools {
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-line);
+  padding: var(--sp-3) 0;
 }
 
 /* 「自分で黒塗りする所を選ぶ」は、結果の一覧の下に移した（B1）。前は .actions の中にあり、ボタンの形をそこから受けていた */
@@ -1394,7 +1485,7 @@ progress {
   justify-content: space-between;
   align-items: center;
   gap: var(--space-2);
-  border-top: 1px solid var(--color-line);
+  border-top: var(--bw-2) solid var(--surface-page);
 }
 
 .pick-tools .pick-remove {
@@ -1411,7 +1502,7 @@ progress {
    枠の三重の入れ子（結果の欄 ▸ 種類 ▸ 項目）をやめる（2026-11-05 夜のレビュー 4） */
 .items > li {
   padding: var(--sp-1) var(--sp-2) var(--sp-2);
-  border-top: var(--bw-1) solid var(--line-hair);
+  border-top: var(--bw-2) solid var(--surface-page);
   border-radius: var(--radius-m);
 }
 
@@ -1419,10 +1510,11 @@ progress {
   border-top-color: transparent;
 }
 
-/* 選んだ項目：li の地の色と内側の線（太さは変えないので、押しても動かない）。前後の区切りの線は隠す */
+/* 選んだ項目（案 C の指摘 d）：紅の面の上では地の差が出ないので、選んだ行だけ白の地にし、内側に紅の 2px の線
+   （太さは変えないので、押しても動かない）。前後の区切りの線は隠す */
 .items > li:has(> .item.is-selected) {
-  background: var(--danger-bg);
-  box-shadow: inset 0 0 0 var(--bw-2) var(--danger-line);
+  background: var(--surface-page);
+  box-shadow: inset 0 0 0 var(--bw-2) var(--danger);
   border-top-color: transparent;
 }
 
@@ -1444,9 +1536,11 @@ progress {
   cursor: pointer;
 }
 
+/* 乗ったとき：題に黄のマーカー（下線は引かない。案 C） */
 .item:hover .item-title {
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .item > span {
@@ -1492,7 +1586,7 @@ progress {
 }
 
 .item-sev.sev-high {
-  color: var(--color-accent);
+  color: var(--danger);
 }
 
 /* 確かめてほしい所：「？ 確かめる」の札は点線（言い切らない形）。項目の枠も点線 */
@@ -1510,7 +1604,7 @@ progress {
   flex: 1 1 12em;
   min-width: 0;
   font-weight: 700;
-  font-size: var(--text-small);
+  font-size: 1rem;
 }
 
 /* 閉じた形を詰める：行の高さを小さく。中身の行（.reveal）も項目のすぐ下に寄せる */
@@ -1572,46 +1666,77 @@ progress {
   white-space: nowrap;
 }
 
-.origin-text a {
-  color: var(--color-base);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
+
 
 /* ---------------------------------------------------------------- 3 片付ける */
 
 .actions {
-  margin: var(--space-3) 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--sp-2);
 }
 
+/* 「整える」（案 C）：結果の面の下の端いっぱいの紅の帯。左右と下は面の余白の分だけ外へ出し、下の角は面の角に合わせる。
+   フォーカスの線は、外に出すと面の外で切れて見えにくいので、内側に引く（design/sheet.md「案 C」のフォーカス） */
 .actions #sanitize {
-  width: 100%;
-  min-height: var(--button-height-large);
-  padding: var(--space-2) var(--space-4);
-  border: var(--border-strong) solid var(--color-base);
-  border-radius: var(--radius);
-  background: var(--color-base);
-  color: var(--color-on-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  width: calc(100% + 2 * var(--face-pad));
+  min-height: calc(var(--button-height-large) + var(--sp-2));
+  margin: var(--sp-3) calc(-1 * var(--face-pad)) calc(-1 * var(--face-pad));
+  padding: var(--sp-3) var(--face-pad);
+  border: 0;
+  border-radius: 0 0 var(--radius-face) var(--radius-face);
+  background: var(--danger);
+  color: var(--text-on-strong);
   font-weight: 700;
-  font-size: var(--text-h2);
+  font-size: var(--fs-h3);
   cursor: pointer;
+  transition: background-color var(--dur-hover) var(--ease-out);
 }
 
-/* 何も見つからないとき：「念のため整える」は第 2 の形（枠だけ・墨の字・ふつうの大きさ。2026-11-05 夜のレビュー 7） */
+.actions #sanitize::after {
+  content: "→";
+}
+
+.actions #sanitize:hover {
+  background: var(--beni-800);
+}
+
+.actions #sanitize:focus-visible {
+  outline-offset: calc(-1 * (var(--bw-focus) + var(--focus-gap)));
+  outline-color: var(--text-on-strong);
+}
+
+/* 何も見つからないとき：「念のため整える」は第 2 の形（帯にしない・生成りの地・墨の字・ふつうの大きさ。2026-11-05 夜のレビュー 7）。
+   面の中に置くので、墨 500 の 1px の線を付ける（.btn-sub と同じ見た目。「整える」だけは主と第 2 を切り替えるので、ここに書く） */
 .actions #sanitize[data-weight="sub"] {
-  /* 第 2 の形（.btn-sub と同じ見た目。「整える」だけは主と第 2 を切り替えるので、ここに書く） */
+  align-self: flex-start;
+  width: auto;
   min-height: var(--target-min);
-  border-width: var(--bw-1);
-  border-color: var(--line-control);
-  background: var(--surface-card);
+  margin: var(--sp-2) 0 0;
+  padding: 0 var(--sp-4);
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--face-kinari);
   color: var(--text-strong);
   font-size: var(--fs-small);
 }
 
+.actions #sanitize[data-weight="sub"]::after {
+  content: none;
+}
+
+.actions #sanitize[data-weight="sub"]:focus-visible {
+  outline-offset: var(--focus-gap);
+  outline-color: var(--focus-ring);
+}
+
 .actions #sanitize:disabled {
-  border-color: var(--color-control-line);
-  background: var(--color-chip);
-  color: var(--color-muted);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
   cursor: default;
 }
 
@@ -1631,8 +1756,8 @@ progress {
   min-height: var(--target-min);
   padding: 0 var(--sp-4);
   border: var(--bw-1) solid var(--line-control);
-  border-radius: var(--radius-m);
-  background: var(--surface-card);
+  border-radius: var(--radius-control);
+  background: var(--face-kinari);
   color: var(--text-strong);
   font: inherit;
   font-size: var(--fs-small);
@@ -1641,8 +1766,9 @@ progress {
   cursor: pointer;
 }
 
+/* 案 C：生成りの地のボタン。面（紅・緑・生成り）の上でも見分けられるよう、墨 500 の 1px の線は残す（design/sheet.md「案 C」の指摘 b） */
 .btn-sub:hover {
-  background: var(--surface-subtle);
+  background: var(--surface-page);
 }
 
 .btn-sub[aria-pressed="true"] {
@@ -1656,28 +1782,24 @@ progress {
 
 /* ---------------------------------------------------------------- 4 読み直す：片付けた結果 */
 
+/* 整えた結果（案 C）：緑の面 1 枚（枠なし）。残っている所がある＝紅の面、言い切れない＝生成りの面（色だけでなく、題の下の一文と ▲ でも示す） */
 .clean {
-  margin: var(--space-3) 0;
-  padding: var(--space-4);
-  background: var(--ok-bg);
-  /* 4 辺とも同じ太さ（上だけ太くすると、角でくさびの形になる。sheet.md「枠」。2026-11-05 夜のレビュー 12） */
-  border: var(--bw-2) solid var(--ok-line);
-  border-radius: var(--radius-l);
+  --face-pad: var(--sp-5);
+  padding: var(--sp-5) var(--face-pad);
+  border-radius: var(--radius-face);
+  background: var(--face-midori);
 }
 
-/* 残っている所がある・言い切れないときは、緑にしない */
 .clean[data-verdict="left"] {
-  background: var(--color-surface);
-  border-color: var(--color-accent);
+  background: var(--face-beni);
 }
 
 .clean[data-verdict="unsure"] {
-  background: var(--color-surface);
-  border-color: var(--color-base);
+  background: var(--face-kinari);
 }
 
 .clean h3 {
-  font-size: var(--text-h2);
+  font-size: var(--fs-h2);
   margin: 0 0 var(--space-1);
 }
 
@@ -1698,7 +1820,7 @@ progress {
 }
 
 .clean-count[data-verdict="left"] {
-  color: var(--color-accent);
+  color: var(--danger);
 }
 
 .download {
@@ -1707,33 +1829,37 @@ progress {
   justify-content: center;
   min-height: var(--button-height-large);
   padding: var(--space-2) var(--space-4);
-  border: var(--border-strong) solid var(--color-ok);
-  border-radius: var(--radius);
-  background: var(--color-ok);
-  color: var(--color-on-dark);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--ok);
+  color: var(--text-on-strong);
   font-weight: 700;
-  font-size: var(--text-h2);
+  font-size: var(--fs-h3);
   text-align: center;
   text-decoration: none;
+  transition: background-color var(--dur-hover) var(--ease-out);
 }
 
 .clean[data-verdict="left"] .download,
 .clean[data-verdict="unsure"] .download {
-  background: var(--color-base);
-  border-color: var(--color-base);
+  background: var(--surface-strong);
 }
 
 .download[href]:hover {
-  text-decoration: underline;
+  background: var(--midori-800);
+}
+
+.clean[data-verdict="left"] .download[href]:hover,
+.clean[data-verdict="unsure"] .download[href]:hover {
+  background: var(--surface-strong);
 }
 
 /* 読み直しが通るまで押せない形（href がない）。押せるボタンと見分けられるよう、地と字の色を変え、斜線の印も付ける。
    残っている所があるときの墨の地より優先する */
 .download[aria-disabled="true"],
 .clean .download[aria-disabled="true"] {
-  border-color: var(--color-control-line);
-  background: var(--color-chip);
-  color: var(--color-muted);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 
@@ -1748,7 +1874,7 @@ progress {
 }
 
 .save-note[data-gate="blocked"] {
-  color: var(--color-accent);
+  color: var(--danger);
 }
 
 .save-confirm {
@@ -1797,7 +1923,7 @@ progress {
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-1) 0;
-  border-top: 1px solid var(--color-line);
+  border-top: var(--bw-2) solid var(--surface-page);
 }
 
 .ba-count {
@@ -1806,7 +1932,7 @@ progress {
 }
 
 .before-after li[data-left] .ba-count {
-  color: var(--color-accent);
+  color: var(--danger);
 }
 
 .before-after li[data-left] .ba-count::before {
@@ -1825,21 +1951,18 @@ progress {
   color: var(--color-muted);
 }
 
+/* 残っていた所・消せなかった所：面の中の 1 段（地・枠は持たない）。紅の太字の題と「▲」で示す */
 .not-done {
-  margin: var(--space-3) 0;
-  padding: var(--pad-box-y) var(--pad-box-x);
-  padding-left: var(--pad-box-x-accent);
-  background: var(--danger-bg);
-  border: var(--bw-1) solid var(--danger-line);
-  border-left-width: var(--bw-accent);
-  border-radius: var(--radius-m);
+  margin: var(--sp-2) 0;
+  padding-top: var(--sp-2);
+  border-top: var(--bw-2) solid var(--surface-page);
 }
 
 .not-done h3,
 .not-done h4 {
   margin: 0;
   font-size: 1rem;
-  color: var(--color-accent);
+  color: var(--danger);
 }
 
 .not-done ul,
@@ -1855,7 +1978,7 @@ progress {
 .sanitize-more,
 .clean-more {
   margin-top: var(--space-2);
-  border-top: var(--bw-1) solid var(--line-hair);
+  border-top: var(--bw-2) solid var(--surface-page);
 }
 
 .sanitize-more summary,
@@ -1893,14 +2016,10 @@ progress {
   font-size: var(--text-small);
 }
 
+/* 何も見つからないときの結論：この面そのものが緑になる（上の .result-face）。結論は面の中の 1 段で、地・枠は持たない */
 .verified[data-state="clean"] {
-  border: var(--bw-1) solid var(--ok-line);
-  border-left-width: var(--bw-accent);
-  border-radius: var(--radius-m);
-  background: var(--ok-bg);
-  padding: var(--pad-box-y) var(--pad-box-x);
-  padding-left: var(--pad-box-x-accent);
-  color: var(--color-ok);
+  padding: var(--sp-2) 0 var(--sp-3);
+  color: var(--midori-800);
   font-weight: 700;
 }
 
@@ -1920,64 +2039,34 @@ progress {
   display: none;
 }
 
+/* 見つけられる範囲の一文：面の中の 1 段。「ｉ」の印（地・枠は持たない） */
 .scope-note {
-  margin: var(--space-4) 0 0;
-  padding: var(--pad-box-y) var(--pad-box-x);
-  padding-left: var(--pad-box-x-accent);
-  border: var(--bw-1) solid var(--info);
-  border-left-width: var(--bw-accent);
-  border-radius: var(--radius-m);
-  background: var(--info-bg);
-  font-size: var(--text-small);
+  margin: 0;
+  padding: var(--sp-3) 0;
+  font-size: var(--fs-small);
+}
+
+.scope-note::before {
+  content: "ｉ ";
+  font-weight: 700;
 }
 
 /* ---------------------------------------------------------------- 狭い画面：帯 → 結果 → 縮小 → ページ（幅 320px でも横にはみ出さない） */
 
 /* 幅 900px（字が 18px のとき）より狭いとき。字を大きくすると、早めに縦に積む */
 @container page (max-width: 50rem) {
-  .band {
-    padding: var(--space-3) var(--space-4);
-  }
-  .steps {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-  }
-  .steps li {
-    border-radius: var(--radius);
-  }
-  .guide {
-    padding: var(--space-3) var(--space-3) 0;
-  }
-  /* 狭い窓：紹介・進み具合・置き場が、スクロールせずに入るように詰める（§7） */
-  .band {
-    flex-wrap: nowrap;
-    gap: var(--space-3);
-  }
-  .about-link {
-    min-width: 0;
-    text-align: right;
-  }
-  .hero-title {
-    font-size: var(--fs-h2);
-  }
-  .drop {
-    margin-top: var(--space-3);
-    gap: var(--space-2);
-  }
-  .drop {
+  /* 読み込む前の 2 列（概要・置き場）を、1 列に積む（概要が上） */
+  .page:has(> .workspace[data-state="empty"]) {
     grid-template-columns: minmax(0, 1fr);
-    padding: var(--space-5) var(--space-4);
-  }
-  .drop-pick {
-    justify-self: start;
+    gap: var(--sp-5);
+    padding-top: var(--sp-3);
   }
   .workspace,
   .workspace[data-state="empty"],
   .workspace[data-state="working"] {
     display: flex;
     flex-direction: column;
-    padding: var(--space-3);
+    padding: var(--sp-3) var(--gut) var(--sp-5);
   }
   .splitter {
     display: none;
@@ -1986,7 +2075,6 @@ progress {
     order: -1;
     /* 縦に積むときは幅いっぱいにする（中の字の最小の幅で、列が窓より広がらないように） */
     align-self: stretch;
-    padding: var(--space-4);
   }
   .thumbs {
     flex-direction: row;
@@ -1996,9 +2084,6 @@ progress {
   .thumb {
     width: 4.5rem;
     flex: none;
-  }
-  .stage {
-    padding: var(--space-3);
   }
   /* 狭いときは縦に積むので、PDF の欄を上に貼り付けない（D1） */
   .workspace[data-state="result"] .stage,
@@ -2052,6 +2137,87 @@ progress {
   }
 }
 
+/* 狭い画面（40rem 以下。サイトのページと同じ切り替え。design/sheet.md「案 C」）：
+ * - 上の帯は、ロゴと data-narrow の付いたリンク 2 本だけを 1 行に（メニューの丸は作らない。ほかの行き先は下の帯にある）
+ * - 色の面は画面の端いっぱいまで広げ、角を 0 にする。中の字・ボタンは縮めない
+ * - 主なボタン（PDF を選ぶ・整える・保存する）は幅いっぱい */
+@container page (max-width: 40rem) {
+  .page {
+    --gut: var(--sp-4);
+  }
+  .site-band {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1) var(--sp-2);
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .site-brand {
+    min-width: 0;
+    margin-right: auto;
+    font-size: var(--fs-h3);
+  }
+  .brand-mark {
+    width: 2rem;
+    height: 2rem;
+  }
+  .site-nav {
+    display: contents;
+  }
+  .site-nav a:not([data-narrow]) {
+    display: none;
+  }
+  .site-nav a {
+    padding: 0 var(--sp-3);
+    font-size: var(--fs-small);
+  }
+  .hero-title {
+    font-size: var(--text-hero-narrow);
+  }
+  .drop,
+  .filebar,
+  .result-face,
+  .clean,
+  #coverage-slot .group,
+  .props {
+    margin-inline: calc(-1 * var(--gut));
+    border-radius: 0;
+  }
+  .result-face,
+  .clean {
+    --face-pad: var(--gut);
+  }
+  .actions #sanitize {
+    border-radius: 0;
+  }
+  .drop {
+    padding: var(--sp-6) var(--gut);
+  }
+  .drop-pick {
+    width: 100%;
+  }
+  .filebar {
+    align-self: stretch; /* 負の余白の分だけ広がる（幅を決めると、真ん中に寄せる並びで片側へずれる） */
+    width: auto;
+    padding: var(--sp-2) var(--gut);
+  }
+  #coverage-slot .group,
+  .props summary {
+    padding-inline: var(--gut);
+  }
+  .props-body {
+    padding-inline: var(--gut);
+  }
+}
+
+/* とても狭い画面（26rem 以下。幅 390 の電話など）：上の帯は、ロゴと「お守りPDF について」の 1 本だけにして 1 行に収める
+   （サイトのページは「PDF を確かめる」の 1 本。検査のページでは今いるページなので、初めて来た人に要る紹介を残す） */
+@container page (max-width: 26rem) {
+  .site-nav a[data-narrow]:not([data-narrowest]) {
+    display: none;
+  }
+}
+
 /* 黒塗りの候補（個人情報らしい字）を、選んだ所に加えるボタン（押した状態は、印と字でも示す。色だけにしない） */
 
 .pick-all {
@@ -2075,7 +2241,7 @@ progress {
   overflow-wrap: anywhere;
   margin-top: var(--space-4);
   padding-top: var(--space-3);
-  border-top: 1px solid var(--color-line);
+  border-top: var(--bw-2) solid var(--surface-page);
 }
 
 .compress h4 {
@@ -2115,7 +2281,7 @@ progress {
   align-items: center;
   min-height: var(--target-min);
   padding: var(--space-1) 0;
-  border-top: 1px solid var(--color-line);
+  border-top: var(--bw-2) solid var(--surface-page);
   cursor: pointer;
 }
 
@@ -2220,18 +2386,41 @@ progress {
 /* とても狭い窓（字を大きくしたスマートフォンなど。幅を rem で測るので、字が大きいほど早く効く）：
    上の帯のロゴと紹介のリンクを、横に並べきれなければ 2 段にする（横にはみ出さない） */
 @container page (max-width: 16rem) {
-  .band {
+  .site-band {
+    justify-content: flex-start;
+  }
+  .site-brand {
+    margin-right: 0;
+  }
+  /* 語のまとまりで折る決まりをゆるめ、どこでも折ってはみ出さない（字を大きくした電話など） */
+  .site-nav a,
+  .drop-note {
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+  .drop {
+    padding-inline: var(--sp-3);
+  }
+  .drop-pick {
+    padding-inline: var(--sp-3);
+  }
+  /* 手順の 1 行と、中身の行（「中身：」・字・ボタン）は、入りきらなければ折り返す */
+  .steps {
     flex-wrap: wrap;
   }
-  .about-link {
-    margin-left: 0;
-    text-align: left;
+  .items > li > .reveal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .group-head,
+  .coverage-sum {
+    overflow-wrap: anywhere;
+    word-break: normal;
   }
 }
 
 /* 高さの低い窓（横向きのスマートフォン・大きな拡大）：上の帯を詰め、「整える」が早く見えるようにする */
 @media (max-height: 31rem) {
-  .band {
+  .site-band {
     padding-block: var(--space-1);
   }
   .steps .step-note {
@@ -2253,10 +2442,10 @@ progress {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-5);
-  border: var(--border-strong) solid var(--color-accent);
-  border-radius: var(--radius-panel);
-  background: var(--color-accent-tint);
+  padding: var(--sp-5);
+  border-radius: var(--radius-face);
+  background: var(--face-beni);
+  box-shadow: inset 0 0 0 var(--bw-2) var(--danger);
   text-align: center;
   pointer-events: none;
 }
@@ -2309,7 +2498,7 @@ progress {
   margin: 0;
   padding: var(--space-2) 0;
   border: 0;
-  border-top: 1px solid var(--color-line);
+  border-top: var(--bw-2) solid var(--surface-page);
 }
 
 .tidy-row legend,
@@ -2345,9 +2534,9 @@ progress {
   width: 100%;
   min-height: var(--target-min);
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-card);
   color: var(--color-base);
   font: inherit;
 }
@@ -2406,6 +2595,12 @@ progress {
 
 .results details[open] > summary:not(.coverage-summary)::before {
   content: "▼";
+}
+
+/* 題の span は、印（▶▼）の右の残りの幅に収め、折り返す（狭い画面で、題が印の次の行に落ちないように） */
+.props summary > span:first-child {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* 押せる所のカーソル：チェックボックス・ラジオボタンとその字・開け閉めの見出しも指の形。押せないものは ⊘ */

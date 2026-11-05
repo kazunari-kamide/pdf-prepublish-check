@@ -19,17 +19,26 @@
       <span class="drop-note">PDF はこの端末のブラウザの中だけで読みます。どこにも送りません。</span>
     </div>
     <p id="unofficial" class="unofficial" role="alert" hidden></p>
-    <header class="band">
-      <p class="brand"><!--omamori:mark-->お守りPDF</p>
-      <a class="about-link" href="/about">お守りPDF について</a>
+    <!-- 上の帯（案 C。サイトのページと同じ形：design/sheet.md「案 C」の上の帯）。検査のページなので「PDF を確かめる」は置かない。
+         狭い画面（40rem 以下）は data-narrow の 2 本、とても狭い画面（26rem 以下）は「お守りPDF について」の 1 本だけ（メニューの丸は作らない） -->
+    <header class="site-band">
+      <a class="site-brand" href="/check"><!--omamori:mark-->お守りPDF</a>
+      <nav class="site-nav" aria-label="サイトの案内">
+        <a href="/about" data-narrow data-narrowest>お守りPDF について</a>
+        <a href="/articles/" data-narrow>記事の一覧</a>
+        <a href="/faq">よくある質問</a>
+      </nav>
     </header>
 
+    <!-- 頭（概要・手順）と作業する所。読み込む前だけ、左に概要・右に置き場の 2 列（案 C。src/style.css の .page） -->
+    <div class="page" id="page">
     <!-- 概要と進み具合（2026-11-05 本人が承認したトップの直し）。左右 2 列の上に置く。
          概要（見出し・具体例の 1 文・札 3 つ）は、PDF を読み込む前だけ。進み具合（手順）は、読み込んだあとだけ（src/style.css） -->
     <div class="guide" id="guide">
       <div class="hero" id="hero">
-        <h1 class="hero-title">公開する前に、<wbr />PDF の「見えない残り」を消す</h1>
-        <p class="hero-lead">黒塗りの下の字、作った人の名前、前の版などを見つけて消し、消えたかを読み直して確かめます。</p>
+        <h1 class="hero-title">見た目は消えても、<wbr />PDF の中に残ることがあります</h1>
+        <p class="hero-lead">黒塗りの下の字や作った人の名前、前の版などを見つけて消した PDF を作り、もう一度調べて消えたかを確かめます。</p>
+        <p class="hero-scope">よくある残り方を調べます。すべてを見つけるものではありません。</p>
         <ul class="hero-chips" aria-label="約束">
           <li>どこにも送らない</li>
           <li>無料</li>
@@ -72,9 +81,9 @@
         </label>
         <!-- 枠のすぐ下に、控えめな入口を 2 つ（A5）。規約の 1 行は、その下に小さな字で -->
         <p class="sample" id="sample-row">
-          <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
+          <button id="sample" type="button" class="sample-button"><span>見本の PDF で試す</span></button>
           <span class="sample-note">（架空の申請書）</span>
-          <a class="about-more" href="/about#lp-remains">どんなものが残る？</a>
+          <a class="about-more" href="/about#lp-remains"><span>どんなものが残る？</span></a>
         </p>
         <details class="limit-entry" id="limit-row">
           <summary>提出先の容量に合わせて小さくしたいとき</summary>
@@ -113,31 +122,55 @@
       <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="PDF の欄と結果の欄の幅（左右の矢印キーで動かせます）" aria-valuemin="0" aria-valuemax="100" tabindex="0"></div>
 
       <aside class="results" id="results" tabindex="-1" aria-labelledby="result-title">
-        <h2 id="result-title" tabindex="-1">種類ごとの結果</h2>
-        <p id="status" role="status" aria-live="polite">まだ PDF を選んでいません。</p>
-        <progress id="progress" max="1" value="0" aria-label="進み具合" hidden></progress>
+        <!-- 結果の面（案 C）：面は 1 段だけ。中は行と白の区切りだけで、面・枠を重ねない。
+             面の色は中身で変わる（見えない情報が見つかった：紅／何も見つからない：緑／それ以外：生成り。src/style.css）。
+             並び：見出し → 状態 → 結論 → お知らせ → 一覧 → 範囲の一文 → 自分で選ぶ → 整える（2026-11-05 夜 本人が承認） -->
+        <div class="result-face" id="result-face">
+          <h2 id="result-title" tabindex="-1">種類ごとの結果</h2>
+          <p id="status" role="status" aria-live="polite">まだ PDF を選んでいません。</p>
+          <progress id="progress" max="1" value="0" aria-label="進み具合" hidden></progress>
 
-        <!-- 何も見つからないときの結論（緑の箱）。「念のため整える」より先に読めるよう、ボタンの上に置く（2026-11-05 夜のレビュー 7） -->
-        <div id="verified" class="verified" data-state="none" hidden>
-          <p id="verified-text"></p>
-          <p id="verified-scope" class="verified-scope"></p>
-        </div>
-        <div id="actions" class="actions" hidden>
-          <div id="consent" class="consent" hidden></div>
-          <button id="sanitize" type="button" aria-describedby="sanitize-note tidy-summary">整える</button>
-          <p id="sanitize-note"></p>
-          <!-- 消す対象の列挙とプロパティの扱いは、開けて読む（2026-11-05 本人の画面のレビュー B1） -->
-          <details id="sanitize-more" class="sanitize-more">
-            <summary>整えると消すもの</summary>
-            <p id="sanitize-list" class="sanitize-list"></p>
-            <p id="tidy-summary" class="tidy-summary"></p>
-          </details>
-          <div id="redact-left" class="not-done" hidden>
-            <h3>▲ 読み直しで残っていた所</h3>
-            <ul id="redact-left-list"></ul>
+          <!-- 何も見つからないときの結論（この面が緑になる）。「念のため整える」より先に読めるよう、ボタンの上に置く（2026-11-05 夜のレビュー 7） -->
+          <div id="verified" class="verified" data-state="none" hidden>
+            <p id="verified-text"></p>
+            <p id="verified-scope" class="verified-scope"></p>
+          </div>
+          <div id="notices" class="notices" hidden>
+            <h3>お知らせ</h3>
+            <ul id="notice-list"></ul>
+          </div>
+
+          <div id="groups" class="groups"></div>
+
+          <!-- 誠実さを伝える一文。結果の一覧のすぐ下に、埋もれさせずに出す（2026-11-05 本人の画面のレビュー B8） -->
+          <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。</p>
+
+          <div id="pick-tools" class="pick-tools" hidden>
+            <button id="pick-toggle" class="pick-toggle btn-sub" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
+            <p id="pick-help" class="pick-help" hidden>ページの絵の上を、黒塗りしたい所の角から角へ、ドラッグしてください。キーボードでは、ページの絵に移って Enter で枠を出し、矢印キーで動かし、Shift と矢印キーで大きさを変え、Enter で決めます（Esc でやめます）。選んだ所は、墨の点線の枠で出ます。</p>
+            <p id="pick-help-candidates" class="pick-help" hidden>個人情報の候補から選ぶ：上の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します。</p>
+            <div id="picks" class="picks" hidden>
+              <p id="pick-count" aria-live="polite"></p>
+              <ul id="pick-list"></ul>
+            </div>
+          </div>
+          <div id="actions" class="actions" hidden>
+            <div id="consent" class="consent" hidden></div>
+            <p id="sanitize-note"></p>
+            <!-- 消す対象の列挙とプロパティの扱いは、開けて読む（2026-11-05 本人の画面のレビュー B1） -->
+            <details id="sanitize-more" class="sanitize-more">
+              <summary>整えると消すもの</summary>
+              <p id="sanitize-list" class="sanitize-list"></p>
+              <p id="tidy-summary" class="tidy-summary"></p>
+            </details>
+            <div id="redact-left" class="not-done" hidden>
+              <h3>▲ 読み直しで残っていた所</h3>
+              <ul id="redact-left-list"></ul>
+            </div>
+            <!-- 「整える」は結果の面の下の端いっぱいの紅の帯（案 C）。注意書きと「整えると消すもの」は、その上に置く -->
+            <button id="sanitize" type="button" aria-describedby="sanitize-note tidy-summary">整える</button>
           </div>
         </div>
-
 
         <section id="clean" class="clean" aria-labelledby="clean-title" hidden>
           <h3 id="clean-title" tabindex="-1">整えた結果</h3>
@@ -200,26 +233,6 @@
           </details>
         </section>
 
-        <div id="notices" class="notices" hidden>
-          <h3>お知らせ</h3>
-          <ul id="notice-list"></ul>
-        </div>
-
-        <div id="groups" class="groups"></div>
-
-        <div id="pick-tools" class="pick-tools" hidden>
-          <button id="pick-toggle" class="pick-toggle btn-sub" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
-          <p id="pick-help" class="pick-help" hidden>ページの絵の上を、黒塗りしたい所の角から角へ、ドラッグしてください。キーボードでは、ページの絵に移って Enter で枠を出し、矢印キーで動かし、Shift と矢印キーで大きさを変え、Enter で決めます（Esc でやめます）。選んだ所は、墨の点線の枠で出ます。</p>
-          <p id="pick-help-candidates" class="pick-help" hidden>個人情報の候補から選ぶ：上の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します。</p>
-          <div id="picks" class="picks" hidden>
-            <p id="pick-count" aria-live="polite"></p>
-            <ul id="pick-list"></ul>
-          </div>
-        </div>
-
-        <!-- 誠実さを伝える一文。結果の一覧のすぐ下に、埋もれさせずに出す（2026-11-05 本人の画面のレビュー B8） -->
-        <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。</p>
-
         <div id="coverage-slot"></div>
 
         <details id="props" class="props" hidden></details>
@@ -228,6 +241,7 @@
 
       </aside>
     </main>
+    </div>
 
     <!-- サイトの部分（持ち場 G）：サイトの案内のリンク。並びは src/site/render.ts の FOOT_LINKS と同じ（tests/site-pages.test.ts）。ページの中身は src/site/、ビルドは site.ts -->
     <footer class="site-links" aria-label="サイトの案内">

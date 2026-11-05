@@ -47,7 +47,7 @@ describe("ページへの差し込み", () => {
     const html = injectLogo(index);
     expect(html).not.toContain(MARK_PLACEHOLDER);
     expect(html).not.toContain(FAVICON_PLACEHOLDER);
-    expect(html).toContain('<p class="brand"><svg class="brand-mark" aria-hidden="true" focusable="false" ');
+    expect(html).toContain('<a class="site-brand" href="/check"><svg class="brand-mark" aria-hidden="true" focusable="false" ');
     expect(html).toContain('<link rel="icon" href="data:image/svg+xml,');
   });
 

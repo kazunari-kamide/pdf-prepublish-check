@@ -341,16 +341,20 @@ describe("検査のページ（check.html）", () => {
     expect([...foot.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1])).toEqual(["/check"]);
   });
 
-  it("最初の画面：概要（見出し 1 つ・具体例の 1 文・札 3 つ）と進み具合を、ヘッダーの外（2 列の上）に置く。送らないことの一文は置き場の中の 1 か所だけ", () => {
-    const band = html.match(/<header class="band">[\s\S]*?<\/header>/)![0];
+  it("最初の画面：概要（見出し 1 つ・具体例の 1 文・範囲の 1 行・札 3 つ）と進み具合を、ヘッダーの外（2 列の上）に置く。送らないことの一文は置き場の中の 1 か所だけ", () => {
+    const band = html.match(/<header class="site-band">[\s\S]*?<\/header>/)![0];
     expect(band).not.toContain('class="steps"');
     expect(band).not.toMatch(/<h1\b/);
     const guide = html.match(/<div class="guide" id="guide">[\s\S]*?<\/ol>\s*<\/div>/)![0];
-    expect(guide).toContain('<h1 class="hero-title">公開する前に、<wbr />PDF の「見えない残り」を消す</h1>');
-    expect(guide).toContain("黒塗りの下の字、作った人の名前、前の版などを見つけて消し、消えたかを読み直して確かめます。");
+    // 見出しの文（2026-11-05 夜 本人が決定）。頭の説明では「読み直す」を「もう一度調べる」と言う（手順の名前はそのまま）
+    expect(guide).toContain('<h1 class="hero-title">見た目は消えても、<wbr />PDF の中に残ることがあります</h1>');
+    expect(guide).toContain("黒塗りの下の字や作った人の名前、前の版などを見つけて消した PDF を作り、もう一度調べて消えたかを確かめます。");
+    expect(guide).toContain('<p class="hero-scope">よくある残り方を調べます。すべてを見つけるものではありません。</p>');
     const chips = guide.match(/<ul class="hero-chips"[\s\S]*?<\/ul>/)![0];
     expect([...chips.matchAll(/<li>([^<]+)<\/li>/g)].map((m) => m[1])).toEqual(["どこにも送らない", "無料", "登録なし"]);
+    expect(guide.indexOf('class="hero-scope"')).toBeLessThan(guide.indexOf('class="hero-chips"'));
     expect(guide).toContain('<ol class="steps" aria-label="手順">');
+    expect(guide).toContain("読み直す</span>");
     expect(html.match(/<h1\b/g)).toHaveLength(1);
     expect(html.indexOf('id="guide"')).toBeLessThan(html.indexOf('id="workspace"'));
     const main = html.match(/<main[\s\S]*?<\/main>/)![0];
@@ -364,7 +368,7 @@ describe("検査のページ（check.html）", () => {
     expect(html).not.toContain("このパソコンのブラウザ");
     expect(html).toContain("この端末のブラウザの中だけで読みます。");
     const sample = html.match(/<p class="sample" id="sample-row">[\s\S]*?<\/p>/)![0];
-    expect(sample).toContain(`<a class="about-more" href="${ABOUT_PATH}#lp-remains">どんなものが残る？</a>`);
+    expect(sample).toContain(`<a class="about-more" href="${ABOUT_PATH}#lp-remains"><span>どんなものが残る？</span></a>`);
   });
 
   it("提出のために小さくする入口：見本のすぐ下に、開けて選ぶ上限（既定は「選ばない」＝ふつうの検査）", () => {
@@ -375,9 +379,18 @@ describe("検査のページ（check.html）", () => {
     expect(html.indexOf('id="limit-row"')).toBeGreaterThan(html.indexOf('id="sample-row"'));
   });
 
-  it("上の帯に、サービス紹介のページへのリンクを 1 つだけ置く", () => {
-    const band = html.match(/<header class="band">[\s\S]*?<\/header>/)![0];
-    expect([...band.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1])).toEqual([ABOUT_PATH]);
+  it("上の帯は、サイトのページと同じ形（ロゴ・案内）。検査のページなので「PDF を確かめる」は置かず、狭い画面の 2 本は紹介と記事の一覧", () => {
+    const band = html.match(/<header class="site-band">[\s\S]*?<\/header>/)![0];
+    expect(band).toContain('<a class="site-brand" href="/check"><!--omamori:mark-->お守りPDF</a>');
+    const nav = [...band.matchAll(/<a href="([^"]+)"([^>]*)>([^<]+)<\/a>/g)].map((m) => [m[1], m[3], (m[2] ?? "").includes("data-narrow")]);
+    expect(nav).toEqual([
+      [ABOUT_PATH, "お守りPDF について", true],
+      ["/articles/", "記事の一覧", true],
+      ["/faq", "よくある質問", false],
+    ]);
+    expect(band).not.toContain("site-band-cta");
+    // とても狭い画面で残す 1 本は、紹介のページ
+    expect([...band.matchAll(/<a href="([^"]+)"[^>]*data-narrowest/g)].map((m) => m[1])).toEqual([ABOUT_PATH]);
   });
 
   it("書体と部品のライセンスは、下の帯のライセンスのページへのリンクで示す（結果の欄の一文は、2026-11-05 本人の指示で外した）", () => {
