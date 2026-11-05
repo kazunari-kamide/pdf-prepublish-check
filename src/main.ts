@@ -547,7 +547,7 @@ function revealBox(content: string, what: string, full?: () => HTMLElement): HTM
   const box = make("div", undefined, "reveal");
   const text = make("span", maskContent(content), "reveal-text");
   text.setAttribute("aria-live", "polite");
-  const btn = make("button", REVEAL_LABEL.closed, "reveal-toggle");
+  const btn = make("button", REVEAL_LABEL.closed, "reveal-toggle btn-sub");
   btn.type = "button";
   btn.setAttribute("aria-pressed", "false");
   btn.setAttribute("aria-label", `${what}の中身を見る`);
@@ -566,7 +566,7 @@ function revealBox(content: string, what: string, full?: () => HTMLElement): HTM
 
 /** 候補の行の「黒塗りに加える／外す」（押した状態を aria-pressed と字で示す） */
 function candidateButton(r: Row): HTMLButtonElement {
-  const b = make("button", undefined, "pick-candidate");
+  const b = make("button", undefined, "pick-candidate btn-sub");
   b.type = "button";
   b.dataset.candidate = String(r.no);
   b.addEventListener("click", () => {
@@ -606,7 +606,7 @@ function coverageText(c: CoverageRow, phase: Session["phase"]): string {
 function renderGroups(s: Session) {
   // 中身を伏せていることの一言は、結果の一番上に 1 回だけ（種類ごとに繰り返さない。2026-11-05 本人の画面のレビュー B2）
   if (s.view.rows.some((r) => r.content)) {
-    ui.groups.append(make("p", `見つけた字の中身は、頭の数文字だけを出し、残りは伏せます。「中身を見る」で全部を出します（このパソコンの画面の中だけで、どこにも送りません）。${REVEAL_NOTE}`, "reveal-note"));
+    ui.groups.append(make("p", `見つけた字の中身は、頭の数文字だけを出し、残りは伏せます。「中身を見る」で全部を出します（この端末のブラウザの中だけで、どこにも送りません）。${REVEAL_NOTE}`, "reveal-note"));
   }
   for (const g of s.view.groups) {
     if (g.status === "error" || !g.rows.length) continue;
@@ -620,7 +620,7 @@ function renderGroups(s: Session) {
     // 黒塗りの候補（個人情報らしい字）：片付ける前だけ、選んだ所に加えるボタンを付ける（キーボードでも選べる）
     const candidates = s.phase === "before" && !ui.pickTools.hidden ? g.rows.filter(isCandidate) : [];
     if (candidates.length) {
-      const all = make("button", "候補をすべて黒塗りに加える", "pick-all");
+      const all = make("button", "候補をすべて黒塗りに加える", "pick-all btn-sub");
       all.type = "button";
       all.addEventListener("click", () => {
         picks = addAllCandidates(picks, candidates);
@@ -964,7 +964,7 @@ function renderProperties(s: Session) {
   body.append(
     make(
       "p",
-      `欄の値は、頭の数文字だけを出しています。「中身を見る」で全部を出します（このパソコンの画面の中だけで、外には出ません）。${REVEAL_NOTE}団体名らしい語には、全部を出したときに印を付けています（形で拾うだけなので、見落としや関係のない語もあります）。`,
+      `欄の値は、頭の数文字だけを出しています。「中身を見る」で全部を出します（この端末のブラウザの中だけで、外には出ません）。${REVEAL_NOTE}団体名らしい語には、全部を出したときに印を付けています（形で拾うだけなので、見落としや関係のない語もあります）。`,
       "props-note",
     ),
   );
@@ -983,7 +983,7 @@ function renderProperties(s: Session) {
   }
   // その場で「消す」へ案内する（片付ける前で、片付けられるときだけ）
   if (count && s.phase === "before" && !ui.sanitize.disabled) {
-    const go = make("button", "この欄を消す（「整える」へ）", "props-go");
+    const go = make("button", "この欄を消す（「整える」へ）", "props-go btn-sub");
     go.type = "button";
     go.addEventListener("click", () => {
       ui.actions.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1438,7 +1438,7 @@ function renderPicks() {
   ui.pickList.replaceChildren(
     ...picks.map((p, i) => {
       const li = make("li");
-      const rm = make("button", "外す", "pick-remove");
+      const rm = make("button", "外す", "pick-remove btn-sub");
       rm.type = "button";
       rm.setAttribute("aria-label", `選んだ所 ${i + 1}（ページ ${p.page}）を外す`);
       rm.addEventListener("click", () => {

@@ -711,18 +711,6 @@ body:has(.terms-dialog[open]) {
 
 .filebar-again {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--target-min);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .sheet-wrap {
@@ -1136,15 +1124,7 @@ progress {
 }
 
 .props-go {
-  min-height: var(--target-min);
-  margin-top: var(--space-3);
-  padding: var(--space-1) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-weight: 700;
-  cursor: pointer;
+  margin-top: var(--sp-3);
 }
 
 /* 幅 480px（字が 18px のとき）より狭いとき */
@@ -1207,12 +1187,6 @@ progress {
 }
 
 /* 「自分で黒塗りする所を選ぶ」は、結果の一覧の下に移した（B1）。前は .actions の中にあり、ボタンの形をそこから受けていた */
-.pick-tools button {
-  border-radius: var(--radius);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
 
 .pick-tools p {
   margin: var(--space-1) 0 0;
@@ -1221,17 +1195,6 @@ progress {
 
 .pick-tools .pick-toggle {
   width: auto;
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-size: var(--text-small);
-}
-
-.pick-tools .pick-toggle[aria-pressed="true"] {
-  border: var(--border-strong) solid var(--color-base);
-  background: var(--color-chip);
 }
 
 .pick-help {
@@ -1255,12 +1218,6 @@ progress {
 
 .pick-tools .pick-remove {
   width: auto;
-  min-height: var(--target-min);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-control-line);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-size: var(--text-small);
 }
 
 .items {
@@ -1446,7 +1403,7 @@ progress {
   margin: var(--space-3) 0 var(--space-4);
 }
 
-.actions button {
+.actions #sanitize {
   width: 100%;
   min-height: var(--button-height-large);
   padding: var(--space-2) var(--space-4);
@@ -1461,6 +1418,7 @@ progress {
 
 /* 何も見つからないとき：「念のため整える」は第 2 の形（枠だけ・墨の字・ふつうの大きさ。2026-11-05 夜のレビュー 7） */
 .actions #sanitize[data-weight="sub"] {
+  /* 第 2 の形（.btn-sub と同じ見た目。「整える」だけは主と第 2 を切り替えるので、ここに書く） */
   min-height: var(--target-min);
   border-width: var(--bw-1);
   border-color: var(--line-control);
@@ -1469,7 +1427,7 @@ progress {
   font-size: var(--fs-small);
 }
 
-.actions button:disabled {
+.actions #sanitize:disabled {
   border-color: var(--color-control-line);
   background: var(--color-chip);
   color: var(--color-muted);
@@ -1479,6 +1437,40 @@ progress {
 .actions p {
   margin: var(--space-1) 0 0;
   font-size: var(--text-small);
+}
+
+/* ---------------------------------------------------------------- 第 2 の形のボタン（枠だけ）：1 つの部品（2026-11-05 夜のレビュー 10）
+   別の PDF にする・中身を見る・黒塗りに加える・候補をすべて加える・自分で黒塗りする所を選ぶ・外す・この欄を消す・報告書・小さくする・一覧へ戻る。
+   押した形（aria-pressed）は、線の太さを変えず、内側の線と地の色で示す（押しても 1px 動かない） */
+.btn-sub {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-height: var(--target-min);
+  padding: 0 var(--sp-4);
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-sub:hover {
+  background: var(--surface-subtle);
+}
+
+.btn-sub[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 var(--bw-1) var(--line-strong);
+  background: var(--surface-sunken);
+}
+
+.back-to-list {
+  margin-top: var(--sp-3);
 }
 
 /* ---------------------------------------------------------------- 4 読み直す：片付けた結果 */
@@ -1643,21 +1635,7 @@ progress {
 /* 処理の報告書：保存のボタンより控えめな、枠だけのボタン */
 .report-download {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--target-min);
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.report-download:hover {
-  text-decoration: underline;
+  margin-top: var(--sp-3);
 }
 
 .report-note {
@@ -1867,18 +1845,6 @@ progress {
 }
 
 /* 黒塗りの候補（個人情報らしい字）を、選んだ所に加えるボタン（押した状態は、印と字でも示す。色だけにしない） */
-.pick-all,
-.pick-candidate {
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font: inherit;
-  font-size: var(--text-small);
-  cursor: pointer;
-}
 
 .pick-all {
   margin: 0 0 var(--space-2);
@@ -1888,10 +1854,6 @@ progress {
   margin: var(--space-1) 0 var(--space-2);
 }
 
-.pick-candidate[aria-pressed="true"] {
-  border: var(--border-strong) solid var(--color-base);
-  background: var(--color-chip);
-}
 
 /* ページの絵（自分で黒塗りする所を、キーボードで選んでいる間だけ Tab で止まる） */
 .sheet[data-picking="true"]:focus-visible {
@@ -1968,14 +1930,6 @@ progress {
 
 .compress-run {
   width: auto;
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .compress-run:disabled {
@@ -2107,21 +2061,6 @@ progress {
   overflow-wrap: anywhere;
 }
 
-.reveal-toggle {
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font: inherit;
-  cursor: pointer;
-}
-
-.reveal-toggle[aria-pressed="true"] {
-  border: var(--border-strong) solid var(--color-base);
-  background: var(--color-chip);
-}
 
 .reveal-note {
   margin: 0 0 var(--space-2);

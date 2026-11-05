@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // プロパティを書き直す（整える。0.9.0 から）。
-// - 題・作成者・サブタイトル・キーワード・作成したアプリ・PDF を作ったアプリ・作成日・更新日を、項目ごとに「そのまま／書き直す／消す」。
+// - タイトル・作成者・件名・キーワード・作成したソフト・PDF に変換したソフト・作成日・更新日（名前は field-labels.ts）を、項目ごとに「そのまま／書き直す／消す」。
 // - 文書情報（Info）と XMP の両方に、同じ値から書く（片方にだけ古い値が残らない）。
 //   XMP は元のものを直さず、選んだ項目だけで作り直す（編集の履歴 xmpMM:History・文書の番号 DocumentID・ほかのアプリの独自の項目は残らない）。
 // - 書き出したあと、書き直した・消した欄の古い値が残っていないかを、バイト列から読み直して確かめる（checkOldValues）。
@@ -16,19 +16,20 @@ import { xmpFields } from "../rules/props/index.ts";
 import { loadPdf } from "../rules/shared/load.ts";
 import { dictOf, nameOf, hasValue } from "./structure.ts";
 import type { NotDoneItem, PropertyChange, PropertyEdit, PropertyKey, RemovedItem, TidyPreflight } from "./types.ts";
+import { INFO_LABEL } from "./field-labels.ts";
 
 const N = (s: string) => PDFName.of(s);
 
 /** 項目と、文書情報・XMP の欄の組み（rules/props の PAIRS と同じ組み。日付を足した） */
 export const FIELDS: ReadonlyArray<{ key: PropertyKey; info: string; xmp: string; date: boolean; label: string }> = [
-  { key: "title", info: "Title", xmp: "dc:title", date: false, label: "題" },
-  { key: "author", info: "Author", xmp: "dc:creator", date: false, label: "作成者" },
-  { key: "subject", info: "Subject", xmp: "dc:description", date: false, label: "サブタイトル" },
-  { key: "keywords", info: "Keywords", xmp: "pdf:Keywords", date: false, label: "キーワード" },
-  { key: "creator", info: "Creator", xmp: "xmp:CreatorTool", date: false, label: "作成したアプリ" },
-  { key: "producer", info: "Producer", xmp: "pdf:Producer", date: false, label: "PDF を作ったアプリ" },
-  { key: "created", info: "CreationDate", xmp: "xmp:CreateDate", date: true, label: "作成日" },
-  { key: "modified", info: "ModDate", xmp: "xmp:ModifyDate", date: true, label: "更新日" },
+  { key: "title", info: "Title", xmp: "dc:title", date: false, label: INFO_LABEL.Title },
+  { key: "author", info: "Author", xmp: "dc:creator", date: false, label: INFO_LABEL.Author },
+  { key: "subject", info: "Subject", xmp: "dc:description", date: false, label: INFO_LABEL.Subject },
+  { key: "keywords", info: "Keywords", xmp: "pdf:Keywords", date: false, label: INFO_LABEL.Keywords },
+  { key: "creator", info: "Creator", xmp: "xmp:CreatorTool", date: false, label: INFO_LABEL.Creator },
+  { key: "producer", info: "Producer", xmp: "pdf:Producer", date: false, label: INFO_LABEL.Producer },
+  { key: "created", info: "CreationDate", xmp: "xmp:CreateDate", date: true, label: INFO_LABEL.CreationDate },
+  { key: "modified", info: "ModDate", xmp: "xmp:ModifyDate", date: true, label: INFO_LABEL.ModDate },
 ];
 const KEYS = new Set<string>(FIELDS.map((f) => f.key));
 

@@ -8,16 +8,17 @@
 // - PDF/A の印と電子署名は、整える前に問いかけて、同意を取る。既定は外す。
 
 import type { PropertyChange, PropertyEdit, PropertyEdits, PropertyKey } from "../../sanitize/types.ts";
+import { INFO_LABEL } from "../../sanitize/field-labels.ts";
 
 export const PROPERTY_FIELDS: ReadonlyArray<{ key: PropertyKey; label: string; info: string; xmp: string; date: boolean }> = [
-  { key: "title", label: "題", info: "Title", xmp: "dc:title", date: false },
-  { key: "author", label: "作成者", info: "Author", xmp: "dc:creator", date: false },
-  { key: "subject", label: "サブタイトル", info: "Subject", xmp: "dc:description", date: false },
-  { key: "keywords", label: "キーワード", info: "Keywords", xmp: "pdf:Keywords", date: false },
-  { key: "creator", label: "作成したアプリ", info: "Creator", xmp: "xmp:CreatorTool", date: false },
-  { key: "producer", label: "PDF を作ったアプリ", info: "Producer", xmp: "pdf:Producer", date: false },
-  { key: "created", label: "作成日", info: "CreationDate", xmp: "xmp:CreateDate", date: true },
-  { key: "modified", label: "更新日", info: "ModDate", xmp: "xmp:ModifyDate", date: true },
+  { key: "title", label: INFO_LABEL.Title, info: "Title", xmp: "dc:title", date: false },
+  { key: "author", label: INFO_LABEL.Author, info: "Author", xmp: "dc:creator", date: false },
+  { key: "subject", label: INFO_LABEL.Subject, info: "Subject", xmp: "dc:description", date: false },
+  { key: "keywords", label: INFO_LABEL.Keywords, info: "Keywords", xmp: "pdf:Keywords", date: false },
+  { key: "creator", label: INFO_LABEL.Creator, info: "Creator", xmp: "xmp:CreatorTool", date: false },
+  { key: "producer", label: INFO_LABEL.Producer, info: "Producer", xmp: "pdf:Producer", date: false },
+  { key: "created", label: INFO_LABEL.CreationDate, info: "CreationDate", xmp: "xmp:CreateDate", date: true },
+  { key: "modified", label: INFO_LABEL.ModDate, info: "ModDate", xmp: "xmp:ModifyDate", date: true },
 ];
 
 export type PropertyMode = "remove" | "keep" | "set";

@@ -82,7 +82,7 @@
           <span class="filebar-name" id="file-name"></span>
           <span class="filebar-facts" id="file-facts"></span>
           <!-- 1 つにまとめた（2026-11-05 本人の画面のレビュー B7）。最初の画面に戻り、そこで置く・選ぶ・見本を試す -->
-          <button id="go-home" class="filebar-again" type="button">別の PDF にする</button>
+          <button id="go-home" class="filebar-again btn-sub" type="button">別の PDF にする</button>
         </div>
 
         <figure class="sheet-wrap" id="sheet-wrap" hidden>
@@ -156,7 +156,7 @@
           </details>
           <details id="clean-tools" class="clean-more">
             <summary>そのほかの操作（報告書・小さくする）</summary>
-            <a id="report-download" class="report-download" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
+            <a id="report-download" class="report-download btn-sub" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
             <label id="report-contents" class="save-confirm" hidden>
               <input id="report-contents-box" type="checkbox" />
               <span>見つけた字の中身も、報告書に入れる（初めは入れません。入れたら、取り扱いに気をつけてください）</span>
@@ -170,7 +170,7 @@
               <fieldset class="compress-presets" id="compress-presets">
                 <legend>画像の細かさ</legend>
               </fieldset>
-              <button id="compress-run" class="compress-run" type="button">小さくする</button>
+              <button id="compress-run" class="compress-run btn-sub" type="button">小さくする</button>
               <div id="compress-result" class="compress-result" hidden>
                 <p id="compress-headline" class="compress-headline" tabindex="-1"></p>
                 <p id="compress-sizes" class="compress-sizes"></p>
@@ -195,7 +195,7 @@
         <div id="groups" class="groups"></div>
 
         <div id="pick-tools" class="pick-tools" hidden>
-          <button id="pick-toggle" class="pick-toggle" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
+          <button id="pick-toggle" class="pick-toggle btn-sub" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
           <p id="pick-help" class="pick-help" hidden>ページの絵の上を、黒塗りしたい所の角から角へ、ドラッグしてください。キーボードでは、ページの絵に移って Enter で枠を出し、矢印キーで動かし、Shift と矢印キーで大きさを変え、Enter で決めます（Esc でやめます）。選んだ所は、墨の点線の枠で出ます。</p>
           <p id="pick-help-candidates" class="pick-help" hidden>個人情報の候補から選ぶ：上の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します。</p>
           <div id="picks" class="picks" hidden>
