@@ -38,7 +38,7 @@ const MAX_PATTERN_TILES = 64;
 export const RULE_ID = "p7-hidden";
 // 1.4.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
 // 1.5.0：字の報告ごとに、読める本文か（readable）を付ける。表の体裁・罫線・飾りのような、まとまって出る型と分けるため（実物の PDF で「高」の誤検知が多かった。2026-11-05）
-export const RULE_VERSION = "1.5.0";
+export const RULE_VERSION = "1.6.0";
 
 export type P7Reason =
   | "hidden_layer"
@@ -1149,8 +1149,17 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
       type Group = { op: number; reason: P7Reason; rect: Rect; chars: number; text: string; last: Glyph };
       let group: Group | null = null;
       const pixels = new ImagePixels(ctx);
+      // 同じ字の並びを、同じ所に何度も描いたもの（同じ理由・同じ箱・同じ字数・同じ字）は 1 件にする（1.6.0 から。
+      // 実物の公開 PDF 1 件で、同じ 27 字が同じ所に 14 回描かれ、14 件に数えていた）。違う字が同じ所にあるときは、別の件のまま
+      const seen = new Set<string>();
       const flush = () => {
         if (group && group.chars > 0) {
+          const key = [group.reason, ...padRect(group.rect).map((v) => Math.round(v * 10)), group.chars, group.text].join("|");
+          if (seen.has(key)) {
+            group = null;
+            return;
+          }
+          seen.add(key);
           const f: P7Finding = { pattern: "P7", page: pageNo, reason: group.reason, rect: padRect(group.rect), chars: group.chars };
           if (options.includeText) f.text = group.text;
           report.findings.push(f);
