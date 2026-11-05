@@ -10,6 +10,7 @@ import { cspForMeta } from "../csp.ts";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
 import { renderRobots, renderSitemap, siteFiles, verificationMeta } from "../site.ts";
 import { ARTICLES } from "../src/site/articles.ts";
+import { GUIDE_PATHS } from "../src/site/pages.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS } from "../src/site/privacy.ts";
 import { escapeHtml, renderArticle, sitePaths } from "../src/site/render.ts";
 import type { Section } from "../src/site/types.ts";
@@ -61,9 +62,9 @@ describe("記事の数と形", () => {
 });
 
 describe("ページの HTML", () => {
-  it("記事 15 本・一覧・プライバシーの 17 枚", () => {
+  it("記事 15 本・一覧・プライバシーの 17 枚と、サイトの案内のページ（tests/site-pages.test.ts）", () => {
     expect(html.map(([n]) => n).sort()).toEqual(
-      ["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`)].sort(),
+      ["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...GUIDE_PATHS.map((p) => p.slice(1))].sort(),
     );
   });
 
@@ -76,8 +77,8 @@ describe("ページの HTML", () => {
       expect(page).not.toMatch(/<script\b/);
       expect(page).not.toMatch(/\sstyle=/);
       expect(page).not.toMatch(/\son[a-z]+=/);
-      // 外を指すのは canonical だけ
-      expect(page.replace(/<link rel="canonical" href="[^"]+" \/>/, "")).not.toMatch(/(src|href)="(https?:)?\/\//);
+      // 外を指すのは canonical と、GitHub へ移る <a> のリンクだけ
+      expect(page.replace(/<link rel="canonical" href="[^"]+" \/>/, "").replace(/<a href="https:\/\/github\.com\/[^"]*"/g, "<a")).not.toMatch(/(src|href)="(https?:)?\/\//);
       // 検査のページ（/）へつながる
       expect(page).toContain('href="/"');
     });

@@ -1,0 +1,259 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// サイトの案内のページ（ライセンス・利用規約・お問い合わせ・よくある質問・公開前の自己点検。src/site/pages.ts と site-licenses.ts）を確かめる。
+// - どのページにも同じ CSP・題・説明・canonical があり、検査のページへつながる。外を指すのは GitHub へ移るリンクだけ
+// - ライセンスの一覧は、package-lock.json・docs/licenses.md・各部品のライセンスの文と食い違わない
+// - 配るものに入る部品の一覧（SHIPPED_ROOTS）が、画面・ルール・片付けのコードの読み込みと食い違わない
+// - 検査のページの下の帯が、サイトのページの下の帯と同じ並び
+
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { cspForMeta } from "../csp.ts";
+import { OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { SHIPPED_ROOTS, buildLicenses, copyrightLines, githubRepo, tableUnder } from "../site-licenses.ts";
+import { renderSitemap, repoUrl, siteCss, siteFiles } from "../site.ts";
+import {
+  CHECKLIST_BLOCKS,
+  CHECKLIST_META,
+  CONTACT_BLOCKS,
+  CONTACT_META,
+  FAQ_BLOCKS,
+  FAQ_META,
+  GUIDE_PATHS,
+  LICENSES_META,
+  TERMS_BLOCKS,
+  TERMS_META,
+  renderGuidePages,
+} from "../src/site/pages.ts";
+import { FOOT_LINKS, escapeHtml, fileFor } from "../src/site/render.ts";
+import type { Section } from "../src/site/types.ts";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8");
+const REPO = "https://github.com/example-owner/example-repo";
+const opts = { origin: OFFICIAL_ORIGIN, csp: cspForMeta, cssHref: "/assets/site.css", repoUrl: REPO };
+const licenses = buildLicenses(ROOT);
+const pages = renderGuidePages(opts, licenses.data);
+const files = siteFiles();
+
+describe("ページの形", () => {
+  it("5 枚あり、sitemap にも並ぶ", () => {
+    expect([...pages.keys()].sort()).toEqual(["checklist.html", "contact.html", "faq.html", "licenses.html", "terms.html"]);
+    for (const p of GUIDE_PATHS) {
+      expect(files.has(fileFor(p)), p).toBe(true);
+      expect(renderSitemap()).toContain(`<loc>${OFFICIAL_ORIGIN}${p}</loc>`);
+    }
+  });
+
+  for (const [name, page] of pages) {
+    it(`${name}：題・説明・canonical・CSP があり、検査のページへつながり、スクリプトがない`, () => {
+      expect(page).toMatch(/<title>[^<]+｜お守りPDF<\/title>/);
+      expect(page).toMatch(/<meta name="description" content="[^"]{20,}" \/>/);
+      expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/${name}" />`);
+      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspForMeta)}" />`);
+      expect(page).toContain('href="/"');
+      expect(page).not.toMatch(/<script\b|\sstyle=|\son[a-z]+=/);
+      // 下の帯に、サイトの案内のリンクが全部ある
+      for (const [href] of FOOT_LINKS) expect(page).toContain(`href="${href}"`);
+    });
+
+    it(`${name}：外を指すのは、GitHub へ移る <a> のリンクだけ`, () => {
+      const rest = page.replace(/<link rel="canonical" href="[^"]+" \/>/, "");
+      const external = [...rest.matchAll(/<(\w+)[^>]*\s(?:src|href)="((?:https?:)?\/\/[^"]*)"/g)].map((m) => [m[1], m[2]]);
+      for (const [tag, url] of external) {
+        expect(tag, url).toBe("a");
+        expect(url).toMatch(/^https:\/\/github\.com\//);
+      }
+    });
+  }
+
+  it("description の長さは 40〜160 字", () => {
+    for (const m of [TERMS_META, CONTACT_META, FAQ_META, CHECKLIST_META, LICENSES_META]) {
+      expect(m.description.length, m.path).toBeGreaterThanOrEqual(40);
+      expect(m.description.length, m.path).toBeLessThanOrEqual(160);
+    }
+  });
+
+  it("リポジトリの場所が分からないときは、GitHub のリンクを出さず、文だけにする", () => {
+    const none = renderGuidePages({ ...opts, repoUrl: null }, licenses.data);
+    for (const [name, page] of none) expect(page, name).not.toContain("https://github.com/example-owner");
+    expect(none.get("contact.html")).toContain("GitHub の Issues を開く（場所は、公式のサイトのこのページで示します）");
+  });
+});
+
+describe("書き方の決まり", () => {
+  const sec = (s: Section & { links?: Array<{ label: string }> }) => [s.heading, ...(s.paragraphs ?? []), ...(s.list ?? []), ...(s.steps ?? []), s.note ?? "", ...(s.links ?? []).map((l) => l.label)];
+  const all = [
+    ...[TERMS_META, CONTACT_META, FAQ_META, CHECKLIST_META, LICENSES_META].flatMap((m) => [m.title, m.description]),
+    ...[TERMS_BLOCKS, CONTACT_BLOCKS, FAQ_BLOCKS, CHECKLIST_BLOCKS].flat().flatMap(sec),
+  ];
+  const NG: Array<[string, RegExp]> = [
+    ["安全です", /安全です/],
+    ["問題なし", /問題(なし|ありません)/],
+    ["初めて", /初めて/],
+    ["唯一", /唯一/],
+    ["上位互換", /上位互換/],
+    ["導入", /導入/],
+    ["黒塗りミス", /黒塗りミス|黒塗りの不備/],
+    ["外の URL", /https?:\/\/|www\./],
+    ["見張り・監視", /見張|監視/],
+    ["メールアドレス", /[\w.+-]+@[\w-]+\.[\w.]+/],
+  ];
+  for (const [label, re] of NG) {
+    it(`「${label}」を使わない`, () => {
+      expect(all.filter((t) => re.test(t))).toEqual([]);
+    });
+  }
+});
+
+describe("利用規約・お問い合わせ・よくある質問・自己点検の中身", () => {
+  const page = (n: string) => pages.get(n)!;
+
+  it("利用規約：無料・ブラウザの中だけ・保証しない・最後の確かめは利用者・AGPL・公式は1つ・禁止・変え方・運営者は空けておく", () => {
+    const t = page("terms.html");
+    for (const s of ["無料", "ブラウザの中だけ", "保証するものではありません", "最後の確かめは、利用者自身", "AGPL-3.0-only", "omamoripdf.com だけ", "禁止すること", "規約の変え方", "【運営者の表示：本人が決める】"]) {
+      expect(t, s).toContain(s);
+    }
+  });
+
+  it("お問い合わせ：Issues へのリンクだけで、PDF・個人情報を貼らない注意がある", () => {
+    const c = page("contact.html");
+    expect(c).toContain(`href="${REPO}/issues"`);
+    expect(c).toContain("PDF を、添付しないでください");
+    expect(c).not.toMatch(/mailto:/);
+  });
+
+  it("よくある質問：10 問以上。送らないこと・サーバーの記録・「見つからなかった」の意味を答える", () => {
+    expect(FAQ_BLOCKS.length).toBeGreaterThanOrEqual(10);
+    const f = page("faq.html");
+    for (const s of ["CSP", "外への要求を数えて", "配信先のサーバーがふつうに残す記録", "そうとは言えません", "PDF 以外", "小さく"]) expect(f, s).toContain(s);
+  });
+
+  it("自己点検：作る時・書き出す時・出す前の3段で、P1〜P12 をすべて含み、印刷用の見た目がある", () => {
+    expect(CHECKLIST_BLOCKS.map((b) => b.heading).slice(1)).toEqual(["1. 作る時（元のファイル）", "2. 書き出す時（PDF にする時）", "3. 出す前（できあがった PDF）"]);
+    const text = CHECKLIST_BLOCKS.flatMap((b) => b.list ?? []).join("\n");
+    for (let i = 1; i <= 12; i++) expect(text, `P${i}`).toMatch(new RegExp(`P${i}(?!\\d)`));
+    expect(page("checklist.html")).toContain('class="site-page site-checklist"');
+    expect(siteCss()).toContain("@media print");
+  });
+});
+
+describe("ライセンスの一覧", () => {
+  const d = licenses.data;
+  const pkg = JSON.parse(read("package.json"));
+  const lock = JSON.parse(read("package-lock.json")).packages;
+
+  it("package.json の部品が全部、package-lock.json と同じ版・ライセンスで並ぶ", () => {
+    const listed = new Map([...d.shipped, ...d.dev].map((r) => [r.name, r]));
+    for (const name of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })) {
+      const r = listed.get(name);
+      expect(r, name).toBeDefined();
+      expect(r!.version).toBe(lock[`node_modules/${name}`].version);
+      expect(r!.license).toBe(lock[`node_modules/${name}`].license);
+    }
+  });
+
+  it("配るものに入る部品は、pdf-lib・pdfjs-dist と、pdf-lib の依存", () => {
+    expect(d.shipped.map((r) => r.name).sort()).toEqual(["@pdf-lib/standard-fonts", "@pdf-lib/upng", "pako", "pdf-lib", "pdfjs-dist", "tslib"]);
+    expect(d.dev.map((r) => r.name)).not.toContain("pdf-lib");
+  });
+
+  it("docs/licenses.md の書体と配信の道具が全部並ぶ", () => {
+    const md = read("docs/licenses.md");
+    expect(d.fonts.map((r) => r.name)).toEqual(tableUnder(md, "フォント・素材").map((r) => r["名前"]!.split("（")[0]!.replace(/\s+\d+(\.\d+)+$/, "").trim()));
+    expect(d.tools.map((r) => r.name)).toEqual(tableUnder(md, "配信で使う道具").map((r) => r["名前"]));
+    const noto = d.fonts.find((r) => r.name === "Noto Sans JP")!;
+    expect(noto.version).toBe("2.004");
+    expect(noto.license).toContain("SIL Open Font License 1.1");
+    expect(noto.copyright.join("\n")).toContain("Copyright 2014-2021 Adobe");
+  });
+
+  it("ライセンスの全文は、部品のライセンスの文をそのまま写す", () => {
+    for (const r of [...d.shipped, ...d.dev, ...d.fonts]) {
+      if (!r.textHref) continue;
+      const name = r.textHref.slice(1);
+      expect(files.get(name), name).toBe(licenses.files.get(name));
+    }
+    expect(files.get("licenses/pdf-lib-1.17.1.txt")).toBe(read("node_modules/pdf-lib/LICENSE.md"));
+    expect(files.get("licenses/Noto-Sans-JP-OFL.txt")).toBe(read("src/assets/fonts/OFL.txt"));
+    expect(files.get("licenses/AGPL-3.0.txt")).toBe(read("LICENSE"));
+  });
+
+  it("著作権の表示は、ライセンスの文にある行だけ（作らない）", () => {
+    const pdfLib = d.shipped.find((r) => r.name === "pdf-lib")!;
+    expect(pdfLib.copyright).toEqual(copyrightLines(read("node_modules/pdf-lib/LICENSE.md")));
+    expect(pdfLib.copyright.length).toBeGreaterThan(0);
+    for (const r of [...d.shipped, ...d.dev, ...d.fonts]) {
+      const text = r.textHref ? licenses.files.get(r.textHref.slice(1))! : "";
+      for (const c of r.copyright) expect(text, r.name).toContain(c);
+    }
+    // Apache-2.0 の説明の文や、見本の行は拾わない
+    expect(copyrightLines('"Licensor" shall mean the copyright owner\n   Copyright [yyyy] [name of copyright owner]\nCopyright (c) 2020 Example')).toEqual(["Copyright (c) 2020 Example"]);
+  });
+
+  it("出典のリンクは GitHub のものだけ", () => {
+    for (const r of [...d.shipped, ...d.dev, ...d.fonts, ...d.tools]) if (r.source) expect(r.source, r.name).toMatch(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+/);
+    expect(d.tools.find((r) => r.name === "lftp")!.source).toBeNull();
+    expect(githubRepo("git+https://github.com/a/b.git")).toBe("https://github.com/a/b");
+    expect(githubRepo({ url: "git://github.com/a/b.git" })).toBe("https://github.com/a/b");
+    expect(githubRepo("a/b")).toBe("https://github.com/a/b");
+    expect(githubRepo("https://gitlab.com/a/b")).toBeNull();
+  });
+
+  it("ページに、この道具の AGPL-3.0・ソースの場所・部品の表が出る", () => {
+    const l = pages.get("licenses.html")!;
+    expect(l).toContain("AGPL-3.0-only");
+    expect(l).toContain('href="/licenses/AGPL-3.0.txt"');
+    expect(l).toContain(`href="${REPO}"`);
+    expect(l).toContain('href="/licenses/Noto-Sans-JP-OFL.txt"');
+    expect(l).toContain(escapeHtml("Copyright 2014-2021 Adobe"));
+    expect(l).toContain("部品の中にライセンスの文がありません");
+  });
+});
+
+describe("配るものに入る部品（SHIPPED_ROOTS）が、コードの読み込みと合う", () => {
+  it("画面・ルール・片付けのコードが読み込む外の部品は、SHIPPED_ROOTS だけ", () => {
+    const list = (dir: string): string[] =>
+      readdirSync(dir).flatMap((n) => {
+        const p = path.join(dir, n);
+        return statSync(p).isDirectory() ? list(p) : /\.ts$/.test(n) ? [p] : [];
+      });
+    // Node でだけ動く所（sanitize/node・sanitize/check）は、配るものに入らない
+    const files = ["src", "rules", "sanitize"].flatMap((d) => list(path.join(ROOT, d))).filter((f) => !/[\\/]sanitize[\\/](node|check)[\\/]/.test(f));
+    const used = new Set<string>();
+    for (const f of files) {
+      for (const m of readFileSync(f, "utf8").matchAll(/(?:from|import)\s*\(?\s*"([^"./][^"]*)"/g)) {
+        const spec = m[1]!;
+        if (spec.startsWith("node:")) continue;
+        used.add(spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0]!);
+      }
+    }
+    expect([...used].sort()).toEqual([...SHIPPED_ROOTS].sort());
+  });
+});
+
+describe("検査のページ（index.html）", () => {
+  const html = read("index.html");
+  it("下の帯のリンクは、サイトのページの下の帯と同じ並び", () => {
+    const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
+    const links = [...foot.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]);
+    expect(links).toEqual(FOOT_LINKS.map(([h, l]) => [h, l]));
+  });
+
+  it("書体の著作権の表示は、ライセンスのページへのリンク1行にした", () => {
+    expect(html).toContain('<a href="/licenses.html">ライセンスのページ</a>');
+    expect(html).not.toContain("© 2014-2021 Adobe");
+  });
+});
+
+describe("リポジトリの場所", () => {
+  it("GitHub Actions では GITHUB_REPOSITORY、手元では git の origin から取る", () => {
+    expect(repoUrl({ GITHUB_REPOSITORY: "o/r" }, () => null)).toBe("https://github.com/o/r");
+    expect(repoUrl({}, () => "https://github.com/o/r.git")).toBe("https://github.com/o/r");
+    expect(repoUrl({}, () => "git@github.com:o/r.git")).toBe("https://github.com/o/r");
+    expect(repoUrl({}, () => "https://gitlab.com/o/r.git")).toBeNull();
+    expect(repoUrl({ GITHUB_REPOSITORY: "o/r\"x" }, () => null)).toBeNull();
+    expect(repoUrl({}, () => null)).toBeNull();
+  });
+});
