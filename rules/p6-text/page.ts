@@ -37,6 +37,11 @@ import { readFont, type FontInfo } from "../shared/fonts.ts";
 import { arrArg, bytesArg, nameArg, numArg, operations, type Tok } from "../shared/content-lexer.ts";
 import type { P6TextSettings } from "./settings.ts";
 import { measureImageDarkness, probeImagePixels } from "./images.ts";
+import { inlineImageStream } from "../shared/inline-image.ts";
+import { invert, readPattern, readShading, tileRange, type PatternPaint } from "../shared/patterns.ts";
+
+/** 模様のタイルを並べる数の上限（1回の塗りごと。中に字のあるタイルの模様だけ）（1.12.0 から） */
+const MAX_PATTERN_TILES = 64;
 
 /** 覆っているものの種類（rubric/p6.md §1 の内訳の「覆っているもの」） */
 export type CoverKind = "fill" | "image" | "annotation";
@@ -220,6 +225,10 @@ type GState = {
   textMode: number;
   /** やわらかい型抜き（ExtGState の /SMask）がかかっているか（1.11.0 から） */
   softMask: boolean;
+  /** 塗りの色がタイルの模様で、中に字を描く命令があるとき（1.12.0 から。塗った所にタイルを並べて字の箱を作る） */
+  fillTiling?: NonNullable<PatternPaint["tiling"]>;
+  /** この中身の流れの、はじめの行列（模様の空間の基準。1.12.0 から） */
+  base: Matrix;
 };
 
 const MAX_FORM_DEPTH = 12;
@@ -444,6 +453,7 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     coverKind: CoverKind,
   ) => {
     let gs = cloneState(start);
+    gs.base = gs.ctm; // 模様の空間は、この流れのはじめの座標を基準にする（PDF 1.7 §8.7.2）
     const stack: GState[] = [];
     // 道（パス）：いまの行列にかける前の点を、部分ごとに持つ
     let subpaths: { points: Point[]; curved: boolean; closed: boolean }[] = [];
@@ -571,6 +581,24 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
           }
         }
       }
+      // 字を描くタイルの模様で塗ったとき（1.12.0 から）：塗った所にタイルを並べ、タイルの中の字も字として持つ
+      const tiling = gs.fillTiling;
+      if (doFill && tiling && depth < MAX_FORM_DEPTH && !seen.has(tiling.stream) && devs.length) {
+        const painted = boundsOf(devs.flatMap((d) => d.dev));
+        const toDevice = multiply(tiling.matrix, gs.base);
+        const inv = invert(toDevice);
+        const tiles = inv && isFiniteMatrix(toDevice) ? tileRange(inv, painted, tiling, MAX_PATTERN_TILES) : null;
+        if (tiles) {
+          const nextSeen = new Set(seen);
+          nextSeen.add(tiling.stream);
+          for (const [i, j] of tiles) {
+            const inner = cloneState(initial);
+            inner.ctm = multiply([1, 0, 0, 1, i * tiling.xStep, j * tiling.yStep], toDevice);
+            inner.clip = narrowClip(gs.clip, painted);
+            run(tiling.data, tiling.resources ?? res, inner, depth + 1, nextSeen, coverKind);
+          }
+        }
+      }
       takeClip(); // 切り抜きは、塗ったあとに効く
       subpaths = [];
       current = null;
@@ -671,8 +699,21 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
 
     const setColor = (target: "fill" | "stroke", comps: number[], space: number) => {
       const lum = luminanceOf(comps, space);
-      if (target === "fill") gs.fill = { luminance: lum };
-      else gs.stroke = { luminance: lum };
+      if (target === "fill") {
+        gs.fill = { luminance: lum };
+        delete gs.fillTiling;
+      } else gs.stroke = { luminance: lum };
+    };
+    // 模様の色（1.12.0 から）：すき間なく不透明に塗る模様は覆いの色にする。明るさが分からなければ、濃くない覆い（0.5）として扱う
+    const setPattern = (target: "fill" | "stroke", args: Tok[]) => {
+      const name = args.map(nameArg).find((x) => x !== undefined) ?? "";
+      const p = readPattern(ctx, res, name, nums(args));
+      const lum = p && p.covers ? (p.luminance ?? 0.5) : null;
+      if (target === "fill") {
+        gs.fill = { luminance: lum };
+        if (p?.tiling) gs.fillTiling = p.tiling;
+        else delete gs.fillTiling;
+      } else gs.stroke = { luminance: lum };
     };
 
     for (const { op, args } of operations(data)) {
@@ -755,14 +796,37 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
         }
         case "sc":
         case "scn":
-          if (args.some((x) => nameArg(x) !== undefined)) gs.fill = { luminance: null }; // 模様（Pattern）
+          if (args.some((x) => nameArg(x) !== undefined)) setPattern("fill", args); // 模様（Pattern。1.12.0 から読む）
           else setColor("fill", a, gs.fillSpace);
           break;
         case "SC":
         case "SCN":
-          if (args.some((x) => nameArg(x) !== undefined)) gs.stroke = { luminance: null };
+          if (args.some((x) => nameArg(x) !== undefined)) setPattern("stroke", args);
           else setColor("stroke", a, gs.strokeSpace);
           break;
+        // シェーディング（sh。1.12.0 から）：いまの切り抜きの中（シェーディングの /BBox があれば、その中）を塗る
+        case "sh": {
+          const shName = nameArg(args[0]);
+          const shObj = shName ? res?.lookupMaybe(PDFName.of("Shading"), PDFDict)?.get(PDFName.of(shName)) : undefined;
+          const sh = readShading(ctx, shObj);
+          if (!sh || !isFiniteMatrix(gs.ctm) || gs.fillAlpha < settings.opacityMin || !gs.blendNormal || gs.softMask) break;
+          let rect: Rect | null = gs.clip;
+          if (sh.bbox) {
+            const b = sh.bbox;
+            const box = boundsOf([apply(gs.ctm, b[0], b[1]), apply(gs.ctm, b[2], b[1]), apply(gs.ctm, b[2], b[3]), apply(gs.ctm, b[0], b[3])]);
+            rect = rect ? narrowClip(rect, box) : box;
+          }
+          if (!rect || area(rect) <= 0) break; // 切り抜きも範囲もない sh（ページ全体）は、覆いの形が決まらないので見ない
+          const lum = sh.luminance ?? 0.5;
+          pushCover({ seq: ++seq, rect, kind: coverKind, how: "fill", tone: lum <= settings.darkLuminanceMax ? "dark" : "opaque", luminance: lum });
+          break;
+        }
+        // 埋め込みの画像（1.12.0 から）：外の画像と同じに、濃さを測って覆いにする
+        case "BI": {
+          const img = inlineImageStream(ctx, args);
+          if (img) paintImage(img, res);
+          break;
+        }
         // 道
         case "m":
           if (a.length >= 2) startSub(a[0]!, a[1]!);
@@ -1001,6 +1065,7 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
     blendNormal: true,
     textMode: 0,
     softMask: false,
+    base: IDENTITY,
   };
   return {
     run(data, res, ctm, coverKind) {

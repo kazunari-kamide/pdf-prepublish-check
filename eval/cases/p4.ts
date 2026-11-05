@@ -113,4 +113,29 @@ export const CASES: Case[] = [
       return save(doc);
     },
   },
+  {
+    id: "p4-l07",
+    kind: "leak",
+    description: "画像に付いた XMP の元のファイルのパスが、Mac の共有ボリューム（/Volumes/<ボリューム名>/…。名前に空白あり）（1.2.0）",
+    leaks: ["server:xmp"],
+    async build() {
+      const { doc, ctx, pages } = await newDoc();
+      const meta = ctx.register(ctx.stream(xmpPacket("", '<xmpMM:DerivedFrom stRef:filePath="/Volumes/Kakuu Share/design/photo.psd"/>'), { Type: "Metadata", Subtype: "XML" }));
+      const im = ctx.register(ctx.flateStream(new Uint8Array(16).fill(128), { Type: "XObject", Subtype: "Image", Width: 4, Height: 4, ColorSpace: "DeviceGray", BitsPerComponent: 8, Metadata: meta }));
+      pages[0]!.node.set(PDFName.of("Resources"), ctx.obj({ XObject: ctx.obj({ Im1: im } as never) } as never));
+      pages[0]!.node.set(PDFName.of("Contents"), ctx.register(ctx.stream("q 40 0 0 40 10 10 cm /Im1 Do Q")));
+      return save(doc);
+    },
+  },
+  {
+    id: "p4-c04",
+    kind: "control",
+    description: "XMP のパスが、起動ディスクの既定の名前（/Volumes/Macintosh HD/…）で、ユーザーのフォルダを含まない。「/Volumes」の字だけ",
+    leaks: [],
+    async build() {
+      const { doc } = await newDoc();
+      setCatalogXmp(doc, xmpPacket('xmp:CreatorTool="Kakuu Draw"', '<xmpMM:DerivedFrom stRef:filePath="/Volumes/Macintosh HD/Applications/Sample.app"/><dc:description><rdf:Alt><rdf:li xml:lang="x-default">see /Volumes</rdf:li></rdf:Alt></dc:description>'), false);
+      return save(doc);
+    },
+  },
 ];

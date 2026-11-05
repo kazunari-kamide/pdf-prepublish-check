@@ -55,3 +55,9 @@ const report2 = await detectP1Info(bytes, { includeValues: true }); // 値その
 - 前の版の読み直しは、版ごとにファイルの頭から読み直すので、版が多い大きなファイルでは時間がかかる。時間の上限はこのルールの中にはない。画面では Worker の時間の上限で止める。
 - パスワードが要る暗号化 PDF は読まない（`encrypted`）。パスワードなしで開ける暗号化は、復号して読む（1.1.0 から）。
 - 増分更新した暗号化 PDF の前の版（`previousInfo`）も、版ごとに復号して読む。合成 PDF ではまだ試していない。
+
+## 1.3.0（2026-11-05）：最後の trailer に /Info が無いもの
+
+- ファイルの最後の trailer に `/Info` が無くても、`/Prev` も無ければ、増分更新ではないとみなし、前の trailer の `/Info` を使う。線形化した PDF（ウェブ表示用）は、先頭の trailer に `/Info` があり、ファイルの最後にある本体の xref の trailer は `/Size` だけのことがあるため（startxref が 2 回・xref は表の形）。
+- `/Prev` のある増分更新で `/Info` を外したものは、いままでどおり「いまの版に文書情報なし」とする。
+- 合成 PDF（`tests/new-rules.test.ts`。バイト列を手で組み立てる `eval/cases/raw-pdf.ts`）：線形化した形で作成者を読む、`/Prev` のある更新で外したものは読まない、の 2 件。
