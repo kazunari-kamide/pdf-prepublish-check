@@ -10,9 +10,14 @@
 // 暗号化されたオブジェクトストリームは、pdf-lib が読み込みの時点で開こうとして壊れる（中のオブジェクトが消える）。
 // そのため、暗号化された PDF は、オブジェクトストリームの型の名前（/ObjStm）を同じ長さの別名に置き換えてから読む。
 // 置き換えるのは読み込みのための写しだけで、利用者のファイルは変えない。
+//
+// 圧縮を解く大きさの上限（inflate-limit.ts）：pdf-lib が読み込みのときに解くオブジェクトストリーム・xref ストリームが
+// 上限を超えると、pdf-lib はその失敗を飲み込み、中のオブジェクトを黙って落とす。そのまま調べると「見つかりませんでした」に
+// なってしまうので、読み込みの間に上限で止まったら InflateLimitError を投げる（呼ぶ側は「大きすぎるため調べていません」）。
 
 import { PDFDocument, PDFName, PDFObjectStreamParser, PDFRawStream, PDFWriter, type PDFRef } from "pdf-lib";
 import { MASKED_OBJSTM, decryptContext, type EncryptionSummary } from "./decrypt.ts";
+import { InflateLimitError, beginLoadMeter, chargeLoad, rethrowIfInflateLimit } from "./inflate-limit.ts";
 
 export type LoadedPdf =
   | {
@@ -27,6 +32,22 @@ const LOAD_OPTIONS = { updateMetadata: false, throwOnInvalidObject: false, ignor
 const ENCRYPT = new TextEncoder().encode("/Encrypt");
 const OBJSTM = new TextEncoder().encode("/ObjStm");
 const TYPE = PDFName.of("Type");
+
+/** pdf-lib で読む。読み込みの間に解いた大きさを、その PDF の合計に数える。上限で止まったら InflateLimitError を投げる */
+async function loadDoc(bytes: Uint8Array): Promise<PDFDocument> {
+  const meter = beginLoadMeter();
+  let doc: PDFDocument;
+  try {
+    doc = await PDFDocument.load(bytes, LOAD_OPTIONS);
+  } catch (e) {
+    meter.end();
+    throw e;
+  }
+  const used = meter.end();
+  if (used.tripped) throw new InflateLimitError("stream");
+  chargeLoad(doc.context, used.used);
+  return doc;
+}
 
 function indexOf(hay: Uint8Array, needle: Uint8Array, from = 0): number {
   outer: for (let i = from; i + needle.length <= hay.length; i++) {
@@ -54,24 +75,27 @@ export async function loadPdf(bytes: Uint8Array): Promise<LoadedPdf> {
   // 暗号化の印がなければ、ふつうに読む
   if (indexOf(bytes, ENCRYPT) < 0) {
     try {
-      const doc = await PDFDocument.load(bytes, LOAD_OPTIONS);
+      const doc = await loadDoc(bytes);
       if (!doc.isEncrypted) return { status: "ok", doc, decrypted: null };
-    } catch {
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       return { status: "error", code: "unreadable" };
     }
   }
 
   let masked: PDFDocument;
   try {
-    masked = await PDFDocument.load(maskObjectStreams(bytes), LOAD_OPTIONS);
-  } catch {
+    masked = await loadDoc(maskObjectStreams(bytes));
+  } catch (e) {
+    rethrowIfInflateLimit(e);
     return { status: "error", code: "unreadable" };
   }
   if (!masked.isEncrypted) {
     // 「/Encrypt」の文字はあったが、暗号化ではなかった。置き換えない写しで読み直す
     try {
-      return { status: "ok", doc: await PDFDocument.load(bytes, LOAD_OPTIONS), decrypted: null };
-    } catch {
+      return { status: "ok", doc: await loadDoc(bytes), decrypted: null };
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       return { status: "error", code: "unreadable" };
     }
   }
@@ -91,10 +115,11 @@ export async function loadPdf(bytes: Uint8Array): Promise<LoadedPdf> {
       if (obj instanceof PDFRawStream && obj.dict.lookup(TYPE)?.toString() === "/XRef") ctx.delete(ref);
     }
     const plain = await PDFWriter.forContext(ctx, 50).serializeToBuffer();
-    const doc = await PDFDocument.load(plain, LOAD_OPTIONS);
+    const doc = await loadDoc(plain);
     if (doc.isEncrypted) return { status: "error", code: "encrypted", reason: "broken" };
     return { status: "ok", doc, decrypted: { ...r.summary, failedObjects: r.failedObjects } };
-  } catch {
+  } catch (e) {
+    rethrowIfInflateLimit(e);
     return { status: "error", code: "encrypted", reason: "broken" };
   }
 }

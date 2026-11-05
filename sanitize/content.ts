@@ -26,11 +26,11 @@ import {
   PDFRef,
   PDFStream,
   PDFString,
-  decodePDFRawStream,
   type PDFContext,
   type PDFObject,
   type PDFPage,
 } from "pdf-lib";
+import { decodeStream } from "../rules/shared/inflate-limit.ts";
 import { operations, type Op, type Tok } from "../rules/shared/content-lexer.ts";
 import { readFont, type FontInfo } from "../rules/shared/fonts.ts";
 import {
@@ -339,7 +339,7 @@ function numsOf(ctx: PDFContext, o: PDFObject | undefined): number[] | null {
   return out.every(Number.isFinite) ? out : null;
 }
 export function streamData(s: PDFStream): Uint8Array {
-  return s instanceof PDFRawStream ? decodePDFRawStream(s).decode() : s.getContents();
+  return decodeStream(s);
 }
 
 export function contentData(ctx: PDFContext, contents: PDFObject | undefined): Uint8Array {

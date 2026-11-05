@@ -9,6 +9,7 @@
 // 前の版（増分更新の前の中身）にも同じルールをかけられるよう、findPiiInContent を P5 の側から呼べる形で出す。
 
 import { PDFDict, PDFName, type PDFContext } from "pdf-lib";
+import { isInflateLimitError } from "../shared/inflate-limit.ts";
 import { loadPdf } from "../shared/load.ts";
 import { DEFAULT_LINE_SETTINGS, buildLines, rectOfRange, type Line, type LineSettings } from "./lines.ts";
 import {
@@ -26,7 +27,8 @@ import {
 import { TooManyOperations, extractText, pageContent, type ExtractSettings, type Glyph, type Rect } from "./text.ts";
 
 export const RULE_ID = "pii";
-export const RULE_VERSION = "0.1.1";
+// 0.1.2：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
+export const RULE_VERSION = "0.1.2";
 
 export { PII_TYPES, type PiiType, type Confidence, type Basis, type ExcludeReason };
 export type { Rect };
@@ -59,7 +61,7 @@ export type PiiFinding = {
   vertical: boolean;
 };
 
-export type PiiSkipReason = "too_many_operations" | "unreadable_page" | "page_limit";
+export type PiiSkipReason = "too_many_operations" | "unreadable_page" | "page_limit" | "stream_too_large";
 
 export type PiiCounts = {
   total: number;
@@ -256,7 +258,10 @@ export async function detectPii(bytes: Uint8Array, options: DetectOptions = {}):
       for (const f of r.findings) report.findings.push({ ...f, page: pageNo });
       for (const e of r.excluded) report.excluded[e.reason]++;
     } catch (e) {
-      report.skippedPages.push({ page: pageNo, reason: e instanceof TooManyOperations ? "too_many_operations" : "unreadable_page" });
+      report.skippedPages.push({
+        page: pageNo,
+        reason: e instanceof TooManyOperations ? "too_many_operations" : isInflateLimitError(e) ? "stream_too_large" : "unreadable_page",
+      });
     }
   }
   report.counts = countOf(report.findings);

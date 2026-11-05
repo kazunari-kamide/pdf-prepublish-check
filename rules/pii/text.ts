@@ -8,7 +8,8 @@
 //   見えている紙の字と同じ中身なので、ここでは全部の字を対象にする。
 // - 部品（Form XObject）の中も、入れ子の上限まで読む。注釈の中の字は読まない（P8 の範囲）。
 
-import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFRef, PDFStream, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { decodeStream, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import { arrArg, bytesArg, nameArg, numArg, operations, type Tok } from "../shared/content-lexer.ts";
 import { readFont, type FontInfo } from "../shared/fonts.ts";
 
@@ -73,9 +74,9 @@ function dictOf(ctx: PDFContext, o: PDFObject | undefined): PDFDict | undefined 
 export function streamData(ctx: PDFContext, o: PDFObject | undefined): Uint8Array {
   const v = lookup(ctx, o);
   try {
-    if (v instanceof PDFRawStream) return decodePDFRawStream(v).decode();
-    if (v instanceof PDFStream) return v.getContents();
-  } catch {
+    if (v instanceof PDFStream) return decodeStream(v);
+  } catch (e) {
+    rethrowIfInflateLimit(e);
     return new Uint8Array();
   }
   return new Uint8Array();

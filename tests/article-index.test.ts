@@ -57,9 +57,30 @@ describe("タグ", () => {
     }
   });
 
-  it("記事が1本もないタグのページは作らない（sitemap にもタグのページは入れない）", () => {
-    for (const t of TAGS.filter((x) => !usedTags().includes(x))) expect(files.has(tagPath(t).slice(1))).toBe(false);
-    expect(files.get("sitemap.xml")).not.toContain("/articles/tags/");
+  it("記事が1本もないタグのページは作らない。作ったタグのページは、検索に載せるページとして sitemap に入れる（#78 の決まり）", () => {
+    for (const t of TAGS.filter((x) => !usedTags().includes(x))) {
+      expect(files.has(tagPath(t).slice(1))).toBe(false);
+      expect(files.get("sitemap.xml")).not.toContain(tagPath(t));
+    }
+    for (const t of usedTags()) expect(files.get("sitemap.xml")).toContain(`<loc>${OFFICIAL_ORIGIN}${tagPath(t)}</loc>`);
+  });
+
+  it("タグのページの head：題は 20〜40 字・説明は 80〜120 字で、タグごとに違い、OGP の題・説明と同じ", () => {
+    const titles = new Set<string>();
+    for (const t of usedTags()) {
+      const head = files.get(tagPath(t).slice(1))!.split("</head>")[0]!;
+      const title = head.match(/<title>([^<]+)<\/title>/)![1]!;
+      const desc = head.match(/<meta name="description" content="([^"]+)"/)![1]!;
+      expect([...title].length, title).toBeGreaterThanOrEqual(20);
+      expect([...title].length, title).toBeLessThanOrEqual(40);
+      expect([...desc].length, desc).toBeGreaterThanOrEqual(80);
+      expect([...desc].length, desc).toBeLessThanOrEqual(120);
+      expect(head).toContain(`<meta property="og:title" content="${title}"`);
+      expect(head).toContain(`<meta property="og:url" content="${OFFICIAL_ORIGIN}${tagPath(t)}"`);
+      expect(head).not.toContain("noindex");
+      titles.add(title);
+    }
+    expect(titles.size).toBe(usedTags().length);
   });
 });
 

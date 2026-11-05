@@ -12,7 +12,8 @@
 // - 見た目のない蛍光ペンの注釈（/Highlight）：色（/C）が濃いときだけ覆いとする（1.11.0 から。乗算で重なるので、濃くない色は透ける）
 // - 1.11.0 から、白・灰・色の不透明な注釈も、字の層の覆い（濃くない覆い）にする（覆いの下の字は、色によらず P6）
 
-import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFStream, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { decodeStream } from "../shared/inflate-limit.ts";
 import { apply, boundsOf, isFiniteMatrix, multiply, type Matrix, type Point, type Rect } from "./geometry.ts";
 import { luminanceOf, type PageScanner } from "./page.ts";
 import type { P6TextSettings } from "./settings.ts";
@@ -74,7 +75,7 @@ function appearanceMatrix(ctx: PDFContext, ap: PDFStream, rect: Rect): Matrix | 
 }
 
 function streamBytes(s: PDFStream): Uint8Array {
-  return s instanceof PDFRawStream ? decodePDFRawStream(s).decode() : s.getContents();
+  return decodeStream(s);
 }
 
 /** ページの注釈を、覆いとして scanner に渡す。ページの命令の列を読んだあとに呼ぶ */

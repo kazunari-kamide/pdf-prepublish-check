@@ -22,6 +22,7 @@ import {
   type PDFObject,
 } from "pdf-lib";
 import { loadPdf } from "../shared/load.ts";
+import { rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 
 export const RULE_ID = "p1-info";
 export const RULE_VERSION = "1.3.0";
@@ -276,6 +277,8 @@ export async function detectP1Info(bytes: Uint8Array, options: DetectOptions = {
     if (e instanceof Encrypted) {
       return { ...base, status: "error", error: { code: "encrypted", message: "暗号化された PDF は、いまは調べられません。" } };
     }
+    // 解くと大きすぎる所で止めたとき（圧縮の爆弾など）は、「読めない」にせず投げ直す（呼ぶ側が「大きすぎるため調べていません」とする）
+    rethrowIfInflateLimit(e);
     return { ...base, status: "error", error: { code: "unreadable", message: "PDF として読めませんでした。" } };
   }
 
@@ -310,7 +313,8 @@ export async function detectP1Info(bytes: Uint8Array, options: DetectOptions = {
       for (const f of old ?? []) {
         if (f.kind === "count" && current.get(f.key) !== f.text) changed.add(f.key);
       }
-    } catch {
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       // 前の版だけでは読めないもの（線形化した PDF の最初の区切りなど）は数えない
     }
   }
