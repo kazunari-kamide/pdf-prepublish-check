@@ -67,4 +67,15 @@ describe("ページへの差し込み", () => {
     expect(page).toContain('stroke="#fbfaf7"');
     expect(page).toContain('<link rel="icon" href="data:image/svg+xml,');
   });
+
+  it("あとから増えたページ（サイトの案内のページ・404 のページ・記事）も含め、サイトのどのページの帯にもマークとファビコンが入る", () => {
+    const pages = [...siteFiles()].filter(([name]) => name.endsWith(".html"));
+    for (const must of ["404.html", "licenses.html", "terms.html", "contact.html", "faq.html", "checklist.html", "articles/index.html"]) {
+      expect(pages.map(([n]) => n), must).toContain(must);
+    }
+    for (const [name, page] of pages) {
+      expect(page, name).toContain('<a class="site-brand" href="/"><svg class="site-brand-mark" aria-hidden="true"');
+      expect(page, name).toContain(`<link rel="icon" href="${faviconHref().replace(/&/g, "&amp;")}" />`);
+    }
+  });
 });

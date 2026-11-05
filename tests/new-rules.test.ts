@@ -67,9 +67,18 @@ describe("P12 JavaScript・開いたときの動作", () => {
     const r4 = await detectP12Actions(await pdf(p12.CASES, "p12-l04"));
     expect(r4.findings[0]).toMatchObject({ where: "page_aa", trigger: "O", page: 1 });
   });
-  it("ふつうのリンクは notCounted に数える", async () => {
+  it("同じ文書の中へ移るリンクは notCounted に数える。押して開く別のファイル・プログラムは link に数える", async () => {
     const r = await detectP12Actions(await pdf(p12.CASES, "p12-c02"));
-    expect(r.notCounted).toEqual({ goto: 1, named: 1, link: 1 });
+    expect(r.notCounted).toEqual({ goto: 1, named: 1, link: 0 });
+    const r4 = await detectP12Actions(await pdf(p12.CASES, "p12-c04"));
+    expect(r4.notCounted.link).toBe(2);
+  });
+  it("押して開くウェブのリンクは、1.1.0 から uri として数える（低い確認）", async () => {
+    const r = await detectP12Actions(await pdf(p12.CASES, "p12-l09"));
+    expect(r.findings.map((f) => [f.kind, f.where, f.page]).sort()).toEqual([
+      ["uri", "annotation", 1],
+      ["uri", "field", 1],
+    ]);
   });
 });
 
@@ -159,7 +168,15 @@ describe("しおりの題・代わりの文字", () => {
 describe("P4 ファイルパス・内部ホスト名", () => {
   it("ユーザーの名前・サーバーの名前の字数。値は返さない", async () => {
     const r = await detectP4Paths(await pdf(p4.CASES, "p4-l02"));
-    expect(r.findings).toEqual([{ pattern: "P4", kind: "server", where: "annotation", places: 1, chars: 10 }]);
+    expect(r.findings).toEqual([{ pattern: "P4", kind: "server", where: "annotation", places: 1, chars: 10, page: null }]);
+  });
+  it("ページの字のパスは、ページの番号つき。ドライブ名のパスは本文では数えない", async () => {
+    const r = await detectP4Paths(await pdf(p4.CASES, "p4-l06"));
+    expect(r.findings.map((f) => [f.kind, f.where, f.page, f.chars])).toEqual([
+      ["user_path", "body", 1, 5],
+      ["server", "body", 1, 10],
+    ]);
+    expect(findPaths("Save to D:\\work\\a.pdf").map((h) => h.kind)).toEqual(["drive_path"]);
   });
   it("findPaths：Mac のユーザーのフォルダ・smb・file の共有フォルダ", () => {
     expect(findPaths("/Users/yamada/Desktop/a.pdf").map((h) => [h.kind, h.chars])).toEqual([["user_path", 6]]);
@@ -174,7 +191,8 @@ describe("P4 ファイルパス・内部ホスト名", () => {
 describe("ページの縮小画像・XFA・C2PA", () => {
   it("縮小画像のページと大きさ", async () => {
     const r = await detectExtras(await pdf(ext.CASES, "ext-l01"));
-    expect(r.thumbnails).toEqual([{ pattern: "P5", page: 2, width: 30, height: 20, bytes: 600 }]);
+    // extras 1.1.0 から：いまのページ（白紙）と比べた結果も返す。縮小画像は一様な灰色（明るさ 0.78）なので「違う」
+    expect(r.thumbnails).toEqual([{ pattern: "P5", page: 2, width: 30, height: 20, bytes: 600, compare: "differs" }]);
   });
   it("XFA の入力した値の字数（タグを除く）", async () => {
     const r = await detectExtras(await pdf(ext.CASES, "ext-l02"));
@@ -189,5 +207,149 @@ describe("書体に残った字形", () => {
     expect(r.findings[0]).toMatchObject({ pattern: "P7", leftover: 5, used: 4 });
     const c = await detectFontGlyphs(await pdf(fg.CASES, "fg-c02"));
     expect(c).toMatchObject({ findings: [], belowThreshold: 1 });
+  });
+});
+
+// ---------------------------------------------------------------- 11/5 見ないで作るテスト集で落ちた型の直し
+
+import { orgNames, detectP3Orgs } from "../rules/p3-orgs/index.ts";
+import { contactLike } from "../rules/p11-forms/index.ts";
+import { classifyName, detectP2Parts } from "../rules/p2-parts/index.ts";
+import * as p3c from "../eval/cases/p3.ts";
+import * as ppc from "../eval/cases/p2-parts.ts";
+
+describe("P3 他組織名の混入", () => {
+  it("団体名らしい語：自治体と会社。部署（課）と、ふつうの言葉は比べない", () => {
+    expect(orgNames("Hoshizora City application")).toEqual(["hoshizora city"]);
+    expect(orgNames("架空市 申請書")).toEqual(["架空市"]);
+    expect(orgNames("架空商事株式会社")).toEqual(["架空商事株式会社"]);
+    expect(orgNames("企画課 市場 都合 Fictional sample report")).toEqual([]);
+  });
+  it("字数だけを返す。本文に団体名が無ければ比べない", async () => {
+    const r = await detectP3Orgs(await pdf(p3c.CASES, "p3-l01"));
+    expect(r.findings).toEqual([{ pattern: "P3", source: "info", field: "Title", chars: 14 }]);
+    const c = await detectP3Orgs(await pdf(p3c.CASES, "p3-c02"));
+    expect(c).toMatchObject({ findings: [], notCompared: 1, bodyOrgs: 0 });
+  });
+});
+
+describe("P11 欄の説明・署名者名（1.1.0）", () => {
+  it("連絡先らしい字だけを数える", () => {
+    expect(["内線 1234", "担当：架空", "a@example.invalid", "Ask ext 12", "Tel"].map(contactLike)).toEqual([true, true, true, true, true]);
+    expect(["お名前を入れてください", "Enter your name", "日付（年/月/日）"].map(contactLike)).toEqual([false, false, false]);
+  });
+  it("署名者名は字数とページだけ", async () => {
+    const r = await detectP11Forms(await pdf(p11.CASES, "p11-l08"));
+    expect(r.signatures).toEqual([{ key: "Name", chars: 5, page: 1 }]);
+    expect(r.findings).toEqual([]);
+  });
+});
+
+describe("P2 部品・アプリのデータ（p2-parts 1.1.0）", () => {
+  it("数字の入った名前：2語で、字だけの語があれば数える。1語のアカウントは数えない", () => {
+    expect(classifyName("Taro KAKUU-0123")).toEqual({ counted: true, chars: 15 });
+    expect(classifyName("user01")).toEqual({ counted: false, reason: "account" });
+    expect(classifyName("PC 1234")).toEqual({ counted: false, reason: "account" });
+  });
+  it("アプリの私的データは、有る・無いだけ（中身は読まない）", async () => {
+    const r = await detectP2Parts(await pdf(ppc.CASES, "pp-l02"));
+    expect(r.findings.map((f) => [f.kind, f.source, f.owner, f.checked]).sort()).toEqual([
+      ["private_data", "app", "document", false],
+      ["private_data", "app", "page", false],
+    ]);
+  });
+});
+
+describe("書体に残った字形：Type3（1.1.0）", () => {
+  it("描かれていない字形の数", async () => {
+    const r = await detectFontGlyphs(await pdf(fg.CASES, "fg-l03"));
+    expect(r.findings).toEqual([{ pattern: "P7", font: expect.any(Number), fontType: "type3", subsetBy: "type3", glyphs: 6, used: 2, leftover: 4 }]);
+  });
+});
+
+// ---------------------------------------------------------------- P12 1.2.0：気をつける行き先のリンクだけ
+
+import { cautionUri } from "../rules/p12-actions/index.ts";
+
+describe("P12 押して開くリンクの行き先（1.2.0）", () => {
+  it("気をつける行き先", () => {
+    expect(
+      ["http://example.jp/", "file:///C:/a.pdf", "smb://kakuu-fs/share", "javascript:void(0)", "https://kakuu-intra/", "https://10.0.0.5/", "https://u:p@example.jp/", "https://fs.local/a"].map(cautionUri),
+    ).toEqual([true, true, true, true, true, true, true, true]);
+  });
+  it("ふつうの https・メール・電話・相対の場所は数えない", () => {
+    expect(["https://www.example.jp/docs/?q=1#a", "HTTPS://Example.org", "mailto:a@example.jp", "tel:0000", "../別紙.pdf"].map(cautionUri)).toEqual([false, false, false, false, false]);
+  });
+  it("ふつうの https のリンクは notCounted.link に数える", async () => {
+    const r = await detectP12Actions(await pdf(p12.CASES, "p12-c05"));
+    expect(r.findings).toEqual([]);
+    expect(r.notCounted.link).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------- 11/5 公開 PDF で見つかった型（型と条件だけ。中身はすべて架空）
+
+import { rawPdf } from "../eval/cases/raw-pdf.ts";
+import { detectP1Info } from "../rules/p1-info/index.ts";
+import { detectUnusedImages } from "../rules/unused-images/index.ts";
+import * as uic from "../eval/cases/unused-images.ts";
+import { sanitizePdf } from "../sanitize/index.ts";
+
+const PAGE = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>";
+
+describe("P1 増分更新の形で、最後の trailer に /Info が無いもの（1.3.0）", () => {
+  it("線形化した形（先頭の trailer に /Info、最後の trailer は /Size だけで /Prev も無い）でも、作成者を読む", async () => {
+    const b = rawPdf([
+      { objects: { 6: "<< /Linearized 1 /L 1000 /N 1 >>", 1: "<< /Type /Catalog /Pages 2 0 R >>", 3: PAGE, 4: "<< /Author (Kakuu Taro) >>" }, trailer: "/Size 7 /Root 1 0 R /Info 4 0 R", prevOf: 1 },
+      { objects: { 2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", 5: "<< >>" }, trailer: "/Size 7" },
+    ]);
+    const r = await detectP1Info(b);
+    expect(r.hasInfo).toBe(true);
+    expect(r.findings.map((f) => f.key)).toEqual(["Author"]);
+  });
+  it("対照：増分更新（/Prev あり）で /Info を外したものは、いまの版に文書情報なし", async () => {
+    const b = rawPdf([
+      { objects: { 1: "<< /Type /Catalog /Pages 2 0 R >>", 2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", 3: PAGE, 4: "<< /Author (Kakuu Taro) >>" }, trailer: "/Size 6 /Root 1 0 R /Info 4 0 R" },
+      { objects: { 5: "<< >>" }, trailer: "/Size 6 /Root 1 0 R", prevOf: 0 },
+    ]);
+    const r = await detectP1Info(b);
+    expect(r).toMatchObject({ hasInfo: false, findings: [] });
+  });
+});
+
+describe("描かれていない資源に残る画像（unused-images）", () => {
+  it("違いの割合と大きさだけを返す", async () => {
+    const r = await detectUnusedImages(await pdf(uic.CASES, "ui-l01"));
+    expect(r.findings).toEqual([{ pattern: "P5", page: 1, width: 40, height: 30, match: "similar", diffRatio: 0.01, bytes: 1200 }]);
+  });
+  it("片付けると、ページの資源の描かれない画像は外れる。描かれた部品の資源の中に残るものは、まだ外れない（C に頼む）", async () => {
+    for (const [id, left] of [["ui-l01", 0], ["ui-l03", 0], ["ui-l02", 1]] as const) {
+      const s = await sanitizePdf(await pdf(uic.CASES, id));
+      expect(s.status).toBe("ok");
+      if (s.status !== "ok") continue;
+      expect((await detectUnusedImages(s.bytes)).findings.length).toBe(left);
+    }
+  });
+});
+
+describe("P4 Mac の共有ボリューム（1.2.0）", () => {
+  it("ボリューム名の字数。起動ディスクの既定の名前は数えない", () => {
+    expect(findPaths("/Volumes/Kakuu Share/a.psd").map((h) => [h.kind, h.chars])).toEqual([["server", 11]]);
+    expect(findPaths("file:///Volumes/KAKUU-NAS/a.ai").map((h) => h.kind)).toEqual(["server"]);
+    expect(findPaths("/Volumes/Macintosh HD/Users/kakuu/a.ai").map((h) => h.kind)).toEqual(["user_path"]);
+    expect(findPaths("/Volumes/Macintosh HD/Applications/x see /Volumes")).toEqual([]);
+  });
+});
+
+describe("書体に残った字形：印の無い部分埋め込み（1.2.0）", () => {
+  it("印が無くても、中身が部分埋め込みの形なら数える", async () => {
+    const r = await detectFontGlyphs(await pdf(fg.CASES, "fg-l04"));
+    expect(r.findings).toMatchObject([{ pattern: "P7", fontType: "truetype", subsetBy: "tables", leftover: 5 }]);
+  });
+  it("使う字形だけの書体と、全部を埋め込んだ書体は出さない", async () => {
+    const c5 = await detectFontGlyphs(await pdf(fg.CASES, "fg-c05"));
+    expect(c5).toMatchObject({ findings: [], checkedFonts: 1, fullFonts: 0 });
+    const c6 = await detectFontGlyphs(await pdf(fg.CASES, "fg-c06"));
+    expect(c6).toMatchObject({ findings: [], checkedFonts: 0, fullFonts: 1 });
   });
 });

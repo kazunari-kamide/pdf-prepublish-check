@@ -7,6 +7,7 @@
 //   const r = await sanitizePdf(bytes);
 //   if (r.status === "ok") { r.bytes（片付けた PDF）, r.removed（取り除いた項目）, r.notDone（片付けられなかった所） }
 //   自分で黒塗りする：redact(bytes, areas, options)（redact.ts）
+//   ファイルを小さくする：compress(bytes, options)（compress.ts。片付けのあとの PDF に使う）
 //
 // 順番：
 //   1. 読む（rules/shared/load.ts。パスワードなしで開ける暗号化は外して読む）
@@ -19,12 +20,14 @@ import { loadPdf } from "../rules/shared/load.ts";
 import type { Rect } from "../rules/p6-text/geometry.ts";
 import { SETTINGS, TooManyOperations, makeVisibility, sanitizePageContent } from "./content.ts";
 import { cleanAnnotations, countRevisions, dropUnreachable, removeAttachments, removeDocInfo, removeStructureExtras, removeJavaScript, removeXmp } from "./structure.ts";
+import { cleanLeftovers } from "./leftovers.ts";
 import type { NotDoneItem, RemovedItem, SanitizeOptions, SanitizeResult } from "./types.ts";
 
 export type * from "./types.ts";
 export { redact } from "./redact.ts";
+export { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "./compress.ts";
 
-export const SANITIZER_VERSION = "0.5.0";
+export const SANITIZER_VERSION = "0.7.0";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 export const MAX_INPUT_BYTES = 512 * 1024 * 1024;
@@ -118,6 +121,9 @@ export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions =
   removed.push(...removeXmp(ctx));
   removed.push(...removeDocInfo(doc));
   removed.push(...removeStructureExtras(doc));
+  const left = cleanLeftovers(doc);
+  removed.push(...left.removed);
+  notDone.push(...left.notDone);
   if (hooks.beforeDrop) removed.push(...hooks.beforeDrop(doc));
 
   // 4. 1つの版にまとめる

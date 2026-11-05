@@ -8,7 +8,6 @@
 import pdfjsUrl from "pdfjs-dist/build/pdf.min.mjs?url";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { createPdfjsImageCodec, offscreenCanvasJpegEncoder, type PdfjsLike } from "../../sanitize/image-codec.ts";
-import { sanitizePdf } from "../../sanitize/index.ts";
 import type { ImageCodec } from "../../sanitize/types.ts";
 
 /**
@@ -27,8 +26,11 @@ async function imageCodec(): Promise<ImageCodec | undefined> {
     return undefined;
   }
 }
-import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol";
-import { addRedactAreas } from "../sanitize/redact";
+import { createPdfjsImageDecoder } from "../../rules/shared/pdfjs-images.ts";
+import { rulesCheck } from "../../sanitize/redact-check.ts";
+import { inspectAll } from "../inspect/inspect.ts";
+import { compressJob, sanitizeJob } from "../sanitize/job.ts";
+import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol.ts";
 
 type WorkerScope = {
   onmessage: ((e: MessageEvent<SanitizeRequest>) => void) | null;
@@ -36,30 +38,53 @@ type WorkerScope = {
 };
 const scope = self as unknown as WorkerScope;
 
+/** 渡し切れる ArrayBuffer にする（写しを作らない。ほかの中身と共有していることがあるので、そのときだけ写す） */
+function transferable(b: Uint8Array): ArrayBuffer {
+  return b.byteOffset === 0 && b.byteLength === b.buffer.byteLength && b.buffer instanceof ArrayBuffer ? b.buffer : b.slice().buffer;
+}
+
+/**
+ * 小さくする前と後にかける作品の検査（全部のルール）。画像を解く道具も、検査の Worker と同じ PDF.js から作る。
+ * PDF.js は imageCodec() で読み込み済み（同じ URL の import は1回だけ読まれる）
+ */
+async function inspectCheck() {
+  let ctx = {};
+  try {
+    const lib = (await import(/* @vite-ignore */ pdfjsUrl)) as Parameters<typeof createPdfjsImageDecoder>[0];
+    ctx = { imageDecoder: createPdfjsImageDecoder(lib) };
+  } catch {
+    ctx = {};
+  }
+  return rulesCheck((b) => inspectAll(b, undefined, undefined, ctx));
+}
+
 scope.onmessage = async (e) => {
   const req = e.data;
-  if (!req || req.type !== "sanitize" || !(req.buffer instanceof ArrayBuffer)) return;
+  if (!req || !(req.buffer instanceof ArrayBuffer)) return;
   try {
-    let input: Uint8Array = new Uint8Array(req.buffer);
-    // 自分で選んだ所があれば、先に墨消しの注釈として足す（仮のつなぎ。src/sanitize/redact.ts）
-    if (Array.isArray(req.areas) && req.areas.length) {
-      const added = await addRedactAreas(input, req.areas);
-      if (added.status === "refused") {
-        scope.postMessage({ type: "refused", id: req.id, message: added.message });
-        return;
-      }
-      input = added.bytes;
-    }
     const codec = await imageCodec();
-    const r = await sanitizePdf(input, codec ? { codec } : {});
-    if (r.status === "error") {
+    if (req.type === "compress") {
+      const r = await compressJob(new Uint8Array(req.buffer), { maxDpi: req.maxDpi, jpegQuality: req.jpegQuality }, codec, [await inspectCheck()]);
+      if (r.type === "refused") scope.postMessage({ type: "refused", id: req.id, message: r.message });
+      else if (r.type === "compress_blocked") scope.postMessage({ type: "compress_blocked", id: req.id, sizeBefore: r.sizeBefore, sizeAfter: r.sizeAfter, increased: r.increased });
+      else {
+        const buffer = transferable(r.bytes);
+        scope.postMessage({ type: "compressed", id: req.id, buffer, sizeBefore: r.sizeBefore, sizeAfter: r.sizeAfter, changed: r.changed, images: r.images }, [buffer]);
+      }
+      return;
+    }
+    if (req.type !== "sanitize") return;
+    // 自分で選んだ所があれば片付けの redact、なければふつうの片付け（src/sanitize/job.ts）
+    const r = await sanitizeJob(new Uint8Array(req.buffer), req.areas, codec);
+    if (r.type === "refused") {
       scope.postMessage({ type: "refused", id: req.id, message: r.message });
       return;
     }
-    // 片付けた PDF は渡し切る（写しを作らない）。ほかの中身と共有していることがあるので、そのときだけ写す
-    const b = r.bytes;
-    const buffer =
-      b.byteOffset === 0 && b.byteLength === b.buffer.byteLength && b.buffer instanceof ArrayBuffer ? b.buffer : b.slice().buffer;
+    if (r.type === "redact_blocked") {
+      scope.postMessage({ type: "redact_blocked", id: req.id, removed: r.removed, notDone: r.notDone, leftovers: r.leftovers });
+      return;
+    }
+    const buffer = transferable(r.bytes);
     scope.postMessage(
       { type: "sanitized", id: req.id, buffer, pages: r.pages, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted },
       [buffer],

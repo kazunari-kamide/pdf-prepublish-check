@@ -24,12 +24,28 @@ const FILES = ["p1", "p5", "p6", "p7", "p9"].flatMap((dir) =>
 const NEEDS_PASSWORD = new Set(["p5/p5-25-encrypted-user-password.pdf"]);
 /**
  * 片付けがまだ消さない、分かっている残り（2026-11-05 に測った値）。
- * P11 フォームの値（rules/p11-forms）を画面の一覧に入れたので、ウィジェットの無い欄の値が、片付けたあとにも「残り」として出る。
- * 片付け（sanitize/）がフォームの値を消すようになったら、ここから外す（11/5 D の PR の「ほかの持ち場に頼みたいこと」）。
+ * いまは無い：ウィジェットの無い欄の値（p5-07・p5-20 の P11）は片付け 0.7.0 で消すようになり、
+ * ふつうの https のリンク（p9-03・p9-n02 の P12）は P12 1.2.0 で出さなくなったので、ここから外した。
+ * 新しく分かっている残りができたら、ここに足す（数と型を書く）。
+ * いまある残り：P6 の合成 PDF の、消した字の字形（下の font-glyphs 1.2.0 の注）。
  */
-const KNOWN_LEFT: Record<string, number> = {
-  "p5/p5-07-form-value-changed.pdf": 1,
-  "p5/p5-20-two-fields-changed.pdf": 2,
+const KNOWN_LEFT: Record<string, { left: number; pattern: string }> = {
+  // font-glyphs 1.2.0 から、印の無い部分埋め込みの書体も見る。片付けは黒塗りの下の字を消すが、書体の字形は残すので、
+  // 消した字の字形が「書体に残った字形」（P7）として出る（片付ける前は、字が描かれているので出ない）。
+  // 片付けが書体を作り直す（使う字形だけにする）ようになったら、ここから外す（11/5 D の PR の「ほかの持ち場に頼みたいこと」）。
+  "p6/p6-m01-two-pages.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t01-rect-over-name.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t02-partial-string.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t03-near-black-and-cmyk.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t04-multi-line.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t05-rotated-page.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t06-scaled-matrix.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t07-form-xobject.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t08-thick-stroke.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t09-square-annotation.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t10-redact-annotation.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t11-scan-with-hidden-text.pdf": { left: 1, pattern: "P7" },
+  "p6/p6-t12-black-image-over-text.pdf": { left: 1, pattern: "P7" },
 };
 
 describe("片付けてから読み直す（合成 PDF の全部）", () => {
@@ -51,8 +67,8 @@ describe("片付けてから読み直す（合成 PDF の全部）", () => {
     const c = buildCleanView({ before, after, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted });
     const known = KNOWN_LEFT[rel];
     if (known !== undefined) {
-      expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: known, notDone: 0, verdict: "left" });
-      expect(after.rows.every((row) => row.patternLabel.endsWith("（P11）"))).toBe(true);
+      expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: known.left, notDone: 0, verdict: "left" });
+      expect(after.rows.every((row) => row.patternLabel.endsWith(`（${known.pattern}）`))).toBe(true);
       return;
     }
     expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: 0, notDone: 0, verdict: "clean" });

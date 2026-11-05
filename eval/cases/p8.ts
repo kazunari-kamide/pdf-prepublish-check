@@ -92,10 +92,10 @@ export const CASES: Case[] = [
     },
   },
   {
-    id: "p8-c01",
-    kind: "control",
-    description: "読み取り専用・ロック・印刷の印の注釈（隠しではない）。見た目に字があるが、見えている",
-    leaks: [],
+    id: "p8-l07",
+    kind: "leak",
+    description: "読み取り専用・ロック・印刷の印のスタンプ（隠しではない）。/Contents が無く、字は見た目の中だけ。1.2.0 から、隠しでない「見た目だけの字」（低）として数える。隠しとしては数えない",
+    leaks: ["AP:shown"],
     async build() {
       const { doc, ctx, pages } = await newDoc();
       const ap = await textAppearance(doc, "APPROVED");

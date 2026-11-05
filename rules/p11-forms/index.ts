@@ -1,20 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P11（フォームの値）1.0.0。フォームの欄（/AcroForm /Fields の木）に入っている値（/V）を、字数で返す。
+// 検出ルール P11（フォームの値）1.1.0。フォームの欄（/AcroForm /Fields の木）に入っている値（/V）を、字数で返す。
 // 値そのものも、欄の名前も返さない（欄の名前が人をたどる手がかりになりうるため）。
 //
 // 見え方（visibility）で分ける：
 //   visible：ページに見えるウィジェットがある（画面にも値が見えている）
 //   hidden：ウィジェットがあるが、すべて隠しの印（Hidden・NoView）か、大きさが 0（画面には出ない）
 //   no_widget：ウィジェットが無い、またはどのページにも置かれていない（値はファイルの中にだけある）
-// 数えないもの：空・空白だけの値、チェックボックスなどの /Off、署名の欄（署名の辞書。P12 ほかの範囲外）、/V の無い欄（/DV の既定の値だけ）。
+// 数えないもの：空・空白だけの値、チェックボックスなどの /Off、署名の欄の値（署名の辞書）、/V の無い欄（/DV の既定の値だけ）。
+//
+// 1.1.0 から、値とは別に次も返す（字数とページだけ）：
+//   tooltips：欄の説明（/TU）・書き出し用の名前（/TM）に、連絡先らしい字（3けた以上の数字・メールアドレス・「内線」「担当」「様」「さん」など）があるもの。
+//     「お名前を入れてください」のような、ふつうの説明は数えない。
+//   signatures：署名した欄の署名の辞書にある、署名者名（/Name）・連絡先（/ContactInfo）。漏れとは言い切れないので「知らせるだけ」にする。
 
 import { PDFArray, PDFDict, PDFHexString, PDFName, PDFString, type PDFContext, type PDFObject } from "pdf-lib";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { arrayItems, catalogOf, charCount, dictOf, hiddenFlagOf, lookup, N, nameOf, numOf, openPdf, textOf, visibleText, type RuleError } from "../common/index.ts";
 
 export const RULE_ID = "p11-forms";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 export type P11Visibility = "visible" | "hidden" | "no_widget";
 export type P11FieldType = "text" | "choice" | "button" | "unknown";
@@ -41,6 +46,10 @@ export type P11Report = {
   fields: number;
   findings: P11Finding[];
   notCounted: { empty: number; off: number; signature: number; defaultOnly: number };
+  /** 欄の説明（/TU・/TM）の中の、連絡先らしい字（1.1.0） */
+  tooltips: Array<{ key: "TU" | "TM"; chars: number; page: number | null }>;
+  /** 署名の辞書の署名者名・連絡先（1.1.0。知らせるだけ） */
+  signatures: Array<{ key: "Name" | "ContactInfo"; chars: number; page: number | null }>;
   limits: Array<"too_many_fields" | "too_deep">;
   decrypted?: EncryptionSummary & { failedObjects: number };
 };
@@ -51,6 +60,12 @@ export type DetectOptions = { includeValues?: boolean };
 export const MAX_FIELDS = 100_000;
 const MAX_DEPTH = 32;
 const TYPE_OF: Record<string, P11FieldType> = { Tx: "text", Ch: "choice", Btn: "button" };
+
+/** 欄の説明に、連絡先らしい字があるか（電話・内線の数字、メールアドレス、担当・様・さん など） */
+export function contactLike(text: string): boolean {
+  const t = text.normalize("NFKC");
+  return /\d{3,}/.test(t) || /[\w.+-]+@[\w-]+\.[\w.-]+/.test(t) || /内線|担当|様|さん|\bext\.?\s*\d|\b(?:tel|phone|contact)\b/i.test(t);
+}
 
 /** 値を字にする。数えない値は、理由を返す */
 function valueOf(ctx: PDFContext, raw: PDFObject | undefined): { text: string } | { skip: "empty" | "off" } | null {
@@ -94,11 +109,11 @@ function zeroSize(ctx: PDFContext, w: PDFDict): boolean {
 }
 
 export async function detectP11Forms(bytes: Uint8Array, options: DetectOptions = {}): Promise<P11Report> {
-  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, hasForm: false, fields: 0, findings: [], notCounted: { empty: 0, off: 0, signature: 0, defaultOnly: 0 }, limits: [] };
+  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, hasForm: false, fields: 0, findings: [], notCounted: { empty: 0, off: 0, signature: 0, defaultOnly: 0 }, tooltips: [], signatures: [], limits: [] };
   const opened = await openPdf(bytes);
   if (!opened.ok) return { ...base, status: "error", error: opened.error };
   const { doc, ctx } = opened;
-  const report: P11Report = { ...base, status: "ok", findings: [], notCounted: { empty: 0, off: 0, signature: 0, defaultOnly: 0 }, limits: [] };
+  const report: P11Report = { ...base, status: "ok", findings: [], notCounted: { empty: 0, off: 0, signature: 0, defaultOnly: 0 }, tooltips: [], signatures: [], limits: [] };
   if (opened.decrypted) report.decrypted = opened.decrypted;
 
   const acro = dictOf(ctx, catalogOf(ctx)?.get(N("AcroForm")));
@@ -142,9 +157,23 @@ export async function detectP11Forms(bytes: Uint8Array, options: DetectOptions =
       if (!report.limits.includes("too_many_fields")) report.limits.push("too_many_fields");
       return;
     }
+    const widgets = [...(nameOf(ctx, f.get(N("Subtype"))) === "Widget" ? [f] : []), ...kids.filter((k) => !k.has(N("T")))];
+    const placed = widgets.filter((w) => pageOf.has(w));
+    const firstPage = placed.length ? Math.min(...placed.map((w) => pageOf.get(w)!)) : null;
+    for (const key of ["TU", "TM"] as const) {
+      const t = visibleText(textOf(ctx, f.get(N(key))) ?? "");
+      if (t && contactLike(t)) report.tooltips.push({ key, chars: charCount(t), page: firstPage });
+    }
     const ft = nameOf(ctx, inherited(f, "FT", parents));
     if (ft === "Sig") {
-      if (f.has(N("V"))) report.notCounted.signature++;
+      const sig = dictOf(ctx, f.get(N("V")));
+      if (sig) {
+        report.notCounted.signature++;
+        for (const key of ["Name", "ContactInfo"] as const) {
+          const t = visibleText(textOf(ctx, sig.get(N(key))) ?? "");
+          if (t) report.signatures.push({ key, chars: charCount(t), page: firstPage });
+        }
+      }
       return;
     }
     const v = valueOf(ctx, f.get(N("V")));
@@ -156,8 +185,6 @@ export async function detectP11Forms(bytes: Uint8Array, options: DetectOptions =
       report.notCounted[v.skip]++;
       return;
     }
-    const widgets = [...(nameOf(ctx, f.get(N("Subtype"))) === "Widget" ? [f] : []), ...kids.filter((k) => !k.has(N("T")))];
-    const placed = widgets.filter((w) => pageOf.has(w));
     let visibility: P11Visibility;
     if (!placed.length) visibility = "no_widget";
     else if (placed.every((w) => hiddenFlagOf(ctx, w) !== null || zeroSize(ctx, w))) visibility = "hidden";
@@ -168,7 +195,7 @@ export async function detectP11Forms(bytes: Uint8Array, options: DetectOptions =
       visibility,
       fieldType,
       chars: fieldType === "button" ? 0 : charCount(v.text),
-      page: placed.length ? Math.min(...placed.map((w) => pageOf.get(w)!)) : null,
+      page: firstPage,
     };
     if (options.includeValues) finding.value = v.text;
     report.findings.push(finding);

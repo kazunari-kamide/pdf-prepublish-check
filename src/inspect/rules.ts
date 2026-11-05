@@ -25,8 +25,11 @@ import { detectAltText, type AltKind, type AltReport } from "../../rules/alt-tex
 import { detectInfoXmpDiff, type DiffReport } from "../../rules/props/index.ts";
 import { detectExtras, type ExtrasReport } from "../../rules/extras/index.ts";
 import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/index.ts";
+import { detectUnusedImages, type UnusedImageReport } from "../../rules/unused-images/index.ts";
+import { detectP2Parts, type P2PartsFinding, type P2PartsReport } from "../../rules/p2-parts/index.ts";
+import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
-import type { Item, Notice, Pattern, RuleResult } from "./report";
+import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
 
 /** ルールに渡す道具。imageDecoder＝pdf-lib で解けない画像（JPEG など）を解く道具（Worker が PDF.js で作る） */
 export type RunContext = { imageDecoder?: ExternalImageDecoder };
@@ -93,6 +96,7 @@ function skippedNotices(skipped: Array<{ page: number; reason: string }>): Notic
 // ---------------------------------------------------------------- P6 見せかけの黒塗り
 
 const P6_COVER: Record<string, string> = { fill: "塗りつぶした図形", image: "黒い画像", annotation: "注釈" };
+const P6_OPAQUE_COVER: Record<string, string> = { fill: "図形", image: "画像", annotation: "注釈" };
 
 const p6 = defineRule<P6TextReport>({
   id: "p6-text",
@@ -128,6 +132,24 @@ export function p6Item(f: P6TextReport["findings"][number]): Item {
   const cover = `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`;
   const base = { pattern: "P6" as const, severity: "high" as const, page: f.page, rect: f.rect };
   const check = f.confidence === "check" ? { confidence: "check" as const } : {};
+  if (f.layer === "text" && f.coverTone === "opaque") {
+    // 白・灰・色の不透明な覆い（検出ルール 1.11.0 から）。覆いの下の字は、色によらず見せかけの黒塗りとして出す【文言は仮】
+    const what = P6_OPAQUE_COVER[f.cover] ?? "図形";
+    return f.confidence === "check"
+      ? {
+          ...base,
+          ...check,
+          title: `上に重ねた${what}の下に、字が残っているかもしれません`,
+          why: "上に別の字や形が重なっているため、言い切れません。白や色で覆っただけなら、下の字を選んでコピーできてしまいます。確かめてください。",
+          detail: `覆っているもの：${what}（黒以外の色）／重なっている字：${f.chars}字`,
+        }
+      : {
+          ...base,
+          title: `上に重ねた${what}の下に、字が残っています`,
+          why: "白や色で覆っても、下の字は消えていません。選んでコピーできます。",
+          detail: `覆っているもの：${what}（黒以外の色）／残っている字：${f.chars}字`,
+        };
+  }
   if (f.layer === "text") {
     return f.confidence === "check"
       ? {
@@ -195,6 +217,8 @@ const P7_REASON: Record<P7Reason, string> = {
   hidden_codepoint: "見えない文字コード",
   remapped: "見た目と取り出される字が違う字",
   overdrawn: "同じ所に重ねて描いた、違う字",
+  image_off_page: "ページの外に置いた画像",
+  image_clipped: "切り抜きで大部分を隠した画像",
 };
 
 /** 見える字の中の隠し（検出ルール 1.1.0 から）は、見出しと理由を分ける。文言・深刻度は【仮】 */
@@ -214,7 +238,20 @@ const P7_VISIBLE_KIND: Partial<Record<P7Reason, { title: string; why: string; se
     why: "上に重なった字しか読めませんが、下の字も検索やコピーで取り出せます。",
     severity: "high",
   },
+  // 見えない所に置いた画像（検出ルール 1.2.0 から）。字ではないので、字の数は出さない
+  image_off_page: {
+    title: "ページの外に、画像が置かれています",
+    why: "画面や印刷には出ませんが、画像を取り出すと中身が見えます。消し忘れの画像でないか、確かめてください。",
+    severity: "medium",
+  },
+  image_clipped: {
+    title: "画像の大部分が、切り抜きで隠されています",
+    why: "見えているのは画像のごく一部ですが、画像を取り出すと隠れた所も見えます。確かめてください。",
+    severity: "medium",
+  },
 };
+
+const P7_SHOWN_AS_P6 = new Set<P7Reason>(["covered_light", "covered_image"]);
 
 const p7 = defineRule<P7Report>({
   id: "p7-hidden",
@@ -223,20 +260,34 @@ const p7 = defineRule<P7Report>({
   // 1ページの命令の数の上限は、P6 とそろえる（2026-11-03 本人が決定。PR #31 の返事 5）。
   // P7 の既定の値（rules/p7-hidden）は検出ルールの担当の範囲なので変えず、画面から呼ぶときだけ上書きする。
   detect: (b) => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
+  // 覆いの下の字（白っぽい図形・あとから重ねた画像）は、色によらず見せかけの黒塗り（P6）で出すので、画面では P7 に出さない（2026-11-05）。
+  // 検出ルールの報告には残す（P7 の正解データと検証器は、これらを P7 として数える）
   items: (r) =>
-    r.findings.map((f) => {
+    r.findings.filter((f) => !P7_SHOWN_AS_P6.has(f.reason)).map((f) => {
       const v = P7_VISIBLE_KIND[f.reason];
       return {
         pattern: "P7",
         severity: v?.severity ?? "high", // 【仮】
         title: v?.title ?? "見えない字が残っています",
         why: v?.why ?? "画面では見えませんが、検索やコピーで取り出せます。",
-        detail: `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
+        detail: f.reason === "image_off_page" || f.reason === "image_clipped" ? P7_REASON[f.reason] : `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
         page: f.page,
         rect: f.rect,
       };
     }),
-  notices: (r) => skippedNotices(r.skippedPages),
+  // 文字認識の層のあるページ（検出ルール 1.1.0 の ocrLayerPages）は、漏れとは言い切れないので、お知らせ（info）として出す（2026-11-05）
+  notices: (r) => [
+    ...skippedNotices(r.skippedPages),
+    ...(r.ocrLayerPages.length
+      ? [
+          {
+            kind: "info" as const,
+            message: "このページには、文字認識で読み取った字の層があります（検索やコピーのため）。見た目と違う字が入っていないか、必要なら確かめてください。",
+            pages: r.ocrLayerPages,
+          },
+        ]
+      : []),
+  ],
 });
 
 // ---------------------------------------------------------------- P1 文書情報
@@ -278,6 +329,7 @@ const P5_KIND: Record<P5Kind, string> = {
   image: "画像",
   embedded_file: "添付ファイル",
   dict_text: "字の入った情報",
+  unused_form: "描かれない部品",
 };
 
 /** 字の中身を持たない構造の部品の呼び名（検出ルール 1.2.0 の cleanupOnly.parts） */
@@ -295,9 +347,21 @@ const p5 = defineRule<P5Report>({
   pattern: "P5",
   detect: (b) => detectP5Revisions(b),
   items: (r) => {
-    const items: Item[] = r.findings.map((f) => ({
-      pattern: "P5",
-      severity: "high", // 【仮】
+    const items: Item[] = r.findings.map((f) =>
+      f.kind === "unused_form"
+        ? {
+            // 資源にあるが描かれない部品（検出ルール 1.3.0 から）【文言は仮】
+            pattern: "P5" as const,
+            severity: "high" as const,
+            title: "ページに描かれない部品に、字が入っています",
+            why: "ページの部品として登録されていますが画面には出ないため、気づかないまま、中の字を取り出せます。",
+            detail: P5_KIND.unused_form,
+            page: null,
+            rect: null,
+          }
+        : {
+      pattern: "P5" as const,
+      severity: "high" as const, // 【仮】
       title: `修正する前の版の「${P5_KIND[f.kind] ?? "中身"}」が、ファイルの中に残っています`,
       why: "見た目は新しい版でも、修正する前の内容を取り出せます。",
       detail: [f.revision !== null ? `${f.revision}番目の版` : "どの版か分からない部分", f.chars !== undefined ? `${f.chars}字` : ""]
@@ -305,10 +369,12 @@ const p5 = defineRule<P5Report>({
         .join("／"),
       page: null,
       rect: null,
-    }));
-    // 字の中身を持たない構造の部品だけの残り（1.2.0）。漏れとは分けて「低」で1行だけ出し、片付けへ案内する
+    });
+    // 字の中身を持たない構造の部品だけの残り（1.2.0）。漏れとは分けて「低」で1行だけ出し、片付けへ案内する。
+    // フォント・対応表・色の設定のような、作った道具や使った字の手がかりになる部品があるときだけ出す。
+    // ページの並び・目次の辞書・中身のない null のような「そのほかの部品」だけなら出さない（2026-11-05。増分更新でページを足しただけの PDF など）
     const c = r.cleanupOnly;
-    if (c && c.count > 0) {
+    if (c && c.count > 0 && (Object.keys(P5_PART) as P5Part[]).some((p) => p !== "other" && c.parts[p] > 0)) {
       const parts = (Object.keys(P5_PART) as P5Part[]).filter((p) => c.parts[p] > 0).map((p) => `${P5_PART[p]} ${c.parts[p]}個`);
       items.push({
         pattern: "P5",
@@ -365,6 +431,22 @@ function innerNote(i: P9Inner | undefined): string {
 
 type P9WithInner = P9AttachReport & { inner: P9Inner[] };
 
+/** 添付の中で見つけた型の呼び名（用語集の言葉） */
+const PATTERN_NAME: Record<string, string> = {
+  P1: "文書情報（作成者など）",
+  P2: "XMP メタデータ",
+  P3: "ほかの団体の名前",
+  P4: "ファイルパス",
+  P5: "前の版の残り",
+  P6: "見せかけの黒塗りの下の字",
+  P7: "見えない文字",
+  P8: "注釈・コメント",
+  P10: "画像の位置情報など",
+  P11: "フォームの入力値",
+  P12: "スクリプト・外部動作",
+  P13: "個人情報らしい字",
+};
+
 const p9 = defineRule<P9WithInner>({
   id: "p9-attach",
   label: "添付ファイル",
@@ -381,10 +463,25 @@ const p9 = defineRule<P9WithInner>({
     return { ...report, inner: await inspectAttachments(b, detectors) };
   },
   items: (r) =>
-    r.findings.map((f): Item => {
+    r.findings.flatMap((f): Item[] => {
       const inner = r.inner.find((i) => i.object === f.object);
       const foundInside = inner?.kind === "pdf" && Object.values(inner.counts ?? {}).some((n) => n > 0);
-      return {
+      // 中の PDF で見つけた型ごとに、1 件ずつ足す（どの型が中にあるかを、型の番号で示す）
+      const insideItems: Item[] =
+        inner?.kind === "pdf"
+          ? Object.entries(inner.counts ?? {})
+              .filter(([p, n]) => n > 0 && p !== "P9")
+              .map(([p, n]) => ({
+                pattern: p as Pattern,
+                severity: "medium" as const, // 【仮】
+                title: `添付ファイルの PDF の中に、${PATTERN_NAME[p] ?? "見えない情報"}が残っています`,
+                why: "添付を取り出して開くと、中の情報を読めます。",
+                detail: [`${n} 件`, "場所：添付ファイルの中"].join("／"),
+                page: f.page ?? null,
+                rect: null,
+              }))
+          : [];
+      return [{
         pattern: "P9",
         severity: foundInside ? "high" : "medium", // 【仮】
         title: foundInside ? "添付ファイルの PDF の中にも、見えない情報が残っています" : "添付ファイルが入っています",
@@ -400,7 +497,7 @@ const p9 = defineRule<P9WithInner>({
           .join("／"),
         page: f.page ?? null,
         rect: null,
-      };
+      }, ...insideItems];
     }),
   notices: (r) =>
     r.limits.length
@@ -460,6 +557,102 @@ const pii = defineRule<PiiReport>({
   },
 });
 
+// ---------------------------------------------------------------- P2 部品の XMP・アプリの私的データ
+
+const P2_PARTS_KIND: Record<P2PartsFinding["kind"], { title: string; why: string; severity: Item["severity"] }> = {
+  person: { title: "画像や部品に付いた作成の記録（XMP）に、名前が残っています", why: "画像や部品を取り出すと、作った人の名前を誰でも見られます。", severity: "medium" },
+  path: { title: "画像や部品に付いた作成の記録に、パソコンのフォルダの名前が残っています", why: "元のファイルの置き場所から、使った人のログイン名などが分かります。", severity: "medium" },
+  gps: { title: "画像や部品に付いた作成の記録に、位置情報（GPS）が残っています", why: "写真を撮った場所などが分かります。", severity: "high" },
+  serial: { title: "画像に付いた作成の記録に、カメラの製造番号が残っています", why: "画像を取り出すと、撮った機械を特定できる番号を誰でも見られます。", severity: "medium" },
+  camera: { title: "画像に付いた作成の記録に、カメラの機種が残っています", why: "画像を取り出すと、撮った機械の機種を誰でも見られます。", severity: "low" },
+  private_data: { title: "作ったアプリの私的なデータ（編集用のデータ）が残っています", why: "見た目には出ませんが、元の編集用のデータに、作った人の名前や消した部分が入っていることがあります。", severity: "low" },
+};
+const P2_OWNER: Record<P2PartsFinding["owner"], string> = {
+  image: "画像",
+  form: "部品",
+  properties: "レイヤーなど",
+  page: "ページ",
+  document: "文書",
+  other: "そのほか",
+  unreferenced: "どこからも使われていない所",
+};
+
+const p2Parts = defineRule<P2PartsReport>({
+  id: "p2-parts",
+  label: "部品の XMP・アプリのデータ",
+  pattern: "P2",
+  detect: (b) => detectP2Parts(b),
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: f.pattern,
+      severity: P2_PARTS_KIND[f.kind].severity, // 【仮】
+      title: f.source === "illustrator" && f.kind !== "private_data" ? (f.kind === "person" ? "作ったアプリの編集用のデータに、名前が残っています" : "作ったアプリの編集用のデータに、パソコンのフォルダの名前が残っています") : P2_PARTS_KIND[f.kind].title,
+      why: P2_PARTS_KIND[f.kind].why,
+      detail: [
+        `場所：${P2_OWNER[f.owner]}`,
+        f.kind === "private_data" ? (f.checked === false ? "中身は調べていません" : "") : f.kind === "gps" ? "緯度・経度" : `${f.chars}字`,
+        f.parts > 1 ? `${f.parts} か所` : "",
+      ]
+        .filter(Boolean)
+        .join("／"),
+      page: null,
+      rect: null,
+    })),
+  notices: (r) => (r.limits.length ? [{ kind: "partial", message: "部品の作成の記録が大きすぎる・読めないため、一部は調べていません。", pages: [] }] : []),
+});
+
+// ---------------------------------------------------------------- P3 他組織名の混入
+
+const p3 = defineRule<P3Report>({
+  id: "p3-orgs",
+  label: "他組織名の混入",
+  pattern: "P3",
+  detect: (b) => detectP3Orgs(b),
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P3",
+      severity: "medium", // 【仮】
+      title: "文書の題などに、本文と違う団体の名前が入っています",
+      why: "ほかの団体の書類をひな形にしたとき、元の団体の名前が残ることがあります。確かめてください。",
+      detail: [`場所：${f.source === "info" ? "文書情報" : "XMP メタデータ"}`, `${f.chars}字`].join("／"),
+      page: null,
+      rect: null,
+    })),
+});
+
+// ---------------------------------------------------------------- 描かれていない資源に残る画像
+
+const unusedImages = defineRule<UnusedImageReport>({
+  id: "unused-images",
+  label: "描かれていない画像",
+  pattern: "P5",
+  detect: (b, ctx) => detectUnusedImages(b, ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}),
+  items: (r) =>
+    r.findings.map((f): Item => ({
+      pattern: "P5",
+      // 【仮】ほとんど同じ＝墨消し前の元の画像のおそれ。比べられなかった同じ大きさのものは中
+      severity: f.match === "similar" ? "high" : f.match === "uncompared" ? "medium" : "low",
+      title:
+        f.match === "similar"
+          ? "描かれていない画像が残っています。墨消しする前の元の画像のおそれがあります"
+          : "ページの資源に、描かれていない画像が残っています",
+      why:
+        f.match === "similar"
+          ? "ページに描かれた画像とほとんど同じで、一部だけ違います。画像を取り出すと、塗る前の元の画像を見られることがあります。"
+          : "画面には出ませんが、画像を取り出すと見られます。意図したものでなければ消してください。",
+      detail: [
+        `${f.width}×${f.height} 画素`,
+        f.diffRatio !== undefined && f.match !== "no_same_size" ? `描かれた画像との違い：${(f.diffRatio * 100).toFixed(2)}%` : "",
+        f.match === "uncompared" ? "描かれた画像と同じ大きさ（中身は比べられませんでした）" : "",
+      ]
+        .filter(Boolean)
+        .join("／"),
+      page: f.page,
+      rect: null,
+    })),
+  notices: (r) => (r.limits.length ? [{ kind: "partial", message: "中身が多すぎる・読めない所があったため、一部の描く命令は調べていません。", pages: [] }] : []),
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
 // ---------------------------------------------------------------- P8 注釈・コメント
 
@@ -486,15 +679,19 @@ const p8 = defineRule<P8Report>({
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P8",
-      severity: f.hidden ? "high" : "medium", // 【仮】
+      severity: f.hidden ? "high" : f.field === "AP" ? "low" : "medium", // 【仮】
       title: f.hidden
         ? "隠した注釈に、字が残っています"
-        : f.field === "T"
+        : f.field === "AP"
+          ? "注釈の見た目の中だけに、字が入っています"
+          : f.field === "T"
           ? "注釈の作成者欄に、名前が残っています"
           : "注釈に、コメントの字が入っています",
       why: f.hidden
         ? "画面には出ませんが、注釈の一覧やファイルの中を見ると読めます。"
-        : f.field === "T"
+        : f.field === "AP"
+          ? "注釈の一覧には出ませんが、注釈を消さないかぎり、字として取り出せます。中身を確かめてください。"
+          : f.field === "T"
           ? "注釈のプロパティを開くと、付けた人の名前（ログイン名など）を誰でも見られます。"
           : "注釈の一覧を開くと、誰でも読めます。意図したものでなければ消してください。",
       detail: [`欄：${P8_FIELD[f.field] ?? "欄"}`, `${f.chars}字`, `注釈 ${f.annotations} 個`, pagesNote(f.pages)].filter(Boolean).join("／"),
@@ -577,7 +774,7 @@ const p11 = defineRule<P11Report>({
   pattern: "P11",
   detect: (b) => detectP11Forms(b),
   items: (r) =>
-    r.findings.map((f) => ({
+    r.findings.map((f): Item => ({
       pattern: "P11",
       severity: f.visibility === "visible" ? "low" : "medium", // 【仮】
       title:
@@ -593,8 +790,32 @@ const p11 = defineRule<P11Report>({
       detail: f.fieldType === "button" ? "チェックの印" : `${f.chars}字`,
       page: f.page,
       rect: null,
-    })),
-  notices: (r) => (r.limits.length ? [{ kind: "partial", message: "フォームの欄が多すぎるため、途中までしか調べていません。", pages: [] }] : []),
+    })).concat(
+      r.tooltips.map((t): Item => ({
+        pattern: "P11",
+        severity: "low", // 【仮】
+        title: "フォームの欄の説明に、連絡先らしい字が入っています",
+        why: "欄に指を当てたときに出る説明です。担当の人の名前や内線などが入っていないか確かめてください。",
+        detail: [`欄：${t.key === "TU" ? "説明" : "書き出し用の名前"}`, `${t.chars}字`].join("／"),
+        page: t.page,
+        rect: null,
+      })),
+    ),
+  notices: (r) => {
+    const out: Notice[] = [];
+    if (r.signatures.length) {
+      const chars = r.signatures.filter((s) => s.key === "Name").reduce((a, s) => a + s.chars, 0);
+      out.push({
+        kind: "info",
+        message: chars
+          ? `電子署名に、署名した人の名前（${chars}字）が入っています。署名の情報は、署名を消さないかぎり残ります。`
+          : "電子署名に、署名した人の連絡先が入っています。署名の情報は、署名を消さないかぎり残ります。",
+        pages: [...new Set(r.signatures.map((s) => s.page).filter((p): p is number => p !== null))],
+      });
+    }
+    if (r.limits.length) out.push({ kind: "partial", message: "フォームの欄が多すぎるため、途中までしか調べていません。", pages: [] });
+    return out;
+  },
 });
 
 // ---------------------------------------------------------------- P12 JavaScript・開いたときの動作
@@ -627,8 +848,11 @@ const p12 = defineRule<P12Report>({
     r.findings.map((f) => ({
       pattern: "P12",
       severity: "low", // 安全上の注意は「低」（用語集 §3 の深刻度）
-      title: `${P12_KIND[f.kind]}が入っています`,
-      why: "漏れではありませんが、開いた人のパソコンで動くことがあります。意図したものでなければ消してください。",
+      title: f.kind === "uri" && f.where === "annotation" ? "気をつける行き先のリンクが入っています" : `${P12_KIND[f.kind]}が入っています`,
+      why:
+        f.kind === "uri" && f.where === "annotation"
+          ? "暗号化されない http・庁内のサーバー・ファイルなど、押すと気をつける場所が開くリンクです。行き先を確かめてください。"
+          : "漏れではありませんが、開いた人のパソコンで動くことがあります。意図したものでなければ消してください。",
       detail: [`場所：${P12_WHERE[f.where]}`, f.count > 1 ? `${f.count} 個` : "", f.kind === "javascript" ? `${f.chars}字` : ""].filter(Boolean).join("／"),
       page: f.page,
       rect: null,
@@ -643,7 +867,7 @@ const P4_KIND: Record<P4Kind, { title: string; severity: Item["severity"]; unit:
   server: { title: "庁内のサーバーの名前が残っています", severity: "medium", unit: "サーバーの名前" },
   drive_path: { title: "パソコンのフォルダの場所が残っています", severity: "low", unit: "場所" },
 };
-const P4_WHERE: Record<P4Where, string> = { info: "文書情報", xmp: "XMP メタデータ", annotation: "注釈", link: "リンクの行き先", filespec: "ファイルの名前" };
+const P4_WHERE: Record<P4Where, string> = { info: "文書情報", xmp: "XMP メタデータ", annotation: "注釈", link: "リンクの行き先", filespec: "ファイルの名前", body: "ページの字" };
 
 const p4 = defineRule<P4Report>({
   id: "p4-paths",
@@ -657,9 +881,10 @@ const p4 = defineRule<P4Report>({
       title: P4_KIND[f.kind].title,
       why: "作ったパソコンや、庁内のサーバーの場所が分かります。意図したものでなければ消してください。",
       detail: [`場所：${P4_WHERE[f.where]}`, `${P4_KIND[f.kind].unit}：${f.chars}字`, f.places > 1 ? `${f.places} か所` : ""].filter(Boolean).join("／"),
-      page: null,
+      page: f.page,
       rect: null,
     })),
+  notices: (r) => (r.skippedPages.length ? [{ kind: "skipped_pages", message: "このページは字を読めなかった・重すぎるため、ページの字の中のパスは調べていません。", pages: r.skippedPages, reason: "heavy" }] : []),
 });
 
 // ---------------------------------------------------------------- しおりの題・代わりの文字
@@ -707,11 +932,11 @@ const DIFF_FIELD: Record<string, string> = { Title: "タイトル", Author: "作
 const infoXmpDiff = defineRule<DiffReport>({
   id: "props-diff",
   label: "文書情報と XMP の食い違い",
-  pattern: "P1",
+  pattern: "P2",
   detect: (b) => detectInfoXmpDiff(b),
   items: (r) =>
     r.findings.map((f) => ({
-      pattern: "P1",
+      pattern: "P2",
       severity: "medium", // 【仮】
       title: `「${DIFF_FIELD[f.field] ?? "欄"}」が、文書情報と XMP メタデータで違います`,
       why: "片方だけを直して、古い値がもう片方に残っているかもしれません。",
@@ -728,12 +953,16 @@ const extras = defineRule<ExtrasReport>({
   label: "ページの縮小画像",
   pattern: "P5",
   detect: (b) => detectExtras(b),
+  // 縮小画像が、いまのページとほぼ同じ（same）なら出さない。違う（differs）なら「高」、比べられなかったら（unknown）これまでどおり「低」（検出ルール 1.1.0 から）
   items: (r) =>
-    r.thumbnails.map((t) => ({
+    r.thumbnails.filter((t) => t.compare !== "same").map((t) => ({
       pattern: "P5",
-      severity: "low", // 【仮】いまのページと違うかは、まだ比べていない
-      title: "ページの縮小画像が付いています",
-      why: "ページを差し替えたり黒塗りしたりしても、縮小画像は前の見た目のまま残ることがあります。確かめてください。",
+      severity: t.compare === "differs" ? ("high" as const) : ("low" as const), // 【仮】
+      title: t.compare === "differs" ? "ページの縮小画像が、いまのページの見た目と違います" : "ページの縮小画像が付いています",
+      why:
+        t.compare === "differs"
+          ? "縮小画像に、いまのページにない見た目が残っています。差し替える前や、黒塗りする前のページかもしれません。"
+          : "ページを差し替えたり黒塗りしたりしても、縮小画像は前の見た目のまま残ることがあります。確かめてください。",
       detail: [t.width && t.height ? `${t.width}×${t.height} 画素` : "", formatSize(t.bytes)].filter(Boolean).join("／"),
       page: t.page,
       rect: null,
@@ -769,11 +998,11 @@ const fontGlyphs = defineRule<FontGlyphReport>({
       severity: "medium", // 【仮】
       title: "埋め込んだ書体に、どこにも描かれていない字の形が残っています",
       why: "前に書いてあって消した字（黒塗りの下だけにあった字など）の手がかりになることがあります。",
-      detail: `余った字の形：${f.leftover} 個（書体の字の形 ${f.glyphs} 個のうち）`,
+      detail: `余った字の形：${f.leftover} 個（書体の字の形 ${f.glyphs} 個のうち）${f.fontType === "type3" ? "／書体：Type3" : ""}`,
       page: null,
       rect: null,
     })),
 });
 
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, extras, p1, infoXmpDiff, p2, p4, p9, p8, p11, p12, p10, pii];
+export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, p4, p9, p8, p11, p12, p10, pii];

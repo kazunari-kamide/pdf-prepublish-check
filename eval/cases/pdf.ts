@@ -234,3 +234,9 @@ export function placeJpeg(ctx: PDFContext, page: PDFPage, jpeg: Uint8Array, name
   page.node.set(PDFName.of("Contents"), content);
   return ref;
 }
+
+/** ページに欧文の字を描く（Helvetica。行ごとに1つ） */
+export async function drawAscii(doc: PDFDocument, page: PDFPage, lines: string[]): Promise<void> {
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  lines.forEach((t, i) => page.drawText(t, { x: 10, y: 170 - i * 16, size: 10, font }));
+}

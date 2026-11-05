@@ -38,6 +38,8 @@
 |---|---|---|---|---|---|
 | actions/checkout | v6.1.0（`d23441a48e516b6c34aea4fa41551a30e30af803` で固定） | MIT | コードを取り出す | 2026-11-04 | https://github.com/actions/checkout |
 | actions/setup-node | v6.5.0（`249970729cb0ef3589644e2896645e5dc5ba9c38` で固定） | MIT | Node を用意する | 2026-11-04 | https://github.com/actions/setup-node |
+| actions/upload-artifact | v7.0.2（`cf430e030ddbb5b0abf93d22962f4752f3646cd9` で固定） | MIT | ビルドのジョブから、dist/ を成果物として渡す | 2026-11-05 | https://github.com/actions/upload-artifact |
+| actions/download-artifact | v8.0.2（`9000827ccba6bdab643e8b6fd33ac0654aef8333` で固定） | MIT | 配信のジョブで、成果物を受け取る | 2026-11-05 | https://github.com/actions/download-artifact |
 | lftp | Ubuntu 24.04 の apt のもの | GPL-3.0-or-later | dist/ を FTPS で上げる（コマンドとして動かすだけで、コードは取り込まない） | 2026-11-04 | https://lftp.yar.ru/ |
 
 ## フォント・素材
@@ -45,7 +47,7 @@
 | 名前 | ライセンス | 何に使うか | 置き場所 | 出典 | 足した日 |
 |---|---|---|---|---|---|
 | BIZ UDゴシック Regular（BIZUDGothic-Regular.ttf、SHA-256 `709fcd41e3209fb765da750472f55ccdf925653e9fa7e1eb007cb65c8f749c75`） | SIL Open Font License 1.1（予約フォント名の指定なし）。全文は同じフォルダの `OFL.txt` | 合成 PDF の字。PDF には使う字だけを埋め込む。埋め込む前に、字のデータを 4 バイトの区切りにそろえる（@pdf-lib/fontkit の不具合を避けるため。字の形は変えない） | `fixtures/p6/fonts/`（案の段階では `proposals/p6/fixtures/p6/fonts/`） | https://github.com/google/fonts/tree/main/ofl/bizudgothic （Google Fonts のリポジトリ。Windows に入っているフォントは使っていない） | 2026-11-03 |
-| Noto Sans JP 2.004（`NotoSansJP[wght].ttf`、SHA-256 `c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f`） | SIL Open Font License 1.1（予約フォント名「Source」）。全文は `design/fonts/source/OFL.txt` と、配る書体の横の `OFL.txt` | 画面の書体。Shift_JIS の字と画面の記号だけ、太さ 400〜700 に絞った WOFF2（`src/assets/fonts/NotoSansJP-subset.woff2`）を dist/ に入れて配る。字を絞るのは改変に当たるので、OFL 1.1 のまま配り、ライセンスの文も配る（画面から開ける） | 元：`design/fonts/source/`。配るもの：`src/assets/fonts/` | https://github.com/google/fonts/tree/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp （Google Fonts のリポジトリ。コミットを固定） | 2026-11-05 |
+| Noto Sans JP 2.004（`NotoSansJP[wght].ttf`、SHA-256 `c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f`） | SIL Open Font License 1.1（予約フォント名「Source」）。全文は `design/fonts/source/OFL.txt` と、配る書体の横の `OFL.txt` | 画面の書体。Shift_JIS の字と画面の記号だけ、太さ 400〜700 に絞った WOFF2（`src/assets/fonts/NotoSansJP-subset.woff2`）を dist/ に入れて配る。字を絞るのは改変に当たるので、OFL 1.1 のまま配り、ライセンスの文も配る（ライセンスのページ `/licenses.html` から開ける） | 元：`design/fonts/source/`。配るもの：`src/assets/fonts/` | https://github.com/google/fonts/tree/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp （Google Fonts のリポジトリ。コミットを固定） | 2026-11-05 |
 
 数え直すときは、package-lock.json の各項目の `license` を読む。
 
@@ -63,7 +65,9 @@
 
 なし（2026-11-03 時点）。
 
-外部の素材としては、2026-11-05 から、同梱の書体（Noto Sans JP を絞ったもの）と、そのライセンスの文（`OFL.txt`）が dist/assets/ に入る（上の「フォント・素材」）。
+外部の素材としては、2026-11-05 から、同梱の書体（Noto Sans JP を絞ったもの）と、そのライセンスの文（`OFL.txt`）が dist/ に入る（上の「フォント・素材」）。
+
+2026-11-05 から、サイトのライセンスのページ（`/licenses.html`）を、ビルドの時にこのファイルの表（「直接の依存」の出典・「フォント・素材」）と package-lock.json から作る（`site-licenses.ts`）。並べるのは、ブラウザに配るもの（dist/）に入る部品と書体だけ（画面・ルール・片付けが読み込む pdf-lib・pdfjs-dist とその依存、置き場所が src/assets/ の書体）。開発・テスト・配信にだけ使う道具は、このファイルにだけ載せる。表の見出しや列の名前を変えるときは、`site-licenses.ts` も直す（合わなければビルドが止まって知らせる）。
 
 ## 値を参考にしたもの（コード・ファイルは写していない）
 

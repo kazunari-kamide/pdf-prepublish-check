@@ -9,20 +9,22 @@
 // - ファイルから取り出した文字や、ファイル名は、HTML として解釈させない（textContent だけを使う。CLAUDE.md §11-3）。
 // - 字の中身は出さない。数と場所だけ（検査の Worker も片付けの Worker も、そもそも返さない）。
 
-// 同梱の書体のライセンス（SIL OFL 1.1）。書体と一緒に配る（design/fonts/README.md）
-import fontLicenseUrl from "./assets/fonts/OFL.txt?url";
 import type { InspectOutcome } from "./inspect/protocol";
 import type { PageBox, InspectSummary } from "./inspect/report";
 import { inspectInWorker } from "./inspect/run";
 import { fromFraction, toFraction, viewSize } from "./inspect/view";
 import { PdfView, RenderTimeout } from "./render/pdf-view";
-import { MAX_REDACT_AREAS, type RedactArea } from "./sanitize/areas";
-import { sanitizeInWorker } from "./sanitize/run";
+import { MAX_REDACT_AREAS } from "./sanitize/areas";
+import { compressInWorker, sanitizeInWorker } from "./sanitize/run";
+import type { NotDoneItem } from "../sanitize/types.ts";
+import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET } from "./ui/compress-model";
 import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
 import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { isOfficialHost, UNOFFICIAL_NOTE } from "./ui/official";
 import { orgSegments } from "./ui/org-words";
+import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
 import { sampleFile } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex } from "./ui/process-report";
@@ -97,9 +99,26 @@ const ui = {
   pickTools: el<HTMLDivElement>("pick-tools"),
   pickToggle: el<HTMLButtonElement>("pick-toggle"),
   pickHelp: el<HTMLParagraphElement>("pick-help"),
+  pickHelpCandidates: el<HTMLParagraphElement>("pick-help-candidates"),
+  cleanTitle: el<HTMLHeadingElement>("clean-title"),
+  compress: el<HTMLElement>("compress"),
+  compressTitle: el<HTMLHeadingElement>("compress-title"),
+  compressPresets: el<HTMLFieldSetElement>("compress-presets"),
+  compressRun: el<HTMLButtonElement>("compress-run"),
+  compressResult: el<HTMLDivElement>("compress-result"),
+  compressHeadline: el<HTMLParagraphElement>("compress-headline"),
+  compressSizes: el<HTMLParagraphElement>("compress-sizes"),
+  compressLines: el<HTMLUListElement>("compress-lines"),
+  compressRecheck: el<HTMLParagraphElement>("compress-recheck"),
+  compressDownload: el<HTMLAnchorElement>("compress-download"),
+  compressSaveNote: el<HTMLParagraphElement>("compress-save-note"),
+  compressConfirm: el<HTMLLabelElement>("compress-confirm"),
+  compressConfirmBox: el<HTMLInputElement>("compress-confirm-box"),
   picks: el<HTMLDivElement>("picks"),
   pickCount: el<HTMLParagraphElement>("pick-count"),
   pickList: el<HTMLUListElement>("pick-list"),
+  redactLeft: el<HTMLDivElement>("redact-left"),
+  redactLeftList: el<HTMLUListElement>("redact-left-list"),
   scopeNote: el<HTMLParagraphElement>("scope-note"),
 };
 
@@ -137,6 +156,11 @@ let downloadUrl: string | null = null;
 /** 片付けた PDF（保存する中身）。保存のリンクは、読み直しが通ったあとでだけ、ここから作る */
 let cleanedBlob: Blob | null = null;
 let reportUrl: string | null = null;
+/** 小さくした PDF（保存する中身）と、その保存のリンク。読み直しが通ったあとでだけリンクを作る（片付けと同じ） */
+let compressedBlob: Blob | null = null;
+let compressUrl: string | null = null;
+/** 片付けて読み直した結果（小さくしたあとの読み直しと比べる） */
+let cleanedState: { view: ViewModel; notDone: NotDoneItem[]; name: string } | null = null;
 
 function setStatus(text: string, tone: "neutral" | "ok" | "problem" = "neutral") {
   ui.status.textContent = text;
@@ -163,6 +187,8 @@ function releaseDownload() {
   ui.reportDownload.removeAttribute("href");
   ui.reportDownload.hidden = true;
   cleanedBlob = null;
+  cleanedState = null;
+  resetCompress();
   ui.saveConfirm.hidden = true;
   ui.saveConfirmBox.checked = false;
   ui.saveNote.textContent = "";
@@ -193,6 +219,118 @@ function applySaveGate(gate: SaveGate) {
   else lockDownload();
 }
 
+// ---------------------------------------------------------------- ファイルを小さくする（片付けの compress）
+
+function lockCompressDownload() {
+  if (compressUrl) URL.revokeObjectURL(compressUrl);
+  compressUrl = null;
+  ui.compressDownload.removeAttribute("href");
+  ui.compressDownload.setAttribute("aria-disabled", "true");
+}
+
+function unlockCompressDownload() {
+  if (!compressedBlob) return;
+  if (!compressUrl) compressUrl = URL.createObjectURL(compressedBlob);
+  ui.compressDownload.href = compressUrl;
+  ui.compressDownload.removeAttribute("aria-disabled");
+}
+
+function resetCompress() {
+  lockCompressDownload();
+  compressedBlob = null;
+  ui.compress.hidden = true;
+  ui.compressResult.hidden = true;
+  ui.compressDownload.hidden = true;
+  ui.compressConfirm.hidden = true;
+  ui.compressConfirmBox.checked = false;
+  ui.compressRun.disabled = false;
+  ui.compressLines.replaceChildren();
+  for (const part of [ui.compressHeadline, ui.compressSizes, ui.compressRecheck, ui.compressSaveNote]) part.textContent = "";
+}
+
+/** 選べる3つの値（ラジオボタン。矢印キーで選べる） */
+function renderCompressPresets() {
+  if (ui.compressPresets.querySelector("input")) return;
+  for (const p of COMPRESS_PRESETS) {
+    const label = make("label", undefined, "compress-preset");
+    const input = make("input");
+    input.type = "radio";
+    input.name = "compress-preset";
+    input.value = p.id;
+    input.checked = p.id === DEFAULT_PRESET.id;
+    label.append(input, make("span", p.label, "compress-preset-name"), make("span", p.note, "compress-preset-note"));
+    ui.compressPresets.append(label);
+  }
+}
+
+function chosenPreset() {
+  const v = ui.compressPresets.querySelector<HTMLInputElement>("input:checked")?.value;
+  return COMPRESS_PRESETS.find((p) => p.id === v) ?? DEFAULT_PRESET;
+}
+
+async function runCompress() {
+  const base = cleanedState;
+  if (busy || !cleanedBlob || !base) return;
+  busy = true;
+  const gen = generation;
+  resetCompress();
+  ui.compress.hidden = false;
+  ui.compressRun.disabled = true;
+  ui.progress.removeAttribute("value");
+  ui.progress.hidden = false;
+  setStatus("ファイルを小さくしています…（小さくする前と後に、検査をかけています）");
+  try {
+    const out = await compressInWorker(await cleanedBlob.arrayBuffer(), chosenPreset());
+    if (gen !== generation) return;
+    ui.compressResult.hidden = false;
+    if (out.kind === "timeout" || out.kind === "refused" || out.kind === "error") {
+      const text = out.kind === "timeout" ? "時間がかかりすぎたため、小さくするのを止めました。片付けた PDF はそのまま保存できます。" : out.message;
+      ui.compressHeadline.textContent = text;
+      setStatus(text, "problem");
+      return;
+    }
+    const v = buildCompressView(out.kind === "done" ? { status: "ok", ...out } : { status: "blocked", ...out });
+    ui.compressHeadline.textContent = v.headline;
+    ui.compressSizes.textContent = v.sizes;
+    ui.compressLines.replaceChildren(...v.lines.map((t) => make("li", t)));
+    if (out.kind !== "done" || !out.changed) {
+      setStatus(v.headline, v.kind === "blocked" ? "problem" : "neutral");
+      return;
+    }
+    // 小さくした PDF を、検査の入口に最初から入れ直す（片付けたあとと同じ。保存できるかは、この結果だけで決める）
+    compressedBlob = new Blob([out.bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" });
+    setStatus("小さくした PDF を、最初から検査し直しています…");
+    const re = await inspectInWorker(out.bytes.buffer as ArrayBuffer, (p) => {
+      ui.progress.max = p.total;
+      ui.progress.value = p.done;
+      setStatus(`小さくした PDF を、最初から検査し直しています…（${p.label}、${p.done + 1}/${p.total}）`);
+    });
+    if (gen !== generation) return;
+    const afterSummary = re.kind === "done" && re.precheck.ok ? re.summary : null;
+    const c = buildCleanView({ before: base.view, after: afterSummary ? buildView(afterSummary) : null, removed: [], notDone: base.notDone, decrypted: false });
+    ui.compressRecheck.textContent = `小さくした PDF を最初から検査し直しました。${c.headline}`;
+    const gate = saveGate(c);
+    ui.compressDownload.download = compressedFileName(base.name);
+    ui.compressDownload.hidden = false;
+    ui.compressSaveNote.textContent = SAVE_NOTE[gate];
+    ui.compressSaveNote.dataset.gate = gate;
+    ui.compressConfirm.hidden = gate !== "confirm";
+    if (gate === "ok") unlockCompressDownload();
+    else lockCompressDownload();
+    setStatus(`${v.headline}${c.headline}`, gate === "blocked" ? "problem" : gate === "ok" ? "ok" : "neutral");
+  } catch {
+    if (gen === generation) {
+      ui.compressResult.hidden = false;
+      ui.compressHeadline.textContent = "小さくする途中で問題が起きました。片付けた PDF はそのまま保存できます。";
+    }
+  } finally {
+    ui.progress.hidden = true;
+    ui.compressRun.disabled = false;
+    busy = false;
+    if (gen === generation) ui.compressTitle.focus();
+  }
+}
+
 function clearResults() {
   for (const part of [ui.noticeList, ui.groups, ui.thumbs, ui.marks]) part.replaceChildren();
   for (const part of [ui.notices, ui.actions, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props, ui.ruleset]) part.hidden = true;
@@ -205,7 +343,8 @@ function reset() {
   clearPicks();
   ui.pickTools.hidden = true;
   releaseDownload();
-  for (const part of [ui.notDoneList, ui.removedGroups, ui.cleanNotes]) part.replaceChildren();
+  for (const part of [ui.notDoneList, ui.removedGroups, ui.cleanNotes, ui.redactLeftList]) part.replaceChildren();
+  ui.redactLeft.hidden = true;
   ui.clean.hidden = true;
   ui.filebar.hidden = true;
   ui.progress.hidden = true;
@@ -254,6 +393,27 @@ function itemButton(r: Row): HTMLButtonElement {
   return btn;
 }
 
+/** 候補の行の「黒塗りに加える／外す」（押した状態を aria-pressed と字で示す） */
+function candidateButton(r: Row): HTMLButtonElement {
+  const b = make("button", undefined, "pick-candidate");
+  b.type = "button";
+  b.dataset.candidate = String(r.no);
+  b.addEventListener("click", () => {
+    picks = toggleCandidate(picks, r);
+    renderPicks();
+    if (session) placeMarks(session, session.current);
+  });
+  syncCandidateButton(b, r.no);
+  return b;
+}
+
+function syncCandidateButton(b: HTMLElement, no: number) {
+  const on = picks.some((p) => p.candidate === no);
+  b.setAttribute("aria-pressed", String(on));
+  b.textContent = on ? "✓ 黒塗りに加えました（外す）" : "黒塗りに加える";
+  b.setAttribute("aria-label", on ? `候補 ${no} を、黒塗りする所から外す` : `候補 ${no} を、黒塗りする所に加える`);
+}
+
 /** 「見た所・見なかった所」の1行の、状態の言葉（形の印つき。色だけにしない） */
 function coverageText(c: CoverageRow, phase: Session["phase"]): string {
   const parts: string[] = [];
@@ -282,10 +442,23 @@ function renderGroups(s: Session) {
     head.append(make("span", `${g.label}（${g.pattern}）`, "group-name"));
     head.append(make("span", [sure ? `${sure} 件` : "", check ? `確かめる ${check} 件` : ""].filter(Boolean).join("・"), "group-count"));
     body.append(head);
+    // 黒塗りの候補（個人情報らしい字）：片付ける前だけ、選んだ所に加えるボタンを付ける（キーボードでも選べる）
+    const candidates = s.phase === "before" && !ui.pickTools.hidden ? g.rows.filter(isCandidate) : [];
+    if (candidates.length) {
+      const all = make("button", "候補をすべて黒塗りに加える", "pick-all");
+      all.type = "button";
+      all.addEventListener("click", () => {
+        picks = addAllCandidates(picks, candidates);
+        renderPicks();
+        if (session) placeMarks(session, session.current);
+      });
+      body.append(all);
+    }
     const list = make("ol", undefined, "items");
     for (const r of g.rows) {
       const li = make("li");
       li.append(itemButton(r));
+      if (candidates.some((c) => c.no === r.no)) li.append(candidateButton(r));
       list.append(li);
     }
     body.append(list);
@@ -541,7 +714,12 @@ function renderProperties(s: Session) {
     return;
   }
   const count = p ? p.info.length + p.xmp.length : 0;
-  const summary = make("summary", p ? `プロパティの一覧（文書情報 ${p.info.length} 欄・XMP ${p.xmp.length} 欄）` : "プロパティの一覧（読めませんでした）");
+  const summary = make("summary");
+  summary.append(
+    make("span", p ? `プロパティの一覧（文書情報 ${p.info.length} 欄・XMP ${p.xmp.length} 欄）` : "プロパティの一覧（読めませんでした）"),
+    // 閉じていても読める一言（値をそのまま出す所なので、画面共有・画面の撮影の前に閉じてもらう）
+    make("span", "開くと欄の値をそのまま出します。画面を共有・撮影する前は、閉じておいてください。", "props-warn"),
+  );
   ui.props.append(summary);
   const body = make("div", undefined, "props-body");
   body.append(
@@ -575,7 +753,8 @@ function renderProperties(s: Session) {
     body.append(go, make("p", "「片付ける」を押すと、文書情報と XMP の欄を、まとめて消した PDF を新しく作ります（元の PDF は変えません）。", "props-note"));
   }
   ui.props.append(body);
-  ui.props.open = count > 0 && s.phase === "before";
+  // 最初は閉じた形で出す（値をそのまま出す所なので、開くのは利用者が決める）
+  ui.props.open = false;
   ui.props.hidden = false;
 }
 
@@ -639,8 +818,9 @@ function renderSummary(s: Session) {
     : "見つかった所はありませんが、XMP メタデータ・注釈のコメント・JavaScript なども取り除いた PDF を作れます。元の PDF は変えません。";
   // 自分で黒塗りする所を選ぶ：片付けられて、ページの絵と形があるときだけ
   ui.pickTools.hidden = ui.sanitize.disabled || !s.pdf || s.summary.pagesUnreadable;
+  ui.pickHelpCandidates.hidden = !v.rows.some(isCandidate);
   setStep(ui.stepClean, v.rows.length ? "now" : "todo");
-  ui.stepCleanNote.textContent = "押すと始めます";
+  ui.stepCleanNote.textContent = "「片付ける」を押します";
 
   // 何も見つからなかったときの札（片付けたあとの「全部緑」は renderCleaned）
   ui.verified.dataset.state = v.clean ? "clean" : "none";
@@ -648,6 +828,9 @@ function renderSummary(s: Session) {
   ui.verified.hidden = !v.clean;
 
   renderInspection(s);
+  // 押したボタン（見本の PDF で試す など）が隠れてフォーカスが行き場を失ったときは、結果の見出しへ移す
+  const a = document.activeElement;
+  if (!a || a === document.body || (a instanceof HTMLElement && a.offsetParent === null)) ui.resultTitle.focus();
 }
 
 function fail(text: string) {
@@ -750,7 +933,7 @@ async function handle(file: File) {
 // ---------------------------------------------------------------- 自分で黒塗りする所を選ぶ（11/5 B の 9）
 
 /** 選んだ所（片付ける前の PDF のページの座標）。片付けるときに、片付けの Worker へ渡す */
-let picks: RedactArea[] = [];
+let picks: PickedArea[] = [];
 let picking = false;
 
 function setPicking(on: boolean) {
@@ -759,7 +942,74 @@ function setPicking(on: boolean) {
   ui.pickToggle.textContent = on ? "選び終える" : "自分で黒塗りする所を選ぶ";
   ui.sheet.dataset.picking = String(on);
   ui.pickHelp.hidden = !on;
+  // キーボードでも選べるよう、選んでいる間だけ、ページの絵に Tab で移れるようにする
+  if (on) {
+    ui.sheet.tabIndex = 0;
+    ui.sheet.setAttribute("role", "group");
+    ui.sheet.setAttribute("aria-label", "黒塗りする所を選ぶページの絵（Enter で枠を出す）");
+    ui.sheet.setAttribute("aria-describedby", "pick-help");
+    // 幅の狭い画面では、ページの絵が結果の下にあるので、見える所まで移す
+    const r = ui.sheetWrap.getBoundingClientRect();
+    if (r.top > window.innerHeight || r.bottom < 0) ui.sheetWrap.scrollIntoView({ block: "start" });
+  } else {
+    ui.sheet.removeAttribute("tabindex");
+    for (const a of ["role", "aria-label", "aria-describedby"]) ui.sheet.removeAttribute(a);
+    cancelKeyDraft();
+  }
 }
+
+// キーボードで選ぶ：Enter で枠を出し、矢印で動かし、Shift＋矢印で大きさを変え、Enter で決める。Esc でやめる
+let keyDraft: { left: number; top: number; width: number; height: number } | null = null;
+let keyDraftEl: HTMLDivElement | null = null;
+function cancelKeyDraft() {
+  keyDraft = null;
+  keyDraftEl?.remove();
+  keyDraftEl = null;
+}
+ui.sheet.addEventListener("keydown", (e) => {
+  if (!picking || !session || session.phase !== "before") return;
+  const step = 0.01;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    if (keyDraft) cancelKeyDraft();
+    else {
+      setPicking(false);
+      ui.pickToggle.focus();
+    }
+    return;
+  }
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    if (!keyDraft) {
+      keyDraft = { left: 0.35, top: 0.45, width: 0.3, height: 0.05 };
+      keyDraftEl = make("div", undefined, "mark mark-pick is-drawing");
+      ui.marks.append(keyDraftEl);
+      placeAt(keyDraftEl, keyDraft);
+      return;
+    }
+    const box = session.boxes.get(session.current);
+    if (box && picks.length < MAX_REDACT_AREAS) {
+      picks.push({ page: session.current, rect: fromFraction(box, keyDraft) });
+      renderPicks();
+    }
+    cancelKeyDraft();
+    placeMarks(session, session.current);
+    return;
+  }
+  const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  const d = arrows[e.key];
+  if (!d || !keyDraft || !keyDraftEl) return;
+  e.preventDefault();
+  const k = keyDraft;
+  if (e.shiftKey) {
+    k.width = Math.min(1 - k.left, Math.max(0.01, k.width + d[0] * step));
+    k.height = Math.min(1 - k.top, Math.max(0.01, k.height + d[1] * step));
+  } else {
+    k.left = Math.min(1 - k.width, Math.max(0, k.left + d[0] * step));
+    k.top = Math.min(1 - k.height, Math.max(0, k.top + d[1] * step));
+  }
+  placeAt(keyDraftEl, k);
+});
 
 function renderPicks() {
   const s = session;
@@ -774,12 +1024,13 @@ function renderPicks() {
         renderPicks();
         if (session) placeMarks(session, session.current);
       });
-      li.append(make("span", `選んだ所 ${i + 1}：ページ ${p.page}`), rm);
+      li.append(make("span", pickLabel(p, i)), rm);
       return li;
     }),
   );
   ui.picks.hidden = picks.length === 0;
-  ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「片付ける」を押すと、見つかった所といっしょに黒塗りします。下の字は消します）`;
+  for (const b of ui.groups.querySelectorAll<HTMLElement>("[data-candidate]")) syncCandidateButton(b, Number(b.dataset.candidate));
+  ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「片付ける」を押すと、見つかった所といっしょに黒塗りします。下の字・画像・注釈も消します）${picks.length >= MAX_REDACT_AREAS ? `。一度に選べるのは ${MAX_REDACT_AREAS} か所までです` : ""}`;
   if (s && s.phase === "before" && !ui.sanitize.disabled) {
     ui.sanitize.textContent = picks.length ? `片付ける（選んだ ${picks.length} か所も黒塗り）` : "片付ける";
   }
@@ -857,6 +1108,27 @@ function cleanFailed(text: string) {
   ui.sanitizeNote.textContent = text;
 }
 
+/**
+ * 自分で黒塗りした PDF を、保存の前に読み直したら残りが見つかった（片付けの redact の blocked）。
+ * PDF は返ってこないので、保存の場面に進まない。何がどこに残ったかを並べ、選び直してもう一度片付けられるようにする
+ */
+function redactBlocked(s: Session, retry: Uint8Array | null, leftovers: Parameters<typeof buildBlockedView>[0], notDone: Parameters<typeof buildBlockedView>[1]) {
+  const v = buildBlockedView(leftovers, notDone);
+  setStatus(v.headline, "problem");
+  setStep(ui.stepClean, "now");
+  ui.stepCleanNote.textContent = "保存できる形にできませんでした";
+  ui.progress.hidden = true;
+  ui.sanitizeNote.textContent = "選んだ所を見直して（外す・選び直す）、もう一度「片付ける」を押せます。";
+  // 「見つかりませんでした」の緑の札は、片付ける前の検査の結果。止められた今は出さない（全部緑と見誤らせない）
+  ui.verified.hidden = true;
+  ui.redactLeftList.replaceChildren(...v.lines.map((t) => make("li", t)));
+  ui.redactLeft.hidden = v.lines.length === 0;
+  s.original = retry;
+  ui.sanitize.disabled = retry === null;
+  ui.sanitize.textContent = picks.length ? `片付ける（選んだ ${picks.length} か所も黒塗り）` : "片付ける";
+  ui.pickTools.hidden = retry === null;
+}
+
 function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages: number; seconds: string }) {
   ui.workspace.dataset.phase = "after";
   ui.actions.hidden = true;
@@ -866,7 +1138,7 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.stepCleanNote.textContent = "片付けました";
   if (c.verdict === "clean") {
     setStep(ui.stepVerify, "done");
-    ui.stepVerifyNote.textContent = "残り 0 件になりました";
+    ui.stepVerifyNote.textContent = "残り 0 件・保存できます";
   } else {
     setStep(ui.stepVerify, "now");
     ui.stepVerifyNote.textContent = c.left === null ? "読み直せませんでした" : c.left > 0 ? `${c.left} か所 残っています` : "消えたと言い切れない所があります";
@@ -900,6 +1172,8 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.clean.hidden = false;
 
   ui.clean.dataset.verdict = c.verdict;
+  // 片付けた結果の見出しへ移す（キーボード・読み上げで、次にすること（保存）がすぐ分かるように）
+  ui.cleanTitle.focus();
   // 「全部緑」は、片付けた結果の欄（緑の枠）が示す。同じ文を重ねない
   ui.verified.hidden = true;
   ui.resultTitle.textContent = "読み直した結果（種類ごと）";
@@ -929,18 +1203,22 @@ async function runSanitize() {
   const original = s.original;
   s.original = null;
   ui.sanitize.disabled = true;
+  ui.redactLeft.hidden = true;
   setStep(ui.stepClean, "now");
   ui.stepCleanNote.textContent = "片付けています";
   setStatus("片付けています…");
   ui.progress.removeAttribute("value"); // どこまで進んだか分からないので、動いていることだけを示す
   ui.progress.hidden = false;
   try {
-    const areas = picks.slice();
+    const areas = toAreas(picks);
+    // 自分で黒塗りした PDF が読み直しで止められたら、選び直してもう一度片付けられるよう、元の写しを持っておく
+    const retry = areas.length ? original.slice() : null;
     setPicking(false);
     ui.pickTools.hidden = true;
     const out = await sanitizeInWorker(original.buffer as ArrayBuffer, undefined, areas);
     if (gen !== generation) return;
     if (out.kind === "timeout") return cleanFailed("時間がかかりすぎたため、片付けを止めました。画面はそのまま使えます。");
+    if (out.kind === "blocked") return redactBlocked(s, retry, out.leftovers, out.notDone);
     if (out.kind !== "done") return cleanFailed(out.message);
 
     setStep(ui.stepClean, "done");
@@ -992,6 +1270,10 @@ async function runSanitize() {
       void opened.view.close();
     }
     renderCleaned(clean, file);
+    // ファイルを小さくする：読み直しで残りが 0 件のときだけ出す（残っている PDF を小さくしても、保存できないため）
+    cleanedState = afterSummary ? { view: buildView(afterSummary), notDone: out.notDone, name } : null;
+    renderCompressPresets();
+    ui.compress.hidden = !cleanedState || saveGate(clean) === "blocked";
     const afterView = afterSummary ? buildView(afterSummary) : null;
     renderBeforeAfter(s.view, afterView);
     if (s.sha256 && afterSha) {
@@ -1025,7 +1307,22 @@ ui.download.addEventListener("click", (e) => {
   if (ui.download.getAttribute("aria-disabled") === "true") e.preventDefault();
 });
 
-el<HTMLAnchorElement>("font-license").href = fontLicenseUrl;
+ui.compressRun.addEventListener("click", () => void runCompress());
+ui.compressConfirmBox.addEventListener("change", () => {
+  if (ui.compressConfirmBox.checked) unlockCompressDownload();
+  else lockCompressDownload();
+});
+ui.compressDownload.addEventListener("click", (e) => {
+  if (ui.compressDownload.getAttribute("aria-disabled") === "true") e.preventDefault();
+});
+
+
+// 公式のサイトで動いていなければ、画面の上に知らせる（丸写しの目印。守りの中心にはしない。src/ui/official.ts）
+if (!isOfficialHost(location.hostname)) {
+  const note = el<HTMLParagraphElement>("unofficial");
+  note.textContent = UNOFFICIAL_NOTE;
+  note.hidden = false;
+}
 
 ui.sample.addEventListener("click", () => {
   const file = sampleFile();

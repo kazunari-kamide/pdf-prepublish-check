@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// サイトのページ（記事の一覧・各記事・プライバシーの説明）を、ビルドに入れる Vite のプラグイン。
+// サイトのページ（記事の一覧・各記事・プライバシーの説明と、ライセンス・利用規約・お問い合わせ・よくある質問・公開前の自己点検）を、ビルドに入れる Vite のプラグイン。
 // 中身と HTML の作り方は src/site/（render.ts・articles.ts・privacy.ts）。ここでは、次のことだけをする。
 // - ページの CSS（design/tokens.css ＋ src/site/site.css）を1つにつなぎ、中身のハッシュの名前で assets/ に置く
 // - HTML のページと、sitemap.xml・robots.txt を dist/ に置く（npm run build）
@@ -9,6 +9,7 @@
 //
 // ページにはスクリプトを入れない。通信を足さない（docs/no-network.md）。
 
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -16,6 +17,8 @@ import type { Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
 import { OFFICIAL_ORIGIN } from "./htaccess.ts";
 import { faviconHref, inlineMark } from "./logo.ts";
+import { buildLicenses } from "./site-licenses.ts";
+import { GUIDE_PATHS, renderGuidePages } from "./src/site/pages.ts";
 import { renderSite, sitePaths } from "./src/site/render.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
 
@@ -32,8 +35,32 @@ export function siteCssFile(css = siteCss()): string {
   return `assets/site-${createHash("sha256").update(css).digest("hex").slice(0, 10)}.css`;
 }
 
+/**
+ * ソースを公開している GitHub のリポジトリの場所（ライセンス・お問い合わせのページのリンクに使う）。
+ * 名前をコードに書かないため、ビルドの時に取る：GitHub Actions では GITHUB_REPOSITORY、手元では git の origin。
+ * どちらも GitHub のリポジトリの形でなければ null（ページはリンクを出さず、文だけにする）
+ */
+export function repoUrl(env: NodeJS.ProcessEnv = process.env, remote = gitRemote): string | null {
+  const fromEnv = env.GITHUB_REPOSITORY;
+  const name = fromEnv && /^[\w.-]+\/[\w.-]+$/.test(fromEnv) ? fromEnv : remote()?.match(/github\.com[/:]([\w.-]+\/[\w.-]+?)(\.git)?\/?$/)?.[1];
+  return name ? `https://github.com/${name}` : null;
+}
+
+function gitRemote(): string | null {
+  try {
+    return execFileSync("git", ["remote", "get-url", "origin"], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/** sitemap に並べるページ（トップ・記事・プライバシーと、サイトの案内のページ） */
+export function allSitePaths(): string[] {
+  return [...sitePaths(), ...GUIDE_PATHS];
+}
+
 export function renderSitemap(origin = OFFICIAL_ORIGIN): string {
-  const urls = sitePaths().map((p) => `  <url><loc>${origin}${p}</loc></url>`);
+  const urls = allSitePaths().map((p) => `  <url><loc>${origin}${p}</loc></url>`);
   return ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">', ...urls, "</urlset>", ""].join("\n");
 }
 
@@ -45,13 +72,19 @@ export function renderRobots(origin = OFFICIAL_ORIGIN): string {
 export function siteFiles(): Map<string, string> {
   const css = siteCss();
   const cssFile = siteCssFile(css);
-  const files = renderSite({
+  const options = {
     origin: OFFICIAL_ORIGIN,
     csp: cspForMeta,
     cssHref: `/${cssFile}`,
+    repoUrl: repoUrl(),
+    // ロゴ（logo.ts）。同じ options を、記事・プライバシー・サイトの案内のページ・404 のページのすべてに渡すので、どの帯にも出る
     favicon: faviconHref(),
     brandMark: inlineMark("mark-on-dark", "site-brand-mark"),
-  });
+  };
+  const files = renderSite(options);
+  const licenses = buildLicenses(ROOT);
+  for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);
+  for (const [name, text] of licenses.files) files.set(name, text);
   files.set("sitemap.xml", renderSitemap());
   files.set("robots.txt", renderRobots());
   files.set(cssFile, css);

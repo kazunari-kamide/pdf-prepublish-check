@@ -5,8 +5,8 @@
 
 export type Rect = [number, number, number, number];
 
-/** 漏洩パターンの番号（docs/glossary.md）。P2＝XMP、P8＝注釈、P12＝スクリプト */
-export type SanitizePattern = "P1" | "P2" | "P5" | "P6" | "P7" | "P8" | "P9" | "P12";
+/** 漏洩パターンの番号（docs/glossary.md）。P2＝XMP、P8＝注釈、P10＝画像の Exif、P11＝フォームの値、P12＝スクリプト・外部動作 */
+export type SanitizePattern = "P1" | "P2" | "P5" | "P6" | "P7" | "P8" | "P9" | "P10" | "P11" | "P12";
 
 export type RemovedKind =
   | "covered_text" // P6：覆いの下の字
@@ -25,6 +25,14 @@ export type RemovedKind =
   | "actual_text" // P7：字の読み替え（/ActualText。構造ツリー・マーク付きの中身）
   | "thumbnail" // P5：ページの縮小画像（/Thumb。古い見た目が残っていることがある）
   | "piece_info" // P2：アプリの独自データ（/PieceInfo・/LastModified）
+  // 0.7.0 から
+  | "external_action" // P12：外のプログラム・ファイルを開く動作（Launch、file: の URI、ほかのファイルへ移る動作）
+  | "image_exif" // P10：写真（JPEG）の中の Exif・撮影の情報・縮小画像・コメント
+  | "outline" // P7：しおり（/Outlines）
+  | "struct_title" // P7：構造要素の題（/T）・フォームの欄の書き出し用の名前（/TM）
+  | "field_value" // P11：見えない欄（見た目のない欄・隠した見た目の欄）の値
+  | "hidden_image" // P7：ページの外・切り抜きの外に隠れた画像（描く命令を外す、隠れた所の画素を白く塗る）
+  | "unused_xobject" // P5：資源にあるが描かれない部品・画像
   // 自分で黒塗りする（redact.ts）。pattern は P6（墨消し）にそろえる
   | "redacted_text" // 選んだ所の字
   | "redacted_pixels" // 選んだ所の画像の画素
@@ -55,7 +63,12 @@ export type NotDoneReason =
   | "uncertain_cover" // 画像の上の白い塗りが、下を隠さない重ね方（Multiply など）・半透明・表示しないレイヤーの中にあり、塗らなかった
   | "too_many_operations" // 命令が多すぎるページ（重いページ）
   | "unreadable_page" // ページの中身を読めない
-  | "field_shared"; // 選んだ所のフォームの欄が、ほかの所にも見た目を持っていて、欄ごとは外せない（redact.ts）
+  | "field_shared" // 選んだ所のフォームの欄が、ほかの所にも見た目を持っていて、欄ごとは外せない（redact.ts）
+  // 0.7.0 から
+  | "accessibility_text" // 読み上げ用の説明（/Alt・/E・/TU）。読み上げに使うので消さない
+  | "field_visible" // 見えている欄の値。提出のための記入かもしれないので消さない
+  | "overdrawn_text" // 同じ所に違う字が重ねて描かれている。どちらが隠れた字か決められない
+  | "annotation_text"; // 注釈（スタンプなど）の見た目の中だけにある字。ページに見えているので消さない
 
 export type NotDoneItem = {
   pattern: SanitizePattern;
@@ -190,3 +203,62 @@ export type RedactResult =
       checked: string[];
     }
   | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_areas"; message: string };
+
+// ---------------------------------------------------------------- ファイルを小さくする（compress.ts）
+
+export type CompressOptions = {
+  /** 画像を解く・JPEG に書く道具（片付けと同じもの）。無いと小さくできない */
+  codec: ImageCodec;
+  /** 画像の細かさの上限（dpi。50〜600、既定 150）。いちばん大きく描かれた所でこれを超える画像だけを縮める */
+  maxDpi?: number;
+  /** JPEG の質（0.3〜0.95、既定 0.75） */
+  jpegQuality?: number;
+  /** 解く画像の画素の数の上限（既定は片付けと同じ） */
+  maxImagePixels?: number;
+  /**
+   * 小さくする前と後の両方にかける確かめ。種類ごとの残りが増えたら保存させない（blocked）。
+   * 画面：rulesCheck((b) => inspectAll(b))。Node（テスト・採点）：さらに検証器（P6）
+   */
+  checks?: RedactCheck[];
+};
+
+/** 書き直さなかった画像の理由 */
+export type CompressSkip = {
+  reason: "within_dpi" | "not_smaller" | "bitonal" | "mask" | "used_elsewhere" | "not_placed" | "too_large" | "unreadable";
+  count: number;
+  /** 画面にそのまま出せる短い文 */
+  label: string;
+};
+
+export type CompressImages = {
+  /** 縮めて JPEG に書き直した画像の数 */
+  changed: number;
+  /** 画像で減ったバイト数 */
+  savedBytes: number;
+  skipped: CompressSkip[];
+};
+
+/** 小さくしたあとの読み直しで増えた残り（中身は入れない。種類と数だけ） */
+export type CompressIncrease = {
+  check: RedactLeftover["check"];
+  kind: RedactLeftover["kind"];
+  pattern?: string;
+  label: string;
+  before: number;
+  after: number;
+};
+
+export type CompressResult =
+  | {
+      status: "ok";
+      /** 小さくした PDF。小さくならなかったときは、入れたバイト列のまま（changed: false） */
+      bytes: Uint8Array;
+      sizeBefore: number;
+      sizeAfter: number;
+      changed: boolean;
+      images: CompressImages;
+      /** 読み直しにかけた確かめの名前（changed: false のときは空） */
+      checked: string[];
+    }
+  | { status: "blocked"; sizeBefore: number; sizeAfter: number; increased: CompressIncrease[]; checked: string[] }
+  | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_options" | "no_codec"; message: string };

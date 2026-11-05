@@ -19,7 +19,7 @@ import { indexGlyphsByText, isGlyphSizedImage, normalizeGlyphText, isGlyphSizedS
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.10.0";
+export const RULE_VERSION = "1.12.0";
 
 /** P6 の層。text＝黒い四角の下に字が残っている型、image＝スキャン画像の画素が残っている型 */
 export type P6Layer = "text" | "image";
@@ -42,6 +42,8 @@ export type P6TextFinding = {
   rect: Rect;
   /** 覆われた字の数（空白は数えない） */
   chars: number;
+  /** 覆いが濃くない色（白・灰・赤など）の不透明な塗り・画像・注釈のとき "opaque"（1.11.0 から）。濃い覆いのときは付けない */
+  coverTone?: "opaque";
   /** includeText のときだけ。覆われた字そのもの。記録やログには使わない */
   text?: string;
   /**
@@ -176,7 +178,8 @@ export function findCoveredText(
   const view = options.view ?? null;
   let byText: Map<string, GlyphBox[]> | null = null;
   for (const cover of covers) {
-    if (cover.tone !== "dark") continue; // 白っぽい覆いは、画像の層でだけ使う（字の層の白い覆いは P7 の範囲）
+    // 白っぽい覆い（light）は、画像の層でだけ使う。字の層は、濃い覆いと、濃くない不透明な覆い（opaque。1.11.0 から）を使う
+    if (cover.tone === "light") continue;
     let chars = 0;
     let text = "";
     let rawChars = 0;
@@ -185,6 +188,7 @@ export function findCoveredText(
     const vis = options.settings ? visiblePart(cover.rect, view, cover.clip) : cover.rect;
     for (const g of glyphs) {
       if (g.seq >= cover.seq) continue; // 覆いのあとに描いた字は、上に見えている
+      if (cover.tone === "opaque" && g.invisible) continue; // 見えない描き方の字（文字認識の層など）は、濃くない覆いの下では数えない（1.11.0 から）
       const a = area(g.rect);
       if (a <= 0) continue;
       // 形を持つ覆い（曲線・回した四角など）は、形と字の箱の重なった面積で測る（1.3.0 から）
@@ -311,7 +315,8 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
           }
         }
       }
-      const covers = [...scan.covers].sort((a, b) => a.seq - b.seq);
+      // 同じ順番の覆い（PDF.js で解いて濃いと分かった画像と、その画像の opaque の覆い）は、濃い方を先に置く（1.11.0 から）
+      const covers = [...scan.covers].sort((a, b) => a.seq - b.seq || (a.tone === "dark" ? 0 : 1) - (b.tone === "dark" ? 0 : 1));
 
       const pageFindings: P6Finding[] = [];
       // 覆いの上のあり方で、数えない・確かめてくださいを決める（1.8.0 から）
@@ -330,6 +335,7 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
       const hits = mergeSameArea(classified);
       for (const h of hits) {
         const f: P6TextFinding = { pattern: "P6", layer: "text", cover: h.cover.kind, page: pageNo, rect: h.cover.rect, chars: h.chars, confidence: h.confidence };
+        if (h.cover.tone === "opaque") f.coverTone = "opaque";
         if (options.includeText) f.text = h.text;
         if (options.explain) {
           f.metrics = textMetrics(h.cover, h.hidden, h.onTop);
@@ -348,7 +354,7 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
           pattern: "P6",
           layer: "image",
           cover: h.cover.kind,
-          tone: h.cover.tone,
+          tone: h.cover.tone === "dark" ? "dark" : "light",
           page: pageNo,
           rect: h.cover.rect,
           spread: h.spread === null ? null : round3(h.spread),

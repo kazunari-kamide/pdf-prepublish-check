@@ -203,3 +203,139 @@ body.site {
 .site-foot p {
   margin: 0;
 }
+
+.site-foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.site-foot-links a {
+  color: var(--color-base);
+}
+
+/* ---- サイトの案内のページ（pages.ts） */
+.site-links-list {
+  padding-left: var(--space-5);
+}
+
+.site-links-list li {
+  margin: var(--space-1) 0;
+}
+
+/* 表は、狭い画面では表の中だけを横に動かす（ページ全体は横にはみ出さない） */
+.site-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+/* 狭い画面で字が1字ずつ折れないよう、表に最低の幅を持たせる（はみ出す分は .site-table-wrap の中だけで横に動く） */
+.site-table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  font-size: var(--text-small);
+}
+
+.site-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.site-table th,
+.site-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.site-table thead th {
+  background: var(--color-chip);
+  white-space: nowrap;
+}
+
+.site-table tbody th {
+  min-width: 8em;
+  font-weight: bold;
+  overflow-wrap: break-word;
+}
+
+.site-copy {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.site-copy-none {
+  color: var(--color-muted);
+}
+
+/* ---- 公開前の自己点検：印を付ける □（印刷して使う） */
+.site-checklist .site-section ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.site-checklist .site-section ul li {
+  position: relative;
+  padding-left: 2em;
+  margin: var(--space-2) 0;
+}
+
+.site-checklist .site-section ul li::before {
+  content: "□";
+  position: absolute;
+  left: 0;
+  font-size: 1.2em;
+  line-height: 1.3;
+}
+
+.site-checklist .site-section ul.site-links-list li {
+  padding-left: 0;
+}
+
+.site-checklist .site-section ul.site-links-list li::before {
+  content: none;
+}
+
+@media print {
+  .site-band,
+  .site-foot,
+  .site-back,
+  .site-cta {
+    display: none;
+  }
+
+  body.site,
+  html {
+    background: var(--color-surface);
+  }
+
+  .site-main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .site-section {
+    break-inside: avoid;
+  }
+
+  .site a {
+    text-decoration: none;
+  }
+}
+
+/* 公式のサイトの場所の1文（どのページの下にも置く。CLAUDE.md §11-6） */
+.site-foot .site-official {
+  margin-bottom: var(--space-2);
+  color: var(--color-base);
+  font-weight: bold;
+}

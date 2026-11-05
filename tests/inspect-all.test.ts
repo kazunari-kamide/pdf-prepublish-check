@@ -29,7 +29,9 @@ describe("登録したルール", () => {
       "p10-exif",
       "p11-forms",
       "p12-actions",
+      "p2-parts",
       "p2-xmp",
+      "p3-orgs",
       "p4-paths",
       "p5-revisions",
       "p6-text",
@@ -38,6 +40,7 @@ describe("登録したルール", () => {
       "p9-attach",
       "pii",
       "props-diff",
+      "unused-images",
     ]);
   });
 });

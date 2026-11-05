@@ -24,6 +24,8 @@ export interface Article {
   /** 検索の結果に出る説明（meta description）。記事の冒頭の1文にも使う */
   description: string;
   sections: Section[];
+  /** 記事の最後に「関係する記事」として並べる、ほかの記事の slug（1つ以上。並べた順に出す） */
+  related: string[];
 }
 
 /** サイトの1枚のページ（記事の一覧・プライバシーなど）が持つ値 */

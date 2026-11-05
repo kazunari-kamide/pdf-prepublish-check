@@ -62,3 +62,16 @@ const report2 = await detectP2Parts(bytes, { includeValues: true }); // 値そ�
 - 文書全体の XMP、写真の EXIF（JPEG の中の APP1。P10）は見ない。
 - 1つのストリームは 16 MB まで、展開した編集用データは 64 MB まで、オブジェクトは 1,000,000 個まで見る。超えたら `limits` に出す。
 - パスワードが要る暗号化 PDF は読まない（`encrypted`）。
+
+## 1.1.0（2026-11-05）
+
+- 画面のルールの一覧（`RULES`）に入れた。名前は「部品の XMP・アプリのデータ」（型は P2）。
+- Illustrator 以外のアプリの `/PieceInfo /<アプリ> /Private` に中身があれば、`private_data`（`source: "app"`、中身は読まない）として返す。文書（カタログ）の `/PieceInfo` も見る（`owner: "document"`）。`/Private` が空のもの、`/LastModified` だけのものは数えない。
+- 人名の見分け方（`classifyName`）：数字の入った値は、空白で区切った語が 2 つ以上あり、そのうち 1 つが字だけの語（小文字か、漢字・かななどを含む）なら、名前として数える（例：`Taro KAKUU-0123`）。`user01`・`PC-1234`・`PC 1234` は、いままでどおりアカウント・端末の名前として数えない。`p2-xmp` も同じ見分け方を使う。
+- 合成 PDF：4 件（隠しあり 2・対照 2。`eval/cases/p2-parts.ts`）で、検出 3/3、誤検知 0。
+
+## 1.2.0（2026-11-05）
+
+- 画像・部品の XMP の、製造番号（`aux:SerialNumber`・`exifEX:BodySerialNumber` など）と機種（`tiff:Make`・`tiff:Model`・`exifEX:LensModel`・`aux:Lens`）を P10 として返す（画面では、製造番号が中・機種が低【仮】）。作った人の欄に `tiff:Artist` を足した。
+- Illustrator の編集用データ（`/PieceInfo /Illustrator /Private`。`%AI12_CompressedData` の zlib）の中の `%%For`（作った人のユーザー名）は、1.0.0 から返している。合成 PDF（`pp-l04`）で確かめた。zstd の形は、展開せずに「中身は調べていない」として返す。
+- 合成 PDF：7 件（隠しあり 4・対照 3）で、検出 9/9、誤検知 0。

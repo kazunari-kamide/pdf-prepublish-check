@@ -1,23 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール：書体に残った字形（`font-glyphs`）1.0.0。26 項目の 22。型は P7（隠れたテキスト）の仲間として扱う【仮】。
+// 検出ルール：書体に残った字形（`font-glyphs`）1.2.0。26 項目の 22。型は P7（隠れたテキスト）の仲間として扱う【仮】。
 // 埋め込みの書体（部分埋め込み＝サブセット）は、ふつう、描いた字の形だけを持つ。
 // ページのどこにも描かれていない字の形が残っていれば、前に書いてあって消した字（黒塗りの下だけにあった字など）の手がかりになる。
 // 字の形から字を読み取るのは、字の形を描いて見比べる必要があるので、ここでは数だけを返す（字の中身は返さない）。
 //
-// 見る書体：Type0 の CIDFontType2（TrueType）で、名前がサブセットの印（ABCDEF+）で始まり、CIDToGIDMap が Identity
+// 見る書体：Type0 の CIDFontType2（TrueType）で、名前がサブセットの印（ABCDEF+）で始まる（1.2.0 からは、印が無くても中身が部分埋め込みの形の）もの。CIDToGIDMap が Identity
 //   （または無い）か、ストリームのもの。字のコードは 2 バイトの Identity（CID）とみなす。
 // 数え方：書体の字の形のうち、形（glyf の中身）があるもので、どのページ・部品・注釈の見た目でも描かれておらず、
 //   描いた字の部品（複合の字形の部品）でもないもの。字の形 0（.notdef）と、形の無い字（空白など）は数えない。
 //   合字・記号など、ふつうに少し余る字形があるので、MIN_LEFTOVER 個以上のときだけ出す。
+// 1.1.0：Type3 の書体（字の形を PDF の命令で描く書体）も見る。/CharProcs の字の形のうち、塗る・線を引くなどの命令があるもので、
+//   /Encoding の /Differences でどの描いた字（1 バイトのコード）からも引かれていないものを数える。Type3 にはサブセットの印が無いので、印は見ない。
+// 1.2.0：名前にサブセットの印が無い TrueType も見る（pdf-lib などは印を付けない）。書体の中身が部分埋め込みの形（字の対応表 cmap と
+//   名前の表 name が無い。部分埋め込みの道具は、PDF で要らないこの2つを落とす）なら、部分埋め込みとして数える。
+//   cmap か name がある印の無い書体は、全部を埋め込んだものとみなして見ない（fullFonts に数える。全部の字形が「余り」になるため）。
 
 import { PDFDict, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
 import { operations } from "../shared/content-lexer.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
-import { appearanceStreams, arrayItems, dictOf, lookup, N, nameOf, openPdf, streamData, type RuleError } from "../common/index.ts";
+import { appearanceStreams, arrayItems, dictOf, lookup, N, nameOf, numOf, openPdf, streamData, type RuleError } from "../common/index.ts";
 
 export const RULE_ID = "font-glyphs";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.2.0";
 
 /** これより少ない余りは、ふつうに余る字形（合字・記号）として出さない【仮の値】 */
 export const MIN_LEFTOVER = 3;
@@ -27,6 +32,10 @@ export type FontGlyphFinding = {
   pattern: "P7";
   /** 書体の辞書のオブジェクト番号 */
   font: number;
+  /** 書体の形（1.1.0） */
+  fontType: "truetype" | "type3";
+  /** 部分埋め込みと見た理由（1.2.0）。name＝名前の印、tables＝書体の中身の形、type3＝Type3（いつも見る） */
+  subsetBy: "name" | "tables" | "type3";
   /** 書体の字の形の数（形のあるもの）と、描かれた数と、余った数 */
   glyphs: number;
   used: number;
@@ -41,6 +50,8 @@ export type FontGlyphReport = {
   /** 見た書体の数（対象の形のもの）と、形が違って見なかった書体の数 */
   checkedFonts: number;
   skippedFonts: number;
+  /** 印が無く、cmap か name の表がある（全部を埋め込んだとみなして見なかった）書体の数（1.2.0。skippedFonts にも入る） */
+  fullFonts: number;
   /** 余りが MIN_LEFTOVER より少なくて、出さなかった書体の数 */
   belowThreshold: number;
   limits: Array<"too_many_ops" | "font_too_large" | "broken_font">;
@@ -50,6 +61,19 @@ export type FontGlyphReport = {
 // ---------------------------------------------------------------- TrueType の字の形
 
 type Glyf = { count: number; hasOutline: (gid: number) => boolean; components: (gid: number) => number[] };
+
+/** TrueType の表の名前（head・glyf・cmap など）。壊れていれば例外 */
+export function fontTables(font: Uint8Array): Set<string> {
+  const v = new DataView(font.buffer, font.byteOffset, font.byteLength);
+  const n = v.getUint16(4);
+  if (12 + n * 16 > font.length) throw new Error("broken table directory");
+  const out = new Set<string>();
+  for (let i = 0; i < n; i++) {
+    const at = 12 + i * 16;
+    out.add(String.fromCharCode(font[at]!, font[at + 1]!, font[at + 2]!, font[at + 3]!));
+  }
+  return out;
+}
 
 /** TrueType の表から、字の形の数・形の有無・複合の字形の部品を読む。壊れていれば例外 */
 export function readGlyf(font: Uint8Array): Glyf {
@@ -100,7 +124,10 @@ export function readGlyf(font: Uint8Array): Glyf {
 
 // ---------------------------------------------------------------- 描かれた字のコード
 
-/** 描く命令を読み、書体の辞書ごとに、描かれた 2 バイトのコードを集める */
+/** 1 バイトのコードは、2 バイトのコードと分けるため、この値を足して入れる（Type3 で使う） */
+const ONE_BYTE = 0x10000;
+
+/** 描く命令を読み、書体の辞書ごとに、描かれた 2 バイトのコード（と、ONE_BYTE を足した 1 バイトのコード）を集める */
 function collectCodes(ctx: PDFContext, content: Uint8Array, res: PDFDict | undefined, used: Map<PDFObject, Set<number>>, visited: Set<PDFObject>, onLimit: () => void, depth = 0) {
   const fonts = dictOf(ctx, res?.get(N("Font")));
   const xobjects = dictOf(ctx, res?.get(N("XObject")));
@@ -109,6 +136,7 @@ function collectCodes(ctx: PDFContext, content: Uint8Array, res: PDFDict | undef
   const show = (b: Uint8Array) => {
     if (!current) return;
     for (let k = 0; k + 1 < b.length; k += 2) current.add((b[k]! << 8) | b[k + 1]!);
+    for (const c of b) current.add(ONE_BYTE + c);
   };
   let ops = 0;
   try {
@@ -164,6 +192,57 @@ function collectCodes(ctx: PDFContext, content: Uint8Array, res: PDFDict | undef
   }
 }
 
+// ---------------------------------------------------------------- Type3 の字の形
+
+/** 字の形を描く命令（塗る・線を引く・画像・字）があるか。d0・d1 と、形のない命令だけなら false */
+function type3HasOutline(data: Uint8Array): boolean {
+  try {
+    let ops = 0;
+    for (const { op } of operations(data)) {
+      if (++ops > LIMITS.opsPerStream) return true;
+      if (/^(f\*?|F|B\*?|b\*?|S|s|sh|Do|BI|Tj|TJ|'|")$/.test(op)) return true;
+    }
+  } catch {
+    return true; // 読めない字の形は、形があるものとして扱う
+  }
+  return false;
+}
+
+/** Type3 の書体の、形のある字の形の数と、どの描いた字からも引かれていない数。/CharProcs が無ければ null */
+function type3Leftover(ctx: PDFContext, font: PDFDict, usedCodes: Set<number>): { glyphs: number; leftover: number } | null {
+  const procs = dictOf(ctx, font.get(N("CharProcs")));
+  if (!procs) return null;
+  // コード → 字の形の名前（/Encoding の /Differences）
+  const nameOfCode = new Map<number, string>();
+  const enc = dictOf(ctx, font.get(N("Encoding")));
+  let code = 0;
+  for (const item of arrayItems(ctx, enc?.get(N("Differences")))) {
+    const n = nameOf(ctx, item);
+    const num = numOf(ctx, item);
+    if (n !== undefined) nameOfCode.set(code++, n);
+    else if (num !== undefined) code = num;
+  }
+  const usedNames = new Set<string>();
+  for (const c of usedCodes) {
+    if (c < ONE_BYTE) continue;
+    const n = nameOfCode.get(c - ONE_BYTE);
+    if (n !== undefined) usedNames.add(n);
+  }
+  let glyphs = 0;
+  let leftover = 0;
+  for (const [k, v] of procs.entries()) {
+    const name = k.decodeText();
+    if (name === ".notdef") continue;
+    const s = lookup(ctx, v);
+    if (!(s instanceof PDFStream)) continue;
+    const d = streamData(s, LIMITS.streamBytes);
+    if (!d || !type3HasOutline(d)) continue;
+    glyphs++;
+    if (!usedNames.has(name)) leftover++;
+  }
+  return { glyphs, leftover };
+}
+
 function contentBytes(ctx: PDFContext, raw: PDFObject | undefined): Uint8Array {
   const v = lookup(ctx, raw);
   const list = v instanceof PDFStream ? [v] : arrayItems(ctx, v).map((x) => lookup(ctx, x)).filter((x): x is PDFStream => x instanceof PDFStream);
@@ -179,7 +258,7 @@ function contentBytes(ctx: PDFContext, raw: PDFObject | undefined): Uint8Array {
 }
 
 export async function detectFontGlyphs(bytes: Uint8Array): Promise<FontGlyphReport> {
-  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], checkedFonts: 0, skippedFonts: 0, belowThreshold: 0, limits: [] };
+  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], checkedFonts: 0, skippedFonts: 0, fullFonts: 0, belowThreshold: 0, limits: [] };
   const opened = await openPdf(bytes);
   if (!opened.ok) return { ...base, status: "error", error: opened.error };
   const { doc, ctx } = opened;
@@ -219,7 +298,19 @@ export async function detectFontGlyphs(bytes: Uint8Array): Promise<FontGlyphRepo
   }
 
   for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
-    if (!(obj instanceof PDFDict) || nameOf(ctx, obj.get(N("Type"))) !== "Font" || nameOf(ctx, obj.get(N("Subtype"))) !== "Type0") continue;
+    if (!(obj instanceof PDFDict) || nameOf(ctx, obj.get(N("Type"))) !== "Font") continue;
+    if (nameOf(ctx, obj.get(N("Subtype"))) === "Type3") {
+      const r = type3Leftover(ctx, obj, usedByDict.get(obj) ?? new Set());
+      if (!r) {
+        report.skippedFonts++;
+        continue;
+      }
+      report.checkedFonts++;
+      if (r.leftover >= MIN_LEFTOVER) report.findings.push({ pattern: "P7", font: ref.objectNumber, fontType: "type3", subsetBy: "type3", glyphs: r.glyphs, used: r.glyphs - r.leftover, leftover: r.leftover });
+      else if (r.leftover > 0) report.belowThreshold++;
+      continue;
+    }
+    if (nameOf(ctx, obj.get(N("Subtype"))) !== "Type0") continue;
     const desc = dictOf(ctx, arrayItems(ctx, obj.get(N("DescendantFonts")))[0]);
     const base = nameOf(ctx, obj.get(N("BaseFont"))) ?? "";
     const fd = desc ? dictOf(ctx, desc.get(N("FontDescriptor"))) : undefined;
@@ -227,7 +318,7 @@ export async function detectFontGlyphs(bytes: Uint8Array): Promise<FontGlyphRepo
     const map = desc ? lookup(ctx, desc.get(N("CIDToGIDMap"))) : undefined;
     const enc = nameOf(ctx, obj.get(N("Encoding")));
     const subset = /^[A-Z]{6}\+/.test(base);
-    if (!desc || nameOf(ctx, desc.get(N("Subtype"))) !== "CIDFontType2" || !(ff instanceof PDFStream) || !subset || (enc !== "Identity-H" && enc !== "Identity-V")) {
+    if (!desc || nameOf(ctx, desc.get(N("Subtype"))) !== "CIDFontType2" || !(ff instanceof PDFStream) || (enc !== "Identity-H" && enc !== "Identity-V")) {
       report.skippedFonts++;
       continue;
     }
@@ -235,6 +326,20 @@ export async function detectFontGlyphs(bytes: Uint8Array): Promise<FontGlyphRepo
     if (!fontData) {
       limit("font_too_large");
       continue;
+    }
+    if (!subset) {
+      let tables: Set<string>;
+      try {
+        tables = fontTables(fontData);
+      } catch {
+        limit("broken_font");
+        continue;
+      }
+      if (tables.has("cmap") || tables.has("name")) {
+        report.fullFonts++;
+        report.skippedFonts++;
+        continue;
+      }
     }
     let g: Glyf;
     try {
@@ -251,7 +356,7 @@ export async function detectFontGlyphs(bytes: Uint8Array): Promise<FontGlyphRepo
     }
     report.checkedFonts++;
     const usedGids = new Set<number>();
-    const queue = [...(usedByDict.get(obj) ?? [])].map(toGid);
+    const queue = [...(usedByDict.get(obj) ?? [])].filter((c) => c < ONE_BYTE).map(toGid);
     while (queue.length) {
       const gid = queue.pop()!;
       if (usedGids.has(gid)) continue;
@@ -265,7 +370,7 @@ export async function detectFontGlyphs(bytes: Uint8Array): Promise<FontGlyphRepo
       glyphs++;
       if (!usedGids.has(gid)) leftover++;
     }
-    if (leftover >= MIN_LEFTOVER) report.findings.push({ pattern: "P7", font: ref.objectNumber, glyphs, used: glyphs - leftover, leftover });
+    if (leftover >= MIN_LEFTOVER) report.findings.push({ pattern: "P7", font: ref.objectNumber, fontType: "truetype", subsetBy: subset ? "name" : "tables", glyphs, used: glyphs - leftover, leftover });
     else if (leftover > 0) report.belowThreshold++;
   }
   return report;

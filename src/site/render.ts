@@ -13,6 +13,26 @@ import type { Article, PageMeta, Section } from "./types.ts";
 export const SITE_NAME = "お守りPDF";
 export const ARTICLES_PATH = "/articles/";
 export const PRIVACY_PATH = "/privacy.html";
+// サイトの案内のページ（中身は pages.ts）
+export const LICENSES_PATH = "/licenses.html";
+export const TERMS_PATH = "/terms.html";
+export const CONTACT_PATH = "/contact.html";
+export const FAQ_PATH = "/faq.html";
+export const CHECKLIST_PATH = "/checklist.html";
+
+/** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
+export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。";
+
+/** どのページの下にも置く、サイトの案内のリンク（検査のページ index.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
+export const FOOT_LINKS: ReadonlyArray<readonly [string, string]> = [
+  [ARTICLES_PATH, "記事の一覧"],
+  [CHECKLIST_PATH, "公開前の自己点検"],
+  [FAQ_PATH, "よくある質問"],
+  [PRIVACY_PATH, "プライバシー"],
+  [TERMS_PATH, "利用規約"],
+  [LICENSES_PATH, "ライセンス"],
+  [CONTACT_PATH, "お問い合わせ"],
+];
 
 export interface RenderOptions {
   /** 公式のサイトの場所（例：https の公式の URL）。末尾の / はなし */
@@ -25,6 +45,8 @@ export interface RenderOptions {
   favicon?: string;
   /** 墨の帯に置くロゴマークの SVG（logo.ts の inlineMark。リポジトリの中のファイルから作るので、escapeHtml を通さない） */
   brandMark?: string;
+  /** ソースを公開している GitHub のリポジトリの場所。分からないときは null（リンクを出さず、文だけにする） */
+  repoUrl?: string | null;
 }
 
 export function escapeHtml(s: string): string {
@@ -38,7 +60,8 @@ export function fileFor(path: string): string {
   return (path.endsWith("/") ? `${path}index.html` : path).replace(/^\//, "");
 }
 
-function layout(meta: PageMeta, body: string, o: RenderOptions): string {
+/** どのページにも共通の枠（CSP・題・説明・canonical・上の帯・下の帯）。中身の HTML は body */
+export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
   const e = escapeHtml;
   const title = meta.path === "/" ? SITE_NAME : `${meta.title}｜${SITE_NAME}`;
   return `<!doctype html>
@@ -68,6 +91,10 @@ function layout(meta: PageMeta, body: string, o: RenderOptions): string {
 ${body}
     </main>
     <footer class="site-foot">
+      <nav class="site-foot-links" aria-label="サイトの案内（下）">
+${FOOT_LINKS.map(([href, label]) => `        <a href="${href}">${e(label)}</a>`).join("\n")}
+      </nav>
+      <p class="site-official">${e(OFFICIAL_NOTE)}</p>
       <p>PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</p>
     </footer>
   </body>
@@ -75,7 +102,7 @@ ${body}
 `;
 }
 
-function renderSection(s: Section): string {
+export function renderSection(s: Section): string {
   const e = escapeHtml;
   const out = [`      <section class="site-section">`, `        <h2>${e(s.heading)}</h2>`];
   for (const p of s.paragraphs ?? []) out.push(`        <p>${e(p)}</p>`);
@@ -95,6 +122,25 @@ function toInspector(): string {
       </aside>`;
 }
 
+/** 記事の最後に置く、関係する記事へのつなぎ（slug が記事の一覧にないときは止める） */
+function toRelated(a: Article): string {
+  const e = escapeHtml;
+  const items = a.related.map((slug) => {
+    const r = ARTICLES.find((x) => x.slug === slug);
+    if (!r) throw new Error(`関係する記事が見つかりません：${a.slug} → ${slug}`);
+    const tag = r.pattern ? `<span class="site-tag">${e(r.pattern)}</span>` : "";
+    return `          <li><a href="${articlePath(r)}">${tag}${e(r.title)}</a></li>`;
+  });
+  return [
+    `      <nav class="site-section" aria-label="関係する記事">`,
+    `        <h2>関係する記事</h2>`,
+    `        <ul class="site-list">`,
+    ...items,
+    `        </ul>`,
+    `      </nav>`,
+  ].join("\n");
+}
+
 export function renderArticle(a: Article, o: RenderOptions): string {
   const e = escapeHtml;
   const kicker = a.pattern ? `型の解説・${a.pattern}` : "正しいやり方の手順";
@@ -105,6 +151,7 @@ export function renderArticle(a: Article, o: RenderOptions): string {
     `      <p class="site-lead">${e(a.description)}</p>`,
     ...a.sections.map(renderSection),
     toInspector(),
+    ...(a.related.length ? [toRelated(a)] : []),
     `      <p class="site-back"><a href="${ARTICLES_PATH}">記事の一覧へ戻る</a></p>`,
     `      </article>`,
   ].join("\n");

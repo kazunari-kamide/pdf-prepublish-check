@@ -1,0 +1,7748 @@
+{
+  "date": "2026-11-05",
+  "commit": "7f68db2",
+  "set": "proposals/blind/fixtures/blind",
+  "rules": {
+    "p6-text": "1.10.0",
+    "p7-hidden": "1.1.0",
+    "alt-text": "1.0.0",
+    "font-glyphs": "1.0.0",
+    "p5-revisions": "1.2.1",
+    "extras": "1.0.0",
+    "p1-info": "1.2.0",
+    "props-diff": "1.0.0",
+    "p2-xmp": "1.0.0",
+    "p4-paths": "1.0.0",
+    "p9-attach": "1.1.0",
+    "p8-annot": "1.1.0",
+    "p11-forms": "1.0.0",
+    "p12-actions": "1.0.0",
+    "p10-exif": "1.0.0",
+    "pii": "0.1.1"
+  },
+  "total": {
+    "types": 98,
+    "typesPass": 66,
+    "leak": [
+      117,
+      140
+    ],
+    "control": [
+      9,
+      101
+    ],
+    "notice": [
+      2,
+      4
+    ],
+    "unchecked": [
+      1,
+      1
+    ],
+    "residual": [
+      25,
+      126
+    ],
+    "sanitizeNotOk": 0,
+    "measureProblems": []
+  },
+  "types": [
+    {
+      "type": "T01",
+      "title": "文書情報の標準の欄（作成者・タイトルなど）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T02",
+      "title": "文書情報の独自の欄（Company・Manager など）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T03",
+      "title": "前の版にだけ残る文書情報",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T04",
+      "title": "Shift_JIS などで書かれた値を正しく読む",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T05",
+      "title": "文書情報と XMP の食い違い",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        1,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": [
+        "a-creator-differs：見逃し（別の型で出た：P1）",
+        "ctl-agree：誤検知 1 件（P2）"
+      ]
+    },
+    {
+      "type": "T06",
+      "title": "文書全体の XMP の人名・編集の履歴",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": [
+        "a-dc-creator：見逃し"
+      ]
+    },
+    {
+      "type": "T07",
+      "title": "圧縮した XMP",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": [
+        "a-flate-xmp：見逃し"
+      ]
+    },
+    {
+      "type": "T08",
+      "title": "部品ごとの XMP（画像・部品の作成者）",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": [
+        "a-image-xmp：見逃し"
+      ]
+    },
+    {
+      "type": "T09",
+      "title": "アプリの私的データ（PieceInfo）",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": [
+        "a-page-pieceinfo：見逃し",
+        "b-catalog-pieceinfo：見逃し"
+      ]
+    },
+    {
+      "type": "T11",
+      "title": "他組織名の混入（P3）",
+      "plan": "△",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": [
+        "a-other-org-title：見逃し（別の型で出た：P1）"
+      ]
+    },
+    {
+      "type": "T12",
+      "title": "文書情報・XMP の中のパス",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T13",
+      "title": "本文・注釈・リンク先の中のパス・サーバー名",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        2,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        2
+      ],
+      "notes": [
+        "a-unc-in-body：見逃し"
+      ]
+    },
+    {
+      "type": "T14",
+      "title": "増分更新の前の版",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        1,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": [
+        "ctl-added-page：誤検知 1 件（P5）"
+      ]
+    },
+    {
+      "type": "T15",
+      "title": "%%EOF の後の孤立したオブジェクト",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T16",
+      "title": "どこからも指されていない中身のストリーム",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T17",
+      "title": "ページの木から外したページ",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T18",
+      "title": "オブジェクトストリームの中の孤立した辞書",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T19",
+      "title": "資源にあるが描かれない部品（Form XObject）",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": [
+        "a-unused-form：見逃し"
+      ]
+    },
+    {
+      "type": "T20",
+      "title": "ページの縮小画像（/Thumb）に前のページが残る",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        1,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": [
+        "ctl-same-thumb：誤検知 1 件（P5）"
+      ]
+    },
+    {
+      "type": "T22",
+      "title": "前の版の中の個人情報の型を探す",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T23",
+      "title": "字の上の黒い四角",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        3,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        3
+      ],
+      "notes": []
+    },
+    {
+      "type": "T24",
+      "title": "濃い色・CMYK の黒の四角",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        3,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        3
+      ],
+      "notes": []
+    },
+    {
+      "type": "T25",
+      "title": "日本語（CID 書体）の字の上の黒い四角",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T26",
+      "title": "形を問わない覆い（楕円・回した四角・太い線）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        3,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        3
+      ],
+      "notes": []
+    },
+    {
+      "type": "T27",
+      "title": "字の上に貼った黒い画像",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        2
+      ],
+      "notes": [
+        "b-black-jpeg：見逃し（別の型で出た：P7）"
+      ]
+    },
+    {
+      "type": "T28",
+      "title": "字の上の黒い四角の注釈（Square）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T29",
+      "title": "字の上の未適用の墨消し注釈",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T30",
+      "title": "網掛け（帯が先・字と同じ色）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T31",
+      "title": "字の上の白い四角",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": [
+        "a-white-rect：見逃し（別の型で出た：P7）"
+      ]
+    },
+    {
+      "type": "T32",
+      "title": "中間の色の不透明な覆い（灰・赤・青）",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        2,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        3
+      ],
+      "notes": [
+        "a-gray：見逃し（別の型で出た：P7）"
+      ]
+    },
+    {
+      "type": "T33",
+      "title": "半透明の濃い覆い・黒い蛍光ペン",
+      "plan": "△",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        2
+      ],
+      "notes": [
+        "b-black-highlight：見逃し"
+      ]
+    },
+    {
+      "type": "T34",
+      "title": "白い四角の注釈",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": [
+        "a-white-square-annot：見逃し"
+      ]
+    },
+    {
+      "type": "T35",
+      "title": "行の一部だけ覆う四角",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T36",
+      "title": "部品（Form XObject）の中の字を覆う",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T37",
+      "title": "覆いの上に別の見える字を描いて隠す",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": [
+        "a-white-then-text：見逃し（別の型で出た：P7）"
+      ]
+    },
+    {
+      "type": "T38",
+      "title": "縦書きの字の上の黒い四角",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": [
+        "a-vertical：見逃し"
+      ]
+    },
+    {
+      "type": "T39",
+      "title": "スキャン＋文字認識の層の上の黒い四角",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T40",
+      "title": "スキャン画像の上の黒い四角（文字の層なし）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T41",
+      "title": "スキャン＋黒い四角の注釈",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T42",
+      "title": "スキャン＋未適用の墨消し注釈",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T43",
+      "title": "白い四角の下の画像",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T44",
+      "title": "字を描いたあと、明るい画像・写真で覆う",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        2,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T45",
+      "title": "白い紙に白い字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T46",
+      "title": "地と同じ色の字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T47",
+      "title": "ごく薄い色の字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T48",
+      "title": "描画モード 3・7（描かない字）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T49",
+      "title": "透明な字（不透明さ 0）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T50",
+      "title": "極小の字（1pt 未満）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T51",
+      "title": "文字行列で縮めた字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T52",
+      "title": "横につぶれた字（横の伸縮 0%・1%）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        2,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T53",
+      "title": "ページの外の字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T54",
+      "title": "MediaBox の中・CropBox の外の字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T55",
+      "title": "切り抜きの外の字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T56",
+      "title": "非表示のレイヤーの字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T57",
+      "title": "輪郭だけの白い字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T58",
+      "title": "1文字ずつ別の命令で置いた白い字を1件にまとめる",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "T59",
+      "title": "圧縮したストリーム・オブジェクトストリームの中の白い字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T60",
+      "title": "違う字を同じ所に重ね描き",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T61",
+      "title": "画像の上の、画像と同じ色の字",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T62",
+      "title": "文字認識の層を知らせる",
+      "plan": "知",
+      "verdict": "否",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": [
+        0,
+        1
+      ],
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": [
+        "n-ocr-layer：出なかった"
+      ]
+    },
+    {
+      "type": "T63",
+      "title": "しおりの題",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        1,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": [
+        1,
+        1
+      ],
+      "residual": [
+        1,
+        1
+      ],
+      "notes": [
+        "ctl-outline-headings：誤検知 1 件（P7）"
+      ]
+    },
+    {
+      "type": "T64",
+      "title": "描いた字と違う /ActualText",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T65",
+      "title": "代わりの説明 /Alt",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        1,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": [
+        1,
+        1
+      ],
+      "residual": [
+        1,
+        1
+      ],
+      "notes": [
+        "ctl-alt-caption：誤検知 1 件（P7）"
+      ]
+    },
+    {
+      "type": "T66",
+      "title": "フォームの説明（/TU・/TM）・構造要素の題（/T）・/E",
+      "plan": "△",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": [
+        1,
+        1
+      ],
+      "residual": [
+        2,
+        2
+      ],
+      "notes": [
+        "a-tooltip：見逃し"
+      ]
+    },
+    {
+      "type": "T67",
+      "title": "見えない文字コード（幅 0・タグ文字・向きの制御・C1 制御文字）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        3,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "T68",
+      "title": "字の対応表（ToUnicode）の書き換え",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "T69",
+      "title": "書体の中に残った字形",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": [
+        "a-unused-glyphs：見逃し"
+      ]
+    },
+    {
+      "type": "T70",
+      "title": "AI への隠れた指示文",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T71",
+      "title": "注釈の作成者名（/T）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T72",
+      "title": "注釈の内容（/Contents・/RC・件名）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T73",
+      "title": "隠しの印の注釈（Hidden・NoView）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T74",
+      "title": "注釈の見た目（/AP）の中だけにある字",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": [
+        "a-ap-text：見逃し"
+      ]
+    },
+    {
+      "type": "T75",
+      "title": "添付ファイル（名前の木・注釈・/AF）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        3,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        3
+      ],
+      "notes": []
+    },
+    {
+      "type": "T76",
+      "title": "どこからも指されていない添付",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        1,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": [
+        "ctl-orphan-null：誤検知 1 件（P5）"
+      ]
+    },
+    {
+      "type": "T77",
+      "title": "添付の中身の検査",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        2
+      ],
+      "notes": [
+        "a-attached-pdf：見逃し（別の型で出た：P9）"
+      ]
+    },
+    {
+      "type": "T78",
+      "title": "PDF の中の写真の EXIF の位置情報",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T79",
+      "title": "写真の機種・撮影者・ソフト・撮影日時",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T80",
+      "title": "EXIF の古い縮小画像",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T82",
+      "title": "ページの外に置いた画像",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": [
+        "a-image-off-page：見逃し"
+      ]
+    },
+    {
+      "type": "T83",
+      "title": "切り抜きで大部分を隠した画像",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": [
+        "a-clip-most：見逃し"
+      ]
+    },
+    {
+      "type": "T84",
+      "title": "フォームの値",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        1,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T85",
+      "title": "ウィジェットの無い欄・隠したウィジェットの値",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        2,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        2,
+        2
+      ],
+      "notes": []
+    },
+    {
+      "type": "T86",
+      "title": "XFA のフォーム",
+      "plan": "知",
+      "verdict": "合",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": [
+        1,
+        1
+      ],
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "T87",
+      "title": "文書の JavaScript",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": [
+        1,
+        1
+      ],
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T88",
+      "title": "開いたときの動作・/AA・外のプログラムの起動",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        3,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": [
+        3,
+        3
+      ],
+      "residual": [
+        1,
+        3
+      ],
+      "notes": []
+    },
+    {
+      "type": "T89",
+      "title": "リンク（URL を開く動作）・フォームの送信先",
+      "plan": "△",
+      "verdict": "否",
+      "leak": [
+        1,
+        2
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": [
+        1,
+        1
+      ],
+      "residual": null,
+      "notes": [
+        "a-uri：見逃し"
+      ]
+    },
+    {
+      "type": "T90",
+      "title": "パスワードなしで開ける暗号化（ほどいて中まで調べる）",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        1,
+        1
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": [
+        0,
+        1
+      ],
+      "notes": []
+    },
+    {
+      "type": "T91",
+      "title": "パスワードが要る暗号化を「調べられない」と出す",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": [
+        1,
+        1
+      ],
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "T92",
+      "title": "電子署名の署名者名を知らせる",
+      "plan": "○（知らせるだけ）",
+      "verdict": "否",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": [
+        0,
+        1
+      ],
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": [
+        "n-signature：出なかった"
+      ]
+    },
+    {
+      "type": "T94",
+      "title": "C2PA（来歴の情報）",
+      "plan": "知",
+      "verdict": "合",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": [
+        1,
+        1
+      ],
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "T95",
+      "title": "見える文字の中の個人情報",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        3,
+        3
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "F01",
+      "title": "Word の「ハイブリッド xref」を前の版と誤らない",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "F02",
+      "title": "黒い帯の上の白い見出しを白い字と誤らない",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        1,
+        2
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": [
+        "ctl-white-heading：誤検知 1 件（P7）"
+      ]
+    },
+    {
+      "type": "F03",
+      "title": "作成日などの数字をカード番号と誤らない",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "F04",
+      "title": "使われていないフォントの部品を前の版と誤らない",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        1,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": [
+        "ctl-burned-scan-unused-font：誤検知 1 件（P5）"
+      ]
+    },
+    {
+      "type": "F05",
+      "title": "輪郭の見える、塗りが透明な字を見えない字と誤らない",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    },
+    {
+      "type": "F06",
+      "title": "帯の下の字を帯の上に同じに描き直したものを誤らない",
+      "plan": "○",
+      "verdict": "否",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        1,
+        1
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": [
+        "ctl-redraw-on-band：誤検知 1 件（P7）"
+      ]
+    },
+    {
+      "type": "F07",
+      "title": "太字の2度描き・合字・素直な ActualText を誤らない",
+      "plan": "○",
+      "verdict": "合",
+      "leak": [
+        0,
+        0
+      ],
+      "control": [
+        0,
+        3
+      ],
+      "notice": null,
+      "unchecked": null,
+      "severity": null,
+      "residual": null,
+      "notes": []
+    }
+  ],
+  "cases": [
+    {
+      "id": "t01-a-author",
+      "type": "T01",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t01-b-utf16",
+      "type": "T01",
+      "kind": "leak",
+      "pass": true,
+      "hits": 3,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "3 件",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t01-ctl-dates",
+      "type": "T01",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t02-a-company",
+      "type": "T02",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t02-b-sourcefile",
+      "type": "T02",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t02-ctl-trapped",
+      "type": "T02",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t03-a-old-author",
+      "type": "T03",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t03-ctl-dates-only",
+      "type": "T03",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t04-a-sjis-author",
+      "type": "T04",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t04-b-sjis-literal",
+      "type": "T04",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t04-ctl-sjis-generic",
+      "type": "T04",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t05-a-creator-differs",
+      "type": "T05",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [
+        "P1"
+      ],
+      "severityOk": null,
+      "why": "見逃し（別の型で出た：P1）",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t05-b-title-differs",
+      "type": "T05",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [
+        "P1"
+      ],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P2",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t05-ctl-agree",
+      "type": "T05",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P2）",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P2",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t06-a-dc-creator",
+      "type": "T06",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t06-b-history",
+      "type": "T06",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P2",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t06-ctl-tool-only",
+      "type": "T06",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t07-a-flate-xmp",
+      "type": "T07",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t07-ctl-flate-tool",
+      "type": "T07",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t08-a-image-xmp",
+      "type": "T08",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t08-b-form-xmp",
+      "type": "T08",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P4",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t08-ctl-image-xmp-format",
+      "type": "T08",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t09-a-page-pieceinfo",
+      "type": "T09",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t09-b-catalog-pieceinfo",
+      "type": "T09",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t09-ctl-pieceinfo-date",
+      "type": "T09",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t11-a-other-org-title",
+      "type": "T11",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [
+        "P1"
+      ],
+      "severityOk": null,
+      "why": "見逃し（別の型で出た：P1）",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t11-ctl-same-org",
+      "type": "T11",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t12-a-path-in-title",
+      "type": "T12",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [
+        "P1"
+      ],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P4",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t12-b-unc-in-xmp",
+      "type": "T12",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P4",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t12-ctl-slashes",
+      "type": "T12",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t13-a-unc-in-body",
+      "type": "T13",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t13-b-path-in-annot",
+      "type": "T13",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [
+        "P8"
+      ],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P4",
+          "severity": "medium",
+          "page": null
+        },
+        {
+          "pattern": "P8",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t13-c-file-link",
+      "type": "T13",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P4",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t13-ctl-web-link",
+      "type": "T13",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t14-a-incremental",
+      "type": "T14",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t14-b-incremental-xrefstm",
+      "type": "T14",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t14-ctl-added-page",
+      "type": "T14",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P5）",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t15-a-after-eof",
+      "type": "T15",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t15-ctl-trailing-space",
+      "type": "T15",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t16-a-orphan-stream",
+      "type": "T16",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t16-b-orphan-flate",
+      "type": "T16",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t16-ctl-free-entries",
+      "type": "T16",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t17-a-detached-page",
+      "type": "T17",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        },
+        {
+          "pattern": "P5",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t17-ctl-two-pages",
+      "type": "T17",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t18-a-objstm-orphan",
+      "type": "T18",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t18-ctl-objstm-all-used",
+      "type": "T18",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t19-a-unused-form",
+      "type": "T19",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t19-ctl-used-form",
+      "type": "T19",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t20-a-old-thumb",
+      "type": "T20",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "low",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t20-ctl-same-thumb",
+      "type": "T20",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P5）",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "low",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t22-a-old-phone",
+      "type": "T22",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t22-ctl-old-date-only",
+      "type": "T22",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t23-a-black-rect",
+      "type": "T23",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t23-b-path-rect",
+      "type": "T23",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t23-c-tj-kerning",
+      "type": "T23",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t23-ctl-bar-apart",
+      "type": "T23",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t24-a-cmyk-k",
+      "type": "T24",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t24-b-dark-navy",
+      "type": "T24",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t24-c-rich-black",
+      "type": "T24",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t24-ctl-dark-adjacent",
+      "type": "T24",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t25-a-cid",
+      "type": "T25",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t25-b-cid-partial",
+      "type": "T25",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t25-ctl-cid-underline",
+      "type": "T25",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t26-a-ellipse",
+      "type": "T26",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t26-b-rotated",
+      "type": "T26",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t26-c-thick-line",
+      "type": "T26",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t26-ctl-frame",
+      "type": "T26",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t27-a-black-image",
+      "type": "T27",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t27-b-black-jpeg",
+      "type": "T27",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [
+        "P7"
+      ],
+      "severityOk": null,
+      "why": "見逃し（別の型で出た：P7）",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t27-ctl-image-beside",
+      "type": "T27",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t28-a-square-ap",
+      "type": "T28",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t28-b-square-noap",
+      "type": "T28",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t28-ctl-square-border",
+      "type": "T28",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t29-a-redact-annot",
+      "type": "T29",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t29-ctl-redact-empty",
+      "type": "T29",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t30-a-band-same-gray",
+      "type": "T30",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t30-b-band-black",
+      "type": "T30",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t30-ctl-band-white-text",
+      "type": "T30",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t31-a-white-rect",
+      "type": "T31",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [
+        "P7"
+      ],
+      "severityOk": null,
+      "why": "見逃し（別の型で出た：P7）",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t31-ctl-white-blank",
+      "type": "T31",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t32-a-gray",
+      "type": "T32",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [
+        "P7"
+      ],
+      "severityOk": null,
+      "why": "見逃し（別の型で出た：P7）",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t32-b-red",
+      "type": "T32",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [
+        "P7"
+      ],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t32-c-blue",
+      "type": "T32",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t32-ctl-color-under",
+      "type": "T32",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t33-a-dark-alpha",
+      "type": "T33",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t33-b-black-highlight",
+      "type": "T33",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t33-ctl-yellow-alpha",
+      "type": "T33",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t34-a-white-square-annot",
+      "type": "T34",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t34-ctl-white-annot-blank",
+      "type": "T34",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t35-a-middle-word",
+      "type": "T35",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t35-b-half-chars",
+      "type": "T35",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t35-ctl-after-line",
+      "type": "T35",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t36-a-text-in-form",
+      "type": "T36",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t36-b-cover-in-form",
+      "type": "T36",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t36-ctl-form-apart",
+      "type": "T36",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t37-a-white-then-text",
+      "type": "T37",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [
+        "P7"
+      ],
+      "severityOk": null,
+      "why": "見逃し（別の型で出た：P7）",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t37-b-black-then-label",
+      "type": "T37",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t37-ctl-label-box",
+      "type": "T37",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t38-a-vertical",
+      "type": "T38",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t38-ctl-vertical-beside",
+      "type": "T38",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t39-a-scan-ocr-cover",
+      "type": "T39",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": "clean",
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t39-b-scan-ocr-cover-form",
+      "type": "T39",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": "clean",
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t39-ctl-scan-ocr-beside",
+      "type": "T39",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t40-a-scan-cover",
+      "type": "T40",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 0,
+        "image": "clean",
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t40-ctl-scan-burned",
+      "type": "T40",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t41-a-scan-square",
+      "type": "T41",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 0,
+        "image": "clean",
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t41-ctl-scan-burned-square",
+      "type": "T41",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t42-a-scan-redact",
+      "type": "T42",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 0,
+        "image": "clean",
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t42-ctl-scan-applied",
+      "type": "T42",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t43-a-image-white-rect",
+      "type": "T43",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P6",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 0,
+        "image": "clean",
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t43-ctl-white-margin",
+      "type": "T43",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t44-a-photo-over-text",
+      "type": "T44",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t44-b-light-gray-image",
+      "type": "T44",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t44-ctl-caption-on-photo",
+      "type": "T44",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t45-a-white-gray",
+      "type": "T45",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t45-b-white-cmyk",
+      "type": "T45",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t45-ctl-white-on-band",
+      "type": "T45",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t46-a-blue-on-blue",
+      "type": "T46",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t46-ctl-yellow-on-blue",
+      "type": "T46",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t47-a-very-light-gray",
+      "type": "T47",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t47-b-very-light-rgb",
+      "type": "T47",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t47-ctl-gray-footer",
+      "type": "T47",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t48-a-tr3",
+      "type": "T48",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t48-b-tr7",
+      "type": "T48",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t48-ctl-tr2",
+      "type": "T48",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t49-a-alpha0",
+      "type": "T49",
+      "kind": "leak",
+      "pass": true,
+      "hits": 4,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "4 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t49-b-alpha002",
+      "type": "T49",
+      "kind": "leak",
+      "pass": true,
+      "hits": 4,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "4 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t49-ctl-alpha05",
+      "type": "T49",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t50-a-size05",
+      "type": "T50",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t50-b-size01",
+      "type": "T50",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t50-ctl-size4",
+      "type": "T50",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t51-a-tm-shrink",
+      "type": "T51",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t51-b-cm-shrink",
+      "type": "T51",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t51-ctl-tm-large",
+      "type": "T51",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t52-a-tz0",
+      "type": "T52",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 2
+      }
+    },
+    {
+      "id": "t52-b-tz1",
+      "type": "T52",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 2
+      }
+    },
+    {
+      "id": "t52-ctl-tz80",
+      "type": "T52",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t53-a-left-out",
+      "type": "T53",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t53-b-top-out",
+      "type": "T53",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t53-ctl-near-edge",
+      "type": "T53",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t54-a-outside-crop",
+      "type": "T54",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t54-ctl-inside-crop",
+      "type": "T54",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t55-a-outside-clip",
+      "type": "T55",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t55-ctl-inside-clip",
+      "type": "T55",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t56-a-ocg-off",
+      "type": "T56",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t56-ctl-ocg-on",
+      "type": "T56",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t57-a-white-outline",
+      "type": "T57",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t57-ctl-black-outline",
+      "type": "T57",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t58-a-white-per-char",
+      "type": "T58",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t58-ctl-black-per-char",
+      "type": "T58",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t59-a-flate-white",
+      "type": "T59",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t59-b-objstm-white",
+      "type": "T59",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t59-ctl-flate-normal",
+      "type": "T59",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t60-a-overprint",
+      "type": "T60",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t60-ctl-bold-double",
+      "type": "T60",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t61-a-same-color-on-image",
+      "type": "T61",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t61-ctl-white-on-image",
+      "type": "T61",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t62-n-ocr-layer",
+      "type": "T62",
+      "kind": "notice",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t62-ctl-plain-text",
+      "type": "T62",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t63-a-outline-name",
+      "type": "T63",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": true,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t63-ctl-outline-headings",
+      "type": "T63",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P7）",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t64-a-actualtext-differs",
+      "type": "T64",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t64-ctl-actualtext-same",
+      "type": "T64",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t65-a-alt-name",
+      "type": "T65",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": true,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t65-ctl-alt-caption",
+      "type": "T65",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P7）",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t66-a-tooltip",
+      "type": "T66",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t66-b-struct-t-e",
+      "type": "T66",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": true,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t66-ctl-tooltip-generic",
+      "type": "T66",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t67-a-zero-width-tag",
+      "type": "T67",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "medium",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t67-b-bidi",
+      "type": "T67",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t67-c-c1-control",
+      "type": "T67",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "medium",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t67-ctl-ideographic-space",
+      "type": "T67",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t68-a-tounicode-swap",
+      "type": "T68",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t68-ctl-tounicode-same",
+      "type": "T68",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t69-a-unused-glyphs",
+      "type": "T69",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t69-ctl-used-glyphs",
+      "type": "T69",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t70-a-white-prompt",
+      "type": "T70",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t70-b-tr3-prompt",
+      "type": "T70",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t70-ctl-visible-instructions",
+      "type": "T70",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t71-a-annot-author",
+      "type": "T71",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P8",
+          "severity": "medium",
+          "page": 1
+        },
+        {
+          "pattern": "P8",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t71-ctl-link-only",
+      "type": "T71",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t72-a-contents",
+      "type": "T72",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P8",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t72-b-rc-subj",
+      "type": "T72",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P8",
+          "severity": "medium",
+          "page": 1
+        },
+        {
+          "pattern": "P8",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t72-ctl-link-only",
+      "type": "T72",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t73-a-hidden-flag",
+      "type": "T73",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P8",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t73-b-noview-flag",
+      "type": "T73",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P8",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t73-ctl-print-link",
+      "type": "T73",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t74-a-ap-text",
+      "type": "T74",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t74-ctl-ap-shapes",
+      "type": "T74",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t75-a-names-tree",
+      "type": "T75",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P9",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t75-b-annot",
+      "type": "T75",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P9",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t75-c-af",
+      "type": "T75",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P9",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t75-ctl-dests-only",
+      "type": "T75",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t76-a-orphan-attachment",
+      "type": "T76",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P9",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t76-ctl-orphan-null",
+      "type": "T76",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P5）",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t77-a-attached-pdf",
+      "type": "T77",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [
+        "P9"
+      ],
+      "severityOk": null,
+      "why": "見逃し（別の型で出た：P9）",
+      "found": [
+        {
+          "pattern": "P9",
+          "severity": "high",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t77-b-attached-text",
+      "type": "T77",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P9",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t77-ctl-attached-clean-pdf",
+      "type": "T77",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [
+        {
+          "pattern": "P9",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t78-a-gps",
+      "type": "T78",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P10",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t78-ctl-no-exif",
+      "type": "T78",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t79-a-camera",
+      "type": "T79",
+      "kind": "leak",
+      "pass": true,
+      "hits": 3,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "3 件",
+      "found": [
+        {
+          "pattern": "P10",
+          "severity": "medium",
+          "page": 1
+        },
+        {
+          "pattern": "P10",
+          "severity": "low",
+          "page": 1
+        },
+        {
+          "pattern": "P10",
+          "severity": "low",
+          "page": 1
+        }
+      ],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 3
+      }
+    },
+    {
+      "id": "t79-ctl-orientation-only",
+      "type": "T79",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t80-a-exif-thumb",
+      "type": "T80",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P10",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t80-ctl-exif-no-thumb",
+      "type": "T80",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [
+        "unchecked_images"
+      ],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t82-a-image-off-page",
+      "type": "T82",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 0,
+        "image": "left",
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t82-ctl-image-on-page",
+      "type": "T82",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t83-a-clip-most",
+      "type": "T83",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 0,
+        "image": "left",
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t83-ctl-clip-margin",
+      "type": "T83",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t84-a-field-value",
+      "type": "T84",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P11",
+          "severity": "low",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t84-ctl-field-empty",
+      "type": "T84",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t85-a-no-widget",
+      "type": "T85",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P11",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t85-b-hidden-widget",
+      "type": "T85",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P11",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t85-ctl-hidden-empty",
+      "type": "T85",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t86-n-xfa",
+      "type": "T86",
+      "kind": "notice",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "お知らせ 1、項目 0",
+      "found": [],
+      "notices": [
+        "info"
+      ],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t86-ctl-acroform-only",
+      "type": "T86",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t87-a-doc-js",
+      "type": "T87",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": true,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P12",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t87-ctl-goto-open",
+      "type": "T87",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t88-a-launch",
+      "type": "T88",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": true,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P12",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 1,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 1
+      }
+    },
+    {
+      "id": "t88-b-page-aa-js",
+      "type": "T88",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": true,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P12",
+          "severity": "low",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t88-c-openaction-js",
+      "type": "T88",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": true,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P12",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t88-ctl-goto",
+      "type": "T88",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t89-a-uri",
+      "type": "T89",
+      "kind": "leak",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "見逃し",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t89-b-submit",
+      "type": "T89",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": true,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P12",
+          "severity": "low",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t89-ctl-goto-link",
+      "type": "T89",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t90-a-empty-pw",
+      "type": "T90",
+      "kind": "leak",
+      "pass": true,
+      "hits": 3,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "3 件",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        },
+        {
+          "pattern": "P1",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted"
+      ],
+      "errors": [],
+      "sanitize": {
+        "status": "ok",
+        "notDone": 0,
+        "markersLeft": 0,
+        "markersTotal": 1,
+        "image": null,
+        "itemsAfter": 0
+      }
+    },
+    {
+      "id": "t90-ctl-empty-pw-clean",
+      "type": "T90",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted",
+        "decrypted"
+      ],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t91-u-user-pw",
+      "type": "T91",
+      "kind": "unchecked",
+      "pass": true,
+      "hits": 16,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "調べられないと出た（エラー 16、お知らせ 0）",
+      "found": [],
+      "notices": [],
+      "errors": [
+        "p6-text",
+        "p7-hidden",
+        "alt-text",
+        "font-glyphs",
+        "p5-revisions",
+        "extras",
+        "p1-info",
+        "props-diff",
+        "p2-xmp",
+        "p4-paths",
+        "p9-attach",
+        "p8-annot",
+        "p11-forms",
+        "p12-actions",
+        "p10-exif",
+        "pii"
+      ],
+      "sanitize": null
+    },
+    {
+      "id": "t91-ctl-plain",
+      "type": "T91",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t92-n-signature",
+      "type": "T92",
+      "kind": "notice",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t92-ctl-empty-sig-field",
+      "type": "T92",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t94-n-c2pa",
+      "type": "T94",
+      "kind": "notice",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "お知らせ 1、項目 1",
+      "found": [
+        {
+          "pattern": "P9",
+          "severity": "medium",
+          "page": null
+        }
+      ],
+      "notices": [
+        "info"
+      ],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t94-ctl-no-c2pa",
+      "type": "T94",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t95-a-name-phone",
+      "type": "T95",
+      "kind": "leak",
+      "pass": true,
+      "hits": 2,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "2 件",
+      "found": [
+        {
+          "pattern": "P13",
+          "severity": "low",
+          "page": 1
+        },
+        {
+          "pattern": "P13",
+          "severity": "medium",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t95-b-mynumber",
+      "type": "T95",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P13",
+          "severity": "low",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t95-c-email",
+      "type": "T95",
+      "kind": "leak",
+      "pass": true,
+      "hits": 1,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "1 件",
+      "found": [
+        {
+          "pattern": "P13",
+          "severity": "low",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "t95-ctl-doc-number",
+      "type": "T95",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f01-ctl-hybrid",
+      "type": "F01",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f02-ctl-white-heading",
+      "type": "F02",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P7）",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f02-ctl-white-heading-cmyk",
+      "type": "F02",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f03-ctl-dates-numbers",
+      "type": "F03",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f04-ctl-burned-scan-unused-font",
+      "type": "F04",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P5）",
+      "found": [
+        {
+          "pattern": "P5",
+          "severity": "low",
+          "page": null
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f05-ctl-stroke-visible-fill-clear",
+      "type": "F05",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f06-ctl-redraw-on-band",
+      "type": "F06",
+      "kind": "control",
+      "pass": false,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "誤検知 1 件（P7）",
+      "found": [
+        {
+          "pattern": "P7",
+          "severity": "high",
+          "page": 1
+        }
+      ],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f07-ctl-bold-double",
+      "type": "F07",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f07-ctl-ligature",
+      "type": "F07",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [
+        "partial"
+      ],
+      "errors": [],
+      "sanitize": null
+    },
+    {
+      "id": "f07-ctl-plain-actualtext",
+      "type": "F07",
+      "kind": "control",
+      "pass": true,
+      "hits": 0,
+      "otherPatterns": [],
+      "severityOk": null,
+      "why": "出なかった",
+      "found": [],
+      "notices": [],
+      "errors": [],
+      "sanitize": null
+    }
+  ],
+  "skipped": [
+    {
+      "id": "T10",
+      "why": "予定が「外」"
+    },
+    {
+      "id": "T93",
+      "why": "予定が「外」"
+    },
+    {
+      "id": "T96",
+      "why": "予定が「外」"
+    },
+    {
+      "id": "T99",
+      "why": "予定が「外」（PDF でもない）"
+    },
+    {
+      "id": "T97",
+      "why": "PDF でない（写真のファイル）。この集は PDF の型だけ"
+    },
+    {
+      "id": "T98",
+      "why": "PDF でない（Office のファイル）。この集は PDF の型だけ"
+    },
+    {
+      "id": "T21",
+      "why": "画面の機能（押したときだけ前の版の字を見せる）で、PDF の型ではない。RULES の結果には中身を入れない決まりなので、結果から合否を決められない。案：画面のテストで、T14 の PDF を入れて「見せる」を押したときだけ字の数が出ることを見る"
+    },
+    {
+      "id": "T81",
+      "why": "電子小黒板の情報が写真のどこに、どの形で入るか（EXIF の独自の欄か、XMP か、別の区画か）が説明だけでは決まらない。案：仕様の一次情報を本人が確かめ、その形の架空の値を JPEG に入れて T79 と同じ作りで足す"
+    }
+  ]
+}
