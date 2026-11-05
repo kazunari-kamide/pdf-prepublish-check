@@ -1,0 +1,417 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  デザインシートの見本（design/sheet.css を、今の画面の部品とサイトのページに当てたもの）。
+  手元で開いて見るためのファイルで、サイトには載せない。外から何も読み込まない（CLAUDE.md §2-1）。
+  中身はすべて架空。
+-->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>デザインシートの見本</title>
+<link rel="stylesheet" href="./sheet.css">
+<style>
+@font-face {
+  font-family: "Noto Sans JP Omamori";
+  src: url("../src/assets/fonts/NotoSansJP-subset.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+* { box-sizing: border-box; }
+html {
+  font-size: var(--fs-root);
+  font-family: "Noto Sans JP Omamori", "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
+  line-height: var(--lh-body);
+  letter-spacing: 0.02em;
+  color: var(--text-strong);
+  background: var(--surface-page);
+}
+html[data-zoom="150"] { font-size: calc(var(--fs-root) * 1.5); }
+html[data-zoom="200"] { font-size: calc(var(--fs-root) * 2); }
+body { margin: 0; overflow-wrap: anywhere; } /* 字を大きくしたとき、長いコードの名前でも横にはみ出さない */
+:focus-visible { outline: 4px solid #000; outline-offset: 2px; box-shadow: 0 0 0 2px var(--focus-ring); }
+[data-theme="dark"] :focus-visible { outline-color: var(--focus-ring); box-shadow: 0 0 0 2px #000; }
+
+/* ---------- 上の帯 */
+.band {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-5);
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--surface-strong); color: var(--text-on-strong);
+}
+.band-brand { font-weight: var(--fw-strong); font-size: var(--fs-h2); }
+.band-tools { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-left: auto; }
+.band-tools fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.band-tools legend { float: left; margin-right: var(--sp-2); font-size: var(--fs-small); }
+.band-tools button {
+  min-height: 44px; padding: 0 var(--sp-3); font: inherit; font-size: var(--fs-small);
+  border: var(--bw-2) solid currentColor; border-radius: var(--radius-pill);
+  background: transparent; color: inherit; cursor: pointer;
+}
+.band-tools button[aria-pressed="true"] { background: var(--text-on-strong); color: var(--surface-strong); }
+
+/* ---------- 全体の組み立て */
+.wrap { max-width: 72rem; padding: var(--sp-6) var(--sp-5) var(--sp-8); margin-left: max(0px, calc((100vw - 72rem) / 2)); }
+.sec { margin-bottom: var(--sp-7); }
+.note { color: var(--text-muted); font-size: var(--fs-small); margin: 0 0 var(--sp-4); max-width: var(--measure); }
+.grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); }
+
+/* ---------- 見出しの段 */
+.h-display { font-size: var(--fs-display); line-height: var(--lh-head); margin: 0 0 var(--sp-2); }
+.h-display::after { content: ""; display: block; width: 3rem; height: var(--bw-accent); margin-top: var(--sp-3); background: var(--danger); border-radius: 2px; }
+.h1 { font-size: var(--fs-h1); line-height: var(--lh-head); margin: 0 0 var(--sp-4); padding-bottom: var(--sp-2); border-bottom: var(--bw-2) solid var(--line-strong); }
+.h2 { font-size: var(--fs-h2); line-height: var(--lh-head); margin: var(--sp-6) 0 var(--sp-3); padding-left: var(--sp-3); border-left: var(--bw-accent) solid var(--line-strong); }
+.h3 { font-size: var(--fs-h3); line-height: var(--lh-head); margin: var(--sp-5) 0 var(--sp-2); }
+.lead { max-width: var(--measure); margin: var(--sp-3) 0 var(--sp-6); font-size: 1.05rem; }
+
+/* ---------- 色の段 */
+.scale { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 8.5rem), 1fr)); gap: var(--sp-2); margin: 0 0 var(--sp-4); padding: 0; list-style: none; }
+.sw { border: var(--bw-1) solid var(--line-default); border-radius: var(--radius-m); overflow: hidden; background: var(--surface-card); font-size: var(--fs-small); }
+.sw-chip { height: 3.25rem; display: flex; align-items: flex-end; padding: var(--sp-1) var(--sp-2); font-weight: var(--fw-strong); }
+.sw-meta { padding: var(--sp-1) var(--sp-2); line-height: 1.4; }
+.sw-meta code { font-size: 0.85rem; }
+
+/* ---------- 面の重なり */
+.layers { background: var(--surface-page); border: var(--bw-1) dashed var(--line-control); border-radius: var(--radius-l); padding: var(--sp-4); }
+.layer-sunken { background: var(--surface-sunken); border-radius: var(--radius-l); padding: var(--sp-4); }
+.layer-card { background: var(--surface-card); border: var(--bw-1) solid var(--line-default); border-radius: var(--radius-l); padding: var(--sp-4); }
+.layer-raised { background: var(--surface-raised); border: var(--bw-1) solid var(--line-default); border-radius: var(--radius-l); padding: var(--sp-4); box-shadow: var(--shadow-1); margin-top: var(--sp-3); }
+.layer-label { font-size: var(--fs-small); font-weight: var(--fw-strong); margin: 0 0 var(--sp-2); }
+
+/* ---------- 枠の段 */
+.lines { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
+.line-box { background: var(--surface-card); border-radius: var(--radius-m); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-small); }
+.line-box b { display: block; font-size: var(--fs-body); }
+
+/* ---------- 強調 */
+.em-table { width: 100%; }
+.danger-word { color: var(--text-danger); font-weight: var(--fw-strong); }
+.danger-word::before { content: "▲ "; }
+.tag { display: inline-block; padding: 0 0.5em; border: var(--bw-1) solid var(--line-control); border-radius: var(--radius-pill); font-size: var(--fs-small); line-height: 1.6; white-space: nowrap; }
+.num { font-size: 1.3em; font-weight: var(--fw-strong); font-variant-numeric: tabular-nums; }
+.uline { text-decoration: underline var(--danger) 2px; text-underline-offset: 0.2em; background: var(--danger-bg); }
+
+/* ---------- お知らせ */
+.notice {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-m);
+  border: var(--bw-1) solid; border-left-width: var(--bw-accent);
+  margin: 0 0 var(--sp-3); max-width: 46rem;
+}
+.notice-mark { font-weight: var(--fw-strong); width: 1.6em; height: 1.6em; display: grid; place-items: center; border-radius: var(--radius-pill); font-size: 0.9em; }
+.notice-title { font-weight: var(--fw-strong); margin: 0; }
+.notice p { grid-column: 2; margin: 0; }
+.notice[data-kind="danger"] { background: var(--danger-bg); border-color: var(--danger-line); }
+.notice[data-kind="danger"] .notice-mark { background: var(--danger); color: var(--text-on-strong); }
+.notice[data-kind="danger"] .notice-title { color: var(--text-danger); }
+.notice[data-kind="ok"] { background: var(--ok-bg); border-color: var(--ok-line); }
+.notice[data-kind="ok"] .notice-mark { background: var(--ok); color: var(--text-on-strong); }
+.notice[data-kind="ok"] .notice-title { color: var(--text-ok); }
+.notice[data-kind="check"] { background: var(--check-bg); border: var(--bw-2) dashed var(--check); border-left: var(--bw-accent) dashed var(--check); }
+.notice[data-kind="check"] .notice-mark { border: var(--bw-2) solid var(--check); }
+.notice[data-kind="info"] { background: var(--info-bg); border-color: var(--line-default); border-left-color: var(--info); }
+.notice[data-kind="info"] .notice-mark { border: var(--bw-2) solid var(--info); font-style: normal; }
+
+/* ---------- ボタン */
+.buttons { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }
+.btn {
+  min-height: 48px; padding: 0 var(--sp-5); font: inherit; font-weight: var(--fw-strong);
+  border-radius: var(--radius-m); border: var(--bw-2) solid transparent; cursor: pointer;
+}
+.btn-primary { background: var(--surface-strong); color: var(--text-on-strong); }
+.btn-ok { background: var(--ok); color: var(--text-on-strong); }
+.btn-secondary { background: var(--surface-card); color: var(--text-strong); border-color: var(--line-control); }
+.btn-secondary:hover { border-color: var(--line-strong); }
+.btn-quiet { background: transparent; color: var(--text-strong); text-decoration: underline; text-underline-offset: 0.2em; padding: 0 var(--sp-3); }
+.btn-large { min-height: 56px; font-size: 1.05rem; }
+.btn[aria-disabled="true"] { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--line-default); cursor: not-allowed; }
+.btn[aria-disabled="true"]::before { content: "⊘ "; }
+
+/* ---------- カード */
+.card { background: var(--surface-card); border: var(--bw-1) solid var(--line-default); border-radius: var(--radius-l); overflow: hidden; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); background: var(--surface-subtle); border-bottom: var(--bw-1) solid var(--line-default); }
+.card-head h4 { margin: 0; font-size: var(--fs-h3); }
+.card-body { padding: var(--sp-4); }
+.card-body p { margin: 0 0 var(--sp-2); }
+.card[data-kind="danger"] { border-color: var(--danger-line); border-top-width: var(--bw-accent); }
+.card[data-kind="ok"] { border-color: var(--ok-line); border-top-width: var(--bw-accent); }
+.count { display: inline-flex; align-items: center; gap: 0.3em; padding: 0 0.6em; border-radius: var(--radius-pill); font-size: var(--fs-small); font-weight: var(--fw-strong); white-space: nowrap; }
+.count-danger { background: var(--danger); color: var(--text-on-strong); }
+.count-ok { background: var(--ok); color: var(--text-on-strong); }
+
+/* ---------- 表 */
+.table-wrap { overflow-x: auto; border: var(--bw-1) solid var(--line-default); border-radius: var(--radius-l); background: var(--surface-card); }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+caption { text-align: left; padding: var(--sp-3) var(--sp-4); font-weight: var(--fw-strong); border-bottom: var(--bw-2) solid var(--line-strong); }
+th, td { text-align: left; padding: var(--sp-2) var(--sp-4); border-bottom: var(--bw-1) solid var(--line-hair); vertical-align: top; }
+thead th { background: var(--surface-sunken); font-size: var(--fs-small); border-bottom: var(--bw-1) solid var(--line-control); }
+tbody tr:nth-child(even) td { background: var(--surface-subtle); }
+tbody tr:last-child td { border-bottom: 0; }
+td.n { text-align: right; }
+
+/* ---------- 一覧（結果の項目） */
+.items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.item {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--sp-1) var(--sp-3); width: 100%;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+  padding: var(--sp-3) var(--sp-4); background: var(--surface-card);
+  border: var(--bw-1) solid var(--line-control); border-left: var(--bw-accent) solid var(--danger-line); border-radius: var(--radius-m);
+}
+.item:hover { background: var(--surface-subtle); }
+.item[aria-pressed="true"] { border-width: var(--bw-2); border-left-width: var(--bw-accent); border-color: var(--danger-line); background: var(--danger-bg); }
+.item[data-check] { border-style: dashed; border-left: var(--bw-accent) dashed var(--check); }
+.item-no { width: 1.8em; height: 1.8em; display: grid; place-items: center; border-radius: var(--radius-pill); background: var(--danger); color: var(--text-on-strong); font-weight: var(--fw-strong); font-size: var(--fs-small); }
+.item[data-check] .item-no { background: transparent; color: var(--check); border: var(--bw-2) dashed var(--check); }
+.item-title { font-weight: var(--fw-strong); }
+.item-meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-small); color: var(--text-muted); }
+.item-why { grid-column: 2; margin: 0; font-size: var(--fs-small); }
+.sev { font-weight: var(--fw-strong); color: var(--text-danger); }
+
+/* ---------- サイトのページ（点検の一覧）に当てた例 */
+.page-frame { border: var(--bw-1) solid var(--line-default); border-radius: var(--radius-l); overflow: hidden; background: var(--surface-page); }
+.page-body { padding: var(--sp-6) var(--sp-5); max-width: 46rem; }
+.kicker { margin: 0 0 var(--sp-1); font-size: var(--fs-small); color: var(--text-muted); font-weight: var(--fw-strong); }
+.steps-card { background: var(--surface-card); border: var(--bw-1) solid var(--line-default); border-radius: var(--radius-l); margin: 0 0 var(--sp-5); overflow: hidden; }
+.steps-head { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); background: var(--surface-subtle); border-bottom: var(--bw-2) solid var(--line-strong); }
+.steps-head h3 { margin: 0; font-size: var(--fs-h3); }
+.step-no { flex: none; width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: var(--radius-pill); background: var(--surface-strong); color: var(--text-on-strong); font-weight: var(--fw-strong); }
+.steps-head .when { margin-left: auto; font-size: var(--fs-small); color: var(--text-muted); white-space: nowrap; }
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li + li { border-top: var(--bw-1) solid var(--line-hair); }
+.checks label { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); cursor: pointer; min-height: 44px; }
+.checks label:hover { background: var(--surface-subtle); }
+.checks input { width: 1.4rem; height: 1.4rem; margin: 0.2rem 0 0; accent-color: var(--ok); }
+.checks input:checked + span { color: var(--text-muted); } /* 打ち消し線は引かない（読みにくくなるため） */
+.checks .tag { margin-left: var(--sp-1); }
+.howto { max-width: var(--measure); }
+
+@media (max-width: 40rem) {
+  .wrap { padding: var(--sp-5) var(--sp-4) var(--sp-7); }
+  .band { padding: var(--sp-3) var(--sp-4); }
+  .band-tools { margin-left: 0; }
+  .page-body { padding: var(--sp-5) var(--sp-4); }
+  .steps-head { flex-wrap: wrap; }
+  .tag, .count { white-space: normal; }
+  .steps-head .when { margin-left: 0; width: 100%; }
+}
+</style>
+</head>
+<body>
+<header class="band">
+  <span class="band-brand">お守りPDF　デザインシート（見本）</span>
+  <div class="band-tools">
+    <fieldset>
+      <legend>色</legend>
+      <button type="button" data-theme-set="auto" aria-pressed="true">端末に合わせる</button>
+      <button type="button" data-theme-set="light" aria-pressed="false">明るい</button>
+      <button type="button" data-theme-set="dark" aria-pressed="false">暗い</button>
+    </fieldset>
+    <fieldset>
+      <legend>字</legend>
+      <button type="button" data-zoom-set="100" aria-pressed="true">100%</button>
+      <button type="button" data-zoom-set="150" aria-pressed="false">150%</button>
+      <button type="button" data-zoom-set="200" aria-pressed="false">200%</button>
+    </fieldset>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1 class="h-display">デザインシート</h1>
+  <p class="lead">画面とサイトで共通に使う、色の濃淡・面・枠・見出し・強調の決まりの案です。メリハリは<strong>面の重なり</strong>と<strong>枠の強弱</strong>で付け、色は増やしません。考え方は <code>design/sheet.md</code>。</p>
+
+  <!-- 1. 色の段 -->
+  <section class="sec" aria-labelledby="s-color">
+    <h2 class="h1" id="s-color">1. 色の段</h2>
+    <p class="note">素の色です。部品からは直接使わず、「役の名前」（<code>--surface-card</code> など）から使います。明暗の比は白の上の値。</p>
+    <h3 class="h3">墨（ベース）</h3>
+    <ul class="scale">
+      <li class="sw"><div class="sw-chip" style="background:#f7f5f1;color:#2b2a28">50</div><div class="sw-meta"><code>#F7F5F1</code><br>表の縞・節の地</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#efece6;color:#2b2a28">100</div><div class="sw-meta"><code>#EFECE6</code><br>へこんだ台</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#e2ded6;color:#2b2a28">200</div><div class="sw-meta"><code>#E2DED6</code><br>いちばん弱い線</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#d9d4ca;color:#2b2a28">300</div><div class="sw-meta"><code>#D9D4CA</code><br>カードの縁</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#8a857c;color:#fff">500</div><div class="sw-meta"><code>#8A857C</code><br>押せる所の枠 3.67</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#6b665e;color:#fff">600</div><div class="sw-meta"><code>#6B665E</code><br>字 5.70</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#57534e;color:#fff">700</div><div class="sw-meta"><code>#57534E</code><br>補足の字 7.63</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#2b2a28;color:#fff">900</div><div class="sw-meta"><code>#2B2A28</code><br>本文・帯 14.34</div></li>
+    </ul>
+    <h3 class="h3">紅（アクセント）</h3>
+    <ul class="scale">
+      <li class="sw"><div class="sw-chip" style="background:#fbf3f2;color:#a3201b">50</div><div class="sw-meta"><code>#FBF3F2</code><br>危ないお知らせの地</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#f7e9e8;color:#a3201b">100</div><div class="sw-meta"><code>#F7E9E8</code><br>選んだ項目の地</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#efcfcd;color:#5e1310">200</div><div class="sw-meta"><code>#EFCFCD</code><br>（予備）</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#d69b98;color:#2b2a28">300</div><div class="sw-meta"><code>#D69B98</code><br>ロゴの折り角（飾りだけ）</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#a3201b;color:#fff">700</div><div class="sw-meta"><code>#A3201B</code><br>危ない所 7.55</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#861a16;color:#fff">800</div><div class="sw-meta"><code>#861A16</code><br>押した紅 9.66</div></li>
+    </ul>
+    <h3 class="h3">緑・黄（状態の色）</h3>
+    <ul class="scale">
+      <li class="sw"><div class="sw-chip" style="background:#f2f7f5;color:#2f6f5e">緑 50</div><div class="sw-meta"><code>#F2F7F5</code><br>済のお知らせの地</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#e7f0ed;color:#2f6f5e">緑 100</div><div class="sw-meta"><code>#E7F0ED</code><br>片付けた結果の欄</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#2f6f5e;color:#fff">緑 700</div><div class="sw-meta"><code>#2F6F5E</code><br>済・保存 5.91</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#245748;color:#fff">緑 800</div><div class="sw-meta"><code>#245748</code><br>押した緑 8.29</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#ffd43d;color:#2b2a28">黄 300</div><div class="sw-meta"><code>#FFD43D</code><br>フォーカスだけ</div></li>
+    </ul>
+  </section>
+
+  <!-- 2. 面と枠 -->
+  <section class="sec" aria-labelledby="s-surface">
+    <h2 class="h1" id="s-surface">2. 面の重なりと枠</h2>
+    <p class="note">下地の上に、へこんだ台・カード・浮いた欄を重ねます。影を付けるのは浮いた欄だけで、1段だけです。</p>
+    <div class="grid">
+      <div class="layers">
+        <p class="layer-label">下地 <code>--surface-page</code></p>
+        <div class="layer-sunken">
+          <p class="layer-label">へこんだ台 <code>--surface-sunken</code></p>
+          <div class="layer-card">
+            <p class="layer-label">カード <code>--surface-card</code></p>
+            <div class="layer-raised"><p class="layer-label" style="margin:0">浮いた欄 <code>--surface-raised</code>＋影</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="lines">
+        <div class="line-box" style="border:1px solid var(--line-hair)"><b>いちばん弱い線</b><code>--line-hair</code>・1px。表の行の間</div>
+        <div class="line-box" style="border:1px solid var(--line-default)"><b>ふつうの線</b><code>--line-default</code>・1px。カードの縁・節の区切り</div>
+        <div class="line-box" style="border:2px solid var(--line-control)"><b>押せる所の枠</b><code>--line-control</code>・2px。3:1 以上</div>
+        <div class="line-box" style="border:1px solid var(--line-default);border-left:4px solid var(--line-strong)"><b>強調の左の線</b><code>--line-strong</code>・4px。見出し・お知らせ</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 見出しと強調 -->
+  <section class="sec" aria-labelledby="s-type">
+    <h2 class="h1" id="s-type">3. 見出しの段と強調</h2>
+    <p class="note">見出しは大きさだけでなく、線の形でも段を分けます（題：紅の短い線、大見出し：下の太線、中見出し：左の線、小見出し：太字だけ）。</p>
+    <div class="layer-card">
+      <p class="h-display" style="font-size:var(--fs-display);font-weight:700;margin:0">ページの題　2rem</p>
+      <p class="h1" style="font-weight:700;margin-top:var(--sp-5)">大見出し　1.6rem・下に太線</p>
+      <p class="h2" style="font-weight:700">中見出し　1.3rem・左に線</p>
+      <p class="h3" style="font-weight:700">小見出し　1.1rem・太字だけ</p>
+      <p style="margin:0">本文　1rem（18px）。行の高さ 1.7。1 行は 40 字くらいまで。<span style="font-size:var(--fs-small);color:var(--text-muted)">補足　0.9rem。これより小さくしません。</span></p>
+    </div>
+    <h3 class="h3">強調のしかた（色だけにしない）</h3>
+    <div class="table-wrap">
+      <table class="em-table">
+        <thead><tr><th scope="col">使う所</th><th scope="col">見た目</th><th scope="col">決まり</th></tr></thead>
+        <tbody>
+          <tr><td>大事な語</td><td><strong>上書きで保存しない</strong></td><td>太字だけ。1 段落に 1 か所まで</td></tr>
+          <tr><td>危ない・残っている</td><td><span class="danger-word">下の字が残っています</span></td><td>紅の字＋太字＋「▲」</td></tr>
+          <tr><td>型の番号</td><td><span class="tag">P6</span> <span class="tag">P1・P2</span></td><td>枠だけの丸い札</td></tr>
+          <tr><td>数</td><td><span class="num">3</span> 件</td><td>大きめの太字、数字の幅をそろえる</td></tr>
+          <tr><td>団体名らしい語（プロパティの一覧だけ）</td><td><span class="uline">〇〇課</span></td><td>紅の下線＋薄い紅の地</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. お知らせ -->
+  <section class="sec" aria-labelledby="s-notice">
+    <h2 class="h1" id="s-notice">4. お知らせ（注意・合格・確かめる・知らせ）</h2>
+    <p class="note">4 種類とも、左の太い線・印・題の字で分けます。色が見えなくても、印と線の形（実線・点線）で区別できます。</p>
+    <div class="notice" data-kind="danger" role="note"><span class="notice-mark" aria-hidden="true">▲</span><p class="notice-title">残っています：見せかけの黒塗り 1 件</p><p>黒い四角の下に、字がテキストとして残っています。選んで写すと読めてしまいます。</p></div>
+    <div class="notice" data-kind="ok" role="note"><span class="notice-mark" aria-hidden="true">✓</span><p class="notice-title">読み直しました：残りは 0 件</p><p>片付けた PDF をはじめから読み直し、調べた型では何も見つかりませんでした。</p></div>
+    <div class="notice" data-kind="check" role="note"><span class="notice-mark" aria-hidden="true">？</span><p class="notice-title">確かめてください：残っているかもしれません</p><p>画像の中の黒い四角は、下に何があるかを言い切れません。元の書類と見比べてください。</p></div>
+    <div class="notice" data-kind="info" role="note"><span class="notice-mark" aria-hidden="true">ｉ</span><p class="notice-title">検査を省いたページがあります：3 ページ</p><p>図形が多すぎるため、このページは検査していません。結果の数にも含めていません。</p></div>
+  </section>
+
+  <!-- 5. 部品 -->
+  <section class="sec" aria-labelledby="s-parts">
+    <h2 class="h1" id="s-parts">5. 今の部品に当てた見本</h2>
+
+    <h3 class="h2">ボタン</h3>
+    <div class="buttons">
+      <button class="btn btn-primary btn-large" type="button">片付ける</button>
+      <button class="btn btn-ok btn-large" type="button">保存する</button>
+      <button class="btn btn-secondary" type="button">見本の PDF で試す</button>
+      <button class="btn btn-quiet" type="button">報告書を保存</button>
+      <button class="btn btn-large" type="button" aria-disabled="true">保存する</button>
+    </div>
+    <p class="note">主：墨の地。済んだあとの保存：緑の地。ほか：枠だけ。押せないとき：へこんだ地と「⊘」。</p>
+
+    <h3 class="h2">カード</h3>
+    <div class="grid">
+      <article class="card" data-kind="danger">
+        <div class="card-head"><h4>見せかけの黒塗り <span class="tag">P6</span></h4><span class="count count-danger">▲ 2 件</span></div>
+        <div class="card-body"><p>黒い四角の下に、字が残っています。</p><p class="note" style="margin:0">ページ 2・ページ 5</p></div>
+      </article>
+      <article class="card" data-kind="ok">
+        <div class="card-head"><h4>文書の情報 <span class="tag">P1</span></h4><span class="count count-ok">✓ 0 件</span></div>
+        <div class="card-body"><p>作成者などの欄に、名前は見つかりませんでした。</p></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><h4>ファイルを小さくする</h4></div>
+        <div class="card-body"><p>前 <span class="num">4.2</span> MB → 後 <span class="num">1.1</span> MB</p><p class="note" style="margin:0">読み直しの結果：残りは 0 件</p></div>
+      </article>
+    </div>
+
+    <h3 class="h2">表</h3>
+    <div class="table-wrap">
+      <table>
+        <caption>型ごとの前後の数</caption>
+        <thead><tr><th scope="col">型</th><th scope="col">片付ける前</th><th scope="col">片付けたあと</th></tr></thead>
+        <tbody>
+          <tr><td>見せかけの黒塗り <span class="tag">P6</span></td><td class="n">2</td><td class="n"><span style="color:var(--text-ok);font-weight:700">✓ 0</span></td></tr>
+          <tr><td>文書の情報 <span class="tag">P1</span></td><td class="n">1</td><td class="n"><span style="color:var(--text-ok);font-weight:700">✓ 0</span></td></tr>
+          <tr><td>前の版の残り <span class="tag">P5</span></td><td class="n">3</td><td class="n"><span class="danger-word">1</span></td></tr>
+          <tr><td>添付ファイル <span class="tag">P9</span></td><td class="n">0</td><td class="n">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="h2">一覧（結果の項目）</h3>
+    <ul class="items">
+      <li><button class="item" type="button" aria-pressed="true"><span class="item-no">1</span><span class="item-title">黒い四角の下に字が残っています</span><span class="item-meta"><span class="sev">▲ 高</span><span>ページ 2</span><span class="tag">P6</span></span><span class="item-why">選んで写すと、下の字が読めてしまいます。</span></button></li>
+      <li><button class="item" type="button" aria-pressed="false"><span class="item-no">2</span><span class="item-title">作成者の欄に人の名前があります</span><span class="item-meta"><span class="sev">■ 中</span><span>文書の情報</span><span class="tag">P1</span></span><span class="item-why">誰が作ったかが、ファイルの情報から分かります。</span></button></li>
+      <li><button class="item" type="button" aria-pressed="false" data-check><span class="item-no">？</span><span class="item-title">残っているかもしれません</span><span class="item-meta"><span>？ 確かめる</span><span>ページ 4</span><span class="tag">P6</span></span><span class="item-why">画像の上の黒い四角で、下に何があるか言い切れません。</span></button></li>
+    </ul>
+  </section>
+
+  <!-- 6. サイトのページ -->
+  <section class="sec" aria-labelledby="s-site">
+    <h2 class="h1" id="s-site">6. サイトのページに当てた例（点検の一覧）</h2>
+    <p class="note">今は見出しと箇条書きが同じ調子で続くため、段の切れ目が分かりにくくなっています。段ごとにカードにし、番号の丸・見出しの地・行の区切り・印を付ける枠で分けます。</p>
+    <div class="page-frame">
+      <div class="page-body">
+        <p class="kicker">点検の一覧</p>
+        <p class="h-display" style="font-weight:700">公開・提出の前の点検</p>
+        <div class="notice howto" data-kind="info" role="note"><span class="notice-mark" aria-hidden="true">ｉ</span><p class="notice-title">使い方</p><p>上から順に確かめ、済んだら印を付けてください。（ ）の中は型の番号です。この点検は目安で、ここに無い残り方もあります。</p></div>
+
+        <section class="steps-card" aria-labelledby="st1">
+          <div class="steps-head"><span class="step-no" aria-hidden="true">1</span><h3 id="st1">作る時</h3><span class="when">元のファイル</span></div>
+          <ul class="checks">
+            <li><label><input type="checkbox"><span>ほかの団体の様式を流用したときは、題・ヘッダー・ファイルの情報に、元の団体の名前が残っていないか<span class="tag">P3</span></span></label></li>
+            <li><label><input type="checkbox" checked><span>ファイルの情報（作成者・会社名・題など）に、出してよくない名前が入っていないか<span class="tag">P1・P2</span></span></label></li>
+            <li><label><input type="checkbox"><span>コメント・変更の履歴・メモを、消すか、すべて確定したか<span class="tag">P8</span></span></label></li>
+          </ul>
+        </section>
+
+        <section class="steps-card" aria-labelledby="st2">
+          <div class="steps-head"><span class="step-no" aria-hidden="true">2</span><h3 id="st2">書き出す時</h3><span class="when">PDF にする時</span></div>
+          <ul class="checks">
+            <li><label><input type="checkbox"><span>黒塗りは、黒い四角を重ねるのではなく、字そのものを消すか、墨消しの機能で消したか<span class="tag">P6</span></span></label></li>
+            <li><label><input type="checkbox"><span>直した PDF を、上書きの保存ではなく、新しいファイルとして保存したか<span class="tag">P5</span></span></label></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // 見本の切り替えだけ（色・字の大きさ）。通信はしない。
+  const root = document.documentElement;
+  for (const b of document.querySelectorAll("[data-theme-set]")) {
+    b.addEventListener("click", () => {
+      const v = b.dataset.themeSet;
+      if (v === "auto") root.removeAttribute("data-theme"); else root.dataset.theme = v;
+      for (const o of document.querySelectorAll("[data-theme-set]")) o.setAttribute("aria-pressed", String(o === b));
+    });
+  }
+  for (const b of document.querySelectorAll("[data-zoom-set]")) {
+    b.addEventListener("click", () => {
+      root.dataset.zoom = b.dataset.zoomSet;
+      for (const o of document.querySelectorAll("[data-zoom-set]")) o.setAttribute("aria-pressed", String(o === b));
+    });
+  }
+</script>
+</body>
+</html>
