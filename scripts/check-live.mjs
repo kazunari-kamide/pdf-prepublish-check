@@ -12,7 +12,9 @@
 // - https の応答に Strict-Transport-Security が付き、Cache-Control が HTML は no-cache・assets/ は 1 年（htaccess.ts）
 // - 見つからない場所は、404 で自前の 404 のページ（dist/404.html と同じ中身）を、同じヘッダーをつけて返す。assets/ を開いてもファイルの一覧は出ない
 // - .mjs が text/javascript、.wasm が application/wasm で返る（dist/ に .wasm がなければ、省いたと表示する）
-// - dist/ のファイルが、本番のものと1バイトも違わない（.htaccess は外から読めないこと）
+// - お問い合わせのページと送り先（contact-send.php）だけ、form-action 'self' の CSP（csp.ts の contactHeaders）。どちらも PHP がフォームを返し、
+//   中身は dist/contact.html と開いた時刻の印だけが違う。PHP のソースを出さない（印がないときは、設定がまだないと表示する）
+// - dist/ のファイルが、本番のものと1バイトも違わない（.htaccess は外から読めないこと。送り先の PHP は、サーバーが動かすので照らさない）
 // - http:// で来たら https:// へ 301
 // - www つきで来たら、www なしへ 301（www の名前が引けないときは「確かめられなかった」と表示し、失敗にはしない）
 //
@@ -21,8 +23,8 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { securityHeaders } from "../csp.ts";
-import { CACHE_ASSETS, CACHE_DEFAULT, HSTS, NOT_FOUND_PAGE, OFFICIAL_HOST } from "../htaccess.ts";
+import { contactHeaders, securityHeaders } from "../csp.ts";
+import { CACHE_ASSETS, CACHE_DEFAULT, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, HSTS, NOT_FOUND_PAGE, OFFICIAL_HOST } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(ROOT, "dist");
@@ -89,7 +91,7 @@ const articleFile = files.find((f) => /^articles\/(?!index\.html$|tags\/).+\.htm
 const tagFile = files.find((f) => /^articles\/tags\/.+\.html$/.test(f));
 
 // ---- .html 付きの場所は、.html なしへ 301（外からのリンクや検索の結果を切らさないため）
-for (const f of ["privacy.html", articleFile, tagFile].filter(Boolean)) {
+for (const f of ["privacy.html", CONTACT_PAGE_FILE, articleFile, tagFile].filter(Boolean)) {
   try {
     const r = await get(new URL(f, base), "HEAD");
     const loc = r.headers.get("location");
@@ -113,6 +115,31 @@ for (const page of ["articles/", "privacy", articleFile && pageUrlFor(articleFil
     const bad = Object.entries(securityHeaders).filter(([name, want]) => r.headers.get(name) !== want).map(([name]) => name);
     if (bad.length) problems.push(`${page} のヘッダーが違います（${bad.join("・")}）`);
     else ok.push(`${page} のヘッダー`);
+  } catch (e) {
+    problems.push(`${page} を確かめられませんでした（${e?.message ?? e}）`);
+  }
+}
+
+// ---- お問い合わせのページと送り先（docs/contact.md）：この 2 つだけ、form-action 'self' の CSP と same-origin の参照元の決まり。
+// どちらも、PHP がフォームのページを返す（.htaccess が /contact を contact-send.php へ中で回す。/contact.html は上で 301 を確かめた）。
+// 中身は dist/contact.html と、開いた時刻の印（隠れた欄 t の値）だけが違う。PHP のソースが、そのまま返らない（PHP が動いている）
+for (const page of [CONTACT_PAGE_FILE, CONTACT_SEND_FILE]) {
+  if (!files.includes(page)) {
+    problems.push(`dist/ に ${page} がありません`);
+    continue;
+  }
+  try {
+    const r = await get(new URL(pageUrlFor(page), base));
+    const text = await r.text();
+    const bad = Object.entries(contactHeaders).filter(([name, want]) => r.headers.get(name) !== want).map(([name]) => name);
+    const token = text.match(/name="t" value="([^"]*)"/)?.[1];
+    const want = readFileSync(path.join(DIST, CONTACT_PAGE_FILE), "utf8");
+    if (r.status !== 200) problems.push(`${page} が ${r.status} を返しました（200 のはず）`);
+    else if (bad.length) problems.push(`${page} のヘッダーが、お問い合わせの決まり（csp.ts の contactHeaders）と違います（${bad.join("・")}）`);
+    else if (/<\?php|contact_handle/.test(text)) problems.push(`${page} で PHP のソースが返りました（PHP が動いていません）`);
+    else if (token === undefined || text.replace(`name="t" value="${token}"`, 'name="t" value=""') !== want) problems.push(`${page} が、dist/${CONTACT_PAGE_FILE} と、開いた時刻の印のほかでも違います（.htaccess の書き換えが効いていないか、古い版）`);
+    else if (!/^\d+\.[0-9a-f]{32}$/.test(token)) notes.push(`${page}：開いた時刻の印が入っていません。サーバーに contact-config.php がまだないか、形が違います（docs/contact.md）。この間は送れません`);
+    else ok.push(`${page}：PHP がフォームを返し、開いた時刻の印が入っている。ヘッダーはお問い合わせの決まりと同じ`);
   } catch (e) {
     problems.push(`${page} を確かめられませんでした（${e?.message ?? e}）`);
   }
@@ -204,6 +231,9 @@ for (const [ext, want] of TYPES) {
 let same = 0;
 for (const f of files) {
   try {
+    // お問い合わせの送り先（PHP）は、サーバーが動かすので中身を照らせない。上で、GET の答えとヘッダーを確かめた
+    // お問い合わせのページも、本番では PHP が返す（開いた時刻の印が毎回違う）。上で、印のほかが同じことを確かめた
+    if (f === CONTACT_SEND_FILE || f === CONTACT_PAGE_FILE) continue;
     // HTML は、本番で開く場所（.html なし）で取る。.html 付きは 301 になるため
     const r = await get(new URL(f.endsWith(".html") ? pageUrlFor(f) : f, base));
     if (f === ".htaccess") {

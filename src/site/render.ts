@@ -6,6 +6,7 @@
 // - ページには、スクリプトを入れない。読み込むのは、同じサイトの CSS 1つだけ。
 // - サイトの場所（https の公式の URL）は、呼ぶ側から受け取る（htaccess.ts の OFFICIAL_ORIGIN）。ここには書かない。
 
+import { CONTACT_SEND_FILE } from "../../htaccess.ts";
 import { ARTICLES } from "./articles.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS, PRIVACY_TITLE } from "./privacy.ts";
 import { SITE_NAME, headFor, headLines } from "./seo.ts";
@@ -18,6 +19,8 @@ export const PRIVACY_PATH = "/privacy";
 export const LICENSES_PATH = "/licenses";
 export const TERMS_PATH = "/terms";
 export const CONTACT_PATH = "/contact";
+/** お問い合わせのフォームの送り先（PHP。server/contact-send.php から site.ts が作る。検索には載せない） */
+export const CONTACT_SEND_PATH = `/${CONTACT_SEND_FILE}`;
 export const FAQ_PATH = "/faq";
 export const CHECKLIST_PATH = "/checklist";
 /** サービス紹介のページ（持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（index.html。tests/site-pages.test.ts） */
@@ -53,6 +56,8 @@ export interface RenderOptions {
   repoUrl?: string | null;
   /** 記事の図（site.ts が src/site/figures/ から assets/ に置いたもの）。鍵は記事の slug。ない記事は、図の場所を出さない */
   figures?: ReadonlyMap<string, FigureAsset>;
+  /** 参照元の決まり（<meta name="referrer">）。ふだんは no-referrer。お問い合わせのページだけ csp.ts の CONTACT_REFERRER */
+  referrer?: string;
   /** 記事の一覧のページで読み込む、検索のスクリプトの場所（site.ts が置いたもの）。なければ、検索の欄を出さない */
   searchScript?: string;
 }
@@ -89,7 +94,7 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${e(o.csp)}" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="referrer" content="no-referrer" />
+    <meta name="referrer" content="${e(o.referrer ?? "no-referrer")}" />
     ${headLines(headFor(meta), o.origin, e)}
     <link rel="icon" href="${e(o.favicon ?? "data:,")}" />
     <link rel="stylesheet" href="${e(o.cssHref)}" />

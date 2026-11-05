@@ -15,13 +15,13 @@ import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
-import { OFFICIAL_ORIGIN } from "./htaccess.ts";
+import { CONTACT_PAGE_FILE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "./htaccess.ts";
 import { faviconHref, inlineMark } from "./logo.ts";
 import { buildFigures } from "./site-figures.ts";
 import { buildLicenses } from "./site-licenses.ts";
 import { renderIndexPages, usedTags } from "./src/site/article-index.ts";
 import { tagPath } from "./src/site/tags.ts";
-import { GUIDE_PATHS, TERMS_DIALOG_MARKER, renderGuidePages, renderTermsDialog } from "./src/site/pages.ts";
+import { CONTACT_ERRORS_MARK, CONTACT_ERRORS_TOP_MARK, CONTACT_MESSAGE_MARK, CONTACT_TOKEN_FIELD, GUIDE_PATHS, TERMS_DIALOG_MARKER, renderContactResults, renderGuidePages, renderTermsDialog } from "./src/site/pages.ts";
 import { escapeHtml, renderSite, sitePaths } from "./src/site/render.ts";
 import { articleTransitionNames } from "./src/site/motion.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
@@ -100,7 +100,35 @@ export function siteBinaryFiles(): Map<string, Uint8Array> {
   return buildFigures().files;
 }
 
-/** dist/ に置くファイル（HTML・sitemap.xml・robots.txt・CSS・検索のスクリプト）。鍵は dist/ の中の名前 */
+/** PHP の一重引用符の文字列にする（\ と ' だけを逃がす。ほかの字はそのまま） */
+export function phpString(s: string): string {
+  return `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
+/**
+ * お問い合わせの送り先（dist/contact-send.php）。server/contact-send.php に、フォーム・受け付けた・送れなかったのページの HTML を差し込む。
+ * ヘッダー（csp.ts の contactHeaders）は .htaccess だけが付ける（PHP でも付けると、同じヘッダーが 2 つになるおそれがあるため）。
+ * 届け先などの本物の設定は入れない（public_html の外の contact-config.php に、本人が置く。docs/contact.md）
+ */
+export function contactSendPhp(pages: { form: string; done: string; error: string }): string {
+  const source = readFileSync(path.join(ROOT, "server", "contact-send.php"), "utf8").replace(/\r\n/g, "\n");
+  if (!pages.error.includes(CONTACT_MESSAGE_MARK)) throw new Error("送れなかったときのページに、理由を入れる印がありません");
+  // フォームのページ（静かな contact.html と同じもの）に、PHP が中身を入れる印が 1 つずつあること
+  for (const mark of [CONTACT_ERRORS_MARK, CONTACT_ERRORS_TOP_MARK, CONTACT_TOKEN_FIELD]) {
+    if (pages.form.split(mark).length !== 2) throw new Error(`お問い合わせのページに「${mark}」が 1 つだけあるはずです`);
+  }
+  const arr = (entries: Array<[string, string]>) => `[\n${entries.map(([k, v]) => `    ${phpString(k)} => ${phpString(v)},`).join("\n")}\n]`;
+  const fill = (text: string, mark: string, value: string) => {
+    const line = `= []; // ${mark}`;
+    if (text.split(line).length !== 2) throw new Error(`server/contact-send.php に「${line}」が 1 つだけあるはずです`);
+    // 置きかえる字は関数で渡す（文字列で渡すと、HTML の中の $& や $' が、置きかえの記号として化けるため）
+    return text.replace(line, () => `= ${value};`);
+  };
+  const out = fill(source, "@@PAGES@@", arr([["form", pages.form], ["done", pages.done], ["error", pages.error]]));
+  return out.replace("// dist/contact-send.php を直接書き換えない。", () => "// これは npm run build で作ったファイル。直接書き換えない（もとは server/contact-send.php）。");
+}
+
+/** dist/ に置くファイル（HTML・sitemap.xml・robots.txt・CSS・検索のスクリプト・お問い合わせの送り先の PHP）。鍵は dist/ の中の名前 */
 export function siteFiles(): Map<string, string> {
   const css = siteCss();
   const cssFile = siteCssFile(css);
@@ -122,6 +150,10 @@ export function siteFiles(): Map<string, string> {
   const licenses = buildLicenses(ROOT);
   for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);
   for (const [name, text] of licenses.files) files.set(name, text);
+  // 送り先の PHP。フォームのページは、静かな contact.html と 1 バイトも違わないもの（check-live が照らす）
+  const contactPage = files.get(CONTACT_PAGE_FILE);
+  if (contactPage === undefined) throw new Error(`${CONTACT_PAGE_FILE} がありません`);
+  files.set(CONTACT_SEND_FILE, contactSendPhp({ form: contactPage, ...renderContactResults(options) }));
   files.set("sitemap.xml", renderSitemap());
   files.set("robots.txt", renderRobots());
   files.set(cssFile, css);

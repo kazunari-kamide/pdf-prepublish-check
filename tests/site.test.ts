@@ -6,7 +6,7 @@
 // - 使わない言い方（断定・「初めて」など）と、外の URL を書かない
 
 import { describe, expect, it } from "vitest";
-import { cspForMeta } from "../csp.ts";
+import { cspForContactMeta, cspForMeta } from "../csp.ts";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
 import { renderRobots, renderSitemap, searchScript, siteFiles, verificationMeta } from "../site.ts";
 import { usedTags } from "../src/site/article-index.ts";
@@ -107,7 +107,8 @@ describe("ページの HTML", () => {
       expect(page).toMatch(/<title>[^<]+｜お守りPDF<\/title>/);
       expect(page).toMatch(/<meta name="description" content="[^"]{20,}" \/>/);
       expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/`);
-      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspForMeta)}" />`);
+      // お問い合わせのページだけ、form-action 'self'（同じサイトへのフォームの送信）だけが違う CSP（docs/contact.md）
+      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(name === "contact.html" ? cspForContactMeta : cspForMeta)}" />`);
       // スクリプトを持たない。例外は1つだけ：記事の一覧のページの、検索のスクリプト（2026-11-05 本人が決定。src/site/article-search.js）
       const scripts = page.match(/<script\b[^>]*>/g) ?? [];
       if (name === "articles/index.html") expect(scripts).toEqual([`<script type="module" src="/${searchScript().file}">`]);

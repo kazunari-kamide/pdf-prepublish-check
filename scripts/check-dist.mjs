@@ -11,6 +11,8 @@
 // - サイトのページ（index.html 以外）はスクリプトを持たない。例外は、記事の一覧のページの検索のスクリプト 1 つだけ（src/site/article-search.js）
 // - assets/ のファイルは、名前に中身のハッシュが付いている（.htaccess で 1 年キャッシュさせるため）
 // - 自前の 404 のページ（404.html）がある（.htaccess の ErrorDocument が指す）
+// - お問い合わせのページ（contact.html）だけ、CSP の form-action が 'self'（ほかは同じ値）。.htaccess も同じ値を、そのページと送り先にだけ返す
+// - PHP は、お問い合わせの送り先（contact-send.php）1 つだけ。結果のページが差し込まれていて、本物の設定（contact-config.php）・メールアドレスが入っていない（docs/contact.md）
 // - JavaScript（.js・.mjs）に、外と通信する仕組みが入っていないか（ライブラリが持ち込むこともあるため、ビルドのあとでも見る）
 //
 // 例外は1つだけ（2026-11-03 本人が決定。理由は docs/no-network.md）：
@@ -23,12 +25,21 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { CLEAN_URL_RULES, OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { withFormActionSelf } from "../csp.ts";
+import { CLEAN_URL_RULES, CONTACT_PAGE_FILE, CONTACT_REWRITE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 // 調べるフォルダは、テストのときだけ DIST_DIR で変えられる（tests/check-dist.test.ts）
 const DIST = process.env.DIST_DIR ? path.resolve(process.env.DIST_DIR) : path.join(ROOT, "dist");
 const problems = [];
+// お問い合わせのページの CSP（form-action だけを 'self' にしたもの）。もとの CSP に form-action 'none' がなければ null
+const contactCspOf = (csp) => {
+  try {
+    return withFormActionSelf(csp);
+  } catch {
+    return null;
+  }
+};
 const allowed = [];
 const allowedHtml = [];
 
@@ -78,6 +89,16 @@ if (htaccess !== null) {
   if (!/^\s*AddType application\/wasm \.wasm\s*$/m.test(htaccess)) problems.push(".htaccess に AddType application/wasm .wasm がありません");
   // HSTS は条件（expr=）を付けずに付ける。配信先では %{HTTPS} が真にならず、条件を付けると黙って付かなくなるため（docs/deploy.md）
   if (!/^\s*Header always set Strict-Transport-Security "max-age=\d+[^"]*"\s*$/m.test(htaccess)) problems.push(".htaccess に Strict-Transport-Security のヘッダーがありません（条件を付けない形で）");
+  // お問い合わせのページと送り先にだけ、form-action 'self' の CSP を返す
+  if (header) {
+    const block = htaccess.match(/^<FilesMatch "([^"]+)">\n([\s\S]*?)^<\/FilesMatch>/m);
+    const contactCsp = block?.[2].match(/^\s*Header always set Content-Security-Policy "([^"]+)"\s*$/m)?.[1];
+    const names = block ? [CONTACT_PAGE_FILE, CONTACT_SEND_FILE, "index.html", "privacy.html"].filter((f) => new RegExp(block[1]).test(f)) : [];
+    if (!block || !contactCsp) problems.push(".htaccess に、お問い合わせのページの CSP（<FilesMatch>）がありません");
+    else if (contactCsp !== contactCspOf(header[1])) problems.push(".htaccess のお問い合わせのページの CSP が、ふつうの CSP の form-action を 'self' にしただけのものと食い違っています");
+    else if (names.join() !== `${CONTACT_PAGE_FILE},${CONTACT_SEND_FILE}`) problems.push(`.htaccess のお問い合わせの <FilesMatch> が、ほかのファイルにも当たるか、どちらかに当たりません（当たる：${names.join("・") || "なし"}）`);
+    if ((htaccess.match(/^\s*Header\b[^\n]*form-action 'self'/gm) ?? []).length !== 1) problems.push(".htaccess で form-action 'self' が、お問い合わせの <FilesMatch> の外にもあります");
+  }
   const notFound = htaccess.match(/^\s*ErrorDocument 404 \/(\S+)\s*$/m);
   if (!notFound) problems.push(".htaccess に ErrorDocument 404 がありません");
   else if (!existsSync(path.join(DIST, notFound[1]))) problems.push(`.htaccess の ErrorDocument 404 が指す ${notFound[1]} が、dist/ にありません`);
@@ -104,8 +125,10 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
   }
   if (rel !== "index.html") {
     const m = text.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/);
+    // お問い合わせのページだけは、form-action 'self'（同じサイトへのフォームの送信）だけが違う
+    const want = indexCsp === null ? null : rel === CONTACT_PAGE_FILE ? contactCspOf(indexCsp) ?? "（index.html の CSP に form-action 'none' がありません）" : indexCsp;
     if (!m) problems.push(`${rel} に CSP の <meta> がありません`);
-    else if (indexCsp !== null && decode(m[1]) !== indexCsp) problems.push(`${rel} の CSP が、index.html の CSP と食い違っています`);
+    else if (want !== null && decode(m[1]) !== want) problems.push(`${rel} の CSP が、index.html の CSP と食い違っています${rel === CONTACT_PAGE_FILE ? "（お問い合わせのページは、form-action 'self' だけが違うはず）" : ""}`);
   }
   const inlineScript = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/\bsrc=/.test(m[1]) || m[2].trim() !== "");
   if (inlineScript.length) problems.push(`${rel} に直接書いたスクリプトが ${inlineScript.length} か所あります`);
@@ -140,6 +163,31 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
     const locs = [...readFileSync(sitemap, "utf8").matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
     const withHtml = locs.filter((u) => u.endsWith(".html"));
     if (withHtml.length) problems.push(`sitemap.xml に、.html 付きの場所が ${withHtml.length} か所あります（${withHtml.slice(0, 3).join("、")}）`);
+  }
+}
+
+// ---- PHP は、お問い合わせの送り先 1 つだけ（docs/contact.md）。本物の設定・メールアドレスを配るものに入れない
+{
+  const php = files.map((f) => path.relative(DIST, f).replace(/\\/g, "/")).filter((r) => /\.(php\d?|phtml|phar|inc)$/i.test(r) || /contact-(config|data)/i.test(r));
+  for (const r of php) if (r !== CONTACT_SEND_FILE) problems.push(`${r} を配るものに入れています（PHP は ${CONTACT_SEND_FILE} だけ。本物の設定・迷惑防止の記録は public_html の外に置く）`);
+  if (!php.includes(CONTACT_SEND_FILE)) problems.push(`dist/ に ${CONTACT_SEND_FILE} がありません（お問い合わせのフォームの送り先）`);
+  else {
+    const src = readFileSync(path.join(DIST, CONTACT_SEND_FILE), "utf8");
+    if (/@@(PAGES|HEADERS)@@/.test(src)) problems.push(`${CONTACT_SEND_FILE} に、結果のページかヘッダーが差し込まれていません`);
+    if (!src.includes("<!--CONTACT_MESSAGE-->")) problems.push(`${CONTACT_SEND_FILE} の送れなかったときのページに、理由を入れる印がありません`);
+    // フォームのページ（開いた時刻の印の欄・理由を入れる印）が入っていること。本番では .htaccess が /contact をここへ回す
+    if (!src.includes(`name="t" value=""`) || !src.includes("<!--CONTACT_ERRORS-->")) problems.push(`${CONTACT_SEND_FILE} に、フォームのページ（開いた時刻の印の欄）が差し込まれていません`);
+    // /contact を PHP へ回す書き換えは、.html なしの書き換え（/contact → contact.html）より前にあること（後ろだと、静かな contact.html が返る）
+    if (htaccess !== null) {
+      const at = htaccess.indexOf(`RewriteRule ${CONTACT_REWRITE}`);
+      const clean = htaccess.indexOf(CLEAN_URL_RULES[0]);
+      if (at < 0) problems.push(`.htaccess に、お問い合わせのページを ${CONTACT_SEND_FILE} へ回す書き換えがありません`);
+      else if (clean >= 0 && at > clean) problems.push(`.htaccess で、お問い合わせのページを ${CONTACT_SEND_FILE} へ回す書き換えが、.html なしの書き換えより後ろにあります（静かな contact.html が返ってしまう）`);
+    }
+    const mail = src.match(/[\w.+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+/g)?.filter((m) => !/^[\w.+-]+@(example\.(invalid|com|org))$/.test(m)) ?? [];
+    if (mail.length) problems.push(`${CONTACT_SEND_FILE} にメールアドレスらしい字があります（${mail.length} 件。届け先は public_html の外の設定に書く）`);
+    if (!/^<\?php\n/.test(src) || /\?>\s*$/.test(src)) problems.push(`${CONTACT_SEND_FILE} が <?php で始まっていないか、?> で終わっています（前後に字が出るのを防ぐため）`);
+    allowedHtml.push(`${CONTACT_SEND_FILE}（お問い合わせの送り先の PHP。ただ 1 つ）`);
   }
 }
 
@@ -198,7 +246,7 @@ if (allowed.length) {
   for (const a of allowed) console.log(`  - ${a}`);
 }
 if (allowedHtml.length) {
-  console.log("\n例外として通した HTML（検索エンジンの確認のファイル・記事の一覧の検索のスクリプト）：");
+  console.log("\n例外として通したもの（検索エンジンの確認のファイル・記事の一覧の検索のスクリプト・お問い合わせの送り先）：");
   for (const a of allowedHtml) console.log(`  - ${a}`);
 }
 if (problems.length) {
