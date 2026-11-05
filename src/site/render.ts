@@ -21,6 +21,9 @@ export const CONTACT_PATH = "/contact.html";
 export const FAQ_PATH = "/faq.html";
 export const CHECKLIST_PATH = "/checklist.html";
 
+/** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
+export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。";
+
 /** どのページの下にも置く、サイトの案内のリンク（検査のページ index.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
 export const FOOT_LINKS: ReadonlyArray<readonly [string, string]> = [
   [ARTICLES_PATH, "記事の一覧"],
@@ -85,6 +88,7 @@ ${body}
       <nav class="site-foot-links" aria-label="サイトの案内（下）">
 ${FOOT_LINKS.map(([href, label]) => `        <a href="${href}">${e(label)}</a>`).join("\n")}
       </nav>
+      <p class="site-official">${e(OFFICIAL_NOTE)}</p>
       <p>PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</p>
     </footer>
   </body>

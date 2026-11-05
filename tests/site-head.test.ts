@@ -9,7 +9,7 @@ import path from "node:path";
 import { build } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
-import { BANNED_WORDS, OG_IMAGE_PATH, OG_IMAGE_SIZE } from "../src/site/seo.ts";
+import { BANNED_WORDS, NOINDEX_PATHS, OG_IMAGE_PATH, OG_IMAGE_SIZE } from "../src/site/seo.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 let out = "";
@@ -27,7 +27,10 @@ afterAll(() => {
 });
 
 type Head = { file: string; url: string; all: (re: RegExp) => string[] };
-function pages(): Head[] {
+/** 検索に載せるページ（noindex のページを除く） */
+const pages = (): Head[] => allPages().filter((h) => !NOINDEX_PATHS.has(new URL(h.url).pathname));
+const noindexPages = (): Head[] => allPages().filter((h) => NOINDEX_PATHS.has(new URL(h.url).pathname));
+function allPages(): Head[] {
   return walk(out)
     .filter((f) => f.endsWith(".html") && !/^google[0-9a-f]+\.html$/.test(path.basename(f)))
     .map((f) => {
@@ -40,6 +43,25 @@ function pages(): Head[] {
 const meta = (h: Head, key: string) => h.all(new RegExp(`<meta (?:property|name)="${key.replace(/[.:]/g, "\\$&")}" content="([^"]*)"`));
 
 describe("ビルドしたあとの全ページの head", () => {
+  it("検索に載せないページ（404）は、noindex で、カードを付けない。canonical はそのページ。題と説明の長さは同じ決まり", () => {
+    const list = noindexPages();
+    expect(list.map((h) => h.file)).toEqual(["404.html"]);
+    for (const h of list) {
+      expect(meta(h, "robots"), h.file).toEqual(["noindex"]);
+      expect(h.all(/<link rel="canonical" href="([^"]*)"/), h.file).toEqual([h.url]);
+      expect(meta(h, "og:url"), h.file).toEqual([]);
+      const t = h.all(/<title>([^<]*)<\/title>/)[0] ?? "";
+      const d = meta(h, "description")[0] ?? "";
+      expect(chars(t)).toBeGreaterThanOrEqual(20);
+      expect(chars(d)).toBeGreaterThanOrEqual(80);
+      expect(chars(d)).toBeLessThanOrEqual(120);
+    }
+  });
+
+  it("検索に載せるページは、noindex を付けない", () => {
+    for (const h of pages()) expect(meta(h, "robots"), h.file).toEqual([]);
+  });
+
   it("ページが 40 以上あり、すべてに題・説明・canonical・OGP の 6 つがそろう", () => {
     const list = pages();
     expect(list.length).toBeGreaterThanOrEqual(40);
@@ -109,11 +131,12 @@ describe("カードの画像・sitemap.xml・robots.txt", () => {
     expect(png.readUInt32BE(20)).toBe(OG_IMAGE_SIZE.height);
   });
 
-  it("sitemap.xml に、ビルドした全ページ（検査・記事・案内）が1回ずつ入る", () => {
+  it("sitemap.xml に、検索に載せる全ページ（検査・記事・案内）が1回ずつ入り、noindex のページは入らない", () => {
     const xml = readFileSync(path.join(out, "sitemap.xml"), "utf8");
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
     expect(new Set(locs).size).toBe(locs.length);
     expect([...locs].sort()).toEqual(pages().map((h) => h.url).sort());
+    for (const h of noindexPages()) expect(locs).not.toContain(h.url);
   });
 
   it("robots.txt は、すべてを許し、sitemap の場所を示す", () => {

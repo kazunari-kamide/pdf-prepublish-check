@@ -59,6 +59,11 @@ const PAGE_HEAD: Record<string, { title: string; description: string }> = {
     description:
       "お守りPDF のライセンス（AGPL-3.0）とソースの場所、使っている部品・書体の名前・版・ライセンス・著作権の表示と、ライセンスの全文です。どの部品をどの条件で使っているかを確かめられます。",
   },
+  "/404.html": {
+    title: "ページが見つかりません（404）｜お守りPDF",
+    description:
+      "お探しのページは見つかりませんでした。場所が変わったか、なくなった可能性があります。検査のページや記事の一覧から探してください。公式のサイトは omamoripdf.com だけです。",
+  },
   "/contact.html": {
     title: "お問い合わせ：質問・不具合・脆弱性の知らせ方｜お守りPDF",
     description:
@@ -76,12 +81,18 @@ const ARTICLE_EXTRA: Record<string, string> = {
   "p4-internal-path": "パスには、職場のサーバーの名前や、使った人の名前が入ることがあります。",
 };
 
-export type HeadInfo = { path: string; title: string; description: string; type: "website" | "article" };
+/**
+ * 検索に載せないページ。カードを付けず `<meta name="robots" content="noindex">` にし、sitemap にも入れない（canonical は付ける）
+ * （404.html：.htaccess の ErrorDocument が、どの場所でも返すページ。tests/site-head.test.ts）
+ */
+export const NOINDEX_PATHS: ReadonlySet<string> = new Set(["/404.html"]);
+
+export type HeadInfo = { path: string; title: string; description: string; type: "website" | "article"; noindex?: boolean };
 
 /** サイトのページ（記事・案内のページ）の head の値。meta は本文と同じもの */
 export function headFor(meta: PageMeta): HeadInfo {
   const page = PAGE_HEAD[meta.path];
-  if (page) return { path: meta.path, ...page, type: "website" };
+  if (page) return { path: meta.path, ...page, type: "website", ...(NOINDEX_PATHS.has(meta.path) ? { noindex: true } : {}) };
   const article = ARTICLES.find((a) => meta.path === `/articles/${a.slug}.html`);
   if (article) {
     const tail = article.pattern ? ARTICLE_TAIL.pattern : ARTICLE_TAIL.guide;
@@ -110,6 +121,17 @@ export function socialMeta(h: HeadInfo, origin: string): Array<{ property?: stri
 
 /** head に入れる行（題・説明・canonical・OGP・X のカード）。escape は呼ぶ側の関数を使う */
 export function headLines(h: HeadInfo, origin: string, escape: (s: string) => string, indent = "    "): string {
+  if (h.noindex) {
+    // 検索に載せないページ（404 など）：カードを付けず、noindex にする（canonical は、どのページにも付ける決まりのまま。tests/site-pages.test.ts）
+    return [
+      `<title>${escape(h.title)}</title>`,
+      `<meta name="description" content="${escape(h.description)}" />`,
+      `<link rel="canonical" href="${escape(origin + h.path)}" />`,
+      `<meta name="robots" content="noindex" />`,
+    ]
+      .map((l, i) => (i === 0 ? l : indent + l))
+      .join("\n");
+  }
   const lines = [
     `<title>${escape(h.title)}</title>`,
     `<meta name="description" content="${escape(h.description)}" />`,

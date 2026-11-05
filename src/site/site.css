@@ -322,3 +322,10 @@ body.site {
     text-decoration: none;
   }
 }
+
+/* 公式のサイトの場所の1文（どのページの下にも置く。CLAUDE.md §11-6） */
+.site-foot .site-official {
+  margin-bottom: var(--space-2);
+  color: var(--color-base);
+  font-weight: bold;
+}

@@ -32,7 +32,6 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { preview } from "vite";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_PDFS = [
@@ -80,7 +79,8 @@ if (!chromePath) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // --url のときは、手元の vite preview を立てずに、配信したサイトを開く
-const server = liveUrl ? null : await preview({ root: ROOT, logLevel: "silent", preview: { host: "127.0.0.1", port: 0, strictPort: false, open: false } });
+// vite は、手元の vite preview を立てるときだけ読み込む（本番を開く --url のときは要らない。配信のジョブでは npm を動かさず、vite を入れないため）
+const server = liveUrl ? null : await (await import("vite")).preview({ root: ROOT, logLevel: "silent", preview: { host: "127.0.0.1", port: 0, strictPort: false, open: false } });
 const appUrl = liveUrl ?? server.resolvedUrls.local[0];
 const origin = new URL(appUrl).origin;
 

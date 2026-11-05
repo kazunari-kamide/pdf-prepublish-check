@@ -9,6 +9,8 @@
 // - トップページが 200 で返り、csp.ts のヘッダー（CSP・nosniff・no-referrer など）が、同じ値で1つずつ付いている
 // - サイトのページ（記事の一覧・記事1つ・プライバシー）も 200 で返り、同じヘッダーが付いている
 // - トップページが、外のサイトからスクリプトを読み込んでいない（アクセス解析のスクリプトは入れない。docs/no-network.md）
+// - https の応答に Strict-Transport-Security が付き、Cache-Control が HTML は no-cache・assets/ は 1 年（htaccess.ts）
+// - 見つからない場所は、404 で自前の 404 のページ（dist/404.html と同じ中身）を、同じヘッダーをつけて返す。assets/ を開いてもファイルの一覧は出ない
 // - .mjs が text/javascript、.wasm が application/wasm で返る（dist/ に .wasm がなければ、省いたと表示する）
 // - dist/ のファイルが、本番のものと1バイトも違わない（.htaccess は外から読めないこと）
 // - http:// で来たら https:// へ 301
@@ -20,7 +22,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { securityHeaders } from "../csp.ts";
-import { OFFICIAL_HOST } from "../htaccess.ts";
+import { CACHE_ASSETS, CACHE_DEFAULT, HSTS, NOT_FOUND_PAGE, OFFICIAL_HOST } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(ROOT, "dist");
@@ -91,6 +93,54 @@ for (const page of ["articles/", "privacy.html", files.find((f) => /^articles\/(
   } catch (e) {
     problems.push(`${page} を確かめられませんでした（${e?.message ?? e}）`);
   }
+}
+
+// ---- HSTS（https の応答だけ）とキャッシュ（HTML は no-cache、名前にハッシュの付いた assets/ は 1 年）
+if (top) {
+  if (base.protocol === "https:") {
+    const got = top.headers.get("strict-transport-security");
+    if (got !== HSTS) problems.push(`Strict-Transport-Security が ${got ?? "（なし）"} です（${HSTS} のはず）`);
+    else ok.push(`Strict-Transport-Security（${HSTS}）`);
+  } else notes.push("http の場所を確かめているため、Strict-Transport-Security は確かめていません");
+  const cc = top.headers.get("cache-control");
+  if (cc !== CACHE_DEFAULT) problems.push(`トップページの Cache-Control が ${cc ?? "（なし）"} です（${CACHE_DEFAULT} のはず）`);
+  else ok.push(`トップページの Cache-Control（${CACHE_DEFAULT}）`);
+}
+{
+  const asset = files.find((f) => f.startsWith("assets/") && f.endsWith(".css")) ?? files.find((f) => f.startsWith("assets/"));
+  if (asset) {
+    try {
+      const r = await get(new URL(asset, base), "HEAD");
+      const cc = r.headers.get("cache-control");
+      if (r.status !== 200) problems.push(`${asset} が ${r.status} を返しました`);
+      else if (cc !== CACHE_ASSETS) problems.push(`${asset} の Cache-Control が ${cc ?? "（なし）"} です（${CACHE_ASSETS} のはず）`);
+      else ok.push(`assets/ の Cache-Control（${CACHE_ASSETS}）`);
+    } catch (e) {
+      problems.push(`${asset} を確かめられませんでした（${e?.message ?? e}）`);
+    }
+  }
+}
+
+// ---- 見つからないとき：自前の 404 のページを、404 で、同じヘッダーをつけて返す。フォルダの中身の一覧は出さない
+try {
+  const missing = `this-page-does-not-exist-${Date.now()}.html`;
+  for (const where of [missing, `assets/${missing}`]) {
+    const r = await get(new URL(where, base));
+    const body = Buffer.from(await r.arrayBuffer());
+    const want = readFileSync(path.join(DIST, NOT_FOUND_PAGE.slice(1)));
+    const bad = Object.entries(securityHeaders).filter(([name, v]) => r.headers.get(name) !== v).map(([name]) => name);
+    if (r.status !== 404) problems.push(`見つからない場所（${where}）が ${r.status} を返しました（404 のはず）`);
+    else if (sha256(body) !== sha256(want)) problems.push(`見つからない場所（${where}）で、自前の 404 のページ（${NOT_FOUND_PAGE}）が返りませんでした`);
+    else if (bad.length) problems.push(`404 の応答のヘッダーが違います（${bad.join("・")}）`);
+    else if (r.headers.get("cache-control") !== CACHE_DEFAULT) problems.push(`404 の応答（${where}）の Cache-Control が ${r.headers.get("cache-control") ?? "（なし）"} です（${CACHE_DEFAULT} のはず）`);
+    else ok.push(`見つからない場所（${where.startsWith("assets/") ? "assets/ の中" : "一番上"}）は、自前の 404 のページと同じヘッダー`);
+  }
+  const dir = await get(new URL("assets/", base));
+  const listing = dir.status === 200 && /Index of \/assets/i.test(await dir.text());
+  if (listing) problems.push("assets/ を開くと、ファイルの一覧が出ます（配信先の設定で、フォルダの一覧を止める必要がある）");
+  else ok.push(`assets/ を開いても、ファイルの一覧は出ない（${dir.status}）`);
+} catch (e) {
+  problems.push(`見つからない場所の確かめができませんでした（${e?.message ?? e}）`);
 }
 
 // ---- アクセス解析のスクリプトを入れていない（開いた回数は、サーバーの記録で数える。docs/no-network.md）
