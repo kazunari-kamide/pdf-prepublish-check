@@ -216,8 +216,17 @@ select {
   color: var(--color-on-dark);
 }
 
+/* 帯の右端：送らないことの一文と、その下にサービス紹介のページへのリンク（右に寄せる。帯の幅が足りないとき、リンクだけが左の 2 行目に落ちないように） */
+.band-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
 .zero-send {
-  margin: 0 0 0 auto;
+  margin: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -232,6 +241,12 @@ select {
   height: 0.65rem;
   border-radius: var(--radius-full);
   border: 2px solid var(--color-ok);
+}
+
+/* サービス紹介のページへのリンク（上の帯の右端。目立たせない） */
+.about-link {
+  font-size: var(--text-small);
+  color: var(--color-muted);
 }
 
 /* ---------------------------------------------------------------- 3つの段 */
@@ -574,6 +589,40 @@ body:has(.terms-dialog[open]) {
 }
 
 .sample-note {
+  color: var(--color-muted);
+}
+
+/* 提出のために小さくする入口：見本のボタンの下に、上限を選ぶ欄（決まりの色・線・角の丸みだけを使う） */
+.limit-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.limit-title {
+  font-weight: 700;
+}
+
+.limit-entry select {
+  min-height: var(--target-min);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-control-line);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font: inherit;
+}
+
+.limit-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--text-small);
   color: var(--color-muted);
 }
 
@@ -1607,8 +1656,9 @@ progress {
   .steps li {
     border-radius: var(--radius);
   }
-  .zero-send {
+  .band-end {
     margin-left: 0;
+    align-items: flex-start;
   }
   .workspace,
   .workspace[data-state="empty"],
@@ -1707,6 +1757,12 @@ progress {
   margin: var(--space-1) 0 var(--space-2);
   font-size: var(--text-small);
   color: var(--color-muted);
+}
+
+/* 選んだ上限に収まったか（提出のために小さくする入口から来たとき） */
+.compress-limit {
+  margin: 0 0 var(--space-2);
+  font-weight: 700;
 }
 
 .compress-presets {

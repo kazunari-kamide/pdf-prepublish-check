@@ -27,7 +27,7 @@ import {
   TERMS_META,
   renderGuidePages,
 } from "../src/site/pages.ts";
-import { FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor } from "../src/site/render.ts";
+import { ABOUT_PATH, FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor, pathForFile } from "../src/site/render.ts";
 import type { Section } from "../src/site/types.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -50,7 +50,8 @@ describe("ページの形", () => {
   });
 
   it("404 のページは、.htaccess の ErrorDocument が指す場所にあり、検査のページ・記事の一覧へつながる", () => {
-    expect(NOT_FOUND_PAGE).toBe(NOT_FOUND_META.path);
+    // ErrorDocument が指すのはファイル（/404.html）。ページの場所は .html なし（/404）
+    expect(NOT_FOUND_PAGE).toBe(`/${fileFor(NOT_FOUND_META.path)}`);
     const p = pages.get("404.html")!;
     expect(p).toContain("ページが見つかりません");
     expect(p).toContain('href="/articles/"');
@@ -68,7 +69,7 @@ describe("ページの形", () => {
     it(`${name}：題・説明・canonical・CSP があり、検査のページへつながり、スクリプトがない`, () => {
       expect(page).toMatch(/<title>[^<]+｜お守りPDF<\/title>/);
       expect(page).toMatch(/<meta name="description" content="[^"]{20,}" \/>/);
-      expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/${name}" />`);
+      expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}${pathForFile(name)}" />`);
       expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspForMeta)}" />`);
       expect(page).toContain('href="/"');
       expect(page).not.toMatch(/<script\b|\sstyle=|\son[a-z]+=/);
@@ -294,9 +295,21 @@ describe("検査のページ（index.html）", () => {
     expect(links).toEqual(FOOT_LINKS.map(([h, l]) => [h, l]));
   });
 
+  it("提出のために小さくする入口：置き場の近くに、名前のついた上限の選択（既定は「選ばない」＝ふつうの検査）", () => {
+    const entry = html.match(/<div class="limit-entry" id="limit-row">[\s\S]*?<\/div>/)![0];
+    expect(entry).toContain('<label class="limit-title" for="size-limit">提出のためにファイルを小さくする</label>');
+    expect([...entry.matchAll(/<option value="([^"]*)">/g)].map((m) => m[1])).toEqual([""]);
+    expect(html.indexOf('id="limit-row"')).toBeGreaterThan(html.indexOf('id="sample-row"'));
+  });
+
+  it("上の帯に、サービス紹介のページへのリンクを 1 つだけ置く", () => {
+    const band = html.match(/<header class="band">[\s\S]*?<\/header>/)![0];
+    expect([...band.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1])).toEqual([ABOUT_PATH]);
+  });
+
   it("書体と部品のライセンスは、下の帯のライセンスのページへのリンクで示す（結果の欄の一文は、2026-11-05 本人の指示で外した）", () => {
     const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
-    expect(foot).toContain('<a href="/licenses.html">');
+    expect(foot).toContain('<a href="/licenses">');
     expect(html).not.toContain("© 2014-2021 Adobe");
   });
 });

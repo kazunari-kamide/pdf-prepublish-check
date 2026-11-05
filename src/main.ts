@@ -21,7 +21,8 @@ import type { TidyChoices } from "./sanitize/protocol";
 import type { PropertyKey, TidyPreflight } from "../sanitize/types.ts";
 import { buildEdits, CONSENT_TEXT, DATE_HINT, MODE_LABEL, PROPERTY_FIELDS, type PropertyChoice, type PropertyMode } from "./ui/tidy-model";
 import type { NotDoneItem } from "../sanitize/types.ts";
-import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET } from "./ui/compress-model";
+import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET, limitLine, nextForLimit, SIZE_LIMITS, sizeLimitFrom } from "./ui/compress-model";
+import type { CompressPreset, SizeLimit } from "./ui/compress-model";
 import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
@@ -30,7 +31,7 @@ import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, S
 import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
-import { sampleFile } from "./ui/sample";
+import { sampleFile, wantsSample, withoutSample } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
 import { setupTermsDialog } from "./ui/terms-dialog";
@@ -57,6 +58,9 @@ const ui = {
   workspace: el<HTMLElement>("workspace"),
   sample: el<HTMLButtonElement>("sample"),
   sampleRow: el<HTMLParagraphElement>("sample-row"),
+  limitRow: el<HTMLDivElement>("limit-row"),
+  sizeLimit: el<HTMLSelectElement>("size-limit"),
+  compressLimit: el<HTMLParagraphElement>("compress-limit"),
   stepPick: el<HTMLLIElement>("step-pick"),
   stepPickNote: el<HTMLSpanElement>("step-pick-note"),
   stepCheck: el<HTMLLIElement>("step-check"),
@@ -197,6 +201,8 @@ let compressedBlob: Blob | null = null;
 let compressUrl: string | null = null;
 /** 片付けて読み直した結果（小さくしたあとの読み直しと比べる） */
 let cleanedState: { view: ViewModel; notDone: NotDoneItem[]; name: string } | null = null;
+/** 提出のために小さくする入口で選んだ上限（PDF を置いたときの選択。選ばなければ null＝ふつうの検査） */
+let shrinkLimit: SizeLimit | null = null;
 
 function setStatus(text: string, tone: "neutral" | "ok" | "problem" = "neutral") {
   ui.status.textContent = text;
@@ -284,7 +290,8 @@ function resetCompress() {
   ui.compressConfirmBox.checked = false;
   ui.compressRun.disabled = false;
   ui.compressLines.replaceChildren();
-  for (const part of [ui.compressHeadline, ui.compressSizes, ui.compressRecheck, ui.compressSaveNote]) part.textContent = "";
+  for (const part of [ui.compressHeadline, ui.compressSizes, ui.compressRecheck, ui.compressSaveNote, ui.compressLimit]) part.textContent = "";
+  ui.compressLimit.hidden = true;
 }
 
 /** 選べる3つの値（ラジオボタン。矢印キーで選べる） */
@@ -307,9 +314,18 @@ function chosenPreset() {
   return COMPRESS_PRESETS.find((p) => p.id === v) ?? DEFAULT_PRESET;
 }
 
-async function runCompress() {
+/**
+ * 小さくする。preset を渡したときは、その細かさを選んだ形にしてから小さくする（上限の入口から呼ぶとき）。
+ * 小さくしたあとの大きさ（changed＝縮めた画像があったか）を返す。止めた・失敗した・残りが増えた・保存できないときは null
+ */
+async function runCompress(preset?: CompressPreset): Promise<{ size: number; changed: boolean } | null> {
   const base = cleanedState;
-  if (busy || !cleanedBlob || !base) return;
+  if (busy || !cleanedBlob || !base) return null;
+  if (preset) {
+    const radio = ui.compressPresets.querySelector<HTMLInputElement>(`input[value="${preset.id}"]`);
+    if (radio) radio.checked = true;
+  }
+  let result: { size: number; changed: boolean } | null = null;
   busy = true;
   const gen = generation;
   resetCompress();
@@ -320,13 +336,13 @@ async function runCompress() {
   setStatus("ファイルを小さくしています…（小さくする前と後に、検査をかけています）");
   try {
     const out = await compressInWorker(await cleanedBlob.arrayBuffer(), chosenPreset());
-    if (gen !== generation) return;
+    if (gen !== generation) return null;
     ui.compressResult.hidden = false;
     if (out.kind === "timeout" || out.kind === "refused" || out.kind === "error") {
       const text = out.kind === "timeout" ? "時間がかかりすぎたため、小さくするのを止めました。整えた PDF はそのまま保存できます。" : out.message;
       ui.compressHeadline.textContent = text;
       setStatus(text, "problem");
-      return;
+      return null;
     }
     const v = buildCompressView(out.kind === "done" ? { status: "ok", ...out } : { status: "blocked", ...out });
     ui.compressHeadline.textContent = v.headline;
@@ -334,7 +350,7 @@ async function runCompress() {
     ui.compressLines.replaceChildren(...v.lines.map((t) => make("li", t)));
     if (out.kind !== "done" || !out.changed) {
       setStatus(v.headline, v.kind === "blocked" ? "problem" : "neutral");
-      return;
+      return out.kind === "done" ? { size: out.sizeBefore, changed: false } : null;
     }
     // 小さくした PDF を、検査の入口に最初から入れ直す（片付けたあとと同じ。保存できるかは、この結果だけで決める）
     compressedBlob = new Blob([out.bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" });
@@ -344,7 +360,7 @@ async function runCompress() {
       ui.progress.value = p.done;
       setStatus(`小さくした PDF を、最初から検査し直しています…（${p.label}、${p.done + 1}/${p.total}）`);
     });
-    if (gen !== generation) return;
+    if (gen !== generation) return null;
     const afterSummary = re.kind === "done" && re.precheck.ok ? re.summary : null;
     const c = buildCleanView({ before: base.view, after: afterSummary ? buildView(afterSummary) : null, removed: [], notDone: base.notDone, decrypted: false });
     ui.compressRecheck.textContent = `小さくした PDF を最初から検査し直しました。${c.headline}`;
@@ -357,6 +373,7 @@ async function runCompress() {
     if (gate === "ok") unlockCompressDownload();
     else lockCompressDownload();
     setStatus(`${v.headline}${c.headline}`, gate === "blocked" ? "problem" : gate === "ok" ? "ok" : "neutral");
+    if (gate !== "blocked") result = { size: out.sizeAfter, changed: true };
   } catch {
     if (gen === generation) {
       ui.compressResult.hidden = false;
@@ -372,6 +389,39 @@ async function runCompress() {
       (ui.compressDownload.hidden ? ui.compressResult : ui.compressDownload).scrollIntoView({ block: "nearest" });
     } else if (gen === generation) ui.compressTitle.focus();
   }
+  return result;
+}
+
+/**
+ * 提出のために小さくする入口：整えて読み直したあと、選んだ上限に収まるまで「ふつう」→「もっと小さく」の順で小さくする。
+ * 整えた PDF がもう収まっていれば、小さくしない。結果は、小さくする欄のいちばん上の 1 文で知らせる
+ */
+async function shrinkToLimit(gen: number, limit: SizeLimit) {
+  if (!cleanedBlob) return;
+  // 小さくする所は「そのほかの操作」の開け閉めの中にある（#117）。入口で上限を選んだときは、結果が隠れないように開く
+  ui.cleanTools.open = true;
+  let size = cleanedBlob.size;
+  let compressed = false;
+  const tried: CompressPreset["id"][] = [];
+  const steps: string[] = [];
+  for (;;) {
+    const next = nextForLimit(size, limit, tried);
+    if (next.kind !== "try") break;
+    const last = COMPRESS_PRESETS.find((p) => p.id === tried.at(-1));
+    if (last) steps.push(`「${last.label}」では収まらなかったため、「${next.preset.label}」で小さくし直しました。`);
+    tried.push(next.preset.id);
+    const r = await runCompress(next.preset);
+    if (gen !== generation || r === null) return;
+    size = r.size;
+    compressed ||= r.changed;
+    if (!r.changed) break;
+  }
+  const text = [...steps, limitLine(size, limit, compressed)].join("");
+  ui.compressLimit.textContent = text;
+  ui.compressLimit.hidden = false;
+  // 読み直し（または小さくしたあとの読み直し）の一文は消さずに、後ろへ足す。色（tone）も、読み直しの結果のまま
+  const tone = ui.status.dataset.tone === "ok" || ui.status.dataset.tone === "problem" ? ui.status.dataset.tone : "neutral";
+  setStatus(`${ui.status.textContent ?? ""}${text}`, tone);
 }
 
 function clearResults() {
@@ -415,6 +465,7 @@ function goHome() {
   reset();
   ui.workspace.dataset.state = "empty";
   ui.sampleRow.hidden = false;
+  ui.limitRow.hidden = false;
   setStep(ui.stepPick, "now");
   ui.stepPickNote.textContent = "PDF を置く";
   ui.fileName.textContent = "";
@@ -953,6 +1004,8 @@ function renderSummary(s: Session) {
   ui.sanitizeList.textContent =
     "黒塗りの下の字・見えない字・作成者などの欄・XMP メタデータ・前の版の残り・添付ファイル・注釈とコメント・JavaScript などを消します。";
   ui.sanitizeMore.hidden = password;
+  // 「提出のためにファイルを小さくする」の入口から来たとき（B の #116）：上限まで小さくすることを、1 行の説明に足す
+  if (shrinkLimit) ui.sanitizeNote.textContent += `整えて読み直したあとに、選んだ上限（${shrinkLimit.label}）まで小さくします。`;
   // 自分で黒塗りする所を選ぶ：片付けられて、ページの絵と形があるときだけ
   ui.pickTools.hidden = ui.sanitize.disabled || !s.pdf || s.summary.pagesUnreadable;
   ui.pickHelpCandidates.hidden = !v.rows.some(isCandidate);
@@ -1014,12 +1067,16 @@ async function handle(file: File) {
   if (busy) return;
   busy = true;
   const gen = ++generation;
+  // 通信を数える拡張機能（extension/）への合図。ページの中の属性を変えるだけで、通信はしない
+  document.documentElement.dataset.omamoriPdf = String(gen);
   const old = session;
   session = null;
   void old?.pdf?.close();
   reset();
   ui.workspace.dataset.state = "working";
   ui.sampleRow.hidden = true;
+  ui.limitRow.hidden = true;
+  shrinkLimit = sizeLimitFrom(ui.sizeLimit.value);
   setStep(ui.stepPick, "done");
   ui.stepPickNote.textContent = "置きました";
   setStep(ui.stepCheck, "now");
@@ -1080,6 +1137,12 @@ async function loadPreflight(gen: number, bytes: Uint8Array) {
   tidyPre = r && r.status === "ok" ? r : null;
   renderTidyEditor();
   renderConsent();
+  // 提出のために小さくする入口で、何も見つからなければ、そのまま整えて小さくする所まで進む。
+  // 同意が要る PDF（PDF/A の印・電子署名）や、自分で黒塗りする所を選んでいる間は、本人が「整える」を押すのを待つ
+  if (shrinkLimit && session.view.clean && ui.consent.hidden && !ui.sanitize.disabled && picks.length === 0 && !picking) {
+    setStatus(`見つかった所はありませんでした。選んだ上限（${shrinkLimit.label}）まで小さくするため、続けて整えます…`, "ok");
+    void runSanitize();
+  }
 }
 
 /** プロパティの一覧の上に、8 つの項目ごとの「消す／そのまま／書き直す」を出す（既定は消す） */
@@ -1612,6 +1675,8 @@ async function runSanitize() {
   } finally {
     busy = false;
   }
+  // 提出のために小さくする入口：読み直しが通って、小さくする欄が出たときだけ、続けて小さくする
+  if (gen === generation && shrinkLimit && !ui.compress.hidden) await shrinkToLimit(gen, shrinkLimit);
 }
 
 ui.sanitize.addEventListener("click", () => void runSanitize());
@@ -1644,6 +1709,13 @@ if (!isOfficialHost(location.hostname)) {
   const note = el<HTMLParagraphElement>("unofficial");
   note.textContent = UNOFFICIAL_NOTE;
   note.hidden = false;
+}
+
+// 提出のために小さくする入口の上限（compress-model.ts の SIZE_LIMITS から並べる）
+for (const l of SIZE_LIMITS) {
+  const o = make("option", `上限 ${l.label}`);
+  o.value = String(l.mb);
+  ui.sizeLimit.append(o);
 }
 
 ui.sample.addEventListener("click", () => {
@@ -1740,3 +1812,11 @@ window.addEventListener("resize", () => {
     if (session && session.current) void showPage(session.current, session.selected);
   }, 200);
 });
+
+// /?sample=1 で開いたら、「見本の PDF で試す」を押したときと同じに進む（サービス紹介のページから来たとき）。ほかの準備がすべて済んだ、このファイルの最後で呼ぶ。
+// 見本はこのファイルに埋め込んだもので、取りに行く通信はない。再読み込みで何度も読まないよう、アドレスから外す
+if (wantsSample(location.search)) {
+  history.replaceState(history.state, "", withoutSample(location.pathname, location.search, location.hash));
+  const file = sampleFile();
+  if (file) void handle(file);
+}
