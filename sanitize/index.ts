@@ -7,6 +7,7 @@
 //   const r = await sanitizePdf(bytes);
 //   if (r.status === "ok") { r.bytes（片付けた PDF）, r.removed（取り除いた項目）, r.notDone（片付けられなかった所） }
 //   自分で黒塗りする：redact(bytes, areas, options)（redact.ts）
+//   ファイルを小さくする：compress(bytes, options)（compress.ts。片付けのあとの PDF に使う）
 //
 // 順番：
 //   1. 読む（rules/shared/load.ts。パスワードなしで開ける暗号化は外して読む）
@@ -23,8 +24,9 @@ import type { NotDoneItem, RemovedItem, SanitizeOptions, SanitizeResult } from "
 
 export type * from "./types.ts";
 export { redact } from "./redact.ts";
+export { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "./compress.ts";
 
-export const SANITIZER_VERSION = "0.5.0";
+export const SANITIZER_VERSION = "0.6.0";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 export const MAX_INPUT_BYTES = 512 * 1024 * 1024;
