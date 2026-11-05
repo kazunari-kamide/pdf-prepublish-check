@@ -35,7 +35,8 @@ function allPages(): Head[] {
     .filter((f) => f.endsWith(".html") && !/^google[0-9a-f]+\.html$/.test(path.basename(f)))
     .map((f) => {
       const rel = path.relative(out, f).split(path.sep).join("/");
-      const url = OFFICIAL_ORIGIN + "/" + rel.replace(/(^|\/)index\.html$/, "$1");
+      // サービスの紹介のページ（about.html）だけは、場所が .html なし（/about。src/site/render.ts の ABOUT_PATH）。#106 で、ほかのページもこの形になる
+      const url = OFFICIAL_ORIGIN + "/" + rel.replace(/(^|\/)index\.html$/, "$1").replace(/^about\.html$/, "about");
       const head = readFileSync(f, "utf8").split("</head>")[0] ?? "";
       return { file: rel, url, all: (re: RegExp) => [...head.matchAll(new RegExp(re.source, "g"))].map((m) => decode(m[1] ?? "")) };
     });

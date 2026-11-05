@@ -31,10 +31,11 @@ import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, S
 import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
-import { sampleFile } from "./ui/sample";
+import { sampleFile, wantsSample, withoutSample } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
 import { setupTermsDialog } from "./ui/terms-dialog";
+import { originNote, repoFromMeta } from "./ui/rule-origin-note";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -558,6 +559,8 @@ function renderGroups(s: Session) {
       const li = make("li");
       li.append(itemButton(r));
       if (r.content) li.append(revealBox(r.content, `${r.no} 番`));
+      // 見つける段から来た型だけ、出どころの札（src/ui/rule-origin.ts）
+      if (r.origin) li.append(originNote(document, r.origin, repoFromMeta(document)));
       if (candidates.some((c) => c.no === r.no)) li.append(candidateButton(r));
       list.append(li);
     }
@@ -989,6 +992,8 @@ async function handle(file: File) {
   if (busy) return;
   busy = true;
   const gen = ++generation;
+  // 通信を数える拡張機能（extension/）への合図。ページの中の属性を変えるだけで、通信はしない
+  document.documentElement.dataset.omamoriPdf = String(gen);
   const old = session;
   session = null;
   void old?.pdf?.close();
@@ -1698,3 +1703,11 @@ window.addEventListener("resize", () => {
     if (session && session.current) void showPage(session.current, session.selected);
   }, 200);
 });
+
+// /?sample=1 で開いたら、「見本の PDF で試す」を押したときと同じに進む（サービス紹介のページから来たとき）。ほかの準備がすべて済んだ、このファイルの最後で呼ぶ。
+// 見本はこのファイルに埋め込んだもので、取りに行く通信はない。再読み込みで何度も読まないよう、アドレスから外す
+if (wantsSample(location.search)) {
+  history.replaceState(history.state, "", withoutSample(location.pathname, location.search, location.hash));
+  const file = sampleFile();
+  if (file) void handle(file);
+}

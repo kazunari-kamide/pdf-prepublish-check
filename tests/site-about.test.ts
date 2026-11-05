@@ -11,11 +11,11 @@ import { describe, expect, it } from "vitest";
 import { renderSitemap, siteFiles } from "../site.ts";
 import { ABOUT_META, PATTERNS, REMAINS, SAMPLE_HREF } from "../src/site/about.ts";
 import { ARTICLES } from "../src/site/articles.ts";
-import { ABOUT_PATH, fileFor } from "../src/site/render.ts";
+import { ABOUT_PATH, aboutFile, fileFor } from "../src/site/render.ts";
 import { BANNED_WORDS } from "../src/site/seo.ts";
 
 const files = siteFiles();
-const page = files.get(fileFor(ABOUT_PATH))!;
+const page = files.get(aboutFile())!;
 const main = page.split("<main")[1]!.split("</main>")[0]!;
 const text = main.replace(/<[^>]+>/g, " ");
 
@@ -71,7 +71,7 @@ describe("サービスの紹介のページ", () => {
 
   it("どのサイトのページの上の帯にも、このページへのリンクがある", () => {
     for (const [name, html] of files) {
-      if (!name.endsWith(".html") || name === fileFor(ABOUT_PATH)) continue;
+      if (!name.endsWith(".html") || name === aboutFile()) continue;
       const band = html.split('<nav class="site-nav"')[1]?.split("</nav>")[0] ?? "";
       expect(band, name).toContain(`href="${ABOUT_PATH}"`);
     }

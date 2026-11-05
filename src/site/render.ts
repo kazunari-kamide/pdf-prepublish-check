@@ -20,8 +20,11 @@ export const TERMS_PATH = "/terms.html";
 export const CONTACT_PATH = "/contact.html";
 export const FAQ_PATH = "/faq.html";
 export const CHECKLIST_PATH = "/checklist.html";
-// サービスの紹介のページ（LP。中身は about.ts）。#106 が入ったら、ほかのページと同じく .html を外す（"/about"）
-export const ABOUT_PATH = "/about.html";
+/**
+ * サービスの紹介のページ（LP。中身は about.ts。持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（index.html。tests/site-pages.test.ts）。
+ * 場所は .html なし。ファイルは about.html（aboutFile。#106 で fileFor が .html を足すようになっても、同じ名前になる）
+ */
+export const ABOUT_PATH = "/about";
 
 /** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
 export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。";
@@ -68,6 +71,12 @@ export function fileFor(path: string): string {
   return (path.endsWith("/") ? `${path}index.html` : path).replace(/^\//, "");
 }
 
+/** サービスの紹介のページのファイルの名前（about.html）。場所（ABOUT_PATH）は .html なしなので、fileFor の後に .html がなければ足す */
+export function aboutFile(): string {
+  const f = fileFor(ABOUT_PATH);
+  return f.endsWith(".html") ? f : `${f}.html`;
+}
+
 /** layout に足せるもの（サービスの紹介のページ about.ts だけが使う） */
 export interface LayoutExtra {
   /** body に足す class（site の後ろに付ける） */
@@ -82,7 +91,7 @@ export interface LayoutExtra {
 export function siteNavLinks(): string {
   return [
     `        <a href="/">検査のページ</a>`,
-    `        <a href="${ABOUT_PATH}">お守りPDFとは</a>`,
+    `        <a href="${ABOUT_PATH}">お守りPDF について</a>`,
     `        <a href="${ARTICLES_PATH}">記事の一覧</a>`,
     `        <a href="${PRIVACY_PATH}">プライバシー</a>`,
   ].join("\n");

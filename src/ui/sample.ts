@@ -26,3 +26,19 @@ export function sampleFile(): File | null {
   const bytes = decodeDataUrl(sampleDataUrl);
   return bytes ? new File([bytes as Uint8Array<ArrayBuffer>], SAMPLE_NAME, { type: "application/pdf" }) : null;
 }
+
+/**
+ * アドレスの query が「?sample=1」を含むか（サービス紹介のページから、見本を開いたまま検査のページへ来るため）。
+ * 値が 1 のときだけ。ほかの値・ほかの query は無視する。
+ */
+export function wantsSample(search: string): boolean {
+  return new URLSearchParams(search).get("sample") === "1";
+}
+
+/** アドレスから sample だけを外した、同じページの場所（再読み込みで何度も読まないように。history.replaceState に渡す） */
+export function withoutSample(pathname: string, search: string, hash: string): string {
+  const q = new URLSearchParams(search);
+  q.delete("sample");
+  const rest = q.toString();
+  return `${pathname}${rest ? `?${rest}` : ""}${hash}`;
+}

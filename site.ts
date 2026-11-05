@@ -23,7 +23,7 @@ import { renderAbout } from "./src/site/about.ts";
 import { renderIndexPages, usedTags } from "./src/site/article-index.ts";
 import { tagPath } from "./src/site/tags.ts";
 import { GUIDE_PATHS, TERMS_DIALOG_MARKER, renderGuidePages, renderTermsDialog } from "./src/site/pages.ts";
-import { ABOUT_PATH, escapeHtml, fileFor, renderSite, sitePaths } from "./src/site/render.ts";
+import { aboutFile, escapeHtml, renderSite, sitePaths } from "./src/site/render.ts";
 import { articleTransitionNames } from "./src/site/motion.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
 import { INSPECTOR_HEAD, OG_IMAGE_PATH, headLines, type HeadInfo } from "./src/site/seo.ts";
@@ -128,7 +128,7 @@ export function siteFiles(): Map<string, string> {
   files.set(search.file, search.source);
   // サービスの紹介のページ（LP）と、そのページだけの CSS
   const about = aboutCss();
-  files.set(fileFor(ABOUT_PATH), renderAbout(options, `/${about.file}`));
+  files.set(aboutFile(), renderAbout(options, `/${about.file}`));
   files.set(about.file, about.source);
   const licenses = buildLicenses(ROOT);
   for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);
@@ -176,7 +176,13 @@ export function sitePages(): Plugin {
         // 検査のページの題・説明・canonical・OGP・X のカード（中身は src/site/seo.ts）
         const head = headLines(INSPECTOR_HEAD_INFO, OFFICIAL_ORIGIN, escapeHtml);
         if (!/<title>[^<]*<\/title>/.test(html)) throw new Error("index.html に <title> がありません（題・説明を入れる場所）");
-        return { html: withTermsDialog(html).replace(/<title>[^<]*<\/title>/, head), tags: meta ? [{ tag: "meta", attrs: meta, injectTo: "head" }] : [] };
+        // 検査のページの出どころの札（src/ui/rule-origin.ts）が PR へのリンクに使う、リポジトリの場所。分からなければ入れない（札は字だけになる）
+        const repo = repoUrl();
+        const tags = [
+          ...(meta ? [{ tag: "meta", attrs: meta, injectTo: "head" as const }] : []),
+          ...(repo ? [{ tag: "meta", attrs: { name: "omamori-repo", content: repo }, injectTo: "head" as const }] : []),
+        ];
+        return { html: withTermsDialog(html).replace(/<title>[^<]*<\/title>/, head), tags };
       },
     },
     generateBundle() {
