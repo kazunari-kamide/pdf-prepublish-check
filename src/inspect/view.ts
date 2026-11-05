@@ -3,7 +3,7 @@
 // ページの座標の箱を、画面に描くページの中の割合（左上が原点、0〜1）に直す。/Rotate もかける。
 // 画面の部品に頼らない計算だけを置き、テストで確かめる。
 
-import type { PageBox, Rect } from "./report";
+import type { PageBox, Rect } from "./report.ts";
 
 /** 画面での見た目の大きさ（ポイント）。90・270 度のときは幅と高さが入れ替わる */
 export function viewSize(box: PageBox): { width: number; height: number } {

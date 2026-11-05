@@ -731,10 +731,23 @@
       "id": "t04-ctl-sjis-generic",
       "type": "T04",
       "kind": "control",
-      "about": "Subject に Shift_JIS で「会議」だけ（人名なし）",
+      "about": "Subject に Shift_JIS で「会議」だけ（人名なし）。題を P1 として出すのはよい",
       "file": "pdf/t04-ctl-sjis-generic.pdf",
       "expect": {
-        "forbid": null
+        "forbid": [
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "P12",
+          "P13"
+        ]
       },
       "residual": null
     },
@@ -778,10 +791,23 @@
       "id": "t05-ctl-agree",
       "type": "T05",
       "kind": "control",
-      "about": "Info と XMP の題が同じで、人名なし",
+      "about": "Info と XMP の題が同じで、人名なし。題を P1 として出すのはよい",
       "file": "pdf/t05-ctl-agree.pdf",
       "expect": {
-        "forbid": null
+        "forbid": [
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "P12",
+          "P13"
+        ]
       },
       "residual": null
     },
@@ -980,10 +1006,23 @@
       "id": "t11-ctl-same-org",
       "type": "T11",
       "kind": "control",
-      "about": "Title と本文が同じ架空の団体名",
+      "about": "Title と本文が同じ架空の団体名。題を P1 として出すのはよい",
       "file": "pdf/t11-ctl-same-org.pdf",
       "expect": {
-        "forbid": null
+        "forbid": [
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "P12",
+          "P13"
+        ]
       },
       "residual": null
     },
@@ -1027,10 +1066,23 @@
       "id": "t12-ctl-slashes",
       "type": "T12",
       "kind": "control",
-      "about": "Title に、パスでない記号（2026/2027・A:B・3\\4）",
+      "about": "Title に、パスでない記号（2026/2027・A:B・3\\4）。題を P1 として出すのはよい",
       "file": "pdf/t12-ctl-slashes.pdf",
       "expect": {
-        "forbid": null
+        "forbid": [
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "P12",
+          "P13"
+        ]
       },
       "residual": null
     },
