@@ -130,6 +130,48 @@ function rectProc(data: Uint8Array, m: Matrix): Rect | null {
   return boundsOf([apply(m, rect[0], rect[1]), apply(m, rect[2], rect[1]), apply(m, rect[0], rect[3]), apply(m, rect[2], rect[3])]);
 }
 
+/**
+ * 埋め込んでいない標準の記号の書体で、黒い四角になる字の外枠（字の大きさ 1 に対して）。
+ * ZapfDingbats の n（a71。黒い四角）：標準の寸法（AFM）の外枠 [35 0 724 691]
+ */
+const STANDARD_BLOCKS: Record<string, Record<number, Rect>> = {
+  ZapfDingbats: { 0x6e: [0.035, 0, 0.724, 0.691] },
+};
+
+/**
+ * 埋め込んでおらず /Widths もない標準の記号の書体で、黒い四角になる字の送りの幅（字の大きさ 1 に対して。標準の寸法）。
+ * 書体の読み手（rules/shared/fonts.ts）は記号の書体の幅を持たず 0.5 にするので、覆いの帯の長さがずれないように、この字だけ直す
+ */
+const STANDARD_BLOCK_WIDTHS: Record<string, Record<number, number>> = {
+  ZapfDingbats: { 0x6e: 0.761 },
+};
+
+/** 書体の読み手の結果のうち、標準の記号の書体の黒い四角の字の幅を直したもの（直すものがなければ、そのまま） */
+function withStandardWidths(ctx: PDFContext, ref: PDFObject, fi: FontInfo): FontInfo {
+  const fd = dictOf(ctx, ref);
+  if (!fd || nameOf(ctx, fd.get(PDFName.of("Subtype"))) !== "Type1" || fd.has(PDFName.of("Widths"))) return fi;
+  const base = (nameOf(ctx, fd.get(PDFName.of("BaseFont"))) ?? "").replace(/^[A-Z]{6}\+/, "");
+  const widths = STANDARD_BLOCK_WIDTHS[base];
+  if (!widths || !standardBlock(ctx, ref, 0x6e)) return fi;
+  return { ...fi, decode: (bytes) => fi.decode(bytes).map((g) => (widths[g.code] !== undefined ? { ...g, width: widths[g.code]! } : g)) };
+}
+
+/** 書体が、埋め込んでいない標準の記号の書体なら、コードの黒い四角の外枠（なければ null） */
+function standardBlock(ctx: PDFContext, ref: PDFObject, code: number): Rect | null {
+  const fd = dictOf(ctx, ref);
+  if (!fd || nameOf(ctx, fd.get(PDFName.of("Subtype"))) !== "Type1") return null;
+  const base = (nameOf(ctx, fd.get(PDFName.of("BaseFont"))) ?? "").replace(/^[A-Z]{6}\+/, "");
+  const table = STANDARD_BLOCKS[base];
+  if (!table) return null;
+  // 埋め込んだ書体は、字形の形が違うかもしれないので、ここでは見ない
+  const desc = dictOf(ctx, fd.get(PDFName.of("FontDescriptor")));
+  if (desc && (desc.has(PDFName.of("FontFile")) || desc.has(PDFName.of("FontFile2")) || desc.has(PDFName.of("FontFile3")))) return null;
+  // 字の並べ替え（/Differences）があれば、コードの字が違うかもしれないので見ない
+  const enc = dictOf(ctx, fd.get(PDFName.of("Encoding")));
+  if (enc && enc.has(PDFName.of("Differences"))) return null;
+  return table[code] ?? null;
+}
+
 /** 字形の形で黒い四角と見分けるときの、幅と高さの下限（字の大きさ 1 に対して） */
 const BLOCK_MIN_EM = 0.3;
 
@@ -201,6 +243,8 @@ type Glyph = {
   hScale: number;
   /** 黒い四角の形の字で、覆いとして使ったもの（ほかの黒い四角の字では消さない。0.8.0 から） */
   isCover: boolean;
+  /** 覆いとして使った黒い四角の字の、覆いの箱（ページの座標） */
+  coverRect?: Rect;
   /** 注釈の見た目の中の字（濃い覆いの下のものだけを消す。0.8.0 から） */
   inAnnot: boolean;
   /** 書体と字のコード（違う字の重ね描きを見分ける） */
@@ -545,6 +589,12 @@ class Walker {
         return boundsOf(pts);
       }
     }
+    // 埋め込んでいない標準の記号の書体（ZapfDingbats）の、黒い四角になる字：標準の寸法（字の外枠）で覆いにする（0.8.0 から）
+    const std = ref ? standardBlock(this.ctx, ref, gl.code) : null;
+    if (std) {
+      const pts: Point[] = [apply(trm, x0 + std[0], y0 + std[1]), apply(trm, x0 + std[2], y0 + std[1]), apply(trm, x0 + std[0], y0 + std[3]), apply(trm, x0 + std[2], y0 + std[3])];
+      return boundsOf(pts);
+    }
     return gl.text === "█" && area(rect) > 0 ? rect : null;
   }
 
@@ -770,6 +820,7 @@ class Walker {
             if (box) {
               this.covers.push({ seq, rect: box, kind: annotation ? "annotation" : "glyph" });
               glyph.isCover = true;
+              glyph.coverRect = box;
             }
           }
           slots.push({
@@ -927,7 +978,7 @@ class Walker {
           if (ref) {
             let fi = this.fontCache.get(ref);
             if (!fi) {
-              fi = readFont(ctx, ref);
+              fi = withStandardWidths(ctx, ref, readFont(ctx, ref));
               this.fontCache.set(ref, fi);
             }
             g.font = fi;
@@ -1350,7 +1401,7 @@ async function judgeP7More(ctx: PDFContext, w: Walker, fillIndex: RectIndex<{ re
   const opaqueImages = w.imageUses.filter((u) => u.opaque && area(u.box) > 0);
   const sameColor: Array<{ gl: Glyph; u: ImageUse }> = [];
   for (const gl of w.glyphs) {
-    if (gl.remove || gl.isSpace || gl.inAnnot) continue;
+    if (gl.remove || gl.isSpace || gl.inAnnot || gl.isCover) continue;
     const a = area(gl.rect);
     if (!(a > 0) || !Number.isFinite(a)) continue;
     if (annLight.some((c) => coveredFraction(c, gl.rect) >= s.coveredFractionMin)) {
@@ -1824,6 +1875,10 @@ export async function sanitizePageContent(
   // P7（塗りは、字の箱に重なりうるものだけを、描いた順に渡す。地の色は字の中心で見るので、これで足りる）
   for (const gl of w.glyphs) {
     if (gl.remove || gl.inAnnot) continue;
+    if (gl.isCover) {
+      if (gl.coverRect && !gl.inAnnot && Math.abs(gl.hScale) < s.squashedScaleBelow) gl.remove = { pattern: "P7", reason: "squashed" };
+      continue;
+    }
     const near = Number.isFinite(area(gl.rect)) ? fillIndex.query(gl.rect, bySeq).map((x) => x.f) : w.fills;
     const r = judgeP7(gl, view, near, w.images, s);
     if (r) gl.remove = { pattern: "P7", reason: r };
@@ -1984,6 +2039,8 @@ export async function sanitizePageContent(
   // 消した字の一覧（書き換えられなかった中身の字は、片付けられなかった所に入れる）
   const p6 = new Map<SanCover, { chars: number }>();
   const p7 = new Map<string, { reason: P7Reason; rect: Rect; chars: number }>();
+  /** 字を消して、黒い四角に描き直す覆いの字の箱 */
+  const redrawn: Rect[] = [];
   let blockedChars = 0;
   for (const gl of w.glyphs) {
     if (!gl.remove) continue;
@@ -1993,6 +2050,10 @@ export async function sanitizePageContent(
       continue;
     }
     if (gl.isSpace) continue;
+    if (gl.isCover && gl.coverRect && gl.remove.pattern === "P7") {
+      redrawn.push(gl.coverRect);
+      continue;
+    }
     if (gl.remove.pattern === "P6") {
       const e = p6.get(gl.remove.cover) ?? { chars: 0 };
       e.chars++;
@@ -2071,7 +2132,13 @@ export async function sanitizePageContent(
       label: `注釈（スタンプなど ${apTextRects.length} 個）の見た目の中に字があります。ページに見えている字なので消していません。見えている字を確かめてください`,
     });
   }
-  const boxes = [...redactRects, ...userAreas];
+  if (redrawn.length) {
+    removed.push({
+      pattern: "P7", kind: "glyph_cover_box", page: pageNo, rect: RECT_ROUND(redrawn.reduce(union)), count: redrawn.length,
+      label: `横につぶして並べた黒い四角の形の字（${redrawn.length} 字）を、同じ所の黒い四角に描き直しました（見た目は変わりません）`,
+    });
+  }
+  const boxes = [...redactRects, ...userAreas, ...redrawn];
   if (boxes.length) applyRedactionBoxes(ctx, page, boxes);
   return { removed, notDone, redactAnnots };
 }

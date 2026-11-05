@@ -386,3 +386,39 @@ describe("部品の中の資源に残る、描かれない画像", () => {
     expect(await inFile(r.bytes, "SHOWN-INNER")).toBe(true);
   });
 });
+
+describe("埋め込んでいない標準の記号の書体（ZapfDingbats）の黒い四角で覆った字", () => {
+  /** 秘密の字の上に、ZapfDingbats の字（code）を横の伸縮 6% で詰めて並べ、黒い帯にした PDF */
+  async function dingbats(chars: string, y: number): Promise<Uint8Array> {
+    return withResources(await buildPdf(() => ({
+      pages: [{ size: [595, 842], content: "BT /H1 14 Tf 72 700 Td (KAKUSHI-DINGBATS) Tj ET\n" + `q BT /Z1 30 Tf 0 g 70 ${y} Td 6 Tz (${chars.repeat(120)}) Tj ET Q\n` + latinAt(72, 400, "SHOWN-ELSEWHERE") }],
+    })), (ctx, res) => {
+      (res.lookup(PDFName.of("Font"), PDFDict)).set(PDFName.of("Z1"), ctx.obj({ Type: "Font", Subtype: "Type1", BaseFont: "ZapfDingbats" }));
+    });
+  }
+
+  it("ZapfDingbats の n（黒い四角）を詰めて並べた帯の下の字を消す。帯は残る", { timeout: HEAVY_TIMEOUT }, async () => {
+    const r = await clean(await dingbats("n", 692));
+    expect(r.removed.some((x) => x.kind === "covered_text")).toBe(true);
+    await expectGone(r.bytes, "KAKUSHI");
+    expect(await textOf(r.bytes)).toContain("SHOWN-ELSEWHERE");
+    // 黒い帯の字（横につぶれた字）は、見えない字として数えず、同じ所の黒い四角に描き直す
+    expect(r.removed.some((x) => x.reason === "squashed")).toBe(false);
+    expect(r.removed.find((x) => x.kind === "glyph_cover_box")?.count).toBe(120);
+    // 秘密の字の後ろの部分（帯の右の端の近く）も残らない
+    expect(await textOf(r.bytes)).not.toMatch(/DING|ATS/);
+    expect(await inFile(r.bytes, "DINGBATS")).toBe(false);
+  });
+
+  it("自分で黒塗りでも、帯の下の字を消して保存できる", { timeout: HEAVY_TIMEOUT }, async () => {
+    const r = await redact(await dingbats("n", 692), [{ page: 1, rect: [70, 690, 250, 720] }], { codec });
+    expect(r.status).toBe("ok");
+    if (r.status !== "ok") return;
+    expect(await inFile(r.bytes, "KAKUSHI")).toBe(false);
+  });
+
+  it("対照：離れた所の帯・黒い四角でない字（o）の帯は、ほかの字を消さない", { timeout: HEAVY_TIMEOUT }, async () => {
+    expect(await textOf((await clean(await dingbats("n", 300))).bytes)).toContain("KAKUSHI-DINGBATS");
+    expect(await textOf((await clean(await dingbats("o", 692))).bytes)).toContain("KAKUSHI-DINGBATS");
+  });
+});

@@ -37,6 +37,7 @@ export type RemovedKind =
   | "font_glyphs" // P7：書体の中の、どこにも描かれていない字形（TrueType の字形の中身、Type3 の字の描き方）
   | "pattern_repainted" // P6：中に字のある模様で塗った覆いや、覆いの下の字の入った模様を、黒一色で塗り直した
   | "unused_unicode" // P7：書体の字の対応表（/ToUnicode）の、どこにも描かれていない字の行
+  | "glyph_cover_box" // P7：横につぶして並べた黒い四角の形の字を、同じ所の黒い四角に描き直した（見た目は同じ）
   // 自分で黒塗りする（redact.ts）。pattern は P6（墨消し）にそろえる
   | "redacted_text" // 選んだ所の字
   | "redacted_pixels" // 選んだ所の画像の画素
