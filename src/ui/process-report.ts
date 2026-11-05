@@ -8,6 +8,7 @@
 import type { NotDoneItem, RemovedItem } from "../../sanitize/types.ts";
 import type { CoverageRow } from "./coverage";
 import { patternWithName } from "./clean-model.ts";
+import { fullContent } from "./reveal.ts";
 
 export type ProcessReportInput = {
   /** 報告を作った日（YYYY-MM-DD）。時刻は載せない */
@@ -21,6 +22,11 @@ export type ProcessReportInput = {
   verdict: string;
   /** 使った検出ルールと版（ruleId@version） */
   rules: string[];
+  /**
+   * 見つけた字の中身（保存の前に「中身も入れる」を選んだときだけ渡す。初めは渡さない）。
+   * 渡さなければ、報告書には中身を一切入れない
+   */
+  contents?: Array<{ pattern: string; page: number | null; title: string; content: string }>;
 };
 
 /** 片付けたときに数えた数の単位（字数として数えるもの） */
@@ -56,7 +62,11 @@ export function buildProcessReport(input: ProcessReportInput): string {
   lines.push("お守りPDF 処理の報告書");
   lines.push("");
   lines.push(`作った日：${input.date}`);
-  lines.push("この報告書には、PDF の字の中身・欄の値・ファイル名を載せていません。数と場所だけです。");
+  lines.push(
+    input.contents?.length
+      ? "この報告書には、保存の前に選んだため、見つけた字の中身を入れています（下の「見つけた字の中身」）。ファイル名は載せていません。"
+      : "この報告書には、PDF の字の中身・欄の値・ファイル名を載せていません。数と場所だけです。",
+  );
   lines.push("");
   lines.push("■ ファイルの確かめ（SHA-256）");
   lines.push(`整える前：${before.sha256}（${before.bytes} バイト）`);
@@ -85,6 +95,13 @@ export function buildProcessReport(input: ProcessReportInput): string {
   if (!input.notDone.length) lines.push("- ありません。");
   for (const n of input.notDone) lines.push(`- ${patternWithName(n.pattern)}／${n.page !== undefined ? `ページ ${n.page}` : "ファイル全体"}／${n.label}`);
   lines.push("");
+  if (input.contents?.length) {
+    lines.push("■ 見つけた字の中身（保存の前に「中身も入れる」を選んだため、入れています。取り扱いに気をつけてください）");
+    for (const c of input.contents) {
+      lines.push(`- ${patternWithName(c.pattern)}／${c.page !== null ? `ページ ${c.page}` : "ファイル全体"}／${c.title}／中身：${fullContent(c.content)}`);
+    }
+    lines.push("");
+  }
   lines.push("■ 調べた範囲（整える前）");
   for (const c of before.coverage) lines.push(coverageLine(c));
   lines.push("");

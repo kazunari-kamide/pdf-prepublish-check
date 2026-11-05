@@ -53,6 +53,7 @@
           <span class="drop-note">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
           <input id="file" type="file" accept="application/pdf,.pdf" />
         </label>
+        <p class="terms-note" id="terms-note">ご利用の前に、<a href="/terms.html">利用規約</a>をご覧ください。</p>
         <p class="sample" id="sample-row">
           <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
           <span class="sample-note">架空の申請書です（黒い四角の下に、架空の名前が残っています）。</span>
@@ -127,7 +128,11 @@
           <ul id="clean-notes" class="clean-notes" hidden></ul>
           <p id="clean-scope" class="clean-scope"></p>
           <a id="report-download" class="report-download" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
-          <p class="report-note">前後の SHA-256・消した所と字数・調べた範囲を、文字だけで残します。字の中身とファイル名は載せません。</p>
+          <label id="report-contents" class="save-confirm" hidden>
+            <input id="report-contents-box" type="checkbox" />
+            <span>見つけた字の中身も、報告書に入れる（初めは入れません。入れたら、取り扱いに気をつけてください）</span>
+          </label>
+          <p class="report-note">前後の SHA-256・消した所と字数・調べた範囲を、文字だけで残します。字の中身は、上で選んだときだけ入れます。ファイル名は載せません。</p>
 
           <section id="compress" class="compress" aria-labelledby="compress-title" hidden>
             <h4 id="compress-title" tabindex="-1">ファイルを小さくする（必要なときだけ）</h4>
@@ -162,7 +167,7 @@
 
         <details id="ruleset" class="ruleset" hidden></details>
 
-        <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。見つけた字の中身は、画面に出しません。数と場所だけを出します。</p>
+        <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。見つけた字の中身は、頭の数文字だけを出し、残りは伏せます。「中身を見る」で全部を出します（このパソコンの画面の中だけで、どこにも送りません）。</p>
       </aside>
     </main>
 

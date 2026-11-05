@@ -22,6 +22,11 @@ export type Item = {
   why: string;
   /** 数や種類の補足（中身そのものは入れない）。例：「12字」 */
   detail: string;
+  /**
+   * 見つけた字の中身（覆われた字・欄の値・ファイル名など）。呼ぶ側が頼んだとき（RunContext の withContents）だけ入る。
+   * 画面の中だけで使い、頭の数文字だけを出して伏せる（src/ui/reveal.ts）。報告書・ログ・保存するファイル名には入れない
+   */
+  content?: string;
   /** ページの上の場所があるときだけ */
   page: number | null;
   rect: Rect | null;

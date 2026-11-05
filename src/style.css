@@ -353,8 +353,17 @@ button {
 }
 
 .workspace[data-state="result"] .drop,
-.workspace[data-state="working"] .drop {
+.workspace[data-state="working"] .drop,
+.workspace[data-state="result"] .terms-note,
+.workspace[data-state="working"] .terms-note {
   display: none;
+}
+
+/* 利用規約へのリンク（置き場の下に 1 行。同意のチェックは足さない。2026-11-05 本人が決めた） */
+.terms-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-small);
+  color: var(--color-muted);
 }
 
 /* 見本の PDF で試す：置き場の下に、枠だけのボタン */
@@ -1489,4 +1498,48 @@ progress {
   background: var(--color-accent-tint);
   text-align: center;
   pointer-events: none;
+}
+
+/* 見つけた字の中身：頭の数文字だけを出して伏せ、「中身を見る」で全部を出す。
+   色・線は、今ある決まり（補足の字の色・枠だけのボタン）だけを使う（デザインシートが届くまで、新しい色・枠は決めない） */
+.reveal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-1) 0 var(--space-2);
+  min-width: 0;
+  font-size: var(--text-small);
+}
+
+.reveal-label {
+  color: var(--color-muted);
+}
+
+.reveal-text {
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.reveal-toggle {
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reveal-toggle[aria-pressed="true"] {
+  border: var(--border-strong) solid var(--color-base);
+  background: var(--color-chip);
+}
+
+.reveal-note {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-small);
+  color: var(--color-muted);
 }
