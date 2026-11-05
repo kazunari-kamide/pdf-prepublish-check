@@ -33,6 +33,18 @@ body { margin: 0; overflow-wrap: anywhere; } /* 字を大きくしたとき、�
 :focus-visible { outline: 4px solid #000; outline-offset: 2px; box-shadow: 0 0 0 2px var(--focus-ring); }
 [data-theme="dark"] :focus-visible { outline-color: var(--focus-ring); box-shadow: 0 0 0 2px #000; }
 
+/* ---------- 押せる所は、どれも指の形のカーソル（チェックボックスとその字も）。押せないときは ⊘ の形 */
+button, a[href], summary, label, input[type="checkbox"], input[type="radio"], [role="button"] { cursor: pointer; }
+[aria-disabled="true"], :disabled { cursor: not-allowed; }
+
+/* ---------- 開け閉めの見出し */
+.disclosure { border: var(--bw-1) solid var(--line-default); border-radius: var(--radius-l); background: var(--surface-card); max-width: 46rem; overflow: hidden; }
+.disclosure summary { min-height: 44px; padding: var(--sp-3) var(--sp-4); font-weight: var(--fw-strong); background: var(--surface-subtle); list-style-position: inside; }
+.disclosure summary:hover { background: var(--surface-sunken); }
+.disclosure[open] summary { border-bottom: var(--bw-1) solid var(--line-default); }
+.disclosure > div { padding: var(--sp-3) var(--sp-4); }
+.disclosure p { margin: 0 0 var(--sp-2); }
+
 /* ---------- 上の帯 */
 .band {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-5);
@@ -94,16 +106,16 @@ body { margin: 0; overflow-wrap: anywhere; } /* 字を大きくしたとき、�
 
 /* ---------- お知らせ */
 /*
- * お知らせ。枠はどの辺も同じ太さにし、左の強調は枠の内側の帯（inset の影）で描く（--band に色を入れる）。
- * 「確かめる」は枠だけ点線にし、帯は実線のまま、ほかの3種類とそろえる。
+ * お知らせ。帯と枠を別々に描かず、枠そのものを 1 色にし、左の辺だけを太くする（1 つの形なので、角の丸みで線が二重にならない）。
+ * 「確かめる」は帯を付けず、どの辺も同じ太さの点線と「？」の印で分ける（点線と帯が角で重ならないように）。
  */
 .notice {
   --band: var(--line-strong);
   display: grid; grid-template-columns: auto 1fr; gap: var(--sp-1) var(--sp-3);
-  padding: var(--sp-3) var(--sp-4) var(--sp-3) calc(var(--sp-4) + var(--bw-accent));
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-4);
   border-radius: var(--radius-m);
   border: var(--bw-1) solid var(--band);
-  box-shadow: inset var(--bw-accent) 0 0 0 var(--band);
+  border-left-width: var(--bw-accent); /* 左の辺の太さ。同じ色・同じ線なので、角は 1 本の線としてつながる */
   margin: 0 0 var(--sp-3); max-width: 46rem;
 }
 /*
@@ -130,14 +142,11 @@ body { margin: 0; overflow-wrap: anywhere; } /* 字を大きくしたとき、�
 .notice[data-kind="ok"] { --band: var(--ok-line); background: var(--ok-bg); }
 .notice[data-kind="ok"] .notice-mark::before { background: var(--ok); }
 .notice[data-kind="ok"] .notice-title { color: var(--text-ok); }
-.notice[data-kind="check"] { --band: var(--check); background: var(--check-bg); border: var(--bw-2) dashed var(--check); padding-left: calc(var(--sp-4) + var(--bw-accent) - var(--bw-1)); }
+.notice[data-kind="check"] { --band: var(--check); background: var(--check-bg); border: var(--bw-2) dashed var(--check); padding-left: calc(var(--sp-4) + var(--bw-accent) - var(--bw-2)); /* 帯は付けない。字の位置はほかとそろえる */ }
 .notice[data-kind="check"] .notice-mark::before { border: var(--bw-2) solid var(--check); }
-.notice[data-kind="info"] { --band: var(--info); background: var(--info-bg); border-color: var(--line-default); }
+.notice[data-kind="info"] { --band: var(--info); background: var(--info-bg); } /* 枠も帯と同じ墨にする（色の違う線が角で混ざらないように） */
 .notice[data-kind="info"] .notice-mark::before { border: var(--bw-2) solid var(--info); }
-/* ハイコントラストの設定では影が消えるので、左の帯の代わりに左の枠を太くする */
-@media (forced-colors: active) {
-  .notice { border-left-width: var(--bw-accent); border-left-style: solid; }
-}
+
 
 /* ---------- ボタン */
 .buttons { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }
@@ -182,11 +191,11 @@ td.n { text-align: right; }
   display: grid; grid-template-columns: auto 1fr; gap: var(--sp-1) var(--sp-3); width: 100%;
   text-align: left; font: inherit; color: inherit; cursor: pointer;
   padding: var(--sp-3) var(--sp-4); background: var(--surface-card);
-  border: var(--bw-1) solid var(--line-control); border-left: var(--bw-accent) solid var(--danger-line); border-radius: var(--radius-m);
+  border: var(--bw-1) solid var(--line-control); border-radius: var(--radius-m); /* 左だけ色の違う帯は付けない（角で線が混ざるため） */
 }
 .item:hover { background: var(--surface-subtle); }
-.item[aria-pressed="true"] { border-width: var(--bw-2); border-left-width: var(--bw-accent); border-color: var(--danger-line); background: var(--danger-bg); }
-.item[data-check] { border-style: dashed; border-left: var(--bw-accent) dashed var(--check); }
+.item[aria-pressed="true"] { border: var(--bw-2) solid var(--danger-line); padding: calc(var(--sp-3) - 1px) calc(var(--sp-4) - 1px); background: var(--danger-bg); }
+.item[data-check] { border-style: dashed; }
 .item-no { width: 1.8em; height: 1.8em; display: grid; place-items: center; border-radius: var(--radius-pill); background: var(--danger); color: var(--text-on-strong); font-weight: var(--fw-strong); font-size: var(--fs-small); }
 .item[data-check] .item-no { background: transparent; color: var(--check); border: var(--bw-2) dashed var(--check); }
 .item-title { font-weight: var(--fw-strong); }
@@ -382,6 +391,12 @@ td.n { text-align: right; }
         </tbody>
       </table>
     </div>
+
+    <h3 class="h2">開け閉めの見出し・リンク</h3>
+    <details class="disclosure">
+      <summary>プロパティの一覧（画面を共有・撮影する前は、閉じておいてください）</summary>
+      <div><p>作成者：（架空）〇〇課</p><p><a href="#s-color">色の段へ戻る</a></p></div>
+    </details>
 
     <h3 class="h2">一覧（結果の項目）</h3>
     <ul class="items">
