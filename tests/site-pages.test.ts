@@ -11,7 +11,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { cspForMeta } from "../csp.ts";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
-import { SHIPPED_ROOTS, buildLicenses, copyrightLines, githubRepo, tableUnder } from "../site-licenses.ts";
+import { SHIPPED_FONT_DIR, SHIPPED_ROOTS, buildLicenses, copyrightLines, githubRepo, tableUnder } from "../site-licenses.ts";
 import { renderSitemap, repoUrl, siteCss, siteFiles } from "../site.ts";
 import {
   CHECKLIST_BLOCKS,
@@ -112,7 +112,7 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
 
   it("利用規約：無料・ブラウザの中だけ・保証しない・最後の確かめは利用者・AGPL・公式は1つ・禁止・変え方・運営者は空けておく", () => {
     const t = page("terms.html");
-    for (const s of ["無料", "ブラウザの中だけ", "保証するものではありません", "最後の確かめは、利用者自身", "AGPL-3.0-only", "omamoripdf.com だけ", "禁止すること", "規約の変え方", "【運営者の表示：本人が決める】"]) {
+    for (const s of ["無料", "ブラウザの中だけ", "保証するものではありません", "最後の確かめは、利用者自身", "AGPL-3.0-only", "omamoripdf.com だけ", "禁止すること", "規約の変え方", "運営者：KK"]) {
       expect(t, s).toContain(s);
     }
   });
@@ -139,40 +139,48 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
   });
 });
 
-describe("ライセンスの一覧", () => {
+describe("ライセンスの一覧（ブラウザに配るものだけ）", () => {
   const d = licenses.data;
-  const pkg = JSON.parse(read("package.json"));
   const lock = JSON.parse(read("package-lock.json")).packages;
+  const md = read("docs/licenses.md");
 
-  it("package.json の部品が全部、package-lock.json と同じ版・ライセンスで並ぶ", () => {
-    const listed = new Map([...d.shipped, ...d.dev].map((r) => [r.name, r]));
-    for (const name of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })) {
-      const r = listed.get(name);
-      expect(r, name).toBeDefined();
-      expect(r!.version).toBe(lock[`node_modules/${name}`].version);
-      expect(r!.license).toBe(lock[`node_modules/${name}`].license);
+  it("npm の部品は、pdf-lib・pdfjs-dist と pdf-lib の依存だけで、package-lock.json と同じ版・ライセンス", () => {
+    expect(d.shipped.map((r) => r.name).sort()).toEqual(["@pdf-lib/standard-fonts", "@pdf-lib/upng", "pako", "pdf-lib", "pdfjs-dist", "tslib"]);
+    for (const r of d.shipped) {
+      expect(r.version, r.name).toBe(lock[`node_modules/${r.name}`].version);
+      expect(r.license, r.name).toBe(lock[`node_modules/${r.name}`].license);
     }
   });
 
-  it("配るものに入る部品は、pdf-lib・pdfjs-dist と、pdf-lib の依存", () => {
-    expect(d.shipped.map((r) => r.name).sort()).toEqual(["@pdf-lib/standard-fonts", "@pdf-lib/upng", "pako", "pdf-lib", "pdfjs-dist", "tslib"]);
-    expect(d.dev.map((r) => r.name)).not.toContain("pdf-lib");
+  it("開発・テスト・配信にだけ使う道具は並べない", () => {
+    const l = pages.get("licenses.html")!;
+    for (const name of ["@napi-rs/canvas", "@pdf-lib/fontkit", "vite", "vitest", "typescript", "subset-font", "@types/node", "actions/checkout", "lftp", "BIZ UDゴシック"]) {
+      expect(l, name).not.toContain(`>${escapeHtml(name)}<`);
+    }
+    // 全文のファイルも、並べた部品・書体とこの道具の分だけ
+    const listed = [...d.shipped, ...d.fonts].map((r) => r.textHref!.slice(1));
+    expect([...licenses.files.keys()].sort()).toEqual([...listed, "licenses/AGPL-3.0.txt"].sort());
+    expect([...files.keys()].filter((k) => k.startsWith("licenses/")).sort()).toEqual([...licenses.files.keys()].sort());
   });
 
-  it("docs/licenses.md の書体と配信の道具が全部並ぶ", () => {
-    const md = read("docs/licenses.md");
-    expect(d.fonts.map((r) => r.name)).toEqual(tableUnder(md, "フォント・素材").map((r) => r["名前"]!.split("（")[0]!.replace(/\s+\d+(\.\d+)+$/, "").trim()));
-    expect(d.tools.map((r) => r.name)).toEqual(tableUnder(md, "配信で使う道具").map((r) => r["名前"]));
-    const noto = d.fonts.find((r) => r.name === "Noto Sans JP")!;
+  it("書体は、docs/licenses.md で置き場所が src/assets/ のもの（画面の書体）だけ", () => {
+    const rows = tableUnder(md, "フォント・素材");
+    const inDist = rows.filter((r) => SHIPPED_FONT_DIR.test(r["置き場所"]!)).map((r) => r["名前"]!.split("（")[0]!.replace(/\s+\d+(\.\d+)+$/, "").trim());
+    expect(inDist).toEqual(["Noto Sans JP"]);
+    expect(rows.length).toBeGreaterThan(inDist.length); // 合成 PDF の書体（fixtures/）は外れる
+    expect(d.fonts.map((r) => r.name)).toEqual(inDist);
+    const noto = d.fonts[0]!;
     expect(noto.version).toBe("2.004");
     expect(noto.license).toContain("SIL Open Font License 1.1");
     expect(noto.copyright.join("\n")).toContain("Copyright 2014-2021 Adobe");
+    // 画面の書体は、本当に src/assets/fonts/ にある
+    expect(read("src/style.css")).toMatch(/assets\/fonts\/NotoSansJP-subset\.woff2/);
   });
 
   it("ライセンスの全文は、部品のライセンスの文をそのまま写す", () => {
-    for (const r of [...d.shipped, ...d.dev, ...d.fonts]) {
-      if (!r.textHref) continue;
-      const name = r.textHref.slice(1);
+    for (const r of [...d.shipped, ...d.fonts]) {
+      expect(r.textHref, r.name).not.toBeNull();
+      const name = r.textHref!.slice(1);
       expect(files.get(name), name).toBe(licenses.files.get(name));
     }
     expect(files.get("licenses/pdf-lib-1.17.1.txt")).toBe(read("node_modules/pdf-lib/LICENSE.md"));
@@ -184,8 +192,8 @@ describe("ライセンスの一覧", () => {
     const pdfLib = d.shipped.find((r) => r.name === "pdf-lib")!;
     expect(pdfLib.copyright).toEqual(copyrightLines(read("node_modules/pdf-lib/LICENSE.md")));
     expect(pdfLib.copyright.length).toBeGreaterThan(0);
-    for (const r of [...d.shipped, ...d.dev, ...d.fonts]) {
-      const text = r.textHref ? licenses.files.get(r.textHref.slice(1))! : "";
+    for (const r of [...d.shipped, ...d.fonts]) {
+      const text = licenses.files.get(r.textHref!.slice(1))!;
       for (const c of r.copyright) expect(text, r.name).toContain(c);
     }
     // Apache-2.0 の説明の文や、見本の行は拾わない
@@ -193,8 +201,7 @@ describe("ライセンスの一覧", () => {
   });
 
   it("出典のリンクは GitHub のものだけ", () => {
-    for (const r of [...d.shipped, ...d.dev, ...d.fonts, ...d.tools]) if (r.source) expect(r.source, r.name).toMatch(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+/);
-    expect(d.tools.find((r) => r.name === "lftp")!.source).toBeNull();
+    for (const r of [...d.shipped, ...d.fonts]) if (r.source) expect(r.source, r.name).toMatch(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+/);
     expect(githubRepo("git+https://github.com/a/b.git")).toBe("https://github.com/a/b");
     expect(githubRepo({ url: "git://github.com/a/b.git" })).toBe("https://github.com/a/b");
     expect(githubRepo("a/b")).toBe("https://github.com/a/b");
@@ -208,7 +215,7 @@ describe("ライセンスの一覧", () => {
     expect(l).toContain(`href="${REPO}"`);
     expect(l).toContain('href="/licenses/Noto-Sans-JP-OFL.txt"');
     expect(l).toContain(escapeHtml("Copyright 2014-2021 Adobe"));
-    expect(l).toContain("部品の中にライセンスの文がありません");
+    expect(l).toContain("開発・テスト・配信にだけ使う道具は、このサイトのファイルに入らないので並べていません");
   });
 });
 

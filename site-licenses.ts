@@ -3,7 +3,9 @@
 // ライセンスのページ（/licenses.html）の中身を、ビルドの時に作る（site.ts が呼ぶ。ブラウザでは動かさない）。
 // - 部品の版とライセンスは package-lock.json から、著作権の表示とライセンスの全文は node_modules の各部品の
 //   ライセンスの文（LICENSE など）から、そのまま写す。著作権の行が見つからないときは、作らずに「ない」とする。
-// - 書体と配信の道具は、docs/licenses.md の表（「フォント・素材」「配信で使う道具」）から読む。
+// - 並べるのは、ブラウザに配るもの（dist/）に入る部品だけ。開発・テスト・配信にだけ使う道具は並べない（2026-11-05 の頼み）。
+//   npm の部品：画面・ルール・片付けのコードが読み込む SHIPPED_ROOTS と、その依存（任意の依存は除く）。
+//   書体：docs/licenses.md の「フォント・素材」の表で、置き場所が src/assets/ のもの。
 // - ライセンスの全文は dist/licenses/ に写して置く（外のサイトを指さない）。出典のリンクは GitHub のものだけ出す。
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -15,6 +17,9 @@ import type { LicenseData, LicenseEntry } from "./src/site/pages.ts";
  * ほかのライブラリを読み込むようにしたら、ここに足す（tests/site-pages.test.ts が、読み込みと食い違えば止める）
  */
 export const SHIPPED_ROOTS = ["pdf-lib", "pdfjs-dist"];
+
+/** 書体のうち、ブラウザに配るもの（docs/licenses.md の置き場所が src/assets/ のもの） */
+export const SHIPPED_FONT_DIR = /(^|[^\w/])src\/assets\//;
 
 const GITHUB = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\/[\w./%-]*)?$/;
 
@@ -76,7 +81,6 @@ export interface BuiltLicenses {
 
 export function buildLicenses(root: string): BuiltLicenses {
   const files = new Map<string, string>();
-  const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
   const lock = JSON.parse(readFileSync(path.join(root, "package-lock.json"), "utf8")).packages as Record<string, LockPackage>;
   const md = readFileSync(path.join(root, "docs", "licenses.md"), "utf8");
   const info = (name: string) => {
@@ -129,24 +133,9 @@ export function buildLicenses(root: string): BuiltLicenses {
   const byName = (a: LicenseEntry, b: LicenseEntry) => a.name.localeCompare(b.name);
   const shipped = [...shippedNames].map(npmEntry).sort(byName);
 
-  // 開発の道具：package.json に書いたもののうち、配るものに入らないもの
-  const direct = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
-  const dev = direct.filter((n) => !shippedNames.has(n)).map(npmEntry).sort(byName);
-
-  // 開発の道具が中で使う部品：ライセンスごとの数
-  const counted = new Set([...shippedNames, ...direct]);
-  const tally = new Map<string, number>();
-  for (const [key, p] of Object.entries(lock)) {
-    if (!key.startsWith("node_modules/")) continue;
-    const name = key.slice(key.lastIndexOf("node_modules/") + "node_modules/".length);
-    if (counted.has(name) && key === `node_modules/${name}`) continue;
-    const lic = p.license ?? "（記載なし）";
-    tally.set(lic, (tally.get(lic) ?? 0) + 1);
-  }
-  const devIndirect = [...tally].map(([license, count]) => ({ license, count })).sort((a, b) => b.count - a.count || a.license.localeCompare(b.license));
-
-  // 書体：docs/licenses.md の「フォント・素材」の表。全文は、置き場所のフォルダの OFL.txt
-  const fonts = tableUnder(md, "フォント・素材").map((r): LicenseEntry => {
+  // 書体：docs/licenses.md の「フォント・素材」の表のうち、置き場所が src/assets/（Vite が dist/ に入れる所）のものだけ。
+  // 合成 PDF にだけ使う書体（fixtures/）は、ブラウザに配らないので並べない。全文は、置き場所のフォルダの OFL.txt
+  const fonts = tableUnder(md, "フォント・素材").filter((r) => SHIPPED_FONT_DIR.test(r["置き場所"] ?? "")).map((r): LicenseEntry => {
     const full = beforeParen(r["名前"] ?? "");
     const m = full.match(/^(.*?)\s+(\d+(?:\.\d+)+)$/);
     const name = m ? m[1]! : full;
@@ -165,23 +154,10 @@ export function buildLicenses(root: string): BuiltLicenses {
     };
   });
 
-  // 配信の道具：docs/licenses.md の「配信で使う道具」の表（全文は写さない。手元にないため）
-  const tools = tableUnder(md, "配信で使う道具").map((r): LicenseEntry => {
-    const source = (r["出典"] ?? "").split(/\s/)[0] ?? "";
-    return {
-      name: r["名前"] ?? "",
-      version: beforeParen(r["版"] ?? "—"),
-      license: r["ライセンス"] ?? "",
-      copyright: [],
-      textHref: null,
-      noText: "配るものに入らないため、写していません",
-      source: GITHUB.test(source) ? source : null,
-    };
-  });
-
   // この作品のライセンス
   const own = readFileSync(path.join(root, "LICENSE"), "utf8");
   files.set("licenses/AGPL-3.0.txt", own);
 
-  return { data: { ownTextHref: "/licenses/AGPL-3.0.txt", shipped, fonts, dev, devIndirect, tools }, files };
+  if (!fonts.length) throw new Error("docs/licenses.md の「フォント・素材」に、src/assets/ に置く書体がありません");
+  return { data: { ownTextHref: "/licenses/AGPL-3.0.txt", shipped, fonts }, files };
 }

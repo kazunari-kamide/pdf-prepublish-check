@@ -72,7 +72,7 @@ export const TERMS_BLOCKS: Block[] = [
     heading: "1. この規約について",
     paragraphs: [
       "この規約は、お守りPDF（以下「この道具」）を使うときの決まりです。この道具を使った時点で、この規約に同意したものとします。",
-      "運営者：【運営者の表示：本人が決める】",
+      "運営者：KK",
     ],
   },
   {
@@ -339,14 +339,8 @@ export interface LicenseData {
   ownTextHref: string;
   /** 配るもの（dist/）に入る部品（画面が読み込むライブラリと、その依存） */
   shipped: LicenseEntry[];
-  /** 同梱の書体と、合成 PDF の書体 */
+  /** 配るもの（dist/）に入る書体（画面の書体） */
   fonts: LicenseEntry[];
-  /** 開発・テストにだけ使う道具（package.json の、配るものに入らないもの） */
-  dev: LicenseEntry[];
-  /** 開発の道具が中で使う部品の、ライセンスごとの数（package-lock.json から数えた） */
-  devIndirect: Array<{ license: string; count: number }>;
-  /** 配信で使う道具（GitHub Actions の中だけ） */
-  tools: LicenseEntry[];
 }
 
 export const LICENSES_META: PageMeta = {
@@ -400,16 +394,8 @@ export function renderLicenses(o: RenderOptions, d: LicenseData): string {
       p(e("画面の書体は、使う字だけに絞って同梱しています（外から読み込みません）。字を絞るのは改変にあたるため、元と同じライセンスのまま配り、ライセンスの全文も一緒に置いています。")),
       licenseTable(d.fonts, "書体"),
     ]),
-    section("開発とテストにだけ使う道具", [
-      p(e("ビルド・テスト・採点に使う道具です。このサイトのファイルには入りません。")),
-      licenseTable(d.dev, "開発とテストにだけ使う道具"),
-      p(e(`これらの道具が中で使う部品：${d.devIndirect.map((x) => `${x.license} ${x.count} 件`).join("、")}（このサイトのファイルには入りません）。`)),
-    ]),
-    section("配信で使う道具", [
-      p(e("GitHub Actions の中で、ビルドしたファイルを配信先へ上げるのに使います。このサイトのファイルには入りません。")),
-      licenseTable(d.tools, "配信で使う道具"),
-    ]),
     section("この一覧の作り方", [
+      p(e("この一覧には、このサイトのファイルに入り、あなたのブラウザで動く部品と書体だけを並べています。開発・テスト・配信にだけ使う道具は、このサイトのファイルに入らないので並べていません（ソースのリポジトリの docs/licenses.md に一覧があります）。")),
       p(e("この一覧は、ビルドの時に package-lock.json と docs/licenses.md から作っています。著作権の表示とライセンスの全文は、それぞれの部品に付いているライセンスの文から、そのまま写しています。")),
     ]),
     `      <p class="site-back"><a href="/">検査のページへ</a></p>`,
