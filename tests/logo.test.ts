@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { FAVICON_PLACEHOLDER, MARK_PLACEHOLDER, faviconHref, injectLogo, logoSvg, type LogoName } from "../logo.ts";
+import { FAVICON_PLACEHOLDER, MARK_PLACEHOLDER, faviconHref, injectLogo, inlineMark, logoSvg, type LogoName } from "../logo.ts";
 import { siteFiles } from "../site.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -61,10 +61,11 @@ describe("ページへの差し込み", () => {
     expect(decodeURIComponent(href.slice("data:image/svg+xml,".length))).toBe(logoSvg("mark-small"));
   });
 
-  it("サイトのページの墨の帯に、墨の地用のマークとファビコンが入る", () => {
+  it("サイトのページの白の帯に、明るい地用のマークとファビコンが入る（帯は白の地。design/sheet.md）", () => {
     const page = siteFiles().get("privacy.html") ?? "";
     expect(page).toContain('<a class="site-brand" href="/"><svg class="site-brand-mark" aria-hidden="true"');
-    expect(page).toContain('stroke="#fbfaf7"');
+    expect(page).toContain(inlineMark("mark", "site-brand-mark"));
+    expect(page).not.toContain('stroke="#fbfaf7"'); // 墨の地用のマーク（紐が白っぽい）は、白の帯では見えにくい
     expect(page).toContain('<link rel="icon" href="data:image/svg+xml,');
   });
 
