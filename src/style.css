@@ -8,19 +8,8 @@
 @import "../design/tokens.css";
 /* デザインシート（design/sheet.md）。色の段・面の重なり・枠・お知らせの役の名前。tokens.css に入ったら、この行は外してよい */
 @import "../design/sheet.css";
-
-/*
- * 同梱の書体：Noto Sans JP を、Shift_JIS の字と画面の記号だけ、太さ 400〜700 に絞ったもの（SIL OFL 1.1）。
- * 作り方は design/fonts/README.md（npm run fonts:build。npm run fonts:check で1バイトも違わないことを確かめる）。
- * 自分のサイトから読む（font-src 'self'）。読み終わるまでは、端末の書体で出す（font-display: swap）。
- */
-@font-face {
-  font-family: "Noto Sans JP Omamori";
-  src: url("./assets/fonts/NotoSansJP-subset.woff2") format("woff2");
-  font-weight: 400 700;
-  font-style: normal;
-  font-display: swap;
-}
+/* 同梱の書体（本文の Noto Sans JP・見出しの Zen Maru Gothic）。@font-face はサイトのページと共通のこのファイルにだけ書く。作り方は design/fonts/README.md */
+@import "../design/fonts.css";
 
 * {
   box-sizing: border-box;

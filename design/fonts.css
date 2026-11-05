@@ -1,0 +1,32 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * 同梱の書体（検査のページとサイトのページで共通。作り方は design/fonts/README.md）。
+ * 自分のサイトから読む（font-src 'self'）。読み終わるまでは、端末の書体で出す（font-display: swap）。
+ * - 本文：Noto Sans JP を、Shift_JIS の字と画面の記号だけ、太さ 400〜700 に絞ったもの（SIL OFL 1.1）
+ * - 見出し：Zen Maru Gothic の Bold（700）と Black（900）を、見出しで使う字だけに絞ったもの（SIL OFL 1.1。2026-11-05 夜 案 C）。
+ *   一覧（design/fonts/heading-chars.txt）にない字は、ブラウザが次の書体（--font-body）で出す
+ * url() は、このファイルの場所から見た道（検査のページは Vite が src/style.css の @import から解く）
+ */
+@font-face {
+  font-family: "Noto Sans JP Omamori";
+  src: url("../src/assets/fonts/NotoSansJP-subset.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Zen Maru Gothic Omamori";
+  src: url("../src/assets/fonts/zen-maru-gothic/ZenMaruGothic-Bold-subset.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Zen Maru Gothic Omamori";
+  src: url("../src/assets/fonts/zen-maru-gothic/ZenMaruGothic-Black-subset.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}

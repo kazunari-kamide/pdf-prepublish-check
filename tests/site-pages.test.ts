@@ -251,15 +251,20 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
   it("書体は、docs/licenses.md で置き場所が src/assets/ のもの（画面の書体）だけ", () => {
     const rows = tableUnder(md, "フォント・素材");
     const inDist = rows.filter((r) => SHIPPED_FONT_DIR.test(r["置き場所"]!)).map((r) => r["名前"]!.split("（")[0]!.replace(/\s+\d+(\.\d+)+$/, "").trim());
-    expect(inDist).toEqual(["Noto Sans JP"]);
+    expect(inDist).toEqual(["Noto Sans JP", "Zen Maru Gothic"]);
     expect(rows.length).toBeGreaterThan(inDist.length); // 合成 PDF の書体（fixtures/）は外れる
     expect(d.fonts.map((r) => r.name)).toEqual(inDist);
     const noto = d.fonts[0]!;
     expect(noto.version).toBe("2.004");
     expect(noto.license).toContain("SIL Open Font License 1.1");
     expect(noto.copyright.join("\n")).toContain("Copyright 2014-2021 Adobe");
-    // 画面の書体は、本当に src/assets/fonts/ にある
-    expect(read("src/style.css")).toMatch(/assets\/fonts\/NotoSansJP-subset\.woff2/);
+    const zen = d.fonts[1]!;
+    expect(zen.version).toBe("1.001");
+    expect(zen.license).toContain("SIL Open Font License 1.1");
+    expect(zen.copyright.join("\n")).toContain("The Zen Maru Gothic Project Authors");
+    // 画面の書体は、本当に src/assets/fonts/ にあり、共通の @font-face（design/fonts.css）から読む
+    expect(read("design/fonts.css")).toMatch(/assets\/fonts\/NotoSansJP-subset\.woff2/);
+    expect(read("design/fonts.css")).toMatch(/assets\/fonts\/zen-maru-gothic\/ZenMaruGothic-Black-subset\.woff2/);
   });
 
   it("ライセンスの全文は、部品のライセンスの文をそのまま写す", () => {
