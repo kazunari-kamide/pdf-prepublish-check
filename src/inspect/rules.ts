@@ -3,7 +3,9 @@
 // 画面で使う検出ルールの一覧。ルールを足すときは、この下の RULES に1つ足すだけでよい（Worker・画面は変えない）。
 //
 // 各ルールの報告を、画面の形（report.ts）にそろえる。
-// - 字の中身・欄の値・ファイル名を返させる設定（includeText など）は使わない。数と場所だけを画面に出す。
+// - 字の中身・欄の値・ファイル名は、呼ぶ側が頼んだとき（RunContext の withContents）だけ、各ルールの設定（includeText・
+//   includeValues・includeNames）で返させ、Item の content に入れる（2026-11-05 本人が決めた）。画面は頭の数文字だけを出して伏せ、
+//   「中身を見る」で全部を出す。報告書・ログ・ファイル名には入れない。コマンドの道具・スキルは頼まない（数と場所だけ）。
 // - 一覧の文は、PDF に詳しくない人が読んでわかる言葉にする（用語集 §6）。断定しない。
 // - 深刻度は【仮】。P6 の「高」だけが docs/prd.md §3-5 で決まっている。ほかは PR の「決めてほしいこと」に書く。
 
@@ -32,7 +34,19 @@ import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
 
 /** ルールに渡す道具。imageDecoder＝pdf-lib で解けない画像（JPEG など）を解く道具（Worker が PDF.js で作る） */
-export type RunContext = { imageDecoder?: ExternalImageDecoder };
+export type RunContext = {
+  imageDecoder?: ExternalImageDecoder;
+  /** true のときだけ、見つけた字の中身を Item の content に入れる（画面の検査の Worker だけが頼む。画面の中だけで使う） */
+  withContents?: boolean;
+};
+
+/** 中身を頼まれたときに、ルールに渡す設定 */
+const values = (ctx: RunContext) => (ctx.withContents ? { includeValues: true } : {});
+
+/** 中身があるときだけ content を足す（空の字は足さない） */
+function contentOf(v: string | undefined): { content?: string } {
+  return typeof v === "string" && v.length > 0 ? { content: v } : {};
+}
 
 export type RuleEntry = {
   id: string;
@@ -102,7 +116,7 @@ const p6 = defineRule<P6TextReport>({
   id: "p6-text",
   label: "見せかけの黒塗り",
   pattern: "P6",
-  detect: (b, ctx) => detectP6Text(b, ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}),
+  detect: (b, ctx) => detectP6Text(b, { ...(ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}), ...(ctx.withContents ? { includeText: true } : {}) }),
   items: (r) => r.findings.map(p6Item),
   notices: (r) => {
     const out = skippedNotices(r.skippedPages);
@@ -130,7 +144,7 @@ const p6 = defineRule<P6TextReport>({
 /** P6 の1件を画面の形にする。confidence: check は、断定しない言葉で出す（「確かめてください」） */
 export function p6Item(f: P6TextReport["findings"][number]): Item {
   const cover = `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`;
-  const base = { pattern: "P6" as const, severity: "high" as const, page: f.page, rect: f.rect };
+  const base = { pattern: "P6" as const, severity: "high" as const, page: f.page, rect: f.rect, ...contentOf("text" in f ? f.text : undefined) };
   const check = f.confidence === "check" ? { confidence: "check" as const } : {};
   if (f.layer === "text" && f.coverTone === "opaque") {
     // 白・灰・色の不透明な覆い（検出ルール 1.11.0 から）。覆いの下の字は、色によらず見せかけの黒塗りとして出す【文言は仮】
@@ -259,7 +273,7 @@ const p7 = defineRule<P7Report>({
   pattern: "P7",
   // 1ページの命令の数の上限は、P6 とそろえる（2026-11-03 本人が決定。PR #31 の返事 5）。
   // P7 の既定の値（rules/p7-hidden）は検出ルールの担当の範囲なので変えず、画面から呼ぶときだけ上書きする。
-  detect: (b) => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
+  detect: (b, ctx) => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage }, ...(ctx.withContents ? { includeText: true } : {}) }),
   // 覆いの下の字（白っぽい図形・あとから重ねた画像）は、色によらず見せかけの黒塗り（P6）で出すので、画面では P7 に出さない（2026-11-05）。
   // 検出ルールの報告には残す（P7 の正解データと検証器は、これらを P7 として数える）
   items: (r) =>
@@ -273,6 +287,7 @@ const p7 = defineRule<P7Report>({
         detail: f.reason === "image_off_page" || f.reason === "image_clipped" ? P7_REASON[f.reason] : `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
         page: f.page,
         rect: f.rect,
+        ...contentOf(f.text),
       };
     }),
   // 文字認識の層のあるページ（検出ルール 1.1.0 の ocrLayerPages）は、漏れとは言い切れないので、お知らせ（info）として出す（2026-11-05）
@@ -304,7 +319,7 @@ const p1 = defineRule<P1InfoReport>({
   id: "p1-info",
   label: "文書情報",
   pattern: "P1",
-  detect: (b) => detectP1Info(b),
+  detect: (b, ctx) => detectP1Info(b, values(ctx)),
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P1",
@@ -315,6 +330,7 @@ const p1 = defineRule<P1InfoReport>({
       detail: `${f.chars}字`,
       page: null,
       rect: null,
+      ...contentOf(f.value),
     })),
 });
 
@@ -452,7 +468,7 @@ const p9 = defineRule<P9WithInner>({
   label: "添付ファイル",
   pattern: "P9",
   async detect(b, ctx) {
-    const report = await detectP9Attach(b);
+    const report = await detectP9Attach(b, ctx.withContents ? { includeNames: true } : {});
     if (report.status !== "ok" || report.findings.length === 0) return { ...report, inner: [] };
     // 添付が PDF なら、ほかの検出ルール（この一覧の P9 以外）で中も調べる。中の添付は inspectAttachments が入れ子でたどる
     const detectors: InnerDetector[] = RULES.filter((r) => r.id !== "p9-attach").map((r) => async (bytes) => {
@@ -497,6 +513,7 @@ const p9 = defineRule<P9WithInner>({
           .join("／"),
         page: f.page ?? null,
         rect: null,
+        ...contentOf(f.name),
       }, ...insideItems];
     }),
   notices: (r) =>
@@ -529,8 +546,10 @@ const pii = defineRule<PiiReport>({
   id: "pii",
   label: "個人情報らしい字",
   pattern: "P13", // 【仮】の番号
-  detect: (b) => detectPii(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
-  // 黒塗りの候補として示すだけ（決めるのは利用者）。字の中身は出さず、型・場所・確からしさだけを出す
+  // includeText は、F が rules/pii に足すまで、ルールの側で読まれない（そのあいだは中身は出せない型。2026-11-05 本人が決めた）
+  detect: (b, ctx) =>
+    detectPii(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage }, ...(ctx.withContents ? { includeText: true } : {}) } as Parameters<typeof detectPii>[1]),
+  // 黒塗りの候補として示すだけ（決めるのは利用者）。型・場所・確からしさを出す（中身は、頼まれたときだけ content に）
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P13",
@@ -540,6 +559,7 @@ const pii = defineRule<PiiReport>({
       detail: `確からしさ：${f.confidence === "high" ? "高" : "確認"}（${PII_BASIS[f.basis] ?? "字の形から"}）／${f.chars}字${f.vertical ? "／縦書き" : ""}`,
       page: f.page,
       rect: f.rect,
+      ...contentOf((f as { text?: string }).text),
     })),
   notices: (r) => {
     const out = skippedNotices(r.skippedPages.map((s) => ({ page: s.page, reason: s.reason === "unreadable_page" ? "unreadable_page" : "heavy" })));
@@ -581,7 +601,7 @@ const p2Parts = defineRule<P2PartsReport>({
   id: "p2-parts",
   label: "部品の XMP・アプリのデータ",
   pattern: "P2",
-  detect: (b) => detectP2Parts(b),
+  detect: (b, ctx) => detectP2Parts(b, values(ctx)),
   items: (r) =>
     r.findings.map((f) => ({
       pattern: f.pattern,
@@ -597,6 +617,7 @@ const p2Parts = defineRule<P2PartsReport>({
         .join("／"),
       page: null,
       rect: null,
+      ...contentOf(f.value),
     })),
   notices: (r) => (r.limits.length ? [{ kind: "partial", message: "部品の作成の記録が大きすぎる・読めないため、一部は調べていません。", pages: [] }] : []),
 });
@@ -607,7 +628,7 @@ const p3 = defineRule<P3Report>({
   id: "p3-orgs",
   label: "他組織名の混入",
   pattern: "P3",
-  detect: (b) => detectP3Orgs(b),
+  detect: (b, ctx) => detectP3Orgs(b, values(ctx)),
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P3",
@@ -617,6 +638,7 @@ const p3 = defineRule<P3Report>({
       detail: [`場所：${f.source === "info" ? "文書情報" : "XMP メタデータ"}`, `${f.chars}字`].join("／"),
       page: null,
       rect: null,
+      ...contentOf(f.value),
     })),
 });
 
@@ -675,7 +697,7 @@ const p8 = defineRule<P8Report>({
   id: "p8-annot",
   label: "注釈・コメント",
   pattern: "P8",
-  detect: (b) => detectP8Annot(b),
+  detect: (b, ctx) => detectP8Annot(b, values(ctx)),
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P8",
@@ -697,6 +719,7 @@ const p8 = defineRule<P8Report>({
       detail: [`欄：${P8_FIELD[f.field] ?? "欄"}`, `${f.chars}字`, `注釈 ${f.annotations} 個`, pagesNote(f.pages)].filter(Boolean).join("／"),
       page: f.pages[0] ?? null,
       rect: null,
+      ...contentOf(f.value),
     })),
   notices: (r) =>
     r.limits.length
@@ -718,7 +741,7 @@ const p2 = defineRule<P2XmpReport>({
   id: "p2-xmp",
   label: "XMP メタデータ",
   pattern: "P2",
-  detect: (b) => detectP2Xmp(b),
+  detect: (b, ctx) => detectP2Xmp(b, values(ctx)),
   items: (r) =>
     r.findings.map((f) => ({
       pattern: f.pattern,
@@ -728,6 +751,7 @@ const p2 = defineRule<P2XmpReport>({
       detail: f.kind === "history" ? `出来事 ${f.events ?? 0} 件` : f.kind === "gps" ? "緯度・経度" : `${f.chars}字`,
       page: null,
       rect: null,
+      ...contentOf(f.value),
     })),
   notices: (r) => (r.limits.length ? [{ kind: "partial", message: "埋め込まれた作成の記録が大きすぎる・読めないため、調べていません。", pages: [] }] : []),
 });
@@ -749,7 +773,7 @@ const p10 = defineRule<P10Report>({
   id: "p10-exif",
   label: "画像の位置情報など",
   pattern: "P10",
-  detect: (b) => detectP10Exif(b),
+  detect: (b, ctx) => detectP10Exif(b, values(ctx)),
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P10",
@@ -762,6 +786,7 @@ const p10 = defineRule<P10Report>({
       detail: f.kind === "thumbnail" ? formatSize(f.bytes ?? null) : f.kind === "gps" ? "緯度・経度" : `${f.chars}字`,
       page: f.pages[0] ?? null,
       rect: null,
+      ...contentOf(f.value),
     })),
   notices: (r) => (r.limits.length ? [{ kind: "partial", message: "読めない・大きすぎる写真があったため、一部の写真は調べていません。", pages: [] }] : []),
 });
@@ -772,7 +797,7 @@ const p11 = defineRule<P11Report>({
   id: "p11-forms",
   label: "フォームの入力値",
   pattern: "P11",
-  detect: (b) => detectP11Forms(b),
+  detect: (b, ctx) => detectP11Forms(b, values(ctx)),
   items: (r) =>
     r.findings.map((f): Item => ({
       pattern: "P11",
@@ -790,6 +815,7 @@ const p11 = defineRule<P11Report>({
       detail: f.fieldType === "button" ? "チェックの印" : `${f.chars}字`,
       page: f.page,
       rect: null,
+      ...contentOf(f.value),
     })).concat(
       r.tooltips.map((t): Item => ({
         pattern: "P11",
@@ -873,7 +899,7 @@ const p4 = defineRule<P4Report>({
   id: "p4-paths",
   label: "ファイルパス・内部ホスト名",
   pattern: "P4",
-  detect: (b) => detectP4Paths(b),
+  detect: (b, ctx) => detectP4Paths(b, values(ctx)),
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P4",
@@ -883,6 +909,7 @@ const p4 = defineRule<P4Report>({
       detail: [`場所：${P4_WHERE[f.where]}`, `${P4_KIND[f.kind].unit}：${f.chars}字`, f.places > 1 ? `${f.places} か所` : ""].filter(Boolean).join("／"),
       page: f.page,
       rect: null,
+      ...contentOf(f.value),
     })),
   notices: (r) => (r.skippedPages.length ? [{ kind: "skipped_pages", message: "このページは字を読めなかった・重すぎるため、ページの字の中のパスは調べていません。", pages: r.skippedPages, reason: "heavy" }] : []),
 });

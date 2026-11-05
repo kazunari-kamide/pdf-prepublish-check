@@ -84,7 +84,7 @@ describe("検査の結果", () => {
   });
 });
 
-describe("中身を画面に返さない", () => {
+describe("頼まないときは、中身を返さない（コマンドの道具・スキル・片付けの読み直し）", () => {
   const cases: Array<[string, (b: Uint8Array) => Promise<string[]>]> = [
     ["p6/p6-t01-rect-over-name.pdf", async (b) => (await detectP6Text(b, { includeText: true })).findings.map((f) => ("text" in f ? f.text : undefined) ?? "")],
     ["p6/p6-t02-partial-string.pdf", async (b) => (await detectP6Text(b, { includeText: true })).findings.map((f) => ("text" in f ? f.text : undefined) ?? "")],
@@ -102,6 +102,27 @@ describe("中身を画面に返さない", () => {
       const { properties: _props, ...rest } = await inspectAll(bytes);
       const out = JSON.stringify(buildView(await inspectAll(bytes))) + JSON.stringify(rest);
       for (const w of words) expect(out).not.toContain(w);
+    });
+  }
+});
+
+describe("画面の検査の Worker が頼んだとき（withContents）は、見つけた字の中身を content に入れる（2026-11-05 本人が決めた）", () => {
+  const cases: Array<[string, string, (b: Uint8Array) => Promise<string[]>]> = [
+    ["p6/p6-t01-rect-over-name.pdf", "P6", async (b) => (await detectP6Text(b, { includeText: true })).findings.map((f) => ("text" in f ? f.text : undefined) ?? "")],
+    ["p1/p1-02-all-standard.pdf", "P1", async (b) => (await detectP1Info(b, { includeValues: true })).findings.map((f) => f.value ?? "")],
+    ["p9/p9-01-names-xlsx.pdf", "P9", async (b) => (await detectP9Attach(b, { includeNames: true })).findings.map((f) => f.name ?? "")],
+    ["p7/p7-01-white-text.pdf", "P7", async (b) => (await detectP7Hidden(b, { includeText: true })).findings.map((f) => ("text" in f ? f.text : undefined) ?? "")],
+  ];
+  for (const [file, pattern, secrets] of cases) {
+    it(`${file}（${pattern}）`, async () => {
+      const bytes = pdf(file);
+      const words = (await secrets(bytes)).filter((s) => s.trim().length > 0);
+      const s = await inspectAll(bytes, undefined, undefined, { withContents: true });
+      const contents = s.rules.flatMap((r) => r.items).filter((i) => i.pattern === pattern && i.content).map((i) => i.content);
+      expect(contents.length).toBeGreaterThan(0);
+      for (const c of contents) expect(words).toContain(c);
+      // 画面の形（buildView）の行にも content が入る（伏せて出すのは画面の部品）
+      expect(buildView(s).rows.some((r) => r.content && words.includes(r.content))).toBe(true);
     });
   }
 });

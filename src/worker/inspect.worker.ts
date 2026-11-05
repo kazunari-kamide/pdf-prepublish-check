@@ -2,7 +2,7 @@
 //
 // 検査の Worker。重い処理は画面とは別のところで動かし、上限を超えたら画面の側からこの Worker だけを止める（CLAUDE.md §5）。
 // ここから外へ通信しない。importScripts も使わない。
-// 返すのは数と場所だけ。覆われた字などの中身は返さない（src/inspect/report.ts）。
+// 返すのは数と場所と、見つけた字の中身（Item の content）。中身は画面の中だけで使う（src/inspect/report.ts）。
 
 // PDF.js は、ページの絵と同じく、npm の pdfjs-dist のファイルを手を加えずに配る（?url。docs/no-network.md の例外の形のまま）
 import pdfjsUrl from "pdfjs-dist/build/pdf.min.mjs?url";
@@ -53,7 +53,8 @@ scope.onmessage = async (e) => {
       bytes,
       (done, total, label) => scope.postMessage({ type: "progress", id: req.id, done, total, label }),
       undefined,
-      decoder ? { imageDecoder: decoder } : {},
+      // 見つけた字の中身も返す（画面の中だけで使い、伏せて出す。2026-11-05 本人が決めた。src/ui/reveal.ts）
+      { ...(decoder ? { imageDecoder: decoder } : {}), withContents: true },
     );
     scope.postMessage({ type: "result", id: req.id, precheck: checked, summary });
   } catch {
