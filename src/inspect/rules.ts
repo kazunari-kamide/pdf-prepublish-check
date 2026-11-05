@@ -166,6 +166,16 @@ export function p6Item(f: P6TextReport["findings"][number]): Item {
           detail: `${cover}／残っている字：${f.chars}字`,
         };
   }
+  if (f.layer === "vector") {
+    // 図形の層（検出ルール 1.13.0 から）：白い四角の注釈の下に、線や形で描いた字が残っているかもしれない。いつも「確かめてください」【文言は仮】
+    return {
+      ...base,
+      ...check,
+      title: "白い四角の注釈の下に、線や形で描いた字が残っているかもしれません",
+      why: "字を図形として描いた上に、白い四角を重ねただけなら、注釈を消すと下の字が見えます。罫線や図の場合もあるため、言い切れません。確かめてください。",
+      detail: `覆っているもの：注釈（白）／下にある図形：${f.paths}個`,
+    };
+  }
   const box = f.tone === "light" ? "白い四角" : "黒い四角";
   if (f.reason === "under_unreadable") {
     return {
