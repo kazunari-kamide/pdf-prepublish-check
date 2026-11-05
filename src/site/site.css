@@ -1395,3 +1395,124 @@ html:has(.site-cards) .site-band {
   height: 1px;
   overflow: hidden;
 }
+
+/* ================================================================ 案 C「色の面で分ける」の上書き（2026-11-05 夜。design/sheet.md「案 C」）
+ * サイトのページの残りの部品（関係する記事の一覧・つなぎの欄・表・点検の一覧・入力欄・お問い合わせのフォーム）を、枠の線から色の面にそろえる。
+ * 上の節は前の決まりのまま残し、ここで上書きする。面の中に面・枠を重ねない */
+
+/* 関係する記事の一覧など（行の並び）：生成りの面 1 枚。行の間は白の 2px の線 */
+.site-list {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+}
+
+.site-list > li {
+  border-bottom: 2px solid var(--surface-card);
+}
+
+/* 検査のページへのつなぎの欄：紅の面 1 枚。中の主のボタンは紅の地のまま */
+.site-cta {
+  border: 0;
+  border-radius: var(--radius-face);
+  background: var(--face-beni);
+  box-shadow: none;
+}
+
+/* 表：生成りの面の上の表（外の枠はやめる。行の区切りは上の決まりのまま） */
+.site-table-wrap {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+}
+
+/* 点検の一覧の段：生成りの面。知らせは生成りの面＋ｉの印（枠・左の太い線はやめる。design/sheet.md「案 C」のお知らせ・状態） */
+.site-steps-card {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+  box-shadow: none;
+}
+
+.site-checklist .site-notice {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+}
+
+/* タグ：枠をやめ、生成りの面のピル。生成りの地（記事の一覧）の上では白のピル */
+.site-tag {
+  border: 0;
+  background: var(--face-kinari);
+  box-shadow: none;
+}
+
+html:has(.site-cards) .site-tag {
+  background: var(--surface-card);
+}
+
+.site-tag[aria-current="page"] {
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
+}
+
+/* 字を入れる欄・選ぶ欄：白の地に墨 500 の 1px の線（--line-control。押せる所の 3:1 を保つ）。角は --radius-control */
+.site-search input,
+.site select,
+.site .site-form-field input:not([type="radio"]):not([type="checkbox"]),
+.site .site-form-field textarea {
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-control);
+  box-shadow: none;
+}
+
+.site-search input {
+  border-radius: var(--radius-pill);
+}
+
+/* お問い合わせ：注意は紅の面（▲ と太字の字で示す。左の太い線はやめる） */
+.site-form-warn {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-beni);
+}
+
+/* 種類を選ぶ行：生成りの面 1 枚。行の間は白の 2px の線 */
+.site-section .site-form-choices {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+}
+
+.site-form-choices li + li {
+  border-top: 2px solid var(--surface-card);
+}
+
+.site-form-choices label:hover {
+  background: var(--page-kinari);
+}
+
+/* 送るボタン：墨の地（紅は検査のページへのボタンだけ）。高さ 56px・角 16px。ふくらみと影はやめる */
+.site .site-form-submit,
+.site .site-form-submit:hover {
+  min-height: var(--button-height-large);
+  border-radius: var(--radius-control);
+  background: var(--surface-strong);
+  box-shadow: none;
+}
+
+.site .site-form-submit:hover {
+  background: var(--ink-800);
+}
+
+/* 点検の一覧の段の見出し：薄い地と墨の線をやめる（段の面の中に面を重ねない）。行の間は白の 2px の線 */
+.site-section h2.site-steps-head {
+  background: none;
+  border-bottom: 0;
+  padding-bottom: var(--sp-1);
+}
+
+.site-steps-card .site-checks li + li,
+.site-steps-card .site-checks > li {
+  border-color: var(--surface-card);
+}

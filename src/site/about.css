@@ -1136,3 +1136,128 @@
     background: none;
   }
 }
+
+/* ================================================================ 案 C「色の面で分ける」の上書き（2026-11-05 夜。design/sheet.md「案 C」）
+ * 枠の線をやめ、色の面 1 段で分ける。面の中に面・枠を重ねない。上の節の値は、ここで上書きする（上の節は前の決まりのまま残す） */
+
+/* 区画：薄い地の区画は、上下の線をやめて生成りの面にする */
+.lp-section-sunken {
+  background: var(--face-kinari);
+  border-block: 0;
+}
+
+.lp-label::before {
+  background: var(--danger);
+}
+
+/* 大見出し：丸ゴシックの 900（--text-hero） */
+.site-lp .lp-hero h1 {
+  font-size: clamp(var(--text-hero-narrow), 4vw, var(--text-hero));
+  font-weight: var(--fw-display);
+}
+
+/* ボタン：主は紅の地、副は生成りの面に墨の字（白い地の上でも見分けられるよう、墨 500 の 1px の線）。角は --radius-control、高さ 56px */
+.site .lp-button {
+  border: 0;
+  border-radius: var(--radius-control);
+  box-shadow: none;
+}
+
+.site .lp-button:hover,
+.site .lp-button:active {
+  box-shadow: none;
+}
+
+.site .lp-button-secondary {
+  background: var(--face-kinari);
+  box-shadow: inset 0 0 0 var(--bw-1) var(--line-control);
+}
+
+.site .lp-button-secondary:hover {
+  background: var(--page-kinari);
+  box-shadow: inset 0 0 0 var(--bw-1) var(--line-control);
+}
+
+/* 約束の札：緑の面（枠・ふくらみ・影なし） */
+.lp-chips li {
+  border: 0;
+  background: var(--face-midori);
+  box-shadow: none;
+}
+
+.lp-card-no {
+  border: 0;
+  background: var(--face-beni);
+  box-shadow: none;
+  color: var(--text-danger);
+}
+
+/* 残り方のカード：生成りの面。枠はやめる（右上のめくれは、そのまま） */
+.lp-card {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+  box-shadow: none;
+}
+
+/* 4 つの手順の番号：緑の丸に白の字（枠の線はやめる。生成りの面の上でも読める） */
+.lp-step-no {
+  border: 0;
+  background: var(--ok);
+  color: var(--text-on-strong);
+}
+
+/* 送らない仕組みの図：緑の面 1 枚。中の段は面を重ねず、白の 2px の線で区切る */
+.lp-diagram-site {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+}
+
+.lp-diagram-box {
+  border: 0;
+  border-radius: var(--radius-face);
+  background: var(--face-midori);
+  box-shadow: none;
+}
+
+.lp-flow li {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+
+.lp-diagram-none,
+.lp-cannot {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+}
+
+/* 調べる型の札：生成りの面（押せるので、指を置くと少し濃くなる） */
+.lp-pattern {
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--face-kinari);
+}
+
+.lp-pattern:hover,
+.lp-pattern:focus-within {
+  background: var(--page-kinari);
+}
+
+/* 良くし続ける仕組み・使う場面：生成りの面 */
+.lp-loop-item,
+.lp-scene {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+  box-shadow: none;
+}
+
+.lp-loop-human {
+  border: 0;
+  background: var(--face-midori);
+}
