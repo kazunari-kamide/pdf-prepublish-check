@@ -37,7 +37,8 @@ const MAX_PATTERN_TILES = 64;
 
 export const RULE_ID = "p7-hidden";
 // 1.4.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
-export const RULE_VERSION = "1.4.1";
+// 1.5.0：字の報告ごとに、読める本文か（readable）を付ける。表の体裁・罫線・飾りのような、まとまって出る型と分けるため（実物の PDF で「高」の誤検知が多かった。2026-11-05）
+export const RULE_VERSION = "1.5.0";
 
 export type P7Reason =
   | "hidden_layer"
@@ -93,6 +94,14 @@ export const DEFAULT_SETTINGS = {
   imageHiddenUniformStdMax: 0.05,
   /** 見えない所に置いた画像として調べる、画像の画素の数の下限（小さな飾り・線の画像は見ない）【仮の値】 */
   imageMinPixels: 1024,
+  /** 読める本文とみなす、1件の中の字か数字の数の下限（罫線・記号・数字1つ2つの飾りを除く。日本語の人名は 2〜4 字なので小さくする。1.5.0 から）【仮の値】 */
+  readableLettersMin: 4,
+  /** 読める本文とみなす、1件の中の字か数字の種類の数の下限（同じ字のくり返しを除く。1.5.0 から）【仮の値】 */
+  readableDistinctMin: 3,
+  /** 同じ型（数字をならした字の並び）の報告が、文書の中でこの数以上あれば、表の体裁・飾りとみなす（1.5.0 から）【仮の値】 */
+  templateRepeatMin: 3,
+  /** ページの見える字のうち、この割合以上が「見た目と取り出される字が違う」なら、書体の対応表の不具合とみなす（1.5.0 から）【仮の値】 */
+  remappedPageShareMin: 0.5,
 };
 export type P7Settings = typeof DEFAULT_SETTINGS;
 
@@ -108,6 +117,11 @@ export type P7Finding = {
   chars: number;
   /** includeText のときだけ。字そのもの（1バイトの書体は latin1 で読む目安）。記録やログには使わない */
   text?: string;
+  /**
+   * 読める本文か（1.5.0 から。字の報告だけ。画像の報告にはない）。字か数字が readableLettersMin 以上・種類が readableDistinctMin 以上で、
+   * 同じ型の報告が文書の中に templateRepeatMin 未満のとき true。字の対応表の書き換えは、ページの大部分が書き換わっていれば false（書体の不具合）
+   */
+  readable?: boolean;
 };
 
 export type P7Report = {
@@ -1053,6 +1067,34 @@ function padRect(r: Rect): Rect {
   return out;
 }
 
+// ---------------------------------------------------------------- 読める本文か（1.5.0 から）
+
+/** 字か数字の数・種類と、同じ型を見分ける鍵（空白を除き、数字を # にならす）。字そのものは外に出さない */
+function lettersOf(text: string): { letters: number; distinct: number; key: string } {
+  const t = text.normalize("NFKC");
+  const list = [...t].filter((c) => LETTER_OR_DIGIT.test(c));
+  return { letters: list.length, distinct: new Set(list).size, key: t.replace(/\s+/g, "").replace(/\p{N}/gu, "#") };
+}
+
+/**
+ * 読める本文かを決める。表の体裁・罫線・飾りのような、まとまって出る型は false。
+ * - 字か数字が少ない、または同じ字のくり返し（罫線・点線・記号・数字1つの飾り）
+ * - 同じ理由・同じ型の報告が、文書の中にいくつもある（表のセルごとの隠し字・ページごとの欄外の字など）
+ * - 字の対応表の書き換えが、ページの大部分に及ぶ（書体の不具合で、隠したものではない）
+ */
+function markReadable(items: Array<{ f: P7Finding; letters: number; distinct: number; key: string }>, remappedHeavy: Set<number>, s: P7Settings): void {
+  const repeats = new Map<string, number>();
+  for (const it of items) {
+    const k = `${it.f.reason} ${it.key}`;
+    repeats.set(k, (repeats.get(k) ?? 0) + 1);
+  }
+  for (const it of items) {
+    const template = (repeats.get(`${it.f.reason} ${it.key}`) ?? 0) >= s.templateRepeatMin;
+    const fontIssue = it.f.reason === "remapped" && remappedHeavy.has(it.f.page);
+    it.f.readable = it.letters >= s.readableLettersMin && it.distinct >= s.readableDistinctMin && !template && !fontIssue;
+  }
+}
+
 // ---------------------------------------------------------------- 本体
 
 export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions = {}): Promise<P7Report> {
@@ -1086,6 +1128,8 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
   const report: P7Report = { ...base, pages: pages.length, findings: [], skippedPages: [], excluded: { p6: 0, ocrLayer: 0 }, ocrLayerPages: [] };
   if (loaded.decrypted) report.decrypted = loaded.decrypted;
   const visible = makeVisibility(ctx, doc.catalog);
+  const textFindings: Array<{ f: P7Finding; letters: number; distinct: number; key: string }> = [];
+  const remappedHeavyPages = new Set<number>();
 
   pages.forEach((page, index) => {
     const pageNo = index + 1;
@@ -1110,6 +1154,7 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
           const f: P7Finding = { pattern: "P7", page: pageNo, reason: group.reason, rect: padRect(group.rect), chars: group.chars };
           if (options.includeText) f.text = group.text;
           report.findings.push(f);
+          textFindings.push({ f, ...lettersOf(group.text) });
         }
         group = null;
       };
@@ -1153,6 +1198,19 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
       });
       flush();
       if (ocrChars > 0) report.ocrLayerPages.push(pageNo);
+      // 書体の対応表の不具合：ページの見える字のうち、大部分が「見た目と取り出される字が違う」（1.5.0 から）
+      let shownLetters = 0;
+      let remappedLetters = 0;
+      scanner.glyphs.forEach((gl, i) => {
+        const j = judged[i];
+        if (gl.isSpace || !LETTER_OR_DIGIT.test(gl.text)) return;
+        if (j === null) shownLetters++;
+        else if (j && "reason" in j && j.reason === "remapped") {
+          shownLetters++;
+          remappedLetters++;
+        }
+      });
+      if (shownLetters > 0 && remappedLetters / shownLetters >= settings.remappedPageShareMin) remappedHeavyPages.add(pageNo);
       // 見えない所に置いた画像（1.2.0 から）：ページの外、または切り抜きで大部分を隠した画像。字の模様などが残っていても、見た目では分からない
       for (const im of scanner.images) {
         const f = hiddenImage(im, view, settings, pixels);
@@ -1165,5 +1223,6 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
       });
     }
   });
+  markReadable(textFindings, remappedHeavyPages, settings);
   return report;
 }
