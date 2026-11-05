@@ -3,6 +3,7 @@
 // 1つのファイルを、登録したすべての検出ルール（rules.ts）にかける。Worker から呼ぶ。
 // 1つのルールが例外で止まっても、ほかのルールは続ける（止まったルールは「調べられなかった」と返す）。
 
+import { INFLATE_LIMIT_MESSAGE, isInflateLimitError } from "../../rules/shared/inflate-limit.ts";
 import { readPageBoxes } from "./pages.ts";
 import { readProperties } from "./properties.ts";
 import type { InspectSummary, RuleResult } from "./report.ts";
@@ -27,15 +28,15 @@ export async function inspectAll(
     onProgress(i + 1, total, rule.label);
     try {
       results.push(await rule.run(bytes, ctx));
-    } catch {
-      // 例外の中身（ファイルの中身を含むことがある）は画面に出さない
+    } catch (e) {
+      // 例外の中身（ファイルの中身を含むことがある）は画面に出さない。解くと大きすぎる所で止めたときだけ、そう伝える
       results.push({
         ruleId: rule.id,
         ruleVersion: "",
         label: rule.label,
         pattern: rule.pattern,
         status: "error",
-        message: "調べている途中で問題が起きたため、この項目は調べられませんでした。",
+        message: isInflateLimitError(e) ? INFLATE_LIMIT_MESSAGE : "調べている途中で問題が起きたため、この項目は調べられませんでした。",
         items: [],
         notices: [],
       });

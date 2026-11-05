@@ -17,9 +17,9 @@ import {
   PDFRef,
   PDFStream,
   PDFString,
-  decodePDFRawStream,
   type PDFObject,
 } from "pdf-lib";
+import { decodeStreamUpTo } from "../shared/inflate-limit.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { loadPdf } from "../shared/load.ts";
 
@@ -264,8 +264,8 @@ function contentsOf(stream: PDFObject | undefined): Uint8Array | null {
   try {
     const raw = stream instanceof PDFRawStream ? stream.contents : stream.getContents();
     if (raw.length > MAX_CONTENT_BYTES) return null;
-    const out = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : raw;
-    return out.length > MAX_CONTENT_BYTES ? null : out;
+    // 上限までだけ解く（途中で止める）。ファイルの合計の上限で止めたときも null（呼ぶ側は「大きすぎる」として数える）
+    return decodeStreamUpTo(stream, MAX_CONTENT_BYTES);
   } catch {
     return null;
   }
