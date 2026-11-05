@@ -118,12 +118,12 @@ export const CASES: Case[] = [
   {
     id: "p12-l09",
     kind: "leak",
-    description: "押したときに外のウェブのページを開くリンクと、フォームのボタンの URL（1.1.0 から、行き先を確かめてもらう低い件として数える）",
+    description: "押したときに気をつける行き先を開くリンク（暗号化されない http）と、フォームのボタンの URL（内向きのサーバー）（1.2.0）",
     leaks: ["uri:annotation", "uri:field"],
     async build() {
       const { doc, ctx, pages } = await newDoc();
-      addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "URI", URI: lit("https://example.invalid/") } });
-      const w = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Btn", Ff: 65536, T: lit("web"), A: { S: "URI", URI: lit("https://example.invalid/") } });
+      addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "URI", URI: lit("http://example.invalid/form") } });
+      const w = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Btn", Ff: 65536, T: lit("web"), A: { S: "URI", URI: lit("https://kakuu-intra/upload") } });
       doc.catalog.set(PDFName.of("AcroForm"), ctx.obj({ Fields: [w] } as never));
       return save(doc);
     },
@@ -159,6 +159,19 @@ export const CASES: Case[] = [
     leaks: [],
     async build() {
       const { doc } = await newDoc();
+      return save(doc);
+    },
+  },
+  {
+    id: "p12-c05",
+    kind: "control",
+    description: "ふつうの https の公開の場所と、メール・電話のリンク（1.2.0 から数えない）",
+    leaks: [],
+    async build() {
+      const { doc, ctx, pages } = await newDoc();
+      addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "URI", URI: lit("https://www.example.jp/docs/?page=2#top") } });
+      addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "URI", URI: lit("mailto:info@example.jp") } });
+      addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "URI", URI: lit("tel:0000000000") } });
       return save(doc);
     },
   },
