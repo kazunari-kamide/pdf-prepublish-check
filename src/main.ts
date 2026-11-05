@@ -284,7 +284,7 @@ async function runCompress() {
     if (gen !== generation) return;
     ui.compressResult.hidden = false;
     if (out.kind === "timeout" || out.kind === "refused" || out.kind === "error") {
-      const text = out.kind === "timeout" ? "時間がかかりすぎたため、小さくするのを止めました。片付けた PDF はそのまま保存できます。" : out.message;
+      const text = out.kind === "timeout" ? "時間がかかりすぎたため、小さくするのを止めました。整えた PDF はそのまま保存できます。" : out.message;
       ui.compressHeadline.textContent = text;
       setStatus(text, "problem");
       return;
@@ -321,7 +321,7 @@ async function runCompress() {
   } catch {
     if (gen === generation) {
       ui.compressResult.hidden = false;
-      ui.compressHeadline.textContent = "小さくする途中で問題が起きました。片付けた PDF はそのまま保存できます。";
+      ui.compressHeadline.textContent = "小さくする途中で問題が起きました。整えた PDF はそのまま保存できます。";
     }
   } finally {
     ui.progress.hidden = true;
@@ -359,7 +359,27 @@ function reset() {
   setStep(ui.stepVerify, "todo");
   ui.stepCheckNote.textContent = "まだです";
   ui.stepCleanNote.textContent = "まだです";
-  ui.stepVerifyNote.textContent = "残り 0 件なら完了";
+  ui.stepVerifyNote.textContent = "通れば保存できます";
+}
+
+/** 最初の画面（PDF を置く所）に戻る。見本の PDF のあとなどに使う */
+function goHome() {
+  if (busy) return;
+  generation++;
+  const old = session;
+  session = null;
+  void old?.pdf?.close();
+  reset();
+  ui.workspace.dataset.state = "empty";
+  ui.sampleRow.hidden = false;
+  setStep(ui.stepPick, "now");
+  ui.stepPickNote.textContent = "PDF を置く";
+  ui.fileName.textContent = "";
+  ui.fileFacts.textContent = "";
+  ui.input.value = "";
+  setStatus("まだ PDF を選んでいません。");
+  ui.input.focus();
+  window.scrollTo(0, 0);
 }
 
 // ---------------------------------------------------------------- 右：種類ごとの結果
@@ -518,7 +538,7 @@ function renderThumbs(s: Session) {
     else if (done) btn.append(make("span", "済", "thumb-count thumb-done"));
     const parts = [`ページ ${n}`];
     if (count) parts.push(`${s.phase === "after" ? "残っている所" : "見つかった所"} ${count} か所`);
-    if (done) parts.push(`片付けた所 ${done} か所`);
+    if (done) parts.push(`消した所 ${done} か所`);
     btn.setAttribute("aria-label", parts.join("、"));
     btn.addEventListener("click", () => void showPage(n, null));
     ui.thumbs.append(btn);
@@ -575,7 +595,7 @@ function placeMarks(s: Session, page: number) {
     if (!f) continue;
     const done = make("div", undefined, "mark mark-done");
     done.setAttribute("role", "img");
-    done.setAttribute("aria-label", `片付けた所：${d.label}`);
+    done.setAttribute("aria-label", `消した所：${d.label}`);
     done.append(make("span", "済", "mark-no"));
     placeAt(done, f);
     ui.marks.append(done);
@@ -627,8 +647,8 @@ async function showPage(page: number, selectNo: number | null) {
   const done = s.doneByPage.get(page)?.length ?? 0;
   const facts = [];
   if (count) facts.push(`${s.phase === "after" ? "残っている所" : "見つかった所"} ${count} か所`);
-  if (done) facts.push(`片付けた所 ${done} か所`);
-  ui.caption.textContent = `${s.phase === "after" ? "片付けた PDF の" : ""}ページ ${page}${facts.length ? `（${facts.join("・")}）` : ""}`;
+  if (done) facts.push(`消した所 ${done} か所`);
+  ui.caption.textContent = `${s.phase === "after" ? "整えた PDF の" : ""}ページ ${page}${facts.length ? `（${facts.join("・")}）` : ""}`;
   ui.sheetWrap.hidden = false;
   placeMarks(s, page);
   markSelected(selectNo);
@@ -748,13 +768,13 @@ function renderProperties(s: Session) {
   }
   // その場で「消す」へ案内する（片付ける前で、片付けられるときだけ）
   if (count && s.phase === "before" && !ui.sanitize.disabled) {
-    const go = make("button", "この欄を消す（「片付ける」へ）", "props-go");
+    const go = make("button", "この欄を消す（「整える」へ）", "props-go");
     go.type = "button";
     go.addEventListener("click", () => {
       ui.actions.scrollIntoView({ block: "center", behavior: "smooth" });
       ui.sanitize.focus({ preventScroll: true });
     });
-    body.append(go, make("p", "「片付ける」を押すと、文書情報と XMP の欄を、まとめて消した PDF を新しく作ります（元の PDF は変えません）。", "props-note"));
+    body.append(go, make("p", "「整える」を押すと、文書情報と XMP の欄を、まとめて消した PDF を新しく作ります（元の PDF は変えません）。", "props-note"));
   }
   ui.props.append(body);
   // 最初は閉じた形で出す（値をそのまま出す所なので、開くのは利用者が決める）
@@ -816,15 +836,15 @@ function renderSummary(s: Session) {
   ui.actions.hidden = false;
   ui.sanitize.disabled = s.original === null || s.pdfProblem === "password";
   ui.sanitizeNote.textContent = s.pdfProblem === "password"
-    ? "パスワードが要る PDF は、片付けられません。"
+    ? "パスワードが要る PDF は、整えられません。"
     : v.rows.length
-    ? "見つかった所を取り除いた PDF を、新しく作ります。元の PDF は変えません。"
-    : "見つかった所はありませんが、XMP メタデータ・注釈のコメント・JavaScript なども取り除いた PDF を作れます。元の PDF は変えません。";
+    ? "「整える」では、見えない情報を消します（黒塗りの下の字・見えない字・作成者などの欄・前の版の残り・添付ファイル・注釈・JavaScript など）。整えた PDF を新しく作り、元の PDF は変えません。"
+    : "見つかった所はありませんが、「整える」で、XMP メタデータ・注釈のコメント・JavaScript などの見えない情報を消した PDF を作れます。元の PDF は変えません。";
   // 自分で黒塗りする所を選ぶ：片付けられて、ページの絵と形があるときだけ
   ui.pickTools.hidden = ui.sanitize.disabled || !s.pdf || s.summary.pagesUnreadable;
   ui.pickHelpCandidates.hidden = !v.rows.some(isCandidate);
   setStep(ui.stepClean, v.rows.length ? "now" : "todo");
-  ui.stepCleanNote.textContent = "「片付ける」を押します";
+  ui.stepCleanNote.textContent = "「整える」を押します";
 
   // 何も見つからなかったときの札（片付けたあとの「全部緑」は renderCleaned）
   ui.verified.dataset.state = v.clean ? "clean" : "none";
@@ -1034,9 +1054,9 @@ function renderPicks() {
   );
   ui.picks.hidden = picks.length === 0;
   for (const b of ui.groups.querySelectorAll<HTMLElement>("[data-candidate]")) syncCandidateButton(b, Number(b.dataset.candidate));
-  ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「片付ける」を押すと、見つかった所といっしょに黒塗りします。下の字・画像・注釈も消します）${picks.length >= MAX_REDACT_AREAS ? `。一度に選べるのは ${MAX_REDACT_AREAS} か所までです` : ""}`;
+  ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「整える」を押すと、見つかった所といっしょに黒塗りします。下の字・画像・注釈も消します）${picks.length >= MAX_REDACT_AREAS ? `。一度に選べるのは ${MAX_REDACT_AREAS} か所までです` : ""}`;
   if (s && s.phase === "before" && !ui.sanitize.disabled) {
-    ui.sanitize.textContent = picks.length ? `片付ける（選んだ ${picks.length} か所も黒塗り）` : "片付ける";
+    ui.sanitize.textContent = picks.length ? `整える（選んだ ${picks.length} か所も黒塗り）` : "整える";
   }
 }
 
@@ -1044,7 +1064,7 @@ function clearPicks() {
   picks = [];
   setPicking(false);
   renderPicks();
-  ui.sanitize.textContent = "片付ける";
+  ui.sanitize.textContent = "整える";
 }
 
 /** ページの上に、選んだ所（墨の点線の枠）を描く */
@@ -1107,7 +1127,7 @@ ui.pickToggle.addEventListener("click", () => setPicking(!picking));
 function cleanFailed(text: string) {
   setStatus(text, "problem");
   setStep(ui.stepClean, "now");
-  ui.stepCleanNote.textContent = "片付けられませんでした";
+  ui.stepCleanNote.textContent = "整えられませんでした";
   ui.progress.hidden = true;
   ui.sanitizeNote.textContent = text;
 }
@@ -1122,14 +1142,14 @@ function redactBlocked(s: Session, retry: Uint8Array | null, leftovers: Paramete
   setStep(ui.stepClean, "now");
   ui.stepCleanNote.textContent = "保存できる形にできませんでした";
   ui.progress.hidden = true;
-  ui.sanitizeNote.textContent = "選んだ所を見直して（外す・選び直す）、もう一度「片付ける」を押せます。";
+  ui.sanitizeNote.textContent = "選んだ所を見直して（外す・選び直す）、もう一度「整える」を押せます。";
   // 「見つかりませんでした」の緑の札は、片付ける前の検査の結果。止められた今は出さない（全部緑と見誤らせない）
   ui.verified.hidden = true;
   ui.redactLeftList.replaceChildren(...v.lines.map((t) => make("li", t)));
   ui.redactLeft.hidden = v.lines.length === 0;
   s.original = retry;
   ui.sanitize.disabled = retry === null;
-  ui.sanitize.textContent = picks.length ? `片付ける（選んだ ${picks.length} か所も黒塗り）` : "片付ける";
+  ui.sanitize.textContent = picks.length ? `整える（選んだ ${picks.length} か所も黒塗り）` : "整える";
   ui.pickTools.hidden = retry === null;
 }
 
@@ -1139,7 +1159,7 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   setStatus(c.headline, c.verdict === "clean" ? "ok" : c.verdict === "left" ? "problem" : "neutral");
 
   setStep(ui.stepClean, "done");
-  ui.stepCleanNote.textContent = "片付けました";
+  ui.stepCleanNote.textContent = "整えました";
   if (c.verdict === "clean") {
     setStep(ui.stepVerify, "done");
     ui.stepVerifyNote.textContent = "残り 0 件・保存できます";
@@ -1149,7 +1169,7 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   }
 
   ui.cleanCount.textContent =
-    c.left === null ? `片付ける前 ${c.before} か所 → 読み直せませんでした` : `片付ける前 ${c.before} か所 → 読み直したあと ${c.left} か所`;
+    c.left === null ? `整える前 ${c.before} か所 → 読み直せませんでした` : `整える前 ${c.before} か所 → 読み直したあと ${c.left} か所`;
   ui.cleanCount.dataset.verdict = c.verdict;
   ui.download.download = file.name;
   applySaveGate(saveGate(c));
@@ -1182,7 +1202,7 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.verified.hidden = true;
   ui.resultTitle.textContent = "読み直した結果（種類ごと）";
   ui.fileName.textContent = file.name;
-  ui.fileFacts.textContent = `片付けた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`;
+  ui.fileFacts.textContent = `整えた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`;
 }
 
 /** 型ごとの、片付ける前と読み直したあとの数（11/5 B の 6） */
@@ -1209,8 +1229,8 @@ async function runSanitize() {
   ui.sanitize.disabled = true;
   ui.redactLeft.hidden = true;
   setStep(ui.stepClean, "now");
-  ui.stepCleanNote.textContent = "片付けています";
-  setStatus("片付けています…");
+  ui.stepCleanNote.textContent = "整えています";
+  setStatus("整えています…");
   ui.progress.removeAttribute("value"); // どこまで進んだか分からないので、動いていることだけを示す
   ui.progress.hidden = false;
   try {
@@ -1221,15 +1241,15 @@ async function runSanitize() {
     ui.pickTools.hidden = true;
     const out = await sanitizeInWorker(original.buffer as ArrayBuffer, undefined, areas);
     if (gen !== generation) return;
-    if (out.kind === "timeout") return cleanFailed("時間がかかりすぎたため、片付けを止めました。画面はそのまま使えます。");
+    if (out.kind === "timeout") return cleanFailed("時間がかかりすぎたため、整えるのを止めました。画面はそのまま使えます。");
     if (out.kind === "blocked") return redactBlocked(s, retry, out.leftovers, out.notDone);
     if (out.kind !== "done") return cleanFailed(out.message);
 
     setStep(ui.stepClean, "done");
-    ui.stepCleanNote.textContent = "片付けました";
+    ui.stepCleanNote.textContent = "整えました";
     setStep(ui.stepVerify, "now");
     ui.stepVerifyNote.textContent = "読み直しています";
-    setStatus("片付けた PDF を、最初から検査し直しています…");
+    setStatus("整えた PDF を、最初から検査し直しています…");
     ui.progress.value = 0;
 
     // 保存する PDF（Blob は中身を写して持つ）。絵を描く側にも写しを渡し、検査の Worker には元を渡し切る。
@@ -1243,7 +1263,7 @@ async function runSanitize() {
     const re = await inspectInWorker(out.bytes.buffer as ArrayBuffer, (p) => {
       ui.progress.max = p.total;
       ui.progress.value = p.done;
-      setStatus(`片付けた PDF を、最初から検査し直しています…（${p.label}、${p.done + 1}/${p.total}）`);
+      setStatus(`整えた PDF を、最初から検査し直しています…（${p.label}、${p.done + 1}/${p.total}）`);
     });
     const opened = await opening;
     ui.progress.hidden = true;
@@ -1295,7 +1315,7 @@ async function runSanitize() {
       ui.reportDownload.hidden = false;
     }
   } catch {
-    if (gen === generation) cleanFailed("片付けの途中で問題が起きました。");
+    if (gen === generation) cleanFailed("整える途中で問題が起きました。");
   } finally {
     busy = false;
   }
@@ -1341,17 +1361,29 @@ ui.input.addEventListener("change", () => {
   if (file) void handle(file);
 });
 
-// 画面のどこに落としても受け取る。画面の外に落としたファイルを、ブラウザが開いてしまわないようにもする
+el<HTMLButtonElement>("go-home").addEventListener("click", goHome);
+
+// 画面のどこに落としても受け取る（結果を見ている間も）。画面の外に落としたファイルを、ブラウザが開いてしまわないようにもする。
+// ファイルを持ってきている間は、画面全体に「ここに落とす」を出す（字や画像のドラッグでは出さない）
+const dropAnywhere = el<HTMLDivElement>("drop-anywhere");
+const draggingFiles = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes("Files");
+function dropOff() {
+  delete ui.drop.dataset.over;
+  dropAnywhere.hidden = true;
+}
 window.addEventListener("dragover", (e) => {
   e.preventDefault();
+  if (!draggingFiles(e)) return;
   ui.drop.dataset.over = "true";
+  dropAnywhere.hidden = busy;
 });
 window.addEventListener("dragleave", (e) => {
-  if (e.relatedTarget === null) delete ui.drop.dataset.over;
+  if (e.relatedTarget === null) dropOff();
 });
+window.addEventListener("dragend", dropOff);
 window.addEventListener("drop", (e) => {
   e.preventDefault();
-  delete ui.drop.dataset.over;
+  dropOff();
   const file = e.dataTransfer?.files?.[0];
   if (file) void handle(file);
 });

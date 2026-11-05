@@ -25,8 +25,8 @@ const input = () => ({
 describe("処理の報告書", () => {
   it("前後の SHA-256・消した字数・型ごとの前後の数・調べた範囲・ルールの版が入る", () => {
     const t = buildProcessReport(input());
-    expect(t).toContain(`片付ける前：${"a".repeat(64)}（1000 バイト）`);
-    expect(t).toContain(`片付けた後：${"b".repeat(64)}（900 バイト・2 ページ）`);
+    expect(t).toContain(`整える前：${"a".repeat(64)}（1000 バイト）`);
+    expect(t).toContain(`整えた後：${"b".repeat(64)}（900 バイト・2 ページ）`);
     expect(t).toContain("消した字の数：合わせて 15 字");
     expect(t).toContain("- 見せかけの黒塗り（P6）／ページ 1／黒い四角の下の字を消しました／数：12 字");
     expect(t).toContain("- 名前P6（P6）：3 → 0");

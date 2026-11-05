@@ -13,6 +13,11 @@
   </head>
   <body>
     <a class="skip" href="#results">結果へ移る</a>
+    <!-- PDF を画面の上へ持ってきている間だけ、画面全体に「ここに落とす」を出す（見た目は置き場の .drop[data-over] と同じ） -->
+    <div id="drop-anywhere" class="drop-anywhere" aria-hidden="true" hidden>
+      <span class="drop-title">ここに落とすと、この PDF を確かめます</span>
+      <span class="drop-note">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
+    </div>
     <p id="unofficial" class="unofficial" role="alert" hidden></p>
     <header class="band">
       <h1 class="brand"><span class="seal" aria-hidden="true">守</span>お守りPDF</h1>
@@ -26,7 +31,7 @@
           <span class="step-note" id="step-check-note">まだです</span>
         </li>
         <li id="step-clean" data-state="todo">
-          <span class="step-no" aria-hidden="true">3</span><span class="step-name"><span class="visually-hidden">3 </span>片付ける</span>
+          <span class="step-no" aria-hidden="true">3</span><span class="step-name"><span class="visually-hidden">3 </span>整える</span>
           <span class="step-note" id="step-clean-note">まだです</span>
         </li>
         <li id="step-verify" data-state="todo">
@@ -34,7 +39,7 @@
           <span class="step-note" id="step-verify-note">通れば保存できます</span>
         </li>
       </ol>
-      <p class="zero-send">送信しない作り・このパソコンの中だけで確かめます</p>
+      <p class="zero-send">当サービスでは、選んだ PDF をどこにも送信しません。</p>
     </header>
 
     <main class="workspace" id="workspace" data-state="empty">
@@ -57,6 +62,7 @@
           <span class="filebar-name" id="file-name"></span>
           <span class="filebar-facts" id="file-facts"></span>
           <button id="file-again" class="filebar-again" type="button">別の PDF を選ぶ</button>
+          <button id="go-home" class="filebar-again" type="button">最初の画面に戻る</button>
         </div>
 
         <figure class="sheet-wrap" id="sheet-wrap" hidden>
@@ -75,7 +81,7 @@
         <progress id="progress" max="1" value="0" aria-label="進み具合" hidden></progress>
 
         <div id="actions" class="actions" hidden>
-          <button id="sanitize" type="button" aria-describedby="sanitize-note">片付ける</button>
+          <button id="sanitize" type="button" aria-describedby="sanitize-note">整える</button>
           <p id="sanitize-note"></p>
           <div id="redact-left" class="not-done" hidden>
             <h3>▲ 読み直しで残っていた所</h3>
@@ -97,9 +103,9 @@
         </div>
 
         <section id="clean" class="clean" aria-labelledby="clean-title" hidden>
-          <h3 id="clean-title" tabindex="-1">片付けた結果</h3>
+          <h3 id="clean-title" tabindex="-1">整えた結果</h3>
           <p id="clean-count" class="clean-count"></p>
-          <a id="download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="save-note">片付けた PDF を保存する</a>
+          <a id="download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="save-note">整えた PDF を保存する</a>
           <p id="save-note" class="save-note"></p>
           <label id="save-confirm" class="save-confirm" hidden>
             <input id="save-confirm-box" type="checkbox" />
@@ -107,11 +113,11 @@
           </label>
           <p id="download-note" class="download-note"></p>
           <div id="not-done" class="not-done" hidden>
-            <h4>▲ 片付けられなかった所</h4>
+            <h4>▲ 消せなかった所</h4>
             <ul id="not-done-list"></ul>
           </div>
           <div id="before-after" class="before-after" hidden>
-            <h4>型ごとの数（片付ける前 → 読み直したあと）</h4>
+            <h4>型ごとの数（整える前 → 読み直したあと）</h4>
             <ul id="before-after-list"></ul>
           </div>
           <details id="removed" class="removed" open>
@@ -125,7 +131,7 @@
 
           <section id="compress" class="compress" aria-labelledby="compress-title" hidden>
             <h4 id="compress-title" tabindex="-1">ファイルを小さくする（必要なときだけ）</h4>
-            <p class="compress-note">提出先に容量の上限があるときに使います。片付けた PDF の画像を縮めて書き直します。字・図形は変えません。小さくしたあとも、もう一度最初から検査し直します。</p>
+            <p class="compress-note">提出先に容量の上限があるときに使います。整えた PDF の画像を縮めて書き直します。字・図形は変えません。小さくしたあとも、もう一度最初から検査し直します。</p>
             <fieldset class="compress-presets" id="compress-presets">
               <legend>画像の細かさ</legend>
             </fieldset>
@@ -157,7 +163,6 @@
         <details id="ruleset" class="ruleset" hidden></details>
 
         <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。見つけた字の中身は、画面に出しません。数と場所だけを出します。</p>
-        <p class="font-note">書体と部品の著作権・ライセンスは、<a href="/licenses.html">ライセンスのページ</a>にまとめています。</p>
       </aside>
     </main>
 

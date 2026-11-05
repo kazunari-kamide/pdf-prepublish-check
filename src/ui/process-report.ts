@@ -59,19 +59,19 @@ export function buildProcessReport(input: ProcessReportInput): string {
   lines.push("この報告書には、PDF の字の中身・欄の値・ファイル名を載せていません。数と場所だけです。");
   lines.push("");
   lines.push("■ ファイルの確かめ（SHA-256）");
-  lines.push(`片付ける前：${before.sha256}（${before.bytes} バイト）`);
-  lines.push(`片付けた後：${after.sha256}（${after.bytes} バイト・${after.pages} ページ）`);
-  lines.push("保存したファイルの SHA-256 が「片付けた後」と同じなら、この報告書のファイルです。");
+  lines.push(`整える前：${before.sha256}（${before.bytes} バイト）`);
+  lines.push(`整えた後：${after.sha256}（${after.bytes} バイト・${after.pages} ページ）`);
+  lines.push("保存したファイルの SHA-256 が「整えた後」と同じなら、この報告書のファイルです。");
   lines.push("");
   lines.push("■ 結論");
   lines.push(input.verdict);
   lines.push("");
-  lines.push("■ 型ごとの数（片付ける前 → 読み直したあと）");
+  lines.push("■ 型ごとの数（整える前 → 読み直したあと）");
   const counts = beforeAfterCounts(before.coverage, after.coverage);
   if (!counts.length) lines.push("- 見つかった所はありませんでした。");
   for (const c of counts) lines.push(`- ${c.name}（${c.key}）：${c.before} → ${c.after === null ? "読み直せなかった" : c.after}`);
   lines.push("");
-  lines.push("■ 消した所");
+  lines.push("■ 整えた内容（見えない情報を消した所）");
   if (!input.removed.length) lines.push("- ありません。");
   const chars = input.removed.filter((r) => CHAR_KINDS.has(r.kind)).reduce((n, r) => n + r.count, 0);
   if (chars) lines.push(`消した字の数：合わせて ${chars} 字`);
@@ -81,11 +81,11 @@ export function buildProcessReport(input: ProcessReportInput): string {
     lines.push(`- ${patternWithName(r.pattern)}／${where}／${r.label}／数：${unit}`);
   }
   lines.push("");
-  lines.push("■ 片付けられなかった所");
+  lines.push("■ 消せなかった所");
   if (!input.notDone.length) lines.push("- ありません。");
   for (const n of input.notDone) lines.push(`- ${patternWithName(n.pattern)}／${n.page !== undefined ? `ページ ${n.page}` : "ファイル全体"}／${n.label}`);
   lines.push("");
-  lines.push("■ 調べた範囲（片付ける前）");
+  lines.push("■ 調べた範囲（整える前）");
   for (const c of before.coverage) lines.push(coverageLine(c));
   lines.push("");
   lines.push("■ 調べた範囲（読み直したあと）");
