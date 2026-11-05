@@ -237,6 +237,7 @@ describe("P5 1.3.0：資源にあるが描かれない部品", () => {
     doc.context.register(doc.context.obj({ Type: "Pages", Kids: [], Count: 0 } as never)); // どこからも指されていないページの木
     const r = await p5rule.run(new Uint8Array(await doc.save({ useObjectStreams: false })));
     expect(r.items).toEqual([]);
+    expect(r.notices).toEqual([]);
   });
 });
 

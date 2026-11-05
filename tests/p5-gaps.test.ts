@@ -99,16 +99,18 @@ describe("項目19：版が1つで、使われていない構造の部品だけ�
     expect(r.cleanupOnly.parts).toMatchObject({ color_profile: 1, cmap: 1, font_file: 1 });
   });
 
-  it("画面では「低」の1行（消せる残り）として出し、「高」は出さない", async () => {
+  it("画面では項目にせず、お知らせ（info）の1行（消せる残り）として出す", async () => {
     const bytes = await make({ extra: async (doc) => void (await doc.embedFont(FONT, { subset: true })) });
     const res = await p5Rule.run(bytes);
     expect(res.status).toBe("ok");
-    expect(res.items.map((i) => i.severity)).toEqual(["low"]);
-    expect(res.items[0]!.title).toContain("（消せる残り）");
-    expect(res.items[0]!.why).toContain("「整える」");
-    expect(res.items[0]!.detail).toBe("フォントの設定 3個／フォントの本体 1個／文字の対応表 1個");
+    expect(res.items).toEqual([]);
+    expect(res.notices.map((n) => n.kind)).toEqual(["info"]);
+    const msg = res.notices[0]!.message;
+    expect(msg).toContain("使われていない部品");
+    expect(msg).toContain("「整える」");
+    expect(msg).toContain("フォントの設定 3個／フォントの本体 1個／文字の対応表 1個");
     // 断定する言い方をしない
-    expect(res.items[0]!.why).not.toMatch(/安全です|問題なし/);
+    expect(msg).not.toMatch(/安全です|問題なし/);
   });
 
   it("対照：使う部品だけの PDF は、何も出さない", async () => {

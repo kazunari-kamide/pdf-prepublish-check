@@ -427,23 +427,24 @@ const p5 = defineRule<P5Report>({
       page: null,
       rect: null,
     });
-    // 字の中身を持たない構造の部品だけの残り（1.2.0）。漏れとは分けて「低」で1行だけ出し、片付けへ案内する。
-    // フォント・対応表・色の設定のような、作った道具や使った字の手がかりになる部品があるときだけ出す。
-    // ページの並び・目次の辞書・中身のない null のような「そのほかの部品」だけなら出さない（2026-11-05。増分更新でページを足しただけの PDF など）
-    const c = r.cleanupOnly;
-    if (c && c.count > 0 && (Object.keys(P5_PART) as P5Part[]).some((p) => p !== "other" && c.parts[p] > 0)) {
-      const parts = (Object.keys(P5_PART) as P5Part[]).filter((p) => c.parts[p] > 0).map((p) => `${P5_PART[p]} ${c.parts[p]}個`);
-      items.push({
-        pattern: "P5",
-        severity: "low", // 【仮】
-        title: "使われていない部品が、ファイルの中に残っています（消せる残り）",
-        why: "調べた範囲では字の中身は見つかりませんでしたが、作った道具や使った字の手がかりになることがあるので、「整える」で消せます。",
-        detail: parts.join("／"),
-        page: null,
-        rect: null,
-      });
-    }
     return items;
+  },
+  // 字の中身を持たない構造の部品だけの残り（検出ルール 1.2.0 の cleanupOnly）。前の版の残り（P5 の項目）とは分け、
+  // お知らせ（info）として1行だけ出し、「整える」へ案内する（2026-11-06。見ないで作るテスト集の F04：使われていない
+  // 書体の部品を、前の版の残りと誤らない）。info は「調べきれなかった所」には数えない（src/ui/model.ts）。
+  // フォント・対応表・色の設定のような、作った道具や使った字の手がかりになる部品があるときだけ出す。
+  // ページの並び・目次の辞書・中身のない null のような「そのほかの部品」だけなら出さない（2026-11-05。増分更新でページを足しただけの PDF など）
+  notices: (r) => {
+    const c = r.cleanupOnly;
+    if (!c || c.count === 0 || !(Object.keys(P5_PART) as P5Part[]).some((p) => p !== "other" && c.parts[p] > 0)) return [];
+    const parts = (Object.keys(P5_PART) as P5Part[]).filter((p) => c.parts[p] > 0).map((p) => `${P5_PART[p]} ${c.parts[p]}個`);
+    return [
+      {
+        kind: "info" as const,
+        message: `使われていない部品が、ファイルの中に残っています（${parts.join("／")}）。調べた範囲では字の中身は見つかりませんでしたが、作った道具や使った字の手がかりになることがあるので、「整える」で消せます。`,
+        pages: [],
+      },
+    ];
   },
 });
 
