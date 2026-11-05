@@ -1566,12 +1566,8 @@ progress {
   cursor: pointer;
 }
 
-/* 乗ったとき：題に黄のマーカー（下線は引かない。案 C） */
-.item:hover .item-title {
-  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
+/* 検出の行の題には、乗っても選んでもマーカーを引かない（題は折り返す箱なので、帯が 2 行目だけに出てしまう）。
+   選んだこと・乗ったことは、行の紅の枠と地の色で示す（2026-11-06 朝） */
 
 .item > span {
   display: block;
