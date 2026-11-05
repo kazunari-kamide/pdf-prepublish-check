@@ -15,6 +15,7 @@ import path from "node:path";
 import type { Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
 import { OFFICIAL_ORIGIN } from "./htaccess.ts";
+import { faviconHref, inlineMark } from "./logo.ts";
 import { renderSite, sitePaths } from "./src/site/render.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
 
@@ -44,7 +45,13 @@ export function renderRobots(origin = OFFICIAL_ORIGIN): string {
 export function siteFiles(): Map<string, string> {
   const css = siteCss();
   const cssFile = siteCssFile(css);
-  const files = renderSite({ origin: OFFICIAL_ORIGIN, csp: cspForMeta, cssHref: `/${cssFile}` });
+  const files = renderSite({
+    origin: OFFICIAL_ORIGIN,
+    csp: cspForMeta,
+    cssHref: `/${cssFile}`,
+    favicon: faviconHref(),
+    brandMark: inlineMark("mark-on-dark", "site-brand-mark"),
+  });
   files.set("sitemap.xml", renderSitemap());
   files.set("robots.txt", renderRobots());
   files.set(cssFile, css);

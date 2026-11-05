@@ -45,7 +45,7 @@ body.site {
 .site-band {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center; /* ロゴマークと名前・案内を、帯の高さの真ん中でそろえる（字の下の線でそろえると、案内が下にずれる） */
   gap: var(--space-3) var(--space-6);
   padding: var(--space-3) var(--space-5);
   background: var(--color-base);
@@ -57,10 +57,20 @@ body.site {
 }
 
 .site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-head);
   font-size: var(--text-h1);
   font-weight: bold;
   text-decoration: none;
+}
+
+/* 墨の帯のロゴマーク（design/logo/mark-on-dark.svg）。伸ばさない・色を変えない */
+.site-brand-mark {
+  flex: none;
+  width: var(--logo-site);
+  height: var(--logo-site);
 }
 
 .site-nav {
