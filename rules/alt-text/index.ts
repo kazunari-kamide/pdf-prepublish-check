@@ -6,9 +6,11 @@
 // 種類（kind）：
 //   actual_text_diff：ページの中の /ActualText（マーク付きの中身の代わりの文字）が、描いた字と違う（コピーすると、描いた字ではなく代わりの字が出る）
 //   outline：しおり（/Outlines）の題。画面の横に見えるもの。低い「確認してほしい所」
-//   alt：読み上げ用の説明（構造の /Alt）と、構造の /ActualText、字を描いていない所の /ActualText。
+//   alt：読み上げ用の説明（構造の /Alt）と、構造の /ActualText・/T（題）・/E（略語の展開。/T・/E は 1.1.0 から）、字を描いていない所の /ActualText。
 //        行政の PDF のアクセシビリティで推奨されるので危険にはせず、低い「確認してほしい所」として件数を出す
 // 数えないもの：描いた字と同じ /ActualText（合字・異体字を、ふつうの字に直すためのもの）。
+//   1.1.0 から：ページに描いた字の中にそのまま出てくる、しおりの題・読み上げ用の説明（見出しと同じ題、図の見える説明と同じ /Alt）。
+//   ページに描いていない字だけを数える（notCounted.inBody）。字の中身が分からない書体の字は比べられないので、これまでどおり数える。
 //   字の中身が分からない書体（ToUnicode なし）の上の /ActualText は、比べられないので notCounted に数える。
 
 import { PDFDict, PDFStream, type PDFContext, type PDFObject, type PDFPage } from "pdf-lib";
@@ -19,7 +21,7 @@ import { decodeTextBytes } from "../p1-info/index.ts";
 import { arrayItems, catalogOf, dictOf, lookup, N, nameOf, openPdf, streamData, textOf, visibleText, type RuleError } from "../common/index.ts";
 
 export const RULE_ID = "alt-text";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 export type AltKind = "actual_text_diff" | "outline" | "alt";
 
@@ -41,7 +43,7 @@ export type AltReport = {
   status: "ok" | "error";
   error?: RuleError;
   findings: AltFinding[];
-  notCounted: { sameText: number; unknownFont: number };
+  notCounted: { sameText: number; unknownFont: number; inBody: number };
   limits: Array<"too_many_outlines" | "too_many_struct" | "too_many_ops" | "unreadable_page">;
   decrypted?: EncryptionSummary & { failedObjects: number };
 };
@@ -56,21 +58,21 @@ function tokText(t: Tok | undefined): string | null {
 }
 
 export async function detectAltText(bytes: Uint8Array): Promise<AltReport> {
-  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], notCounted: { sameText: 0, unknownFont: 0 }, limits: [] };
+  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], notCounted: { sameText: 0, unknownFont: 0, inBody: 0 }, limits: [] };
   const opened = await openPdf(bytes);
   if (!opened.ok) return { ...base, status: "error", error: opened.error };
   const { doc, ctx } = opened;
-  const report: AltReport = { ...base, status: "ok", findings: [], notCounted: { sameText: 0, unknownFont: 0 }, limits: [] };
+  const report: AltReport = { ...base, status: "ok", findings: [], notCounted: { sameText: 0, unknownFont: 0, inBody: 0 }, limits: [] };
   if (opened.decrypted) report.decrypted = opened.decrypted;
   const limit = (l: AltReport["limits"][number]) => {
     if (!report.limits.includes(l)) report.limits.push(l);
   };
 
-  // ---- しおり
+  // ---- しおり（題を集め、ページの字を読んだあとで数える。1.1.0 から）
+  const outlineTitles: string[] = [];
+  const structTexts: string[] = [];
   const outlines = dictOf(ctx, catalogOf(ctx)?.get(N("Outlines")));
   if (outlines) {
-    let count = 0;
-    let chars = 0;
     let seen = 0;
     const visited = new Set<PDFObject>();
     const stack: Array<{ obj: PDFObject | undefined; depth: number }> = [{ obj: outlines.get(N("First")), depth: 0 }];
@@ -87,22 +89,16 @@ export async function detectAltText(bytes: Uint8Array): Promise<AltReport> {
           break;
         }
         const t = visibleText(textOf(ctx, d.get(N("Title"))) ?? "");
-        if (t) {
-          count++;
-          chars += [...t].length;
-        }
+        if (t) outlineTitles.push(t);
         if (depth < LIMITS.depth) stack.push({ obj: d.get(N("First")), depth: depth + 1 });
         cur = d.get(N("Next"));
       }
     }
-    if (count) report.findings.push({ pattern: "P7", kind: "outline", where: "outlines", pages: [], count, chars });
   }
 
   // ---- 構造（/StructTreeRoot）の /Alt と /ActualText
   const root = dictOf(ctx, catalogOf(ctx)?.get(N("StructTreeRoot")));
   if (root) {
-    let count = 0;
-    let chars = 0;
     let n = 0;
     const visited = new Set<PDFObject>();
     const stack: Array<{ obj: PDFObject | undefined; depth: number }> = [{ obj: root.get(N("K")), depth: 0 }];
@@ -116,21 +112,20 @@ export async function detectAltText(bytes: Uint8Array): Promise<AltReport> {
           limit("too_many_struct");
           break;
         }
-        for (const key of ["Alt", "ActualText"]) {
+        // 構造要素の題（/T）と略語の展開（/E）も、読み上げや支援技術で取り出される（1.1.0 から。ページに描いた字と同じものは数えない）
+        for (const key of ["Alt", "ActualText", "T", "E"]) {
           const t = visibleText(textOf(ctx, v.get(N(key))) ?? "");
-          if (t) {
-            count++;
-            chars += [...t].length;
-          }
+          if (t) structTexts.push(t);
         }
         stack.push({ obj: v.get(N("K")), depth: depth + 1 });
       } else for (const k of arrayItems(ctx, v)) stack.push({ obj: k, depth: depth + 1 });
     }
-    if (count) report.findings.push({ pattern: "P7", kind: "alt", where: "structure", pages: [], count, chars });
   }
 
   // ---- ページの中の /ActualText
   const diff = { count: 0, chars: 0, pages: new Set<number>() };
+  // ページに描いた字（中身の分かるものだけ。比べるため。1.1.0 から）
+  const bodyParts: string[] = [];
   const noGlyph = { count: 0, chars: 0, pages: new Set<number>() };
   let pages: PDFPage[];
   try {
@@ -166,12 +161,31 @@ export async function detectAltText(bytes: Uint8Array): Promise<AltReport> {
           diff.chars += [...a].length;
           diff.pages.add(pageNo);
         }
-      }, () => limit("too_many_ops"));
+      }, () => limit("too_many_ops"), (t) => bodyParts.push(t));
     } catch {
       limit("unreadable_page");
     }
   });
   const sorted = (s: Set<number>) => [...s].sort((a, b) => a - b);
+  // しおりの題・構造の説明は、ページに描いた字の中にそのまま出てこないものだけを数える（1.1.0 から）
+  const body = norm(bodyParts.join(""));
+  const notInBody = (list: string[]) => {
+    const out = { count: 0, chars: 0 };
+    for (const t of list) {
+      const n = norm(t);
+      if (n && body.includes(n)) {
+        report.notCounted.inBody++;
+        continue;
+      }
+      out.count++;
+      out.chars += [...t].length;
+    }
+    return out;
+  };
+  const ol = notInBody(outlineTitles);
+  if (ol.count) report.findings.push({ pattern: "P7", kind: "outline", where: "outlines", pages: [], count: ol.count, chars: ol.chars });
+  const st = notInBody(structTexts);
+  if (st.count) report.findings.push({ pattern: "P7", kind: "alt", where: "structure", pages: [], count: st.count, chars: st.chars });
   if (diff.count) report.findings.unshift({ pattern: "P7", kind: "actual_text_diff", where: "page", pages: sorted(diff.pages), count: diff.count, chars: diff.chars });
   if (noGlyph.count) report.findings.push({ pattern: "P7", kind: "alt", where: "page", pages: sorted(noGlyph.pages), count: noGlyph.count, chars: noGlyph.chars });
   return report;
@@ -189,6 +203,7 @@ function walkActualText(
   resources: PDFDict | undefined,
   onSpan: (actual: string, shown: string, glyphs: number, unknown: boolean) => void,
   onLimit: () => void,
+  onShown: (text: string) => void = () => {},
 ) {
   let ops = 0;
   const captures: Capture[] = [];
@@ -203,8 +218,10 @@ function walkActualText(
     const fontStack: Array<FontInfo | undefined> = [];
     const show = (b: Uint8Array) => {
       const cap = captures[0];
+      const glyphs = (font ?? readFont(ctx, undefined)).decode(b);
+      onShown(glyphs.map((g) => g.text).join(""));
       if (!cap) return;
-      for (const g of (font ?? readFont(ctx, undefined)).decode(b)) {
+      for (const g of glyphs) {
         if (g.isSpace) continue;
         cap.glyphs++;
         if (!g.text) cap.unknown = true;

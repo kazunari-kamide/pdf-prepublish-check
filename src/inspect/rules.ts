@@ -93,6 +93,7 @@ function skippedNotices(skipped: Array<{ page: number; reason: string }>): Notic
 // ---------------------------------------------------------------- P6 見せかけの黒塗り
 
 const P6_COVER: Record<string, string> = { fill: "塗りつぶした図形", image: "黒い画像", annotation: "注釈" };
+const P6_OPAQUE_COVER: Record<string, string> = { fill: "図形", image: "画像", annotation: "注釈" };
 
 const p6 = defineRule<P6TextReport>({
   id: "p6-text",
@@ -128,6 +129,24 @@ export function p6Item(f: P6TextReport["findings"][number]): Item {
   const cover = `覆っているもの：${P6_COVER[f.cover] ?? "図形"}`;
   const base = { pattern: "P6" as const, severity: "high" as const, page: f.page, rect: f.rect };
   const check = f.confidence === "check" ? { confidence: "check" as const } : {};
+  if (f.layer === "text" && f.coverTone === "opaque") {
+    // 白・灰・色の不透明な覆い（検出ルール 1.11.0 から）。覆いの下の字は、色によらず見せかけの黒塗りとして出す【文言は仮】
+    const what = P6_OPAQUE_COVER[f.cover] ?? "図形";
+    return f.confidence === "check"
+      ? {
+          ...base,
+          ...check,
+          title: `上に重ねた${what}の下に、字が残っているかもしれません`,
+          why: "上に別の字や形が重なっているため、言い切れません。白や色で覆っただけなら、下の字を選んでコピーできてしまいます。確かめてください。",
+          detail: `覆っているもの：${what}（黒以外の色）／重なっている字：${f.chars}字`,
+        }
+      : {
+          ...base,
+          title: `上に重ねた${what}の下に、字が残っています`,
+          why: "白や色で覆っても、下の字は消えていません。選んでコピーできます。",
+          detail: `覆っているもの：${what}（黒以外の色）／残っている字：${f.chars}字`,
+        };
+  }
   if (f.layer === "text") {
     return f.confidence === "check"
       ? {
@@ -195,6 +214,8 @@ const P7_REASON: Record<P7Reason, string> = {
   hidden_codepoint: "見えない文字コード",
   remapped: "見た目と取り出される字が違う字",
   overdrawn: "同じ所に重ねて描いた、違う字",
+  image_off_page: "ページの外に置いた画像",
+  image_clipped: "切り抜きで大部分を隠した画像",
 };
 
 /** 見える字の中の隠し（検出ルール 1.1.0 から）は、見出しと理由を分ける。文言・深刻度は【仮】 */
@@ -214,7 +235,20 @@ const P7_VISIBLE_KIND: Partial<Record<P7Reason, { title: string; why: string; se
     why: "上に重なった字しか読めませんが、下の字も検索やコピーで取り出せます。",
     severity: "high",
   },
+  // 見えない所に置いた画像（検出ルール 1.2.0 から）。字ではないので、字の数は出さない
+  image_off_page: {
+    title: "ページの外に、画像が置かれています",
+    why: "画面や印刷には出ませんが、画像を取り出すと中身が見えます。消し忘れの画像でないか、確かめてください。",
+    severity: "medium",
+  },
+  image_clipped: {
+    title: "画像の大部分が、切り抜きで隠されています",
+    why: "見えているのは画像のごく一部ですが、画像を取り出すと隠れた所も見えます。確かめてください。",
+    severity: "medium",
+  },
 };
+
+const P7_SHOWN_AS_P6 = new Set<P7Reason>(["covered_light", "covered_image"]);
 
 const p7 = defineRule<P7Report>({
   id: "p7-hidden",
@@ -223,20 +257,34 @@ const p7 = defineRule<P7Report>({
   // 1ページの命令の数の上限は、P6 とそろえる（2026-11-03 本人が決定。PR #31 の返事 5）。
   // P7 の既定の値（rules/p7-hidden）は検出ルールの担当の範囲なので変えず、画面から呼ぶときだけ上書きする。
   detect: (b) => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage } }),
+  // 覆いの下の字（白っぽい図形・あとから重ねた画像）は、色によらず見せかけの黒塗り（P6）で出すので、画面では P7 に出さない（2026-11-05）。
+  // 検出ルールの報告には残す（P7 の正解データと検証器は、これらを P7 として数える）
   items: (r) =>
-    r.findings.map((f) => {
+    r.findings.filter((f) => !P7_SHOWN_AS_P6.has(f.reason)).map((f) => {
       const v = P7_VISIBLE_KIND[f.reason];
       return {
         pattern: "P7",
         severity: v?.severity ?? "high", // 【仮】
         title: v?.title ?? "見えない字が残っています",
         why: v?.why ?? "画面では見えませんが、検索やコピーで取り出せます。",
-        detail: `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
+        detail: f.reason === "image_off_page" || f.reason === "image_clipped" ? P7_REASON[f.reason] : `${P7_REASON[f.reason] ?? "見えない字"}／${f.chars}字`,
         page: f.page,
         rect: f.rect,
       };
     }),
-  notices: (r) => skippedNotices(r.skippedPages),
+  // 文字認識の層のあるページ（検出ルール 1.1.0 の ocrLayerPages）は、漏れとは言い切れないので、お知らせ（info）として出す（2026-11-05）
+  notices: (r) => [
+    ...skippedNotices(r.skippedPages),
+    ...(r.ocrLayerPages.length
+      ? [
+          {
+            kind: "info" as const,
+            message: "このページには、文字認識で読み取った字の層があります（検索やコピーのため）。見た目と違う字が入っていないか、必要なら確かめてください。",
+            pages: r.ocrLayerPages,
+          },
+        ]
+      : []),
+  ],
 });
 
 // ---------------------------------------------------------------- P1 文書情報
@@ -278,6 +326,7 @@ const P5_KIND: Record<P5Kind, string> = {
   image: "画像",
   embedded_file: "添付ファイル",
   dict_text: "字の入った情報",
+  unused_form: "描かれない部品",
 };
 
 /** 字の中身を持たない構造の部品の呼び名（検出ルール 1.2.0 の cleanupOnly.parts） */
@@ -295,9 +344,21 @@ const p5 = defineRule<P5Report>({
   pattern: "P5",
   detect: (b) => detectP5Revisions(b),
   items: (r) => {
-    const items: Item[] = r.findings.map((f) => ({
-      pattern: "P5",
-      severity: "high", // 【仮】
+    const items: Item[] = r.findings.map((f) =>
+      f.kind === "unused_form"
+        ? {
+            // 資源にあるが描かれない部品（検出ルール 1.3.0 から）【文言は仮】
+            pattern: "P5" as const,
+            severity: "high" as const,
+            title: "ページに描かれない部品に、字が入っています",
+            why: "ページの部品として登録されていますが画面には出ないため、気づかないまま、中の字を取り出せます。",
+            detail: P5_KIND.unused_form,
+            page: null,
+            rect: null,
+          }
+        : {
+      pattern: "P5" as const,
+      severity: "high" as const, // 【仮】
       title: `修正する前の版の「${P5_KIND[f.kind] ?? "中身"}」が、ファイルの中に残っています`,
       why: "見た目は新しい版でも、修正する前の内容を取り出せます。",
       detail: [f.revision !== null ? `${f.revision}番目の版` : "どの版か分からない部分", f.chars !== undefined ? `${f.chars}字` : ""]
@@ -305,10 +366,12 @@ const p5 = defineRule<P5Report>({
         .join("／"),
       page: null,
       rect: null,
-    }));
-    // 字の中身を持たない構造の部品だけの残り（1.2.0）。漏れとは分けて「低」で1行だけ出し、片付けへ案内する
+    });
+    // 字の中身を持たない構造の部品だけの残り（1.2.0）。漏れとは分けて「低」で1行だけ出し、片付けへ案内する。
+    // フォント・対応表・色の設定のような、作った道具や使った字の手がかりになる部品があるときだけ出す。
+    // ページの並び・目次の辞書・中身のない null のような「そのほかの部品」だけなら出さない（2026-11-05。増分更新でページを足しただけの PDF など）
     const c = r.cleanupOnly;
-    if (c && c.count > 0) {
+    if (c && c.count > 0 && (Object.keys(P5_PART) as P5Part[]).some((p) => p !== "other" && c.parts[p] > 0)) {
       const parts = (Object.keys(P5_PART) as P5Part[]).filter((p) => c.parts[p] > 0).map((p) => `${P5_PART[p]} ${c.parts[p]}個`);
       items.push({
         pattern: "P5",
@@ -728,12 +791,16 @@ const extras = defineRule<ExtrasReport>({
   label: "ページの縮小画像",
   pattern: "P5",
   detect: (b) => detectExtras(b),
+  // 縮小画像が、いまのページとほぼ同じ（same）なら出さない。違う（differs）なら「高」、比べられなかったら（unknown）これまでどおり「低」（検出ルール 1.1.0 から）
   items: (r) =>
-    r.thumbnails.map((t) => ({
+    r.thumbnails.filter((t) => t.compare !== "same").map((t) => ({
       pattern: "P5",
-      severity: "low", // 【仮】いまのページと違うかは、まだ比べていない
-      title: "ページの縮小画像が付いています",
-      why: "ページを差し替えたり黒塗りしたりしても、縮小画像は前の見た目のまま残ることがあります。確かめてください。",
+      severity: t.compare === "differs" ? ("high" as const) : ("low" as const), // 【仮】
+      title: t.compare === "differs" ? "ページの縮小画像が、いまのページの見た目と違います" : "ページの縮小画像が付いています",
+      why:
+        t.compare === "differs"
+          ? "縮小画像に、いまのページにない見た目が残っています。差し替える前や、黒塗りする前のページかもしれません。"
+          : "ページを差し替えたり黒塗りしたりしても、縮小画像は前の見た目のまま残ることがあります。確かめてください。",
       detail: [t.width && t.height ? `${t.width}×${t.height} 画素` : "", formatSize(t.bytes)].filter(Boolean).join("／"),
       page: t.page,
       rect: null,
