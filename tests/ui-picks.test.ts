@@ -10,7 +10,7 @@ import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, to
 
 const row = (over: Partial<Row>): Row => ({
   no: 1, severity: "medium", severityLabel: "中", patternLabel: "個人情報らしい字（P13）", pattern: "P13",
-  page: 1, pageLabel: "1", hasRect: true, rect: [10, 10, 60, 22], title: "t", why: "w", detail: "d", check: false, ...over,
+  page: 1, pageLabel: "1", hasRect: true, rect: [10, 10, 60, 22], title: "t", why: "w", detail: "d", check: false, candidate: true, ...over,
 });
 
 describe("個人情報の候補から選ぶ", () => {

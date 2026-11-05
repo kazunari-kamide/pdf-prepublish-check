@@ -789,6 +789,18 @@ body:has(.terms-dialog[open]) {
   color: var(--color-accent);
 }
 
+/* 見えている候補の枠：墨の点線（見えない情報の紅の実線と、色と線の形で分ける）。札も墨 */
+.mark.mark-candidate {
+  border-style: dashed;
+  border-color: var(--line-strong);
+  background: transparent;
+}
+
+.mark.mark-candidate .mark-no {
+  border-color: var(--line-strong);
+  background: var(--line-strong);
+}
+
 /* 片付けた所：緑の点線の細い枠と「済」の札。押せない（残っている所の枠と、色・線・字で見分ける） */
 .mark.mark-done {
   border: var(--border-done) dashed var(--color-ok);
@@ -920,6 +932,15 @@ progress {
 .group[data-status="scope"] .fuda {
   background: var(--color-chip);
   color: var(--color-base);
+}
+
+/* 見えている個人情報らしい字（候補）：紅にせず、知らせの形（墨の帯・「ｉ」の印）。黒塗りにするかは本人が決める（2026-11-05 夜のレビュー §0） */
+.group[data-status="candidate"] .fuda {
+  background: var(--line-strong);
+}
+
+.group[data-status="candidate"] .group-name::before {
+  content: "ｉ ";
 }
 
 .group-body {
@@ -1283,7 +1304,8 @@ progress {
   font-variant-numeric: tabular-nums;
 }
 
-.item[data-check] .item-no {
+.item[data-check] .item-no,
+.item[data-candidate] .item-no {
   background: transparent;
   color: var(--check);
   border: var(--bw-2) dashed var(--check);
@@ -1450,6 +1472,17 @@ progress {
 
 .clean-count {
   margin: 0 0 var(--space-3);
+  font-weight: 700;
+}
+
+/* 見えている候補の前と後（見えない情報の数とは別の行。紅にしない） */
+.clean-candidates {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  font-size: var(--text-small);
+}
+
+.clean-candidates::before {
+  content: "ｉ ";
   font-weight: 700;
 }
 
