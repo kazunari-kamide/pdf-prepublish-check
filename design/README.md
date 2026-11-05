@@ -82,7 +82,7 @@
 - マークは `design/logo/` の SVG（3つ：明るい地・墨の地・小さいとき用）。使い分け・余白・してはいけないことは `design/logo/README.md`。
 - **SVG は AGPL-3.0-only ではない**（`LicenseRef-OmamoriPDF-Logo`。改変版には使えない）。2026-11-05 本人が決めた。
 - 色は決まりの中だけ。小さいとき用の紙の折り角に `--color-logo-fold` `#D69B98` を足した（紅を白の上で 45% に薄めた色を、決まった値にしたもの。2色の決まりの外の新しい色ではない）。
-- 画面では、手順の帯の見出しに `mark.svg`（`--logo-header` 2.75rem）、サイトのページの墨の帯に `mark-on-dark.svg`（`--logo-site` 2.5rem）、ファビコンに `mark-small.svg`（`data:` の形）を使う。
+- 画面では、手順の帯の見出しに `mark.svg`（`--logo-header` 2.75rem）、サイトのページの上の帯（白の地）にも同じ `mark.svg` と `--logo-header`（検査のページとそろえる。`--logo-site` は今は使わない）、ファビコンに `mark-small.svg`（`data:` の形）を使う。
 
 ## 角の丸め
 

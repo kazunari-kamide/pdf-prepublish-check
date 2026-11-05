@@ -123,7 +123,7 @@ body.site {
   align-items: center;
   gap: var(--sp-2);
   font-family: var(--font-head);
-  font-size: var(--fs-h2);
+  font-size: var(--text-h2); /* 検査のページの上の帯（src/style.css の .brand）と同じ大きさ */
   font-weight: var(--fw-strong);
   text-decoration: none;
 }
@@ -135,8 +135,8 @@ body.site {
 /* ロゴマーク（design/logo/mark.svg。明るい地用）。伸ばさない・色を変えない */
 .site-brand-mark {
   flex: none;
-  width: var(--logo-site);
-  height: var(--logo-site);
+  width: var(--logo-header);
+  height: var(--logo-header);
 }
 
 .site-nav {
