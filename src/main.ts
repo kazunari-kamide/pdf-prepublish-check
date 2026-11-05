@@ -27,6 +27,7 @@ import type { CoverageRow } from "./ui/coverage";
 import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
 import { isOfficialHost, UNOFFICIAL_NOTE } from "./ui/official";
+import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, SPLIT_STEP_PX } from "./ui/compact";
 import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
@@ -74,6 +75,7 @@ const ui = {
   caption: el<HTMLElement>("sheet-caption"),
   renderNote: el<HTMLParagraphElement>("render-note"),
   resultTitle: el<HTMLHeadingElement>("result-title"),
+  results: el<HTMLElement>("results"),
   status: el<HTMLParagraphElement>("status"),
   progress: el<HTMLProgressElement>("progress"),
   verified: el<HTMLDivElement>("verified"),
@@ -438,6 +440,7 @@ function itemButton(r: Row): HTMLButtonElement {
   btn.id = `item-${r.no}`;
   btn.dataset.severity = r.severity;
   if (r.check) btn.dataset.check = "true";
+  btn.setAttribute("aria-expanded", "false");
   const top = make("span", undefined, "item-top");
   top.append(
     make("span", String(r.no), "item-no"),
@@ -445,10 +448,20 @@ function itemButton(r: Row): HTMLButtonElement {
     r.check
       ? make("span", "？ 確かめる", "item-sev sev-check")
       : make("span", `${SEVERITY_MARK[r.severity]} ${r.severityLabel}`, `item-sev sev-${r.severity}`),
-    make("span", r.page !== null ? `ページ ${r.page}` : "ファイル全体", "item-page"),
+    make("span", r.title, "item-title"),
   );
-  btn.append(top, make("span", r.title, "item-title"), make("span", r.why, "item-why"), make("span", r.detail, "item-detail"));
-  btn.addEventListener("click", () => void select(r));
+  // 閉じた形は 2 行（題の行と、場所・内訳の 1 行）。なぜ危ないかは、押して開いたときに出す（2026-11-05 本人の気づき）
+  const where = r.page !== null ? `ページ ${r.page}` : "ファイル全体";
+  btn.append(top, make("span", `${where}・${compactDetail(r.detail)}`, "item-detail"), make("span", r.why, "item-why"));
+  btn.addEventListener("click", () => {
+    // もう一度押すと閉じる。ほかの項目を押すと、そちらを開く
+    const open = btn.getAttribute("aria-expanded") === "true" && session?.selected === r.no;
+    if (open) {
+      btn.setAttribute("aria-expanded", "false");
+      return;
+    }
+    void select(r);
+  });
   return btn;
 }
 
@@ -557,8 +570,12 @@ function renderGroups(s: Session) {
 function renderCoverage(s: Session) {
   const { box, body } = groupBox(FUDA_SCOPE, "scope");
   box.id = "coverage";
-  body.append(make("h3", "見た所・見なかった所", "group-head"));
-  body.append(
+  const details = make("details", undefined, "coverage-details");
+  const summary = make("summary", undefined, "coverage-summary");
+  const head = make("h3", "見た所・見なかった所", "group-head");
+  summary.append(head, make("span", coverageSummary(s.view.coverage, s.phase), "coverage-sum"));
+  details.append(summary);
+  details.append(
     make(
       "p",
       "この版のルールで、どこまで調べたかを、型ごとに並べます。「調べた」は、決めた範囲を調べたという意味で、すべてを保証するものではありません。",
@@ -574,7 +591,8 @@ function renderCoverage(s: Session) {
     for (const r of c.reasons) li.append(make("span", r, "coverage-reason"));
     list.append(li);
   }
-  body.append(list);
+  details.append(list);
+  body.append(details);
   ui.groups.append(box);
 }
 
@@ -690,6 +708,8 @@ function markSelected(no: number | null) {
   if (no === null) return;
   document.getElementById(`mark-${no}`)?.classList.add("is-selected");
   document.getElementById(`item-${no}`)?.classList.add("is-selected");
+  // 選んだ項目だけを開く（ページの上の枠を押したときも、その項目の説明が開く）
+  for (const e of document.querySelectorAll<HTMLElement>(".item[aria-expanded]")) e.setAttribute("aria-expanded", String(e.id === `item-${no}`));
 }
 
 async function showPage(page: number, selectNo: number | null) {
@@ -1619,6 +1639,54 @@ window.addEventListener("drop", (e) => {
 
 // 幅が変わったら、大きなページを描き直す
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+
+const splitter = el<HTMLDivElement>("splitter");
+const stageEl = ui.sheetWrap.parentElement as HTMLElement;
+const rootPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 18;
+/** PDF の欄と結果の欄に使える幅（いまの 2 つの欄の幅の和） */
+const splitAvailable = () => stageEl.getBoundingClientRect().width + ui.results.getBoundingClientRect().width;
+function setResultsWidth(want: number) {
+  const w = clampResultsWidth(want, splitAvailable(), rootPx());
+  ui.workspace.style.setProperty("--results-w", `${w}px`);
+  const total = splitAvailable();
+  splitter.setAttribute("aria-valuenow", String(Math.round(((total - w) / total) * 100)));
+  splitter.setAttribute("aria-valuetext", `PDF の欄 ${Math.round(((total - w) / total) * 100)}%・結果の欄 ${Math.round((w / total) * 100)}%`);
+}
+let splitDrag: { x: number; w: number } | null = null;
+splitter.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  splitter.setPointerCapture(e.pointerId);
+  splitDrag = { x: e.clientX, w: ui.results.getBoundingClientRect().width };
+  splitter.dataset.dragging = "true";
+});
+splitter.addEventListener("pointermove", (e) => {
+  if (!splitDrag) return;
+  // 仕切りを左へ動かすと、結果の欄が広がる（PDF の欄が狭まる）
+  setResultsWidth(splitDrag.w + (splitDrag.x - e.clientX));
+});
+const endDrag = () => {
+  splitDrag = null;
+  delete splitter.dataset.dragging;
+};
+splitter.addEventListener("pointerup", endDrag);
+splitter.addEventListener("pointercancel", endDrag);
+splitter.addEventListener("keydown", (e) => {
+  const step = e.shiftKey ? SPLIT_BIG_STEP_PX : SPLIT_STEP_PX;
+  const w = ui.results.getBoundingClientRect().width;
+  if (e.key === "ArrowLeft") setResultsWidth(w + step);
+  else if (e.key === "ArrowRight") setResultsWidth(w - step);
+  else if (e.key === "Home") setResultsWidth(Number.POSITIVE_INFINITY);
+  else if (e.key === "End") setResultsWidth(0);
+  else return;
+  e.preventDefault();
+});
+// PDF の欄の幅が変わったら（仕切り・窓の大きさ）、ページの絵を欄の幅に合わせて描き直す（少し待ってから。ドラッグ中に何度も描かない）
+new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (session && session.current) void showPage(session.current, session.selected);
+  }, 200);
+}).observe(stageEl);
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
