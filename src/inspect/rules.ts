@@ -569,9 +569,8 @@ const pii = defineRule<PiiReport>({
   id: "pii",
   label: "個人情報らしい字",
   pattern: "P13", // 【仮】の番号
-  // includeText は、F が rules/pii に足すまで、ルールの側で読まれない（そのあいだは中身は出せない型。2026-11-05 本人が決めた）
-  detect: (b, ctx) =>
-    detectPii(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage }, ...(ctx.withContents ? { includeText: true } : {}) } as Parameters<typeof detectPii>[1]),
+  // 中身は、頼まれたときだけ includeText（rules/pii 0.1.3）で受ける（ほかの型と同じ出し方。2026-11-05）
+  detect: (b, ctx) => detectPii(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage }, ...(ctx.withContents ? { includeText: true } : {}) }),
   // 黒塗りの候補として示すだけ（決めるのは利用者）。型・場所・確からしさを出す（中身は、頼まれたときだけ content に）
   items: (r) =>
     r.findings.map((f) => ({
@@ -582,7 +581,7 @@ const pii = defineRule<PiiReport>({
       detail: `確からしさ：${f.confidence === "high" ? "高" : "確認"}（${PII_BASIS[f.basis] ?? "字の形から"}）／${f.chars}字${f.vertical ? "／縦書き" : ""}`,
       page: f.page,
       rect: f.rect,
-      ...contentOf((f as { text?: string }).text),
+      ...contentOf(f.text),
     })),
   notices: (r) => {
     const out = skippedNotices(

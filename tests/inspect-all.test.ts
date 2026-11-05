@@ -8,6 +8,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { detectPii } from "../rules/pii/index.ts";
+import { buildPdf, latinAt } from "./helpers/redact-pdfs.ts";
 import { detectP1Info } from "../rules/p1-info/index.ts";
 import { detectP6Text } from "../rules/p6-text/index.ts";
 import { detectP7Hidden } from "../rules/p7-hidden/index.ts";
@@ -125,6 +127,21 @@ describe("画面の検査の Worker が頼んだとき（withContents）は、�
       expect(buildView(s).rows.some((r) => r.content && words.includes(r.content))).toBe(true);
     });
   }
+});
+
+describe("個人情報の候補（P13）も、頼んだときは見つけた字を content に入れる（rules/pii 0.1.3 の includeText）", () => {
+  it("合成 PDF の架空のメールアドレスと携帯の番号", async () => {
+    const bytes = await buildPdf(() => ({ pages: [{ content: latinAt(50, 200, "ritsu@kakuu.test") + latinAt(50, 170, "TEL 090-0274-1883") }] }));
+    const words = (await detectPii(bytes, { includeText: true })).findings.map((f) => f.text ?? "").filter(Boolean);
+    expect(words.length).toBeGreaterThan(0);
+    const withC = await inspectAll(bytes, undefined, undefined, { withContents: true });
+    const contents = withC.rules.flatMap((r) => r.items).filter((i) => i.pattern === "P13").map((i) => i.content);
+    expect(contents.length).toBe(words.length);
+    for (const c of contents) expect(words).toContain(c);
+    // 頼まないときは入れない
+    const without = await inspectAll(bytes);
+    expect(without.rules.flatMap((r) => r.items).filter((i) => i.pattern === "P13" && i.content)).toHaveLength(0);
+  });
 });
 
 describe("プロパティの一覧だけは値を持つ（11/5 B の 8 の例外）", () => {
