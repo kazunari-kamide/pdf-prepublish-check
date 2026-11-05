@@ -9,6 +9,7 @@ import pdfjsUrl from "pdfjs-dist/build/pdf.min.mjs?url";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { createPdfjsImageDecoder, type ExternalImageDecoder, type PdfjsLike } from "../../rules/shared/pdfjs-images.ts";
 import { inspectAll } from "../inspect/inspect";
+import { PDFJS_WASM_URL } from "../render/pdfjs-parts";
 import { precheck } from "../inspect/precheck";
 import type { InspectRequest, InspectResponse } from "../inspect/protocol";
 
@@ -16,8 +17,8 @@ import type { InspectRequest, InspectResponse } from "../inspect/protocol";
  * 画像を解く道具（PDF.js）。JPEG の画像の画素を読み、P6 の画像の層を、この Worker の中で調べられるようにする。
  * - PDF.js の Worker の部品も、この Worker の中に読み込む（PDF.js は、それを見つけると、別の Worker を作らずに同じ所で動く）。
  *   時間の上限で、この Worker を止めれば、画像を解く処理もいっしょに止まる。
- * - CCITT・JBIG2 を解く部品（pdfjs-dist/wasm/）は渡さない。その部品は中に fetch を持ち、配る形の確かめ（scripts/check-dist.mjs）の
- *   例外に入っていないため。それらの画像は、これまでどおり「調べられなかった」と知らせる。
+ * - CCITT・JBIG2・JPEG 2000 を解く部品（WASM の代わりの JS）は、配信の中の /pdfjs/wasm/ に置いたもの（pdfjs-dist の写し）を、
+ *   PDF.js が import() で読む（2026-11-06 本人が決定。src/render/pdfjs-parts.ts）。前は渡さなかったので、それらの画像は「調べられなかった」になっていた。
  * - 読み込めなかったときは、道具なしで調べる（JPEG の画像は「調べられなかった」と知らせる）。
  */
 async function imageDecoder(): Promise<ExternalImageDecoder | undefined> {
@@ -26,7 +27,7 @@ async function imageDecoder(): Promise<ExternalImageDecoder | undefined> {
       import(/* @vite-ignore */ pdfjsUrl) as Promise<PdfjsLike>,
       import(/* @vite-ignore */ pdfjsWorkerUrl),
     ]);
-    return createPdfjsImageDecoder(lib);
+    return createPdfjsImageDecoder(lib, { jbig2Url: PDFJS_WASM_URL });
   } catch {
     return undefined;
   }

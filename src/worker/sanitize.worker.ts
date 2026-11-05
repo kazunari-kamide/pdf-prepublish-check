@@ -12,7 +12,7 @@ import type { ImageCodec } from "../../sanitize/types.ts";
 
 /**
  * 覆いの下の JPEG の画像を塗って書き直す道具（11/5 B）。解くのは PDF.js、書くのは OffscreenCanvas（Worker の中でも使える）。
- * CCITT・JBIG2 の部品（pdfjs-dist/wasm/）は、中に fetch を持つので渡さない（これまでどおり「片付けられなかった所」になる）。
+ * CCITT・JBIG2・JPEG 2000 を解く部品は、配信の中の /pdfjs/wasm/ に置いたもの（pdfjs-dist の写し）を読む（2026-11-06。src/render/pdfjs-parts.ts）。
  * 読み込めなかったときは、道具なしで片付ける。
  */
 async function imageCodec(): Promise<ImageCodec | undefined> {
@@ -29,6 +29,7 @@ async function imageCodec(): Promise<ImageCodec | undefined> {
 import { createPdfjsImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import { rulesCheck } from "../../sanitize/redact-check.ts";
 import { inspectAll } from "../inspect/inspect.ts";
+import { PDFJS_WASM_URL } from "../render/pdfjs-parts.ts";
 import { compressJob, preflightJob, sanitizeJob } from "../sanitize/job.ts";
 import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol.ts";
 
@@ -51,7 +52,7 @@ async function inspectCheck() {
   let ctx = {};
   try {
     const lib = (await import(/* @vite-ignore */ pdfjsUrl)) as Parameters<typeof createPdfjsImageDecoder>[0];
-    ctx = { imageDecoder: createPdfjsImageDecoder(lib) };
+    ctx = { imageDecoder: createPdfjsImageDecoder(lib, { jbig2Url: PDFJS_WASM_URL }) };
   } catch {
     ctx = {};
   }

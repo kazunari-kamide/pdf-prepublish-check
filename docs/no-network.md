@@ -17,8 +17,8 @@
 | 層 | 何を見るか | どこで |
 |---|---|---|
 | 1. 自分たちのコード | `src/`・`rules/`・`check.html`（検査のページ）に、`fetch`・`XMLHttpRequest`・`WebSocket`・`sendBeacon`・外の URL・`innerHTML`・`eval` がないこと | `tests/no-network.test.ts`（`npm test`） |
-| 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` に `connect-src 'none'` があること。サイトのページ（記事・プライバシー）を含む、すべての HTML に同じ CSP があり（お問い合わせのページだけは、`form-action 'self'` だけが違う CSP）、スクリプトを直接書かず、外から読み込まないこと（公式の URL を指す canonical だけは許す） | `scripts/check-dist.mjs`（`npm run build` の最後） |
-| 3. CSP | ページ全体の読み込み先と送り先を絞る（`connect-src 'none'`、`img-src 'self' data: blob:` など） | `csp.ts` |
+| 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` の `connect-src` が、検査のページは `'self'`、ほかのページは `'none'` であること。サイトのページ（記事・プライバシー）を含む、すべての HTML に同じ CSP があり（お問い合わせのページは `form-action 'self'`、検査のページは `connect-src 'self'` だけが違う CSP）。`dist/pdfjs/`（PDF.js の部品）のどのファイルも `pdfjs-dist` の写しで、決めた名前のものだけであること、スクリプトを直接書かず、外から読み込まないこと（公式の URL を指す canonical だけは許す） | `scripts/check-dist.mjs`（`npm run build` の最後） |
+| 3. CSP | ページ全体の読み込み先と送り先を絞る（`connect-src 'none'`。検査のページだけ `'self'`。`img-src 'self' data: blob:` など） | `csp.ts` |
 | 4. 本物のブラウザ | 合成 PDF を入れて、ページを開いてから閉じるまでの要求を「最初の表示」と「PDF を入れた後」に分けて数え、どちらも外への要求が0件であること。サイトのページも1つずつ開き、外への要求が0件であること | `scripts/check-browser.mjs`（`npm run check:browser`） |
 
 ## PDF.js の例外（2026-11-03 本人が決定。PR #31 の返事 2）
@@ -27,8 +27,8 @@
 
 そこで、層 2 に1つだけ例外を置く。**次の2つがそろうときだけ、そのファイルの通信の仕組みを許す。**
 
-1. ファイルが、npm の `pdfjs-dist`（`package-lock.json` で版を固定）の `build/pdf.min.mjs` か `build/pdf.worker.min.mjs` と、**1バイトも違わない写し**であること（SHA-256 で照らす）。
-2. CSP の `<meta>` に `connect-src 'none'` があること。
+1. ファイルが、npm の `pdfjs-dist`（`package-lock.json` で版を固定）の `build/pdf.min.mjs`・`build/pdf.worker.min.mjs`・`wasm/jbig2_nowasm_fallback.js`・`wasm/openjpeg_nowasm_fallback.js` のどれかと、**1バイトも違わない写し**であること（SHA-256 で照らす）。
+2. 検査のページの CSP の `connect-src` が `'self'`（自分の配信先だけ）で、外のサイトを含まないこと。2026-11-05 までは `'none'` だった（下の「PDF.js の部品」）。
 
 そして、この例外を使う代わりに、**層 4（本物のブラウザで外への要求が0件）を必ず通す。**
 
@@ -36,8 +36,23 @@
 
 - PDF.js を自分たちのコードと一緒にバンドルすると、写しかどうかを確かめられない（自分たちのコードに `fetch` が入っても、PDF.js のせいと区別できない）。そのため、PDF.js は手を加えずに、そのままのファイルとして配る（`src/render/pdf-view.ts` の `?url`）。
 - 写しであることは、ハッシュで機械的に確かめられる。版は lockfile で固定しているので、更新は PR で見える。
-- PDF.js の通信の道は、使わない設定にしている（バイト列だけを渡す。`cMapUrl`・`standardFontDataUrl`・`wasmUrl`・`iccUrl` を渡さない。`useWorkerFetch: false`、`useWasm: false`）。それでもコードは残るので、CSP で止め、ブラウザで数える。
+- PDF は URL からは読まない（バイト列だけを渡す）。`standardFontDataUrl`・`iccUrl` は渡さない。`useWorkerFetch: false`、`useWasm: false`。外へ出る道はコードに残るので、CSP で止め、ブラウザで数える。
+- `wasmUrl`・`cMapUrl` は、2026-11-06 から、自分の配信先の `/pdfjs/` だけを渡す（下の「PDF.js の部品」）。
 - 捨てた案：PDF.js のファイルの名前で許す。名前は変えられるので、自分たちのコードを同じ名前のファイルに入れても通ってしまう。
+
+## PDF.js の部品（2026-11-06 本人が決定。案 B）
+
+前は部品を渡さなかったので、スキャンの PDF（CCITT・JBIG2）と JPEG 2000 の画像がまっ白になり、埋め込まれていない日本語の書体の字が描かれなかった（架空の見本で確かめた）。そこで、次の部品を `pdfjs-dist` から手を加えずに `dist/pdfjs/` へ写し（`vite.config.ts` の `pdfjsParts`。置くものは `src/render/pdfjs-parts.ts`）、PDF.js に自分の配信先から読ませる。
+
+| 部品 | 置き場所 | 読み方 | CSP |
+|---|---|---|---|
+| CCITT・JBIG2・JPEG 2000 を解く部品（WASM の代わりの JS 2 つ） | `/pdfjs/wasm/` | PDF.js が `import()` で読む | `script-src 'self'`（前と同じ） |
+| 字の対応表（cMap。169 個） | `/pdfjs/cmaps/` | この画面が `fetch` で読み、PDF.js の Worker に渡す | 検査のページだけ `connect-src 'self'` |
+
+- 外のサイトへの送り先は増えない。`connect-src 'self'` は検査のページ（`check.html`）だけで、サイトのページ・ほかのファイルは `'none'` のまま（`.htaccess` の `<FilesMatch>`）。
+- 標準の書体（`standard_fonts/`）は置かない。PDF.js は Helvetica・Arial に Liberation の書体を使うが、Liberation は GPL 2.0 系で、このリポジトリの決まり（CLAUDE.md §10）に合わない。Foxit の書体だけを置くと Helvetica のたびに 404 になる。置かなくても、PDF.js は代わりの書体で字を描く。
+- 要求の名前に `?` などを付けない（ブラウザの拡張機能が、問い合わせの付いた要求を「送った」に数えるため）。
+- 層 2 は、`dist/pdfjs/` のどのファイルも `pdfjs-dist` と 1 バイトも違わない写しで、決めた名前のものだけであることを確かめる。
 
 ### 層 4 の数え方
 
@@ -53,4 +68,5 @@
 
 - `--self-test` で確かめられたのは、ページの中から出した要求（画像・`fetch`）を捕まえることまで。Worker の中から出した要求を捕まえることは、点検用の Worker を CSP（`worker-src 'self'`）が止めるため、まだ確かめていない。
 - 層 4 は、選んだ合成 PDF を入れたときの結果。どんな PDF でも0件であることの証明ではない。
+- 2026-11-06 から、PDF を入れた後に、同じサイトへの要求（Worker・PDF.js・部品・cMap）が出る。外への要求ではないが、ブラウザの開発者の道具の「ネットワーク」には出る。PDF を入れた後は同じサイトへの要求も 0 件にする作り（開いたときに全部読んでおく）は、本人の決定を受けて、別の PR で進める。
 - 配信先（Xserver）で、CSP を HTTP ヘッダーとして返せるか、`.mjs` を JavaScript の種類（`text/javascript`）で返すかは、配信の手順と一緒に確かめる。

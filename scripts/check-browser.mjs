@@ -147,7 +147,8 @@ try {
   for (const r of results) {
     console.log(`\n■ ${r.name}`);
     console.log(`  状態：${r.status}`);
-    console.log(`  ページの絵：${r.drawn}`);
+    console.log(`  ページの絵：${r.drawn}${r.dark === null || r.dark === undefined ? "" : `（暗い点 ${r.dark}%）`}`);
+    for (const n of r.notices ?? []) console.log(`  お知らせ：${n}`);
     if (r.cleaned) {
       console.log(`  片付け：${r.cleaned.status}`);
       if (r.cleaned.count) console.log(`  読み直し：${r.cleaned.count}`);
@@ -370,6 +371,18 @@ async function checkOne(c, pdf) {
     const drawn = await evaluate(
       "(() => { const d = document.getElementById('sheet').dataset.drawn; const n = document.getElementById('render-note'); return d === 'true' ? '描けた' : (n.hidden ? '描いていない' : n.textContent); })()",
     );
+    // 描けたページの絵の、暗い点の割合（まっ白のまま「描けた」になっていないかを見る。2026-11-06。スキャンの画像が白くなっていた）
+    // 絵を描き直すことがあるので、0 のときは最大 10 秒、測り直す
+    const darkNow = () =>
+      evaluate(
+        "(() => { const c = document.getElementById('sheet-canvas'); if (!c || !c.width) return null; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let k = 0, n = 0; for (let i = 0; i < d.length; i += 64) { n++; if (d[i + 3] > 128 && d[i] < 100 && d[i + 1] < 100 && d[i + 2] < 100) k++; } return Math.round((1000 * k) / n) / 10; })()",
+      );
+    let dark = await darkNow();
+    for (let i = 0; i < 20 && dark === 0; i++) {
+      await sleep(500);
+      dark = await darkNow();
+    }
+    const notices = await evaluate("[...document.querySelectorAll('#notice-list li')].map((li) => li.textContent)");
 
     let shot = null;
     if (shotsDir) shot = await screenshot(c, sessionId, evaluate, path.join(shotsDir, `${path.basename(pdf, ".pdf")}.png`));
@@ -398,6 +411,8 @@ async function checkOne(c, pdf) {
       name,
       status,
       drawn,
+      dark,
+      notices,
       all,
       same: all.filter((u) => u.startsWith(origin + "/")).map((u) => u.slice(origin.length)),
       outside: all.filter((u) => !local(u)),
