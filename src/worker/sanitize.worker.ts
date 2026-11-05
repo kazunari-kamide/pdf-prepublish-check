@@ -26,7 +26,10 @@ async function imageCodec(): Promise<ImageCodec | undefined> {
     return undefined;
   }
 }
-import { sanitizeJob } from "../sanitize/job.ts";
+import { createPdfjsImageDecoder } from "../../rules/shared/pdfjs-images.ts";
+import { rulesCheck } from "../../sanitize/redact-check.ts";
+import { inspectAll } from "../inspect/inspect.ts";
+import { compressJob, sanitizeJob } from "../sanitize/job.ts";
 import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol.ts";
 
 type WorkerScope = {
@@ -35,11 +38,42 @@ type WorkerScope = {
 };
 const scope = self as unknown as WorkerScope;
 
+/** 渡し切れる ArrayBuffer にする（写しを作らない。ほかの中身と共有していることがあるので、そのときだけ写す） */
+function transferable(b: Uint8Array): ArrayBuffer {
+  return b.byteOffset === 0 && b.byteLength === b.buffer.byteLength && b.buffer instanceof ArrayBuffer ? b.buffer : b.slice().buffer;
+}
+
+/**
+ * 小さくする前と後にかける作品の検査（全部のルール）。画像を解く道具も、検査の Worker と同じ PDF.js から作る。
+ * PDF.js は imageCodec() で読み込み済み（同じ URL の import は1回だけ読まれる）
+ */
+async function inspectCheck() {
+  let ctx = {};
+  try {
+    const lib = (await import(/* @vite-ignore */ pdfjsUrl)) as Parameters<typeof createPdfjsImageDecoder>[0];
+    ctx = { imageDecoder: createPdfjsImageDecoder(lib) };
+  } catch {
+    ctx = {};
+  }
+  return rulesCheck((b) => inspectAll(b, undefined, undefined, ctx));
+}
+
 scope.onmessage = async (e) => {
   const req = e.data;
-  if (!req || req.type !== "sanitize" || !(req.buffer instanceof ArrayBuffer)) return;
+  if (!req || !(req.buffer instanceof ArrayBuffer)) return;
   try {
     const codec = await imageCodec();
+    if (req.type === "compress") {
+      const r = await compressJob(new Uint8Array(req.buffer), { maxDpi: req.maxDpi, jpegQuality: req.jpegQuality }, codec, [await inspectCheck()]);
+      if (r.type === "refused") scope.postMessage({ type: "refused", id: req.id, message: r.message });
+      else if (r.type === "compress_blocked") scope.postMessage({ type: "compress_blocked", id: req.id, sizeBefore: r.sizeBefore, sizeAfter: r.sizeAfter, increased: r.increased });
+      else {
+        const buffer = transferable(r.bytes);
+        scope.postMessage({ type: "compressed", id: req.id, buffer, sizeBefore: r.sizeBefore, sizeAfter: r.sizeAfter, changed: r.changed, images: r.images }, [buffer]);
+      }
+      return;
+    }
+    if (req.type !== "sanitize") return;
     // 自分で選んだ所があれば片付けの redact、なければふつうの片付け（src/sanitize/job.ts）
     const r = await sanitizeJob(new Uint8Array(req.buffer), req.areas, codec);
     if (r.type === "refused") {
@@ -50,10 +84,7 @@ scope.onmessage = async (e) => {
       scope.postMessage({ type: "redact_blocked", id: req.id, removed: r.removed, notDone: r.notDone, leftovers: r.leftovers });
       return;
     }
-    // 片付けた PDF は渡し切る（写しを作らない）。ほかの中身と共有していることがあるので、そのときだけ写す
-    const b = r.bytes;
-    const buffer =
-      b.byteOffset === 0 && b.byteLength === b.buffer.byteLength && b.buffer instanceof ArrayBuffer ? b.buffer : b.slice().buffer;
+    const buffer = transferable(r.bytes);
     scope.postMessage(
       { type: "sanitized", id: req.id, buffer, pages: r.pages, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted },
       [buffer],

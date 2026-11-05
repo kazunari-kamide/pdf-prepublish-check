@@ -30,7 +30,7 @@
         </li>
         <li id="step-verify" data-state="todo">
           <span class="step-no" aria-hidden="true">4</span><span class="step-name"><span class="visually-hidden">4 </span>読み直す</span>
-          <span class="step-note" id="step-verify-note">残り 0 件なら完了</span>
+          <span class="step-note" id="step-verify-note">通れば保存できます</span>
         </li>
       </ol>
       <p class="zero-send">送信しない作り・このパソコンの中だけで確かめます</p>
@@ -69,9 +69,9 @@
       </section>
 
       <aside class="results" id="results" tabindex="-1" aria-labelledby="result-title">
-        <h2 id="result-title">種類ごとの結果</h2>
+        <h2 id="result-title" tabindex="-1">種類ごとの結果</h2>
         <p id="status" role="status" aria-live="polite">まだ PDF を選んでいません。</p>
-        <progress id="progress" max="1" value="0" hidden></progress>
+        <progress id="progress" max="1" value="0" aria-label="進み具合" hidden></progress>
 
         <div id="actions" class="actions" hidden>
           <button id="sanitize" type="button" aria-describedby="sanitize-note">片付ける</button>
@@ -82,10 +82,10 @@
           </div>
           <div id="pick-tools" class="pick-tools" hidden>
             <button id="pick-toggle" class="pick-toggle" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
-            <p id="pick-help" class="pick-help" hidden>ページの上を、黒塗りしたい所の角から角へ、ドラッグしてください。選んだ所は、墨の点線の枠で出ます。</p>
-            <p class="pick-help">個人情報の候補から選ぶ：下の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します（キーボードでも選べます）。</p>
+            <p id="pick-help" class="pick-help" hidden>ページの絵の上を、黒塗りしたい所の角から角へ、ドラッグしてください。キーボードでは、ページの絵に移って Enter で枠を出し、矢印キーで動かし、Shift と矢印キーで大きさを変え、Enter で決めます（Esc でやめます）。選んだ所は、墨の点線の枠で出ます。</p>
+            <p id="pick-help-candidates" class="pick-help" hidden>個人情報の候補から選ぶ：下の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します。</p>
             <div id="picks" class="picks" hidden>
-              <p id="pick-count"></p>
+              <p id="pick-count" aria-live="polite"></p>
               <ul id="pick-list"></ul>
             </div>
           </div>
@@ -96,9 +96,9 @@
         </div>
 
         <section id="clean" class="clean" aria-labelledby="clean-title" hidden>
-          <h3 id="clean-title">片付けた結果</h3>
+          <h3 id="clean-title" tabindex="-1">片付けた結果</h3>
           <p id="clean-count" class="clean-count"></p>
-          <a id="download" class="download" download aria-disabled="true" aria-describedby="save-note">片付けた PDF を保存する</a>
+          <a id="download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="save-note">片付けた PDF を保存する</a>
           <p id="save-note" class="save-note"></p>
           <label id="save-confirm" class="save-confirm" hidden>
             <input id="save-confirm-box" type="checkbox" />
@@ -121,6 +121,27 @@
           <p id="clean-scope" class="clean-scope"></p>
           <a id="report-download" class="report-download" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
           <p class="report-note">前後の SHA-256・消した所と字数・調べた範囲を、文字だけで残します。字の中身とファイル名は載せません。</p>
+
+          <section id="compress" class="compress" aria-labelledby="compress-title" hidden>
+            <h4 id="compress-title" tabindex="-1">ファイルを小さくする（必要なときだけ）</h4>
+            <p class="compress-note">提出先に容量の上限があるときに使います。片付けた PDF の画像を縮めて書き直します。字・図形は変えません。小さくしたあとも、もう一度最初から検査し直します。</p>
+            <fieldset class="compress-presets" id="compress-presets">
+              <legend>画像の細かさ</legend>
+            </fieldset>
+            <button id="compress-run" class="compress-run" type="button">小さくする</button>
+            <div id="compress-result" class="compress-result" hidden>
+              <p id="compress-headline" class="compress-headline"></p>
+              <p id="compress-sizes" class="compress-sizes"></p>
+              <ul id="compress-lines" class="compress-lines"></ul>
+              <p id="compress-recheck" class="compress-recheck"></p>
+              <a id="compress-download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="compress-save-note" hidden>小さくした PDF を保存する</a>
+              <p id="compress-save-note" class="save-note"></p>
+              <label id="compress-confirm" class="save-confirm" hidden>
+                <input id="compress-confirm-box" type="checkbox" />
+                <span>言い切れない所があると分かったうえで保存する</span>
+              </label>
+            </div>
+          </section>
         </section>
 
         <div id="notices" class="notices" hidden>

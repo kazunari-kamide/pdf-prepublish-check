@@ -812,10 +812,10 @@ const p12 = defineRule<P12Report>({
     r.findings.map((f) => ({
       pattern: "P12",
       severity: "low", // 安全上の注意は「低」（用語集 §3 の深刻度）
-      title: f.kind === "uri" && f.where === "annotation" ? "ウェブのページを開くリンクが入っています" : `${P12_KIND[f.kind]}が入っています`,
+      title: f.kind === "uri" && f.where === "annotation" ? "気をつける行き先のリンクが入っています" : `${P12_KIND[f.kind]}が入っています`,
       why:
         f.kind === "uri" && f.where === "annotation"
-          ? "押すと外のページが開きます。行き先が公開してよい場所か（庁内や作業中の場所でないか）確かめてください。"
+          ? "暗号化されない http・庁内のサーバー・ファイルなど、押すと気をつける場所が開くリンクです。行き先を確かめてください。"
           : "漏れではありませんが、開いた人のパソコンで動くことがあります。意図したものでなければ消してください。",
       detail: [`場所：${P12_WHERE[f.where]}`, f.count > 1 ? `${f.count} 個` : "", f.kind === "javascript" ? `${f.chars}字` : ""].filter(Boolean).join("／"),
       page: f.page,
