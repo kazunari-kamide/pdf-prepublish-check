@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// ライセンスのページ（/licenses.html）の中身を、ビルドの時に作る（site.ts が呼ぶ。ブラウザでは動かさない）。
+// ライセンスのページ（/licenses。ファイルは licenses.html）の中身を、ビルドの時に作る（site.ts が呼ぶ。ブラウザでは動かさない）。
 // - 部品の版とライセンスは package-lock.json から、著作権の表示とライセンスの全文は node_modules の各部品の
 //   ライセンスの文（LICENSE など）から、そのまま写す。著作権の行が見つからないときは、作らずに「ない」とする。
 // - 並べるのは、ブラウザに配るもの（dist/）に入る部品だけ。開発・テスト・配信にだけ使う道具は並べない（2026-11-05 の頼み）。
 //   npm の部品：画面・ルール・片付けのコードが読み込む SHIPPED_ROOTS と、その依存（任意の依存は除く）。
 //   書体：docs/licenses.md の「フォント・素材」の表で、置き場所が src/assets/ のもの。
-// - ライセンスの全文は dist/licenses/ に写して置く（外のサイトを指さない）。出典のリンクは GitHub のものだけ出す。
+// - ライセンスの全文は dist/license-texts/ に写して置く（外のサイトを指さない）。出典のリンクは GitHub のものだけ出す。
+//   フォルダの名前を、ページの名前（licenses）と変えるのは、同じ名前だと本番の Apache が /licenses を /licenses/ へ
+//   301 で移して 403 になるため（mod_dir が .htaccess の書き換えより先に効く。2026-11-05 の本番で起きた）。
+//   前の場所（/licenses/*.txt）は、.htaccess で新しい場所へ 301 で移す（htaccess.ts の LICENSE_TEXTS_RULES）。
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { LICENSE_TEXTS_DIR } from "./htaccess.ts";
 import type { LicenseData, LicenseEntry } from "./src/site/pages.ts";
 
 /**
@@ -91,7 +95,7 @@ export function buildLicenses(root: string): BuiltLicenses {
 
   // ライセンスの全文を写す。ないときは null
   const putText = (name: string, file: string, text: string) => {
-    const out = `licenses/${slug(name)}-${file}`;
+    const out = `${LICENSE_TEXTS_DIR}/${slug(name)}-${file}`;
     files.set(out, text);
     return `/${out}`;
   };
@@ -156,8 +160,8 @@ export function buildLicenses(root: string): BuiltLicenses {
 
   // この作品のライセンス
   const own = readFileSync(path.join(root, "LICENSE"), "utf8");
-  files.set("licenses/AGPL-3.0.txt", own);
+  files.set(`${LICENSE_TEXTS_DIR}/AGPL-3.0.txt`, own);
 
   if (!fonts.length) throw new Error("docs/licenses.md の「フォント・素材」に、src/assets/ に置く書体がありません");
-  return { data: { ownTextHref: "/licenses/AGPL-3.0.txt", shipped, fonts }, files };
+  return { data: { ownTextHref: `/${LICENSE_TEXTS_DIR}/AGPL-3.0.txt`, shipped, fonts }, files };
 }

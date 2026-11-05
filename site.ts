@@ -15,7 +15,7 @@ import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { build as viteBuild, type Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
-import { CONTACT_PAGE_FILE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "./htaccess.ts";
+import { CONTACT_PAGE_FILE, CONTACT_SEND_FILE, LICENSE_TEXTS_DIR, OFFICIAL_ORIGIN, OLD_LICENSE_TEXTS_DIR } from "./htaccess.ts";
 import { faviconHref, inlineMark } from "./logo.ts";
 import { buildFigures } from "./site-figures.ts";
 import { buildLicenses } from "./site-licenses.ts";
@@ -265,6 +265,12 @@ export function cleanUrlRoute(rawUrl: string, exists: (file: string) => boolean)
     return null;
   }
   const file = decoded.replace(/^\/+/, "");
+  // ライセンスの全文の前の場所（htaccess.ts の LICENSE_TEXTS_RULES と同じ）
+  if (file === `${OLD_LICENSE_TEXTS_DIR}/`) return { kind: "redirect", location: `/${OLD_LICENSE_TEXTS_DIR}${query}` };
+  if (file.startsWith(`${OLD_LICENSE_TEXTS_DIR}/`)) {
+    const name = file.slice(OLD_LICENSE_TEXTS_DIR.length + 1);
+    if (!name.includes("/") && name.endsWith(".txt")) return { kind: "redirect", location: `/${LICENSE_TEXTS_DIR}/${name}${query}` };
+  }
   if (decoded.endsWith(".html")) {
     if (/(^|\/)index\.html$/.test(decoded) || /^\/google[0-9a-z]+\.html$/.test(decoded) || !exists(file)) return null;
     return { kind: "redirect", location: `${pathname.replace(/^\/+/, "/").replace(/\.html$/, "")}${query}` };

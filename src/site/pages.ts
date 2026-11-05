@@ -492,7 +492,7 @@ export interface LicenseEntry {
   license: string;
   /** ライセンスの文にある著作権の表示（そのまま写したもの）。ないときは空 */
   copyright: string[];
-  /** ライセンスの全文（dist/ に置いた写し。/licenses/... ）。ないときは null */
+  /** ライセンスの全文（dist/ に置いた写し。/license-texts/... ）。ないときは null */
   textHref: string | null;
   /** 全文を置いていないときの理由 */
   noText?: string;
@@ -501,7 +501,7 @@ export interface LicenseEntry {
 }
 
 export interface LicenseData {
-  /** この作品のライセンスの全文（/licenses/AGPL-3.0.txt） */
+  /** この作品のライセンスの全文（/license-texts/AGPL-3.0.txt） */
   ownTextHref: string;
   /** 配るもの（dist/）に入る部品（画面が読み込むライブラリと、その依存） */
   shipped: LicenseEntry[];
