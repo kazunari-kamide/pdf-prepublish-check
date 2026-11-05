@@ -182,10 +182,10 @@ async function compressCore(bytes: Uint8Array, options: CompressOptions): Promis
   const loaded = await loadPdf(bytes);
   if (loaded.status === "error") {
     return loaded.code === "encrypted"
-      ? { status: "error", code: "encrypted", message: "暗号化された PDF は小さくできません。先に片付けてください。" }
+      ? { status: "error", code: "encrypted", message: "暗号化された PDF は小さくできません。先に整えてください。" }
       : { status: "error", code: "unreadable", message: "PDF として読めませんでした。" };
   }
-  if (loaded.decrypted) return { status: "error", code: "encrypted", message: "暗号化された PDF は小さくできません。先に片付けてください。" };
+  if (loaded.decrypted) return { status: "error", code: "encrypted", message: "暗号化された PDF は小さくできません。先に整えてください。" };
   const doc = loaded.doc;
   const ctx = doc.context;
   const pages = doc.getPages();
