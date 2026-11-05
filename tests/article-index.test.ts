@@ -164,8 +164,9 @@ describe("記事の図", () => {
 
   it("図がない記事には、図の場所を出さない", () => {
     expect(figureHtml(undefined)).toEqual([]);
-    const a = ARTICLES.find((x) => !x.figure)!;
-    expect(files.get(`articles/${a.slug}.html`)).not.toContain("<figure");
+    // 今は全部の記事に図があるので、図のない記事を作って確かめる（2026-11-05 H、記事の図を足したとき）
+    const page = renderArticle({ ...ARTICLES[0]!, figure: undefined }, { origin: OFFICIAL_ORIGIN, csp: "x", cssHref: "/a.css", figures: new Map() });
+    expect(page).not.toContain("<figure");
   });
 
   it("SVG と PNG は、大きさを読み、名前にハッシュを付けて assets/figures/ に置く", () => {
