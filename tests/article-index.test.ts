@@ -234,7 +234,7 @@ describe("タグの絞り込み（記事の一覧のページの中）", () => {
     // #photos は、ページにタグのリンクがないので知らないタグ：絞り込まない
     init(doc, win);
     expect(items.map((x) => x.hidden)).toEqual([false, false]);
-    expect(all.attrs["aria-current"]).toBe("true");
+    expect(all.attrs["aria-current"]).toBe("page");
     let prevented = false;
     const click = (key: string, extra: Record<string, unknown> = {}) => {
       prevented = false;
@@ -253,7 +253,7 @@ describe("タグの絞り込み（記事の一覧のページの中）", () => {
     expect(transitions).toBe(1);
     doc.flush();
     expect(items.map((x) => x.hidden)).toEqual([false, true]);
-    expect(red.attrs["aria-current"]).toBe("true");
+    expect(red.attrs["aria-current"]).toBe("page");
     expect(all.attrs["aria-current"]).toBeUndefined();
     expect(count.textContent).toBe("「黒塗り」の記事 1 本（2 本のうち）");
     // 戻る：popstate と hashchange が続けて来ても、動きは1回だけ。アドレスが元に戻ると、絞り込みも戻る

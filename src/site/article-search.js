@@ -78,7 +78,7 @@ export function init(doc, win = doc.defaultView ?? undefined) {
     for (const sec of sections) sec.hidden = !sec.querySelector("[data-search]:not([hidden])");
     // いま選んでいるタグ（「すべての記事」は data-tag=""）に aria-current を付ける。札の中のタグも同じ
     for (const a of links) {
-      if ((a.getAttribute("data-tag") ?? "") === tag) a.setAttribute("aria-current", "true");
+      if ((a.getAttribute("data-tag") ?? "") === tag) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     }
     count.textContent = countText({ total, inTag, shown, query: q, label: labels.get(tag) ?? "" });

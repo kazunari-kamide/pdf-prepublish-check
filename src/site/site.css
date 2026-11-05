@@ -1,20 +1,35 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /*
- * サイトのページ（記事の一覧・各記事・プライバシー）の見た目。値は design/tokens.css の変数だけを使う（決まりは design/README.md）。
- * ビルドの時に site.ts が、tokens.css とこのファイルをつないで、1つの CSS（assets/site-<ハッシュ>.css）にする。
- * 書体は外から読み込まない（CLAUDE.md §2-1）。
+ * サイトのページ（記事・記事の一覧・タグ・点検の一覧・FAQ・規約・プライバシー・ライセンス・問い合わせ・404）の見た目。
+ * 値は design/tokens.css と design/sheet.css（デザインシート）の変数だけを使う。決まりは design/sheet.md。
+ * ビルドの時に site.ts が、tokens.css・sheet.css・このファイルをつないで、1つの CSS（assets/site-<ハッシュ>.css）にする。
+ * いつも白をもとにした明るい画面で出す（端末の暗い色の設定では切り替えない）。書体は外から読み込まない（CLAUDE.md §2-1）。
  */
 
 * {
   box-sizing: border-box;
 }
 
+/* 本文の欄の幅と、左右の余白。上の帯・本文・下の帯の中身を、同じ幅の枠にそろえる */
+:root {
+  --site-width: 46rem; /* 本文の欄（読みやすい幅）。余白を含む */
+  --site-gutter: var(--sp-5);
+}
+
+/* 帯（上・下）の左右の余白：画面の端まで地を引いたまま、中身の左端を本文の字の左端にそろえる */
+.site-band,
+.site-foot {
+  --site-inline: max(var(--site-gutter), calc((100% - var(--site-width)) / 2 + var(--site-gutter)));
+}
+
 html {
   font-family: var(--font-body);
-  font-size: var(--text-base);
-  line-height: var(--leading);
-  color: var(--color-base);
-  background: var(--color-paper);
+  font-size: var(--fs-root); /* 18px。rem で決め、ブラウザの字の大きさの設定に付いていく */
+  line-height: var(--lh-body);
+  letter-spacing: var(--tracking);
+  color: var(--text-strong);
+  background: var(--surface-page);
+  color-scheme: light;
 }
 
 body.site {
@@ -22,17 +37,23 @@ body.site {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow-wrap: anywhere; /* 字を大きくしても、長い英数字で横にはみ出さない */
 }
 
 .site h1,
-.site h2 {
+.site h2,
+.site h3 {
   font-family: var(--font-head);
-  line-height: 1.35;
+  line-height: var(--lh-head);
 }
 
 .site a {
-  color: var(--color-base);
+  color: var(--text-strong);
   text-underline-offset: 0.2em;
+}
+
+.site a:hover {
+  text-decoration-thickness: 2px;
 }
 
 .site :focus-visible {
@@ -41,32 +62,53 @@ body.site {
   box-shadow: var(--focus-halo);
 }
 
-/* ---- 上の帯（検査のページの手順の帯と同じ墨の地） */
+/* 押せる所は、どれも指の形のカーソル（チェックボックスとその字も。ブラウザの既定では指にならない） */
+.site a[href],
+.site button,
+.site summary,
+.site label,
+.site input[type="checkbox"],
+.site input[type="radio"] {
+  cursor: pointer;
+}
+
+/* 読み上げだけに渡す字 */
+.site-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- 上の帯：白の地。下に墨の線を引いて本文と区切る（墨の地の帯にはしない） */
 .site-band {
   display: flex;
   flex-wrap: wrap;
-  align-items: center; /* ロゴマークと名前・案内を、帯の高さの真ん中でそろえる（字の下の線でそろえると、案内が下にずれる） */
-  gap: var(--space-3) var(--space-6);
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-base);
-  color: var(--color-on-dark);
-}
-
-.site-band a {
-  color: var(--color-on-dark);
+  align-items: center; /* ロゴマークと名前・案内を、帯の高さの真ん中でそろえる */
+  gap: var(--sp-3) var(--sp-6);
+  padding: var(--sp-3) var(--site-inline);
+  background: var(--surface-page);
+  color: var(--text-strong);
+  border-bottom: var(--bw-2) solid var(--line-strong);
 }
 
 .site-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--sp-2);
   font-family: var(--font-head);
-  font-size: var(--text-h1);
-  font-weight: bold;
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-strong);
   text-decoration: none;
 }
 
-/* 墨の帯のロゴマーク（design/logo/mark-on-dark.svg）。伸ばさない・色を変えない */
+.site .site-brand {
+  text-decoration: none;
+}
+
+/* ロゴマーク（design/logo/mark.svg。明るい地用）。伸ばさない・色を変えない */
 .site-brand-mark {
   flex: none;
   width: var(--logo-site);
@@ -76,128 +118,373 @@ body.site {
 .site-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
+  gap: var(--sp-2) var(--sp-5);
 }
 
-/* ---- 本文。読みやすい幅にし、左に寄せる（中央寄せのカードにしない。CLAUDE.md §6） */
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: var(--fw-strong);
+}
+
+/* ---- 本文。読みやすい幅の欄を、画面の真ん中に置く（白い地のまま。枠や影で囲む「中央寄せのカード」にはしない。CLAUDE.md §6） */
 .site-main {
   flex: 1;
   width: 100%;
-  max-width: 46rem;
-  padding: var(--space-6) var(--space-5);
-  margin-left: max(0px, calc((100vw - 70rem) / 2));
+  max-width: var(--site-width);
+  padding: var(--sp-6) var(--site-gutter) var(--sp-7);
+  margin-inline: auto;
 }
 
+/* ページの題：下に紅の短い線（ロゴの袋の紅）。1 ページに 1 つ */
 .site-main h1 {
-  font-size: var(--text-h1);
-  margin: 0 0 var(--space-3);
+  font-size: var(--fs-h1);
+  margin: 0 0 var(--sp-4);
+}
+
+.site-main h1::after {
+  content: "";
+  display: block;
+  width: 3rem;
+  height: var(--bw-accent);
+  margin-top: var(--sp-3);
+  background: var(--danger);
+  border-radius: 2px;
 }
 
 .site-kicker {
-  margin: 0;
-  font-size: var(--text-small);
-  color: var(--color-muted);
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
+  color: var(--text-muted);
 }
 
+/* 導入の文：少し大きめの字（箱にしない。お知らせの箱と見分けがつくように。design/sheet-sample.html の .lead） */
 .site-lead {
-  margin: 0 0 var(--space-6);
-  padding-left: var(--space-4);
-  border-left: var(--border-strong) solid var(--color-base);
+  margin: 0 0 var(--sp-6);
+  max-width: var(--measure);
+  font-size: 1.05rem;
 }
 
 .site-section {
-  margin: 0 0 var(--space-6);
+  margin: 0 0 var(--sp-6);
 }
 
+/* 節の見出し：左に墨の線（中見出し）。見出しの上は下より広くとる */
 .site-section h2 {
-  font-size: var(--text-h2);
-  margin: 0 0 var(--space-3);
-  padding-bottom: var(--space-1);
-  border-bottom: 1px solid var(--color-line);
+  font-size: var(--fs-h2);
+  margin: var(--sp-6) 0 var(--sp-3);
+  padding-left: var(--sp-3);
+  border-left: var(--bw-accent) solid var(--line-strong);
+}
+
+.site-section:first-child h2,
+.site-lead + .site-section h2,
+.site-figure + .site-section h2 {
+  margin-top: 0;
 }
 
 .site-section p,
 .site-section ul,
 .site-section ol {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--sp-3);
+  max-width: var(--measure);
 }
 
 .site-section li {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--sp-2);
 }
 
 .site-steps {
-  padding-left: var(--space-6);
+  padding-left: var(--sp-6);
+}
+
+.site-steps li::marker {
+  font-weight: var(--fw-strong);
 }
 
 .site-note {
-  font-size: var(--text-small);
-  color: var(--color-muted);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
 }
 
-/* ---- 記事の一覧 */
-.site-list {
-  list-style: none;
-  padding: 0;
-}
-
-.site-list li {
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-line);
-}
-
-.site-list a {
-  font-weight: bold;
-}
-
-.site-list p {
-  margin: var(--space-1) 0 0;
-  font-size: var(--text-small);
-  color: var(--color-muted);
-}
-
+/* ---- 型の番号・タグの札：枠だけの丸い札 */
 .site-tag {
   display: inline-block;
   min-width: 2.6em;
-  margin-right: var(--space-2);
-  padding: 0 var(--space-1);
-  border: 1px solid var(--color-base);
-  font-size: var(--text-small);
+  margin-right: var(--sp-2);
+  padding: 0 var(--sp-2);
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
+  line-height: 1.6;
   text-align: center;
+  text-decoration: none;
+  vertical-align: 0.1em;
 }
 
-/* ---- 検査のページへのつなぎ */
-.site-cta {
-  margin: var(--space-6) 0;
-  padding: var(--space-4) var(--space-5);
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-left: var(--border-mark) solid var(--color-accent);
-}
-
-.site-cta p {
-  margin: 0 0 var(--space-2);
-}
-
-.site .site-cta-link {
-  display: inline-block;
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-base);
-  color: var(--color-on-dark);
-  font-weight: bold;
+.site a.site-tag {
   text-decoration: none;
 }
 
-.site-back {
-  margin-top: var(--space-5);
+.site a.site-tag:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-subtle);
 }
 
-/* ---- 下の帯 */
+/* いま開いているタグ：墨の地に白の字（色だけでなく、地の塗りで分ける） */
+.site-tag[aria-current="page"] {
+  background: var(--surface-strong);
+  border-color: var(--surface-strong);
+  color: var(--text-on-strong);
+}
+
+/* ---- 記事の一覧（関係する記事など、行の並び）：枠のある 1 つの箱に、細い線で行を分ける */
+.site-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--sp-3);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+
+.site-list > li {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--bw-1) solid var(--line-hair);
+}
+
+.site-list > li:last-child {
+  border-bottom: 0;
+}
+
+.site-list a {
+  font-weight: var(--fw-strong);
+}
+
+.site-list p {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+/* ---- 記事の一覧・タグのページ（記事の札 .site-cards があるページ）：ページの地を薄い色（へこんだ台）にし、白い札を並べる
+ * 上の帯は白のまま、下の帯は薄い地のまま。札は浮いた欄（白・枠・影 1 段） */
+body.site:has(.site-cards) {
+  background: var(--surface-sunken);
+}
+
+/* ---- 記事の一覧のカード（article-index.ts）：記事ごとの白い札。見出しの部分を薄い地で分ける */
+.site-list.site-cards {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  border: 0;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+}
+
+.site-cards > li.card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
+.site-cards > li.card:last-child {
+  border-bottom: var(--bw-1) solid var(--line-default);
+}
+
+.site-cards > li.card[hidden] {
+  display: none;
+}
+
+.site-cards .card-figure {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  border-bottom: var(--bw-1) solid var(--line-default);
+}
+
+.site-cards .card-head {
+  display: block;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-subtle);
+  border-bottom: var(--bw-1) solid var(--line-default);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-head);
+}
+
+.site-cards .card-head:hover {
+  background: var(--surface-sunken);
+}
+
+.site-cards .card-body {
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+}
+
+.site-cards .card-body p {
+  margin: 0;
+}
+
+.card-tags,
+.site-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card-tags .site-tag,
+.site-tag-list .site-tag {
+  margin-right: 0;
+  min-width: 0;
+  padding: 0 var(--sp-2);
+}
+
+/* 押せる札は、押せる所の大きさ（44px）を満たす */
+.site-tag-list a.site-tag,
+.site-tag-list span.site-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+}
+
+.site-list .card-tags li,
+.site-tag-list li {
+  margin: 0;
+  padding: 0;
+  border-bottom: 0;
+}
+
+/* タグで絞り込む欄：白い欄（薄い地のページの上に置くので、記事の札と同じ白・枠にする。影は付けない） */
+.site-tag-nav {
+  padding: var(--sp-4);
+  background: var(--surface-card);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+}
+
+.site-tag-nav h2 {
+  margin-top: 0;
+}
+
+.site-tag-group {
+  margin: var(--sp-3) 0 0;
+  font-weight: var(--fw-strong);
+  font-size: var(--fs-small);
+}
+
+.site-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* 字を大きくしても、入力欄の決まった幅で横にはみ出さない */
+  gap: var(--sp-2);
+  margin: var(--sp-4) 0;
+}
+
+.site-search[hidden] {
+  display: none;
+}
+
+.site-search label {
+  font-weight: var(--fw-strong);
+}
+
+.site-search input {
+  width: 100%;
+  max-width: 30rem;
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  font: inherit;
+  color: var(--text-strong);
+  background: var(--surface-card);
+  border: var(--bw-2) solid var(--line-control);
+  border-radius: var(--radius-m);
+}
+
+.site-search input:hover {
+  border-color: var(--line-strong);
+}
+
+/* ---- 記事の図 */
+/* 図は、図の中に自分の枠を持つので、外に枠を足さない（二重になるため） */
+.site-figure {
+  margin: 0 0 var(--sp-6);
+}
+
+.site-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.site-figure figcaption {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+/* ---- 検査のページへのつなぎ：浮いた欄（枠＋影 1 段）。主のボタンは墨の地 */
+.site-cta {
+  margin: var(--sp-7) 0 var(--sp-6);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface-raised);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-1);
+}
+
+.site-cta p {
+  margin: 0 0 var(--sp-3);
+}
+
+.site-cta p:last-child {
+  margin-bottom: 0;
+}
+
+.site .site-cta-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--button-height);
+  padding: 0 var(--sp-5);
+  border-radius: var(--radius-m);
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
+  font-weight: var(--fw-strong);
+  text-decoration: none;
+}
+
+.site .site-cta-link:hover {
+  background: var(--ink-800);
+}
+
+.site-back {
+  margin-top: var(--sp-6);
+}
+
+/* ---- 下の帯：薄い地で本文と分ける */
 .site-foot {
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--color-line);
-  font-size: var(--text-small);
-  color: var(--color-muted);
+  padding: var(--sp-5) var(--site-inline);
+  background: var(--surface-subtle);
+  border-top: var(--bw-1) solid var(--line-default);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
 }
 
 .site-foot p {
@@ -207,30 +494,40 @@ body.site {
 .site-foot-links {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-  margin-bottom: var(--space-3);
+  gap: var(--sp-1) var(--sp-4);
+  margin-bottom: var(--sp-3);
 }
 
 .site-foot-links a {
-  color: var(--color-base);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-strong);
+}
+
+/* 公式のサイトの場所の1文（どのページの下にも置く。CLAUDE.md §11-6） */
+.site-foot .site-official {
+  margin-bottom: var(--sp-2);
+  color: var(--text-strong);
+  font-weight: var(--fw-strong);
 }
 
 /* ---- サイトの案内のページ（pages.ts） */
 .site-links-list {
-  padding-left: var(--space-5);
+  padding-left: var(--sp-5);
 }
 
 .site-links-list li {
-  margin: var(--space-1) 0;
+  margin: var(--sp-1) 0;
 }
 
 /* 表は、狭い画面では表の中だけを横に動かす（ページ全体は横にはみ出さない） */
 .site-table-wrap {
   max-width: 100%;
   overflow-x: auto;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
 }
 
 /* 狭い画面で字が1字ずつ折れないよう、表に最低の幅を持たせる（はみ出す分は .site-table-wrap の中だけで横に動く） */
@@ -238,7 +535,9 @@ body.site {
   width: 100%;
   min-width: 36rem;
   border-collapse: collapse;
-  font-size: var(--text-small);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: normal;
 }
 
 .site-table caption {
@@ -252,20 +551,29 @@ body.site {
 
 .site-table th,
 .site-table td {
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--color-line);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: var(--bw-1) solid var(--line-hair);
   text-align: left;
   vertical-align: top;
 }
 
 .site-table thead th {
-  background: var(--color-chip);
+  background: var(--surface-sunken);
+  border-bottom: var(--bw-1) solid var(--line-control);
   white-space: nowrap;
+}
+
+.site-table tbody tr:nth-child(even) > * {
+  background: var(--surface-subtle);
+}
+
+.site-table tbody tr:last-child > * {
+  border-bottom: 0;
 }
 
 .site-table tbody th {
   min-width: 8em;
-  font-weight: bold;
+  font-weight: var(--fw-strong);
   overflow-wrap: break-word;
 }
 
@@ -275,48 +583,138 @@ body.site {
 }
 
 .site-copy-none {
-  color: var(--color-muted);
+  color: var(--text-muted);
 }
 
-/* ---- 公開前の自己点検：印を付ける □（印刷して使う） */
-.site-checklist .site-section ul {
+/* ---- 点検の一覧（checklist.html）：段ごとのカード。番号の丸・見出しの薄い地・行の区切り・本物のチェックボックス
+ * 印は保存しない・どこにも送らない（スクリプトは使わない）。印刷すると □ の形で出る。 */
+.site-checklist .site-notice {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--info-bg);
+  border: var(--bw-1) solid var(--info);
+  border-left-width: var(--bw-accent);
+  border-radius: var(--radius-m);
+}
+
+.site-checklist .site-notice h2 {
+  margin: 0 0 var(--sp-2);
+  padding-left: 0;
+  border-left: 0;
+  font-size: var(--fs-h3);
+}
+
+.site-checklist .site-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.site-steps-card {
+  background: var(--surface-card);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+}
+
+.site-section h2.site-steps-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-subtle);
+  border-left: 0;
+  border-bottom: var(--bw-2) solid var(--line-strong);
+  font-size: var(--fs-h3);
+}
+
+.site-step-no {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
+  font-weight: var(--fw-strong);
+}
+
+.site-steps-card > p {
+  margin: var(--sp-3) var(--sp-4) 0;
+}
+
+.site-section .site-checks {
   list-style: none;
-  padding-left: 0;
+  margin: 0;
+  padding: 0;
+  max-width: none;
 }
 
-.site-checklist .site-section ul li {
-  position: relative;
-  padding-left: 2em;
-  margin: var(--space-2) 0;
+.site-checks li {
+  margin: 0;
 }
 
-.site-checklist .site-section ul li::before {
-  content: "□";
-  position: absolute;
-  left: 0;
-  font-size: 1.2em;
-  line-height: 1.3;
+.site-checks li + li {
+  border-top: var(--bw-1) solid var(--line-hair);
 }
 
-.site-checklist .site-section ul.site-links-list li {
-  padding-left: 0;
+.site-checks label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: var(--sp-3) var(--sp-4);
 }
 
-.site-checklist .site-section ul.site-links-list li::before {
-  content: none;
+.site-checks label:hover {
+  background: var(--surface-subtle);
+}
+
+.site-checks input {
+  width: 1.4rem;
+  height: 1.4rem;
+  margin: 0.2rem 0 0;
+  accent-color: var(--ok);
+}
+
+/* 印を付けた項目：補足の色にする（打ち消し線は引かない。読みにくくなるため） */
+.site-checks input:checked + span {
+  color: var(--text-muted);
+}
+
+.site-steps-card > .site-note {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: var(--bw-1) solid var(--line-hair);
+}
+
+/* 点検の一覧の中のリンクの並び（ある場合）は、印を付ける形にしない */
+.site-checklist .site-section ul.site-links-list {
+  list-style: disc;
+}
+
+@media (max-width: 40rem) {
+  :root {
+    --site-gutter: var(--sp-4);
+  }
+
+  .site-main {
+    padding-top: var(--sp-5);
+    padding-bottom: var(--sp-6);
+  }
 }
 
 @media print {
   .site-band,
   .site-foot,
   .site-back,
-  .site-cta {
+  .site-cta,
+  .site-search {
     display: none;
   }
 
   body.site,
   html {
-    background: var(--color-surface);
+    background: #ffffff;
   }
 
   .site-main {
@@ -331,91 +729,28 @@ body.site {
   .site a {
     text-decoration: none;
   }
-}
 
-/* 公式のサイトの場所の1文（どのページの下にも置く。CLAUDE.md §11-6） */
-.site-foot .site-official {
-  margin-bottom: var(--space-2);
-  color: var(--color-base);
-  font-weight: bold;
-}
+  .site-cta,
+  .site-figure {
+    box-shadow: none;
+  }
 
-/* ---- 記事の一覧・タグの絞り込み・検索・記事の図（article-index.ts）
- * 並べ方だけを決める。色・枠・地は決めない（デザインシート design/sheet.md の card・tag などを、D が当てる）。
- * 札の見た目は、今の .site-tag をそのまま使う。 */
-.site-cards .card-head {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-}
+  /* 点検の一覧：紙では □ の形で出す（チェックボックスの見た目はブラウザごとに違うため、枠の四角に置きかえる） */
+  .site-checks input {
+    appearance: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 1.5px solid #000000;
+    border-radius: 0;
+    background: #ffffff;
+  }
 
-.site-cards .card-body p {
-  margin: var(--space-1) 0 0;
-}
+  .site-checks input:checked + span {
+    color: inherit;
+  }
 
-.card-tags,
-.site-tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.card-tags .site-tag,
-.site-tag-list .site-tag {
-  margin-right: 0;
-  min-width: 0;
-  padding: 0 var(--space-2);
-}
-
-.site-tag-group {
-  margin: var(--space-3) 0 0;
-  font-weight: bold;
-}
-
-.card-figure {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin-bottom: var(--space-2);
-}
-
-.site-search {
-  display: grid;
-  gap: var(--space-2);
-  margin: var(--space-4) 0;
-}
-
-.site-search[hidden] {
-  display: none;
-}
-
-.site-search input {
-  max-width: 100%;
-  min-height: 44px;
-  font: inherit;
-}
-
-.site-figure {
-  margin: var(--space-5) 0;
-}
-
-.site-figure img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-
-.site-figure figcaption {
-  margin-top: var(--space-2);
-  font-size: var(--text-small);
-  color: var(--color-muted);
-}
-
-/* カードの中のタグの並びには、一覧の行の区切り（.site-list li の下の線と余白）を当てない */
-.site-list .card-tags li {
-  padding: 0;
-  border-bottom: 0;
+  .site-steps-head,
+  .site-checks label:hover {
+    background: none;
+  }
 }

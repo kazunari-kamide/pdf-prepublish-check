@@ -36,12 +36,14 @@ export function ogImage(): Buffer {
   return readFileSync(path.join(ROOT, "src", "site", "og-image.png"));
 }
 
-/** サイトのページの CSS。tokens.css の後に site.css、その後に動きの CSS（src/site/motion.css と、記事ごとの名前。motion.ts）をつなぐ */
+/** サイトのページの CSS。tokens.css・sheet.css の後に site.css、その後に動きの CSS（src/site/motion.css と、記事ごとの名前。motion.ts）をつなぐ */
 export function siteCss(): string {
   const tokens = readFileSync(path.join(ROOT, "design", "tokens.css"), "utf8");
+  // デザインシート（design/sheet.md）の役の名前。検査の画面（src/style.css の @import）と同じファイルを読む
+  const sheet = readFileSync(path.join(ROOT, "design", "sheet.css"), "utf8");
   const site = readFileSync(path.join(ROOT, "src", "site", "site.css"), "utf8");
   const motion = readFileSync(path.join(ROOT, "src", "site", "motion.css"), "utf8");
-  return `${tokens}\n${site}\n${motion}\n${articleTransitionNames()}`;
+  return `${tokens}\n${sheet}\n${site}\n${motion}\n${articleTransitionNames()}`;
 }
 
 export function siteCssFile(css = siteCss()): string {
@@ -111,7 +113,7 @@ export function siteFiles(): Map<string, string> {
     repoUrl: repoUrl(),
     // ロゴ（logo.ts）。同じ options を、記事・プライバシー・サイトの案内のページ・404 のページのすべてに渡すので、どの帯にも出る
     favicon: faviconHref(),
-    brandMark: inlineMark("mark-on-dark", "site-brand-mark"),
+    brandMark: inlineMark("mark", "site-brand-mark"), // 帯は白の地（design/sheet.md）なので、明るい地のマーク
   };
   const files = renderSite({ ...options, figures: figures.assets });
   // 記事の一覧（検索のスクリプトを読む）と、タグごとの一覧のページ
