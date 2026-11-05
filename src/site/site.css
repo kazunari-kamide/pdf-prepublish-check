@@ -421,47 +421,55 @@ body.site {
   color: var(--text-muted);
 }
 
-/* ---- 記事の一覧・タグのページ（記事の札 .site-cards があるページ）：ページの地を薄い色（へこんだ台）にし、白い札を並べる
- * 上の帯は白のまま、下の帯は薄い地のまま。札は浮いた欄（白・枠・影 1 段） */
+/* ---- 記事の一覧・タグのページ（記事の札 .site-cards があるページ。案 C。design/sheet.md「案 C」の面）
+ * このページだけ、地を生成り（--page-kinari）にし、記事ごとに白いパネル 1 枚を並べる。パネルの中に枠・面を重ねない */
 html:has(.site-cards) {
-  background: var(--surface-sunken);
+  background: var(--page-kinari);
 }
 
-/* ---- 記事の一覧のカード（article-index.ts）：記事ごとの白い札。見出しの部分を薄い地で分ける */
+html:has(.site-cards) .site-band {
+  background: transparent;
+}
+
+/* 一覧は、上の帯と同じ幅まで広げる（本文の欄の幅だと 3 列にならないため） */
+.site:has(.site-cards) {
+  --site-width: calc(var(--site-frame) + 2 * var(--site-gutter));
+}
+
 .site-list.site-cards {
   display: grid;
-  gap: var(--sp-4);
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--sp-5);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
   border: 0;
   border-radius: 0;
   background: none;
   overflow: visible;
 }
 
+/* 記事の札：白いパネル 1 枚（--radius-card・--shadow-card）。枠は引かない */
 .site-cards > li.card {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 0;
-  border: var(--bw-1) solid var(--line-default);
-  border-radius: var(--radius-l);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-rest);
-  overflow: hidden; /* 図の角は、札の角（12px − 縁 1px）で切る */
-  transition: transform var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden; /* サムネの角は、パネルの角で切る */
+  transition: transform var(--dur-hover) var(--ease-out);
 }
 
 .site-cards > li.card:last-child {
-  border-bottom: var(--bw-1) solid var(--line-default);
+  border-bottom: 0;
 }
 
-/* 指を置いた時・中にフォーカスがある時は、札ごと少し浮く（図だけを拡大・移動はしない。縁で切れるため） */
 .site-cards > li.card:hover,
 .site-cards > li.card:focus-within {
   transform: translateY(var(--lift-card));
-  box-shadow: var(--shadow-lift);
 }
 
-/* 札の題へのフォーカスは、札の外側に出す（札の中では overflow で左右が切れるため） */
+/* 札の題へのフォーカスは、札の外側に出す（札の中では overflow で切れるため） */
 .site-cards > li.card:has(.card-head:focus-visible) {
   outline: var(--bw-focus, 3px) solid var(--focus-ring);
   outline-offset: var(--focus-gap, 3px);
@@ -475,48 +483,108 @@ html:has(.site-cards) {
   display: none;
 }
 
-/* 札の図：図そのものは枠を持たない（site-figures-draw.ts）。縁は札が、図の下の区切りはこの線だけが描く */
-.site-cards .card-figure {
+/* サムネ：パネルの上の端いっぱい（パネルの一部。別の面ではない）。広い画面は 16:9、狭い画面は正方形 */
+.site-cards .card-thumb {
   display: block;
-  width: 100%;
   max-width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
   margin: 0;
   border: 0;
-  border-bottom: var(--bw-1) solid var(--line-default);
   border-radius: 0;
 }
 
-.site-cards .card-head {
-  display: block;
-  padding: var(--sp-3) var(--sp-4);
-  background: var(--surface-subtle);
-  border-bottom: var(--bw-1) solid var(--line-default);
-  font-weight: var(--fw-strong);
-  line-height: var(--lh-head);
+.site-cards .card-thumb-wide {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
 }
 
-.site-cards .card-head:hover {
-  background: var(--surface-sunken);
+.site-cards .card-thumb-square {
+  display: none;
 }
 
-/* 題の長さが札ごとに違っても、タグは札の下の端にそろえる */
 .site-cards .card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5) var(--sp-5);
 }
 
-.site-cards .card-body .card-tags {
-  margin-top: auto;
-  padding-top: var(--sp-3);
-}
-
-.site-cards .card-body p {
+.site-cards .card-meta {
   margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.site-cards .card-pattern {
+  margin-right: var(--sp-2);
+  color: var(--text-danger);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.06em;
+}
+
+/* 題：丸ゴシックの 700。題のリンクを札全体に広げ、札のどこを押しても記事へ移る */
+.site .site-cards .card-head {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: var(--fw-display-sub);
+  line-height: var(--lh-head);
+  text-decoration: none;
+}
+
+.site-cards .card-head::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.site-cards .card-desc {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 狭い画面：1 列。パネルは画面の端から 8px まで広げ、左に正方形のサムネ（104px）、右に題と説明（2 行まで）。字は縮めない */
+@media (max-width: 40rem) {
+  .site-list.site-cards {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-3);
+    margin-inline: calc(8px - var(--site-gutter));
+  }
+
+  .site-cards > li.card {
+    flex-direction: row;
+    border-radius: 20px;
+  }
+
+  .site-cards .card-thumb-wide {
+    display: none;
+  }
+
+  /* 正方形のサムネは、パネルの高さいっぱいに伸ばす（SVG の地は外まで塗ってあるので、伸ばしても絵は切れない） */
+  .site-cards .card-thumb-square {
+    display: block;
+    flex: none;
+    width: 104px;
+    height: auto;
+    min-height: 104px;
+    align-self: stretch;
+  }
+
+  .site-cards .card-body {
+    min-width: 0;
+    gap: var(--sp-1);
+    padding: var(--sp-3) var(--sp-4);
+  }
+
+  .site-cards .card-desc {
+    -webkit-line-clamp: 2;
+  }
 }
 
 .card-tags,
@@ -552,12 +620,11 @@ html:has(.site-cards) {
   border-bottom: 0;
 }
 
-/* タグで絞り込む欄：白い欄（薄い地のページの上に置くので、記事の札と同じ白・枠にする。影は付けない） */
+/* タグで絞り込む欄：案 C では囲まない（生成りの地の上に、白いタグを直に並べる。面の中に面を重ねない） */
 .site-tag-nav {
-  padding: var(--sp-4);
-  background: var(--surface-card);
-  border: var(--bw-1) solid var(--line-default);
-  border-radius: var(--radius-l);
+  padding: 0;
+  background: none;
+  border: 0;
 }
 
 .site-tag-nav h2 {
@@ -901,8 +968,7 @@ html:has(.site-cards) {
   content: "✓ ";
 }
 
-/* ---- 欄（タグの絞り込み・点検の一覧のカード）：縁は --line-default のまま、重ねた影 */
-.site-tag-nav,
+/* ---- 欄（点検の一覧のカード）：縁は --line-default のまま、重ねた影。タグの絞り込みは案 C で囲まなくなったので、影も付けない */
 .site-steps-card {
   box-shadow: var(--shadow-rest);
 }

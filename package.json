@@ -39,6 +39,7 @@
     "cli": "node cli/omamori.ts",
     "og:build": "node site-og-image.ts --write",
     "figures:draw": "node site-figures-draw.ts",
+    "thumbs:draw": "node site-thumbs-draw.ts",
     "eval:redact": "vitest run tests/redact-eval.test.ts --silent=false",
     "eval:compress": "vitest run tests/compress-eval.test.ts --silent=false"
   },
