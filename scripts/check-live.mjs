@@ -12,7 +12,8 @@
 // - https の応答に Strict-Transport-Security が付き、Cache-Control が HTML は no-cache・assets/ は 1 年（htaccess.ts）
 // - 見つからない場所は、404 で自前の 404 のページ（dist/404.html と同じ中身）を、同じヘッダーをつけて返す。assets/ を開いてもファイルの一覧は出ない
 // - .mjs が text/javascript、.wasm が application/wasm で返る（dist/ に .wasm がなければ、省いたと表示する）
-// - dist/ のファイルが、本番のものと1バイトも違わない（.htaccess は外から読めないこと）
+// - お問い合わせのページと送り先（contact-send.php）だけ、form-action 'self' の CSP（csp.ts の contactHeaders）。送り先は GET に 405 を返し、PHP のソースを出さない
+// - dist/ のファイルが、本番のものと1バイトも違わない（.htaccess は外から読めないこと。送り先の PHP は、サーバーが動かすので照らさない）
 // - http:// で来たら https:// へ 301
 // - www つきで来たら、www なしへ 301（www の名前が引けないときは「確かめられなかった」と表示し、失敗にはしない）
 //
@@ -21,8 +22,8 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { securityHeaders } from "../csp.ts";
-import { CACHE_ASSETS, CACHE_DEFAULT, HSTS, NOT_FOUND_PAGE, OFFICIAL_HOST } from "../htaccess.ts";
+import { contactHeaders, securityHeaders } from "../csp.ts";
+import { CACHE_ASSETS, CACHE_DEFAULT, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, HSTS, NOT_FOUND_PAGE, OFFICIAL_HOST } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(ROOT, "dist");
@@ -90,6 +91,26 @@ for (const page of ["articles/", "privacy.html", files.find((f) => /^articles\/(
     const bad = Object.entries(securityHeaders).filter(([name, want]) => r.headers.get(name) !== want).map(([name]) => name);
     if (bad.length) problems.push(`${page} のヘッダーが違います（${bad.join("・")}）`);
     else ok.push(`${page} のヘッダー`);
+  } catch (e) {
+    problems.push(`${page} を確かめられませんでした（${e?.message ?? e}）`);
+  }
+}
+
+// ---- お問い合わせのページと送り先（docs/contact.md）：この 2 つだけ、form-action 'self' の CSP と same-origin の参照元の決まり。
+// 送り先は GET では送らない（405）。PHP のソースが、そのまま返らない（PHP が動いている）
+for (const [page, status] of [[CONTACT_PAGE_FILE, 200], [CONTACT_SEND_FILE, 405]]) {
+  if (!files.includes(page)) {
+    problems.push(`dist/ に ${page} がありません`);
+    continue;
+  }
+  try {
+    const r = await get(new URL(page, base));
+    const text = await r.text();
+    const bad = Object.entries(contactHeaders).filter(([name, want]) => r.headers.get(name) !== want).map(([name]) => name);
+    if (r.status !== status) problems.push(`${page} が ${r.status} を返しました（${status} のはず）`);
+    else if (bad.length) problems.push(`${page} のヘッダーが、お問い合わせの決まり（csp.ts の contactHeaders）と違います（${bad.join("・")}）`);
+    else if (/<\?php|contact_handle/.test(text)) problems.push(`${page} で PHP のソースが返りました（PHP が動いていません）`);
+    else ok.push(`${page}（${status}）のヘッダーが、お問い合わせの決まりと同じ`);
   } catch (e) {
     problems.push(`${page} を確かめられませんでした（${e?.message ?? e}）`);
   }
@@ -181,6 +202,8 @@ let same = 0;
 for (const f of files) {
   try {
     const r = await get(new URL(f, base));
+    // お問い合わせの送り先（PHP）は、サーバーが動かすので中身を照らせない。上で、GET の答えとヘッダーを確かめた
+    if (f === CONTACT_SEND_FILE) continue;
     if (f === ".htaccess") {
       if (r.status === 200) problems.push(".htaccess が外から読めます（403 か 404 のはず）");
       else ok.push(`.htaccess は外から読めない（${r.status}）`);

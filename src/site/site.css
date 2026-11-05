@@ -754,3 +754,140 @@ body.site:has(.site-cards) {
     background: none;
   }
 }
+
+/* ---- お問い合わせのフォーム（contact.html）。部品は今の形を使う：入力欄は記事の検索の欄、主のボタンは検査のページへのつなぎ、
+   選ぶ行は点検の一覧の行、注意はお知らせの「注意」（▲・紅の地・左の紅の線）。決まりは design/sheet.md の「お問い合わせのフォーム」 */
+.site-form-warn {
+  max-width: var(--measure);
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--danger-bg);
+  border: var(--bw-1) solid var(--danger);
+  border-left-width: var(--bw-accent);
+  border-radius: var(--radius-m);
+  color: var(--text-danger);
+  font-weight: var(--fw-strong);
+}
+
+.site-form {
+  display: grid;
+  gap: var(--sp-5);
+  max-width: var(--measure);
+}
+
+.site-form-field {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.site-form-field > label,
+.site-form-field > legend {
+  padding: 0;
+  font-weight: var(--fw-strong);
+}
+
+.site-form-need {
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+.site-form-field input,
+.site-form-field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  font: inherit;
+  color: var(--text-strong);
+  background: var(--surface-card);
+  border: var(--bw-2) solid var(--line-control);
+  border-radius: var(--radius-m);
+}
+
+.site-form-field textarea {
+  resize: vertical;
+}
+
+.site-form-field input:hover,
+.site-form-field textarea:hover {
+  border-color: var(--line-strong);
+}
+
+.site-form-hint {
+  display: block;
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.site-section .site-form-choices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-m);
+  background: var(--surface-card);
+}
+
+.site-form-choices li {
+  margin: 0;
+}
+
+.site-form-choices li + li {
+  border-top: var(--bw-1) solid var(--line-hair);
+}
+
+.site-form-choices label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.site-form-choices label:hover {
+  background: var(--surface-subtle);
+}
+
+.site-form-choices input {
+  width: 1.4rem;
+  height: 1.4rem;
+  margin: 0.2rem 0 0;
+  accent-color: var(--surface-strong);
+}
+
+/* 選んだ種類は、字を太くする（色だけで示さない） */
+.site-form-choices input:checked + span {
+  font-weight: var(--fw-strong);
+}
+
+.site-form-choices .site-form-hint {
+  font-weight: normal;
+}
+
+.site .site-form-submit {
+  min-height: var(--button-height);
+  padding: 0 var(--sp-6);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
+  font-weight: var(--fw-strong);
+}
+
+.site .site-form-submit:hover {
+  background: var(--ink-800);
+}
+
+/* 人には見えない欄（ボットだけが埋める）。画面の外に出し、読み上げからも外す（aria-hidden）。display: none にしないのは、それを見て飛ばすボットがあるため */
+.site-form-trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

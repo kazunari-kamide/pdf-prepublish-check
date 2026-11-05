@@ -111,11 +111,13 @@ describe("依存の更新（dependabot.yml）", () => {
 });
 
 describe("弱点の知らせ方・偽のサイト", () => {
-  it("SECURITY.md は、GitHub の非公開の報告を使うよう書き、実物の PDF を送らせない", () => {
+  it("SECURITY.md は、お問い合わせのフォームだけを窓口にし、弱点の中身は書かせず、実物の PDF を送らせない", () => {
     const s = read("SECURITY.md");
-    expect(s).toContain("private vulnerability reporting");
-    expect(s).toContain("公開の Issue には書かないでください");
+    expect(s).toContain("お問い合わせのページ（`https://omamoripdf.com/contact.html`）のフォーム");
+    expect(s).toContain("弱点の詳しい中身は書かず、連絡先のメールアドレスだけ");
     expect(s).toContain("架空の名前・番号で作ったもの");
+    // 本人が見ていない窓口（GitHub の Issues・非公開の報告）は案内しない（2026-11-05 本人が決定）
+    for (const f of ["SECURITY.md", "README.md"]) expect(read(f), f).not.toMatch(/private vulnerability reporting|Report a vulnerability|Issue/);
   });
   it("偽のサイトの文書は、公式の URL と、知らせる窓口・ひな形を書く", () => {
     const f = read("docs/fake-sites.md");

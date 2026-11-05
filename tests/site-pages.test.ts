@@ -9,7 +9,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { cspForMeta } from "../csp.ts";
+import { CONTACT_REFERRER, cspForContactMeta, cspForMeta } from "../csp.ts";
 import { NOT_FOUND_PAGE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 import { SHIPPED_FONT_DIR, SHIPPED_ROOTS, buildLicenses, copyrightLines, githubRepo, tableUnder } from "../site-licenses.ts";
 import { renderSitemap, repoUrl, siteCss, siteFiles } from "../site.ts";
@@ -69,7 +69,8 @@ describe("ページの形", () => {
       expect(page).toMatch(/<title>[^<]+｜お守りPDF<\/title>/);
       expect(page).toMatch(/<meta name="description" content="[^"]{20,}" \/>/);
       expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/${name}" />`);
-      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspForMeta)}" />`);
+      // お問い合わせのページだけ、form-action 'self' だけが違う CSP（docs/contact.md）
+      expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(name === "contact.html" ? cspForContactMeta : cspForMeta)}" />`);
       expect(page).toContain('href="/"');
       expect(page).not.toMatch(/<script\b|\sstyle=|\son[a-z]+=/);
       // 下の帯に、サイトの案内のリンクが全部ある
@@ -96,7 +97,7 @@ describe("ページの形", () => {
   it("リポジトリの場所が分からないときは、GitHub のリンクを出さず、文だけにする", () => {
     const none = renderGuidePages({ ...opts, repoUrl: null }, licenses.data);
     for (const [name, page] of none) expect(page, name).not.toContain("https://github.com/example-owner");
-    expect(none.get("contact.html")).toContain("GitHub の Issues を開く（場所は、公式のサイトのこのページで示します）");
+    expect(none.get("terms.html")).toContain("ソースコード（GitHub）（場所は、公式のサイトのこのページで示します）");
   });
 });
 
@@ -145,18 +146,43 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
 
   it("プライバシー：PDF を入れたときにファイルを読み込む記録が残ることと、記録の使い方・お問い合わせの扱い・説明の変え方を書く", () => {
     const p = files.get("privacy.html")!;
-    for (const s of ["検査に使うプログラムのファイルを、このサイトから読み込むことがあります", "過大な負担に対処すること", "不具合の原因を調べること", "お問い合わせに書いたこと", "この説明の変え方"]) {
+    for (const s of ["検査に使うプログラムのファイルを、このサイトから読み込むことがあります", "過大な負担に対処すること", "不具合の原因を調べること", "お問い合わせで受け取るもの", "この説明の変え方"]) {
       expect(p, s).toContain(s);
     }
     // 「PDF を入れた」という操作が記録に残らない、とは言い切らない（ファイルの読み込みの記録は残りうる）
     expect(p).not.toContain("PDF を入れた、などの画面での操作");
   });
 
-  it("お問い合わせ：Issues へのリンクだけで、PDF・個人情報を貼らない注意がある", () => {
+  it("お問い合わせ：同じサイトの送り先へのフォームだけ。GitHub・メールの窓口は出さない", () => {
     const c = page("contact.html");
-    expect(c).toContain(`href="${REPO}/issues"`);
-    expect(c).toContain("PDF を、添付しないでください");
-    expect(c).not.toMatch(/mailto:/);
+    expect(c.match(/<form\b[^>]*>/g)).toEqual(['<form class="site-form" method="post" action="/contact-send.php" accept-charset="UTF-8">']);
+    expect(c).not.toMatch(/github\.com|issues|advisories|mailto:/i);
+    expect(c).toContain(`<meta name="referrer" content="${CONTACT_REFERRER}" />`);
+  });
+
+  it("お問い合わせ：種類と本文は必ず、メールアドレスは任意、名前の欄はない。人には見えない欄がある", () => {
+    const c = page("contact.html");
+    const radios = c.match(/<input type="radio" name="kind" value="(\w+)" required \/>/g) ?? [];
+    expect(radios).toHaveLength(4);
+    for (const label of ["質問", "不具合", "セキュリティの弱点", "その他"]) expect(c).toContain(`<span>${label}`);
+    expect(c).toMatch(/<textarea id="contact-body" name="body" rows="8" maxlength="4000" required><\/textarea>/);
+    expect(c).toMatch(/<input id="contact-email" name="email" type="email" maxlength="254"/);
+    expect(c).not.toMatch(/name="email"[^>]*required/);
+    expect(c).not.toMatch(/name="(name|namae|full_?name)"/);
+    expect(c).toContain("（返事がほしいときだけ）");
+    // 人には見えない欄：読み上げから外し、Tab でも止まらない
+    expect(c).toMatch(/<div class="site-form-trap" aria-hidden="true">[\s\S]*<input id="contact-website" name="website" type="text" tabindex="-1" autocomplete="off" \/>/);
+    expect(siteCss()).toMatch(/\.site-form-trap \{[^}]*left: -10000px/);
+  });
+
+  it("お問い合わせ：フォームのすぐ上に「書かないで」の注意、セキュリティの弱点には「連絡先だけ」", () => {
+    const c = page("contact.html");
+    const warn = c.indexOf('<p class="site-form-warn"><span aria-hidden="true">▲ </span>PDF や個人情報、見つかった字の中身は書かないでください。</p>');
+    expect(warn).toBeGreaterThan(0);
+    expect(c.indexOf("<form")).toBeGreaterThan(warn);
+    // 注意とフォームの間に、ほかの段落を挟まない
+    expect(c.slice(warn + 1, c.indexOf("<form"))).not.toMatch(/<p\b/);
+    expect(c).toMatch(/セキュリティの弱点<span class="site-form-hint">弱点の詳しい中身は書かず、連絡先だけ書いてください。こちらから連絡します。<\/span>/);
   });
 
   it("よくある質問：10 問以上。送らないこと・サーバーの記録・「見つからなかった」の意味を答える", () => {
