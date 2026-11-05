@@ -863,10 +863,12 @@ body.site::before {
 }
 
 .site-hero-3d {
+  /* 飾りなので、大きさは px で決める（字を大きくしても一緒に大きくならず、横にはみ出さない）。箱の外は切り取る */
   position: relative;
-  width: 13rem;
-  height: 11rem;
+  width: 208px;
+  height: 176px;
   perspective: 700px;
+  overflow: clip;
 }
 
 .site-hero-canvas {
@@ -884,9 +886,9 @@ body.site::before {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 6.5rem;
-  height: 8rem;
-  margin: -4rem 0 0 -3.25rem;
+  width: 104px;
+  height: 128px;
+  margin: -64px 0 0 -52px;
   transform-style: preserve-3d;
   transform: rotateX(52deg) rotateZ(-38deg);
   animation: site-float 6s ease-in-out infinite;
@@ -912,20 +914,20 @@ body.site::before {
 .site-sheet:nth-child(3) {
   transform: translateZ(24px);
   display: grid;
-  gap: 0.45rem;
+  gap: 7px;
   align-content: start;
-  padding: 0.8rem 0.7rem;
+  padding: 13px 11px;
 }
 
 .site-sheet i {
   display: block;
-  height: 0.3rem;
+  height: 5px;
   border-radius: 3px;
   background: var(--ink-200);
 }
 
 .site-sheet i.site-sheet-bar {
-  height: 0.55rem;
+  height: 9px;
   width: 75%;
   border-radius: 2px;
   background: var(--ink-900); /* 黒塗りの帯 */
@@ -937,10 +939,11 @@ body.site::before {
 
 .site-badge {
   position: absolute;
-  right: -0.8rem;
-  top: -0.6rem;
-  width: 2.5rem;
-  height: 2.5rem;
+  right: -13px;
+  top: -10px;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -994,8 +997,8 @@ body.site::before {
 
   .site-hero-3d {
     width: 100%;
-    max-width: 13rem;
-    height: 9rem;
+    max-width: 208px;
+    height: 150px;
   }
 }
 
@@ -1195,6 +1198,42 @@ body.site::before {
 
 .site .site-form-submit:hover {
   background: var(--ink-800);
+}
+
+/* フォームの中の字を入れる欄は、1 行も複数行も同じ角の丸み（12px）にそろえる（記事の検索の 1 つだけの欄はピルのまま） */
+.site .site-form-field input:not([type="radio"]):not([type="checkbox"]),
+.site .site-form-field textarea {
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-inset);
+}
+
+/* 「送る」のボタンにも、ほかのボタン（検査のページへのつなぎ）と同じ立体感：ふくらみと影。ホバーで浮き、押すと沈む（2026-11-05 本人の頼み「もっとリッチに」） */
+.site .site-form-submit {
+  background: linear-gradient(var(--ink-800), var(--ink-900));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), var(--shadow-rest);
+  transition: transform var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+}
+
+.site .site-form-submit:hover {
+  background: linear-gradient(var(--ink-800), var(--ink-900));
+  transform: translateY(var(--lift-pill));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), var(--shadow-lift);
+}
+
+.site .site-form-submit:active {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-press);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site .site-form-submit {
+    transition: none;
+  }
+
+  .site .site-form-submit:hover,
+  .site .site-form-submit:active {
+    transform: none;
+  }
 }
 
 /* 人には見えない欄（ボットだけが埋める）。画面の外に出し、読み上げからも外す（aria-hidden）。display: none にしないのは、それを見て飛ばすボットがあるため */

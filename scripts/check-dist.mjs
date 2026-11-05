@@ -257,8 +257,7 @@ if (allowed.length) {
   for (const a of allowed) console.log(`  - ${a}`);
 }
 if (allowedHtml.length) {
-  console.log("
-例外として通したもの（検索エンジンの確認のファイル・記事の一覧の検索のスクリプトと 3D の飾り・お問い合わせの送り先）：");
+  console.log("\n例外として通したもの（検索エンジンの確認のファイル・記事の一覧の検索のスクリプトと 3D の飾り・お問い合わせの送り先）：");
   for (const a of allowedHtml) console.log(`  - ${a}`);
 }
 if (problems.length) {
