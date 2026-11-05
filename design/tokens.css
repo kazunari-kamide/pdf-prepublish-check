@@ -84,4 +84,47 @@
   --width-thumbs: 7.5rem;
   --width-results: 30rem;
   --width-fuda: 0.5rem; /* 種類ごとの札（色の帯）の幅。字は出さない（2026-11-05 本人の画面のレビュー B4） */
+
+  /* ==== 案 C「色の面で分ける」（2026-11-05 夜 本人が決定。決まりは design/sheet.md の「案 C」）
+     枠をやめ、色の面 1 段で分ける。面の中に面・枠を重ねない。2 色（墨・紅）の決まりの外の色は、本人が承認した */
+
+  /* ---- 面の色（字は墨・補足・紅を置く。明暗の比は sheet.md） */
+  --face-beni: #fbeceb; /* 紅の面：見つかった所・PDF の置き場 */
+  --face-midori: #eaf4f0; /* 緑の面：済・約束の札（どこにも送らない など） */
+  --face-kinari: #f6efe9; /* 生成りの面：ファイル名の帯・検索の欄・ふつうの札 */
+  --page-kinari: #f5efe8; /* 生成りの地：記事の一覧のページだけ（その上に白いパネル） */
+
+  /* ---- 話題の色（記事のサムネの地。話題ごとに 1 色。字は置かない） */
+  --topic-beni: #f2cdc7; /* 黒塗り・見えない字 */
+  --topic-midori: #cbe3d8; /* 文書の情報 */
+  --topic-ki: #f2dc98; /* 前の版 */
+  --topic-ai: #d2e0ee; /* 手順（Word・Excel・一太郎 など） */
+
+  /* ---- マーカー（字の下半分に引く淡い帯。下線の代わり） */
+  --marker-ki: #f8dc6a; /* 本文のリンク（太字と合わせる）・本文の強調 */
+  --marker-beni: #f4c4c0; /* 見出しの中の強調 */
+  --marker-top: 58%; /* 帯の上の端（字の高さのこの位置から下に引く） */
+  --marker-bottom: 92%; /* 帯の下の端 */
+
+  /* ---- 角 */
+  --radius-face: 32px; /* 色の面（置き場・結果の面） */
+  --radius-card: 24px; /* 白いパネル（記事の一覧） */
+  --radius-control: 16px; /* ボタン */
+
+  /* ---- 影（白いパネルだけ。墨を薄くしたもの。重ねない） */
+  --shadow-card: 0 1px 2px rgb(43 42 40 / 4%), 0 10px 28px rgb(43 42 40 / 6%);
+
+  /* ---- 見出しの書体（Zen Maru Gothic。見出しで使う字だけに絞って同梱。design/fonts.css・design/fonts/README.md）
+     本文は今のまま --font-body（Noto Sans JP）。一覧にない字は、本文の書体で出る */
+  --font-display: "Zen Maru Gothic Omamori", var(--font-body);
+  --fw-display: 900; /* ページの大見出し（検査のページ・about・記事の一覧の題） */
+  --fw-display-sub: 700; /* 節の見出し・パネルの題・ロゴの字 */
+
+  /* ---- 見出しの大きさ（狭い画面は 40rem 以下。メディアクエリには変数が使えないので、値は sheet.md に書く） */
+  --text-hero: 2.4rem; /* 検査のページ・about の大見出し */
+  --text-hero-narrow: 1.8rem;
+  --text-page: 2.2rem; /* ほかのページの題（記事の一覧など） */
+  --text-page-narrow: 1.75rem;
+
+  /* ---- 押せる所：主なボタンは --button-height-large（56px）。ほかの押せる所・帯のリンクは --target-min（44px）以上 */
 }
