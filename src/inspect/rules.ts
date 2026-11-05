@@ -331,6 +331,7 @@ const p1 = defineRule<P1InfoReport>({
       page: null,
       rect: null,
       ...contentOf(f.value),
+      field: f.key,
     })),
 });
 
@@ -639,6 +640,7 @@ const p3 = defineRule<P3Report>({
       page: null,
       rect: null,
       ...contentOf(f.value),
+      field: f.field,
     })),
 });
 
@@ -752,6 +754,7 @@ const p2 = defineRule<P2XmpReport>({
       page: null,
       rect: null,
       ...contentOf(f.value),
+      field: f.field,
     })),
   notices: (r) => (r.limits.length ? [{ kind: "partial", message: "埋め込まれた作成の記録が大きすぎる・読めないため、調べていません。", pages: [] }] : []),
 });

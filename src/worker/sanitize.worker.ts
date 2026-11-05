@@ -29,7 +29,7 @@ async function imageCodec(): Promise<ImageCodec | undefined> {
 import { createPdfjsImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import { rulesCheck } from "../../sanitize/redact-check.ts";
 import { inspectAll } from "../inspect/inspect.ts";
-import { compressJob, sanitizeJob } from "../sanitize/job.ts";
+import { compressJob, preflightJob, sanitizeJob } from "../sanitize/job.ts";
 import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol.ts";
 
 type WorkerScope = {
@@ -73,9 +73,13 @@ scope.onmessage = async (e) => {
       }
       return;
     }
+    if (req.type === "preflight") {
+      scope.postMessage({ type: "preflighted", id: req.id, result: await preflightJob(new Uint8Array(req.buffer)) });
+      return;
+    }
     if (req.type !== "sanitize") return;
     // 自分で選んだ所があれば片付けの redact、なければふつうの片付け（src/sanitize/job.ts）
-    const r = await sanitizeJob(new Uint8Array(req.buffer), req.areas, codec);
+    const r = await sanitizeJob(new Uint8Array(req.buffer), req.areas, codec, req.tidy ?? {});
     if (r.type === "refused") {
       scope.postMessage({ type: "refused", id: req.id, message: r.message });
       return;
@@ -86,7 +90,7 @@ scope.onmessage = async (e) => {
     }
     const buffer = transferable(r.bytes);
     scope.postMessage(
-      { type: "sanitized", id: req.id, buffer, pages: r.pages, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted },
+      { type: "sanitized", id: req.id, buffer, pages: r.pages, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted, ...(r.properties ? { properties: r.properties } : {}) },
       [buffer],
     );
   } catch {
