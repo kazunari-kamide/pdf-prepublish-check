@@ -29,7 +29,7 @@ export type * from "./types.ts";
 export { redact } from "./redact.ts";
 export { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "./compress.ts";
 
-export const SANITIZER_VERSION = "0.9.0";
+export const SANITIZER_VERSION = "0.10.0";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 export const MAX_INPUT_BYTES = 512 * 1024 * 1024;

@@ -37,6 +37,7 @@ export type RemovedKind =
   | "font_glyphs" // P7：書体の中の、どこにも描かれていない字形（TrueType の字形の中身、Type3 の字の描き方）
   | "pattern_repainted" // P6：中に字のある模様で塗った覆いや、覆いの下の字の入った模様を、黒一色で塗り直した
   | "unused_unicode" // P7：書体の字の対応表（/ToUnicode）の、どこにも描かれていない字の行
+  | "covered_vector" // P6：白い不透明な注釈の下の道（パスで描いた字など）を、注釈の箱の中だけ消した（0.10.0 から）
   | "glyph_cover_box" // P7：横につぶして並べた黒い四角の形の字を、同じ所の黒い四角に描き直した（見た目は同じ）
   // 自分で黒塗りする（redact.ts）。pattern は P6（墨消し）にそろえる
   | "redacted_text" // 選んだ所の字
@@ -82,7 +83,10 @@ export type NotDoneReason =
   | "font_not_pruned" // 書体の中の描かれていない字形を外せなかった（CFF・Type1 の形、使う字を数えきれなかった）
   // 0.9.0 から
   | "pdfa_mark_kept" // 本人が PDF/A の印を残すと選んだ。整えたあとの PDF は、形式の決まりを満たさない恐れがある
-  | "signature_kept"; // 本人が電子署名を残すと選んだ。整えると署名は無効になる
+  | "signature_kept" // 本人が電子署名を残すと選んだ。整えると署名は無効になる
+  // 0.10.0 から
+  | "vector_partial" // 白い不透明な注釈にまたがる道（曲線・破線）。切ると見えている所の形が変わるので消していない
+  | "hidden_image_kept"; // ページの外にはみ出した画像を切り詰められなかった（画像を読めない・大きすぎる）。見えない所の中身が残っている
 
 export type NotDoneItem = {
   pattern: SanitizePattern;
@@ -194,6 +198,8 @@ type TraceRect = [number, number, number, number];
 export type SanitizeTraceEvent =
   | { type: "page"; page: number; operations: number; images: number; inlineImages: number; darkCovers: number; lightCovers: number; lightSkipped: number; fillLog: number }
   | { type: "page_error"; page: number; error: "too_many_operations" | "unreadable_page" }
+  /** ページの外にはみ出した画像を切り詰めたか（0.10.0 から） */
+  | { type: "crop"; page: number; imageSeq: number; ok: boolean; reason?: string }
   | {
       type: "image"; page: number; seq: number; box: TraceRect; ctm: number[];
       width: number | null; height: number | null; bpc: number | null; filter: string | null; inForm: boolean;

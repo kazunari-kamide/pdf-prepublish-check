@@ -24,13 +24,14 @@ import {
   PDFNumber,
   PDFObjectCopier,
   PDFRawStream,
+  PDFRef,
   PDFStream,
   PDFString,
   decodePDFRawStream,
   type PDFContext,
   type PDFObject,
 } from "pdf-lib";
-import { apply, type Matrix } from "../rules/p6-text/geometry.ts";
+import { apply, type Matrix, type Rect } from "../rules/p6-text/geometry.ts";
 import type { SanCover } from "./geometry.ts";
 import { coverContains } from "./geometry.ts";
 import type { DecodedImage, ImageCodec } from "./types.ts";
@@ -438,27 +439,8 @@ export async function burnImage(ctx: PDFContext, stream: PDFStream, colorSpaces:
     return { ok: false, reason: "too_large" };
   }
 
-  let data: Uint8Array;
-  try {
-    data = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
-  } catch {
-    return { ok: false, reason: "broken" };
-  }
-  const parms = decodeParms(ctx, d);
-  if (parms) {
-    const predictor = numOf(parms, "Predictor", 1);
-    const colors = numOf(parms, "Colors", L.comps);
-    const pbpc = numOf(parms, "BitsPerComponent", L.bpc);
-    const columns = numOf(parms, "Columns", L.width);
-    if (predictor >= 10) data = undoPng(data, colors, pbpc, columns);
-    else if (predictor === 2) {
-      const t = undoTiff(data, colors, pbpc, columns);
-      if (!t) return { ok: false, reason: "unsupported_filter" };
-      data = t;
-    }
-  }
-  if (data.length < L.rowLen * L.height) return { ok: false, reason: "broken" };
-  data = data.slice(0, L.rowLen * L.height);
+  const data = decodeMemory(ctx, stream, L);
+  if (typeof data === "string") return { ok: false, reason: data };
 
   const painter = makePainter(L, ctm, covers);
   for (let y = 0; y < L.height; y++) painter.paintRow(data, y * L.rowLen, y);
@@ -467,6 +449,31 @@ export async function burnImage(ctx: PDFContext, stream: PDFStream, colorSpaces:
   const out = ctx.flateStream(data, {});
   copyEntries(d, out.dict, []);
   return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, offPerCover: painter.offPerCover, reached: painter.reached, via: "memory" };
+}
+
+/** 丸ごと解ける画像（圧縮なし・Flate など）の画素を、予測を戻して取り出す（行の長さ × 高さに切りそろえる） */
+function decodeMemory(ctx: PDFContext, stream: PDFStream, L: Layout): Uint8Array | BurnFailure {
+  let data: Uint8Array;
+  try {
+    data = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
+  } catch {
+    return "broken";
+  }
+  const parms = decodeParms(ctx, stream.dict);
+  if (parms) {
+    const predictor = numOf(parms, "Predictor", 1);
+    const colors = numOf(parms, "Colors", L.comps);
+    const pbpc = numOf(parms, "BitsPerComponent", L.bpc);
+    const columns = numOf(parms, "Columns", L.width);
+    if (predictor >= 10) data = undoPng(data, colors, pbpc, columns);
+    else if (predictor === 2) {
+      const t = undoTiff(data, colors, pbpc, columns);
+      if (!t) return "unsupported_filter";
+      data = t;
+    }
+  }
+  if (data.length < L.rowLen * L.height) return "broken";
+  return data.slice(0, L.rowLen * L.height);
 }
 
 /** 大きな Flate の画像を、丸ごと解かずに、行ごとに解いて塗り、Flate で書き直す（予測は戻して、予測なしで書く） */
@@ -584,17 +591,10 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
  * - CCITT・JBIG2：1 ビットの灰色（1 が白）に解いて塗り、1 ビットのまま Flate で書き直す（DeviceGray）
  * 解くために、画像1つだけを描いた小さな PDF（1×1 のページ）を作って道具に渡す。色は Decode などをかけたあとのものになる
  */
-async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined, ctm: Matrix, covers: SanCover[], limits: BurnLimits, format: "jpeg" | "bitonal"): Promise<BurnResult> {
-  const d = stream.dict;
-  const width = Math.floor(numOf(d, "Width", 0));
-  const height = Math.floor(numOf(d, "Height", 0));
-  if (width <= 0 || height <= 0) return { ok: false, reason: "broken" };
-  if (width * height > limits.maxPixels) return { ok: false, reason: "too_large" };
-  const mask = d.lookup(PDFName.of("ImageMask"));
-  if (mask instanceof PDFBool && mask.asBoolean()) return { ok: false, reason: "unsupported_filter" };
-  const codec = limits.codec;
-  if (!codec || (format === "bitonal" && !codec.bitonal)) return { ok: false, reason: "no_codec" };
 
+/** 画像の道具（PDF.js）で、JPEG・CCITT・JBIG2 の画像の画素を取り出す。取り出せない・大きさが合わないときは null */
+async function decodeViaCodec(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined, codec: ImageCodec, width: number, height: number): Promise<DecodedImage | null> {
+  const d = stream.dict;
   let pdf: Uint8Array;
   try {
     const one = await PDFDocument.create({ updateMetadata: false });
@@ -611,7 +611,7 @@ async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFD
     page.node.set(PDFName.of("Contents"), one.context.register(one.context.stream("q 1 0 0 1 0 0 cm /I Do Q")));
     pdf = await one.save({ useObjectStreams: false });
   } catch {
-    return { ok: false, reason: "broken" };
+    return null;
   }
   let decoded: DecodedImage | null;
   try {
@@ -619,7 +619,22 @@ async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFD
   } catch {
     decoded = null;
   }
-  if (!decoded || decoded.width !== width || decoded.height !== height) return { ok: false, reason: "broken" };
+  if (!decoded || decoded.width !== width || decoded.height !== height) return null;
+  return decoded;
+}
+
+async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined, ctm: Matrix, covers: SanCover[], limits: BurnLimits, format: "jpeg" | "bitonal"): Promise<BurnResult> {
+  const d = stream.dict;
+  const width = Math.floor(numOf(d, "Width", 0));
+  const height = Math.floor(numOf(d, "Height", 0));
+  if (width <= 0 || height <= 0) return { ok: false, reason: "broken" };
+  if (width * height > limits.maxPixels) return { ok: false, reason: "too_large" };
+  const mask = d.lookup(PDFName.of("ImageMask"));
+  if (mask instanceof PDFBool && mask.asBoolean()) return { ok: false, reason: "unsupported_filter" };
+  const codec = limits.codec;
+  if (!codec || (format === "bitonal" && !codec.bitonal)) return { ok: false, reason: "no_codec" };
+  const decoded = await decodeViaCodec(ctx, stream, colorSpaces, codec, width, height);
+  if (!decoded) return { ok: false, reason: "broken" };
 
   const gray1 = decoded.kind === "gray1";
   const L: Layout = gray1
@@ -654,4 +669,161 @@ async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFD
   out.dict.set(PDFName.of("ColorSpace"), PDFName.of(gray1 ? "DeviceGray" : "DeviceRGB"));
   out.dict.set(PDFName.of("BitsPerComponent"), PDFNumber.of(gray1 ? 1 : 8));
   return { ok: true, stream: out, pixels: painter.pixels, perCover: painter.perCover, offPerCover: painter.offPerCover, reached: painter.reached, via };
+}
+
+// ---------------------------------------------------------------- ページの外の部分を切り詰める（0.10.0 から）
+
+export type CropResult =
+  /** stream：切り詰めた画像。place：新しい画像の単位の正方形 → 元の画像の単位の正方形（描く命令の前に cm でかける）。pixels：外した画素の数 */
+  | { ok: true; stream: PDFRawStream; place: Matrix; pixels: number }
+  /** 見える所が画像の全部に掛かり、切り詰める所がない */
+  | { ok: "whole" }
+  | { ok: false; reason: BurnFailure };
+
+type PixelRange = { x0: number; x1: number; y0: number; y1: number };
+
+function invert(m: Matrix): Matrix | null {
+  const [a, b, c, d, e, f] = m;
+  const det = a * d - b * c;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return null;
+  return [d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det];
+}
+
+/** 画像 1 つを、画素の範囲 r（列 x0〜x1、行 y0〜y1。行 0 が上）だけに切った新しいストリームを作る */
+async function cropStream(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined, r: PixelRange, limits: BurnLimits): Promise<PDFRawStream | BurnFailure> {
+  const d = stream.dict;
+  const width = Math.floor(numOf(d, "Width", 0));
+  const height = Math.floor(numOf(d, "Height", 0));
+  if (width <= 0 || height <= 0) return "broken";
+  if (width * height > limits.maxPixels) return "too_large";
+  const nw = r.x1 - r.x0;
+  const nh = r.y1 - r.y0;
+  const filters = filterNames(ctx, d);
+  const viaCodec = filters.length === 1 && (DCT.has(filters[0]!) || BITONAL.has(filters[0]!));
+
+  let L: { bpc: number; comps: number; rowLen: number };
+  let data: Uint8Array;
+  let kind: "same" | "jpeg" | "gray1" | "rgb";
+  if (viaCodec) {
+    const mask = d.lookup(PDFName.of("ImageMask"));
+    if (mask instanceof PDFBool && mask.asBoolean()) return "unsupported_filter";
+    const codec = limits.codec;
+    if (!codec || (BITONAL.has(filters[0]!) && !codec.bitonal)) return "no_codec";
+    const decoded = await decodeViaCodec(ctx, stream, colorSpaces, codec, width, height);
+    if (!decoded) return "broken";
+    const gray1 = decoded.kind === "gray1";
+    L = gray1 ? { bpc: 1, comps: 1, rowLen: Math.ceil(width / 8) } : { bpc: 8, comps: 3, rowLen: width * 3 };
+    if (decoded.data.length < L.rowLen * height) return "broken";
+    data = decoded.data;
+    kind = gray1 ? "gray1" : DCT.has(filters[0]!) ? "jpeg" : "rgb";
+  } else {
+    const lay = layoutOf(ctx, d, colorSpaces);
+    if (typeof lay === "string") return lay;
+    if (filters.some((f) => !DECODABLE.has(f))) return "unsupported_filter";
+    if (lay.rowLen * lay.height > limits.maxBytes) return "too_large";
+    const raw = decodeMemory(ctx, stream, lay);
+    if (typeof raw === "string") return raw;
+    L = lay;
+    data = raw;
+    kind = "same";
+  }
+
+  const spp = L.comps;
+  const outRow = Math.ceil((nw * spp * L.bpc) / 8);
+  const out = new Uint8Array(outRow * nh);
+  for (let y = 0; y < nh; y++) {
+    const src = (r.y0 + y) * L.rowLen;
+    const dst = y * outRow;
+    if (L.bpc >= 8) {
+      const bytes = L.bpc / 8;
+      out.set(data.subarray(src + r.x0 * spp * bytes, src + r.x1 * spp * bytes), dst);
+      continue;
+    }
+    for (let x = 0; x < nw * spp; x++) writeSample(out, dst, x, L.bpc, readSample(data, src, r.x0 * spp + x, L.bpc));
+  }
+
+  const size = (o: PDFRawStream) => {
+    o.dict.set(PDFName.of("Width"), PDFNumber.of(nw));
+    o.dict.set(PDFName.of("Height"), PDFNumber.of(nh));
+    return o;
+  };
+  const dims = ["Width", "Height", "SMask", "Mask"];
+  if (kind === "same") {
+    const o = ctx.flateStream(out, {});
+    copyEntries(d, o.dict, dims);
+    return size(o);
+  }
+  const skip = ["ColorSpace", "Decode", "BitsPerComponent", "ColorTransform", "ImageMask", ...dims];
+  if (kind === "jpeg") {
+    let jpeg: Uint8Array | null;
+    try {
+      jpeg = await limits.codec!.encodeJpeg(out, nw, nh, limits.jpegQuality);
+    } catch {
+      jpeg = null;
+    }
+    if (!jpeg || jpeg.length === 0) return "broken";
+    const o = PDFRawStream.of(ctx.obj({}), jpeg);
+    copyEntries(d, o.dict, skip);
+    o.dict.set(PDFName.of("Filter"), PDFName.of("DCTDecode"));
+    o.dict.set(PDFName.of("ColorSpace"), PDFName.of("DeviceRGB"));
+    o.dict.set(PDFName.of("BitsPerComponent"), PDFNumber.of(8));
+    return size(o);
+  }
+  const o = ctx.flateStream(out, {});
+  copyEntries(d, o.dict, skip);
+  o.dict.set(PDFName.of("ColorSpace"), PDFName.of(kind === "gray1" ? "DeviceGray" : "DeviceRGB"));
+  o.dict.set(PDFName.of("BitsPerComponent"), PDFNumber.of(kind === "gray1" ? 1 : 8));
+  return size(o);
+}
+
+/**
+ * 画像を、置いた行列 ctm（単位の正方形 → ページの座標）で描いたとき、見える所 visible（ページの座標）に掛かる画素だけに切り詰める。
+ * ふちにまたがる画素は残す（見た目を変えないため）。透明の型（/SMask）・型抜きの画像（/Mask のストリーム）も、同じ範囲で切る
+ * （画素の数が元の画像と違う型は、範囲がずれるので切らない）。色で抜く /Mask（配列）は、画素をそのまま写すときだけ残す。
+ * 元の画像は書き換えない（ほかの所でも使われているかもしれないため）
+ */
+export async function cropImage(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined, ctm: Matrix, visible: Rect, limits: BurnLimits): Promise<CropResult> {
+  const d = stream.dict;
+  const width = Math.floor(numOf(d, "Width", 0));
+  const height = Math.floor(numOf(d, "Height", 0));
+  if (width <= 0 || height <= 0) return { ok: false, reason: "broken" };
+  const inv = invert(ctm);
+  if (!inv) return { ok: false, reason: "broken" };
+  const corners = [apply(inv, visible[0], visible[1]), apply(inv, visible[2], visible[1]), apply(inv, visible[2], visible[3]), apply(inv, visible[0], visible[3])];
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  const u0 = clamp(Math.min(...corners.map((c) => c[0])));
+  const u1 = clamp(Math.max(...corners.map((c) => c[0])));
+  const v0 = clamp(Math.min(...corners.map((c) => c[1])));
+  const v1 = clamp(Math.max(...corners.map((c) => c[1])));
+  const r: PixelRange = {
+    x0: Math.max(0, Math.floor(u0 * width)), x1: Math.min(width, Math.ceil(u1 * width)),
+    y0: Math.max(0, Math.floor((1 - v1) * height)), y1: Math.min(height, Math.ceil((1 - v0) * height)),
+  };
+  if (r.x1 <= r.x0 || r.y1 <= r.y0) return { ok: false, reason: "broken" };
+  if (r.x0 === 0 && r.y0 === 0 && r.x1 === width && r.y1 === height) return { ok: "whole" };
+
+  const main = await cropStream(ctx, stream, colorSpaces, r, limits);
+  if (typeof main === "string") return { ok: false, reason: main };
+  for (const key of ["SMask", "Mask"]) {
+    const o = d.get(PDFName.of(key));
+    if (!o) continue;
+    const m = o instanceof PDFRef ? ctx.lookup(o) : o;
+    if (m instanceof PDFStream) {
+      const mw = Math.floor(numOf(m.dict, "Width", 0));
+      const mh = Math.floor(numOf(m.dict, "Height", 0));
+      if (mw !== width || mh !== height) return { ok: false, reason: "unsupported_filter" };
+      const cm = await cropStream(ctx, m, undefined, r, limits);
+      if (typeof cm === "string") return { ok: false, reason: cm };
+      main.dict.set(PDFName.of(key), ctx.register(cm));
+    } else if (key === "Mask") {
+      // 色で抜く型抜き（配列）：画素の値をそのまま写したときだけ、そのまま使える
+      const f = main.dict.lookup(PDFName.of("Filter"));
+      if (!(f instanceof PDFName && f.decodeText() === "FlateDecode") || main.dict.get(PDFName.of("ColorSpace")) !== d.get(PDFName.of("ColorSpace"))) {
+        return { ok: false, reason: "unsupported_filter" };
+      }
+      main.dict.set(PDFName.of(key), o);
+    }
+  }
+  const place: Matrix = [(r.x1 - r.x0) / width, 0, 0, (r.y1 - r.y0) / height, r.x0 / width, 1 - r.y1 / height];
+  return { ok: true, stream: main, place, pixels: width * height - (r.x1 - r.x0) * (r.y1 - r.y0) };
 }
