@@ -31,7 +31,7 @@ import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, S
 import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
-import { sampleFile } from "./ui/sample";
+import { sampleFile, wantsSample, withoutSample } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
 import { setupTermsDialog } from "./ui/terms-dialog";
@@ -1698,3 +1698,11 @@ window.addEventListener("resize", () => {
     if (session && session.current) void showPage(session.current, session.selected);
   }, 200);
 });
+
+// /?sample=1 で開いたら、「見本の PDF で試す」を押したときと同じに進む（サービス紹介のページから来たとき）。ほかの準備がすべて済んだ、このファイルの最後で呼ぶ。
+// 見本はこのファイルに埋め込んだもので、取りに行く通信はない。再読み込みで何度も読まないよう、アドレスから外す
+if (wantsSample(location.search)) {
+  history.replaceState(history.state, "", withoutSample(location.pathname, location.search, location.hash));
+  const file = sampleFile();
+  if (file) void handle(file);
+}

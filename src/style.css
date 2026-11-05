@@ -234,6 +234,12 @@ select {
   border: 2px solid var(--color-ok);
 }
 
+/* サービス紹介のページへのリンク（上の帯の右端。目立たせない） */
+.about-link {
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
 /* ---------------------------------------------------------------- 3つの段 */
 
 .workspace {
