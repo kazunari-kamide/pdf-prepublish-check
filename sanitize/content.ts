@@ -17,12 +17,15 @@
 
 import {
   PDFArray,
+  PDFBool,
   PDFDict,
+  PDFHexString,
   PDFName,
   PDFNumber,
   PDFRawStream,
   PDFRef,
   PDFStream,
+  PDFString,
   decodePDFRawStream,
   type PDFContext,
   type PDFObject,
@@ -48,6 +51,7 @@ import {
 import { measureImageDarkness } from "../rules/p6-text/images.ts";
 import { luminanceOf } from "../rules/p6-text/page.ts";
 import { RectIndex, coveredFraction, type SanCover } from "./geometry.ts";
+import { decodeLuma, sampleLuma } from "./image-sample.ts";
 import { burnImage, type BurnFailure, type BurnLimits } from "./images.ts";
 import { serializeOps } from "./serialize.ts";
 import type { ImageCodec, NotDoneItem, NotDoneReason, RemovedItem, SanitizeTraceEvent } from "./types.ts";
@@ -82,6 +86,14 @@ export const SETTINGS = {
   sameColorDeltaBelow: 0.1,
   coverAlphaMin: 0.9,
   rectangularFillMin: 0.9,
+  /** 横の伸縮（Tz ÷ 100）がこれ未満なら、横につぶれて見えない字（rules/p7-hidden の squashedScaleBelow と同じ。0.7.0 から） */
+  squashedScaleBelow: 0.1,
+  /** 見える所（ページと切り抜きの重なり）が、画像の箱のこの割合未満なら、隠れた所の画素を白く塗る（0.7.0 から。字の outsideFraction と同じ 0.5） */
+  hiddenImageVisibleBelow: 0.5,
+  /** 違う字の重ね描きとみなす、2つの字の箱の重なりの割合の下限（どちらの箱から見ても。0.7.0 から） */
+  overdrawnOverlapMin: 0.8,
+  /** 地の色を読むために解く画像の画素の数の上限（0.7.0 から） */
+  maxSamplePixels: 16_000_000,
 };
 export type ContentSettings = typeof SETTINGS;
 
@@ -108,7 +120,7 @@ type FillLogEntry = {
   decision: "light_cover" | "skip_blend" | "skip_hidden" | "skip_transparent" | "ignore_transparent" | "no_area" | "mid_tone" | "unknown_color";
 };
 
-type P7Reason = "hidden_layer" | "off_page" | "clipped" | "invisible" | "tiny" | "same_color" | "covered_light";
+type P7Reason = "hidden_layer" | "off_page" | "clipped" | "invisible" | "tiny" | "squashed" | "same_color" | "covered_light" | "covered_image";
 
 const P7_LABEL: Record<P7Reason, string> = {
   hidden_layer: "表示しないレイヤーの中の字",
@@ -116,8 +128,10 @@ const P7_LABEL: Record<P7Reason, string> = {
   clipped: "切り抜きの外にある字",
   invisible: "見えない描き方・透明な字",
   tiny: "小さすぎて読めない字",
+  squashed: "横につぶれて見えない字",
   same_color: "地と同じ色の字",
   covered_light: "白などの不透明な四角で隠した字",
+  covered_image: "あとから重ねた画像で隠した字",
 };
 
 // ---------------------------------------------------------------- 集めるもの
@@ -150,6 +164,11 @@ type Glyph = {
   mode: number;
   alpha: number;
   lum: number | null;
+  /** 横の伸縮（Tz ÷ 100。縦書きは 1） */
+  hScale: number;
+  /** 書体と字のコード（違う字の重ね描きを見分ける） */
+  font: FontInfo;
+  code: number;
   page: number;
   remove: null | { pattern: "P6"; cover: SanCover } | { pattern: "P7"; reason: P7Reason };
   node: CNode;
@@ -157,7 +176,13 @@ type Glyph = {
 };
 
 type Fill = { seq: number; box: Rect; polys: Point[][]; lum: number | null; alpha: number; normal: boolean; rectangular: boolean };
-type ImageUse = { seq: number; box: Rect; ctm: Matrix; stream: PDFStream; res: PDFDict | undefined; node: CNode; op: number };
+type ImageUse = {
+  seq: number; box: Rect; ctm: Matrix; stream: PDFStream; res: PDFDict | undefined; node: CNode; op: number;
+  /** 描いたときの切り抜きの箱 */
+  clip: Rect;
+  /** 下を隠す描き方か（不透明・ふつうの重ね方・表示するレイヤー・透明の型と型抜きなし） */
+  opaque: boolean;
+};
 
 type GState = {
   ctm: Matrix;
@@ -539,6 +564,7 @@ class Walker {
           const glyph: Glyph = {
             seq, rect: boundsOf(corners), height: Math.hypot(tx - bx, ty - by), isSpace: gl.isSpace,
             hidden: isHidden(), clip: g.clip, mode: g.mode, alpha: strokeMode ? g.CA : g.ca, lum: strokeMode ? g.stroke : g.fill,
+            hScale: vert ? 1 : g.th, font: f, code: gl.code,
             page: this.pageNo, remove: null, node, op: opIndex,
           };
           this.glyphs.push(glyph);
@@ -782,7 +808,12 @@ class Walker {
             const box = boundsOf(corners);
             if (!annotation) {
               this.images.push({ seq, box });
-              const use: ImageUse = { seq, box, ctm: g.ctm, stream: xo, res, node, op: opIndex };
+              const d = xo.dict;
+              const imMask = d.lookup(PDFName.of("ImageMask"));
+              // 下の字を隠すとみなす画像：不透明・ふつうの重ね方・表示するレイヤー・透明の型と型抜きなし・縦横に置いたもの（箱で隠れた割合を測るため）
+              const opaque = g.ca >= s.opacityMin && g.normal && !isHidden() && this.visible(d.get(PDFName.of("OC"))) &&
+                !d.has(PDFName.of("SMask")) && !d.has(PDFName.of("Mask")) && !(imMask instanceof PDFBool && imMask.asBoolean()) && isAxisRect(corners);
+              const use: ImageUse = { seq, box, ctm: g.ctm, stream: xo, res, node, op: opIndex, clip: g.clip, opaque };
               this.imageUses.push(use);
               node.images.set(opIndex, use);
             }
@@ -884,11 +915,12 @@ function appearanceMatrix(ctx: PDFContext, ap: PDFStream, rect: Rect): Matrix | 
 }
 
 /** ページの注釈を覆いとして足す。適用する墨消し注釈の箱を返す */
-function scanAnnotations(ctx: PDFContext, page: PDFPage, w: Walker, visible: Visibility, s: ContentSettings): { redactRects: Rect[]; redactAnnots: PDFObject[] } {
+function scanAnnotations(ctx: PDFContext, page: PDFPage, w: Walker, visible: Visibility, s: ContentSettings): { redactRects: Rect[]; redactAnnots: PDFObject[]; apTextRects: Rect[] } {
   const redactRects: Rect[] = [];
   const redactAnnots: PDFObject[] = [];
+  const apTextRects: Rect[] = [];
   const annots = ctx.lookup(page.node.get(PDFName.of("Annots")));
-  if (!(annots instanceof PDFArray)) return { redactRects, redactAnnots };
+  if (!(annots instanceof PDFArray)) return { redactRects, redactAnnots, apTextRects };
   for (const ref of annots.asArray()) {
     const annot = dictOf(ctx, ref);
     if (!annot) continue;
@@ -939,6 +971,22 @@ function scanAnnotations(ctx: PDFContext, page: PDFPage, w: Walker, visible: Vis
         if (e instanceof TooManyOperations) throw e;
         unreadable();
       }
+      // 見た目の中だけに字があり、コメント（/Contents）のない注釈（スタンプなど）：ページに見えている字なので消さず、notDone にする
+      if (!NO_TEXT_CHECK.has(subtype) && !hasText(ctx, annot.get(PDFName.of("Contents"))) && apHasText(ctx, data, dictOf(ctx, ap.dict.get(PDFName.of("Resources"))), 0)) {
+        apTextRects.push(rect);
+      }
+      continue;
+    }
+    if (subtype === "Highlight") {
+      // 見た目のない蛍光ペン：読み手は下の色に掛け合わせて描く。色が濃ければ、下の字は黒く塗りつぶされて見えない（濃い覆い）
+      const c = numsOf(ctx, annot.get(PDFName.of("C")));
+      const lum = c && c.length > 0 ? luminanceOf(c, c.length) : null;
+      if (lum !== null && lum <= s.darkLuminanceMax && alpha >= s.opacityMin) {
+        const q = numsOf(ctx, annot.get(PDFName.of("QuadPoints")));
+        if (q && q.length >= 8) {
+          for (let i = 0; i + 8 <= q.length; i += 8) w.covers.push({ seq: ++w.seq, rect: boundsOf([[q[i]!, q[i + 1]!], [q[i + 2]!, q[i + 3]!], [q[i + 4]!, q[i + 5]!], [q[i + 6]!, q[i + 7]!]]), kind: "annotation" });
+        } else w.covers.push({ seq: ++w.seq, rect, kind: "annotation" });
+      }
       continue;
     }
     if (subtype === "Square") {
@@ -953,7 +1001,33 @@ function scanAnnotations(ctx: PDFContext, page: PDFPage, w: Walker, visible: Vis
     }
   }
   void visible;
-  return { redactRects, redactAnnots };
+  return { redactRects, redactAnnots, apTextRects };
+}
+
+/** 見た目の中の字を調べない注釈（フォームの欄の値は leftovers.ts、リンク・吹き出しは字を描かない、付箋は外す） */
+const NO_TEXT_CHECK = new Set(["Widget", "Link", "Popup", "Text", "Redact"]);
+
+function hasText(ctx: PDFContext, o: PDFObject | undefined): boolean {
+  const v = o instanceof PDFRef ? ctx.lookup(o) : o;
+  return (v instanceof PDFString || v instanceof PDFHexString) && v.decodeText().trim().length > 0;
+}
+
+/** 見た目（と、その中の部品）に字を描く命令があるか */
+function apHasText(ctx: PDFContext, data: Uint8Array, res: PDFDict | undefined, depth: number): boolean {
+  for (const { op, args } of operations(data)) {
+    if (op === "Tj" || op === "TJ" || op === "'" || op === '"') return true;
+    if (op === "Do" && depth < 4 && args[0]?.t === "name") {
+      const xo = ctx.lookup(dictOf(ctx, res?.get(PDFName.of("XObject")))?.get(PDFName.of(args[0].v)));
+      if (xo instanceof PDFStream && nameOf(ctx, xo.dict.get(PDFName.of("Subtype"))) === "Form") {
+        try {
+          if (apHasText(ctx, streamData(xo), dictOf(ctx, xo.dict.get(PDFName.of("Resources"))) ?? res, depth + 1)) return true;
+        } catch {
+          // 読めない部品は数えない
+        }
+      }
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------- 決める（P7）
@@ -972,6 +1046,7 @@ function judgeP7(gl: Glyph, view: Rect, fills: Fill[], images: Array<{ seq: numb
     return "invisible";
   }
   if (gl.height < s.tinyHeightBelowPt) return "tiny";
+  if (Math.abs(gl.hScale) < s.squashedScaleBelow) return "squashed";
   if (a > 0) {
     for (const f of fills) {
       if (f.seq < gl.seq || !f.normal || f.alpha < s.coverAlphaMin || !f.rectangular || f.lum === null) continue;
@@ -992,6 +1067,138 @@ function judgeP7(gl: Glyph, view: Rect, fills: Fill[], images: Array<{ seq: numb
   }
   if (under.lum === null) return null;
   return Math.abs(gl.lum - under.lum) < s.sameColorDeltaBelow ? "same_color" : null;
+}
+
+/** 見える描き方の字か（描き方 3・7 と、ほとんど透明な字は、ほかの決まりで見る） */
+const drawnVisibly = (gl: Glyph, s: ContentSettings) => gl.mode !== 3 && gl.mode !== 7 && gl.alpha >= s.invisibleAlphaBelow && !gl.hidden;
+
+/**
+ * P7 の続き（0.7.0 から）。judgeP7 で決まらなかった字について：
+ * - 白など明るい不透明な注釈の見た目（Square など）に、字の箱の半分以上が隠れた字（covered_light）
+ * - 字のあとに描いた不透明な画像に、字の箱の半分以上が隠れた字（covered_image）。描き方 3・7 の字（文字認識の層）は残す
+ * - 字のすぐ下が画像で、字の箱の下の画素がほぼ一色、その明るさが字の色と同じ字（same_color。字の色と地の色の差は P7 と同じ 0.1 未満）
+ */
+async function judgeP7More(ctx: PDFContext, w: Walker, fillIndex: RectIndex<{ rect: Rect; seq: number; f: Fill }>, s: ContentSettings, codec: ImageCodec | undefined) {
+  const annLight = w.lightCovers.filter((c) => c.kind === "annotation");
+  const opaqueImages = w.imageUses.filter((u) => u.opaque && area(u.box) > 0);
+  const sameColor: Array<{ gl: Glyph; u: ImageUse }> = [];
+  for (const gl of w.glyphs) {
+    if (gl.remove || gl.isSpace) continue;
+    const a = area(gl.rect);
+    if (!(a > 0) || !Number.isFinite(a)) continue;
+    if (annLight.some((c) => coveredFraction(c, gl.rect) >= s.coveredFractionMin)) {
+      gl.remove = { pattern: "P7", reason: "covered_light" };
+      continue;
+    }
+    if (!drawnVisibly(gl, s)) continue;
+    if (opaqueImages.some((u) => u.seq > gl.seq && intersectionArea(gl.rect, u.box) / a >= s.coveredFractionMin)) {
+      gl.remove = { pattern: "P7", reason: "covered_image" };
+      continue;
+    }
+    if (gl.lum === null) continue;
+    // 字の中心のすぐ下にあるもの：いちばんあとに描いた（字より前の）塗りと画像を比べる
+    const cx = (gl.rect[0] + gl.rect[2]) / 2;
+    const cy = (gl.rect[1] + gl.rect[3]) / 2;
+    let fillSeq = -1;
+    for (const { f } of fillIndex.query(gl.rect, (x, y) => x.seq - y.seq)) {
+      if (f.seq > gl.seq || !f.normal || f.alpha < s.coverAlphaMin || !inRect(f.box, cx, cy) || !inShapeEvenOdd(f.polys, cx, cy)) continue;
+      fillSeq = Math.max(fillSeq, f.seq);
+    }
+    let under: ImageUse | null = null;
+    for (const u of w.imageUses) if (u.seq < gl.seq && u.seq > fillSeq && inRect(u.box, cx, cy) && (!under || u.seq > under.seq)) under = u;
+    // 下の画像は、字より前に描いた画像のうち、いちばんあとのもの。透明の型などがある画像は、地の色が分からないので見ない
+    if (under && under.opaque) sameColor.push({ gl, u: under });
+  }
+  if (!sameColor.length) return;
+  const decoded = new Map<ImageUse, Awaited<ReturnType<typeof decodeLuma>>>();
+  for (const { gl, u } of sameColor) {
+    if (!decoded.has(u)) decoded.set(u, await decodeLuma(ctx, u.stream, dictOf(ctx, u.res?.get(PDFName.of("ColorSpace"))), codec, s.maxSamplePixels));
+    const img = decoded.get(u);
+    if (!img) continue;
+    const st = sampleLuma(img, u.ctm, gl.rect);
+    if (!st || st.max - st.min >= s.sameColorDeltaBelow) continue;
+    if (Math.abs(gl.lum! - st.mean) < s.sameColorDeltaBelow) gl.remove = { pattern: "P7", reason: "same_color" };
+  }
+}
+
+/**
+ * 同じ所に違う字が重ねて描かれている所（0.7.0 から。どちらが見える字か決められないので、消さずに notDone にする）。
+ * 2つの字の箱の重なりが、どちらの箱から見ても overdrawnOverlapMin 以上で、書体か字のコードが違うもの（同じ字の重ね描き＝太字の代わり、は数えない）
+ */
+function findOverdrawn(w: Walker, s: ContentSettings): { count: number; rect: Rect | null } {
+  const shown = w.glyphs.filter((g) => !g.remove && !g.isSpace && drawnVisibly(g, s) && area(g.rect) > 0 && Number.isFinite(area(g.rect)));
+  const index = new RectIndex(shown);
+  let count = 0;
+  let rect: Rect | null = null;
+  for (const a of shown) {
+    const aa = area(a.rect);
+    for (const b of index.query(a.rect, (x, y) => x.seq - y.seq)) {
+      if (b.seq <= a.seq || (b.font === a.font && b.code === a.code)) continue;
+      const ov = intersectionArea(a.rect, b.rect);
+      if (ov / aa < s.overdrawnOverlapMin || ov / area(b.rect) < s.overdrawnOverlapMin) continue;
+      count++;
+      rect = rect ? union(rect, union(a.rect, b.rect)) : union(a.rect, b.rect);
+      break;
+    }
+  }
+  return { count, rect };
+}
+
+/**
+ * ページの資源（/XObject）のうち、ページの中身から描かれない部品・画像を外す（0.7.0 から。描かれない部品の中の字・画像が、取り出せてしまうため）。
+ * 資源を持たない部品（ページの資源を使う部品）の中で描くものも、使っているとみなす。
+ * 字の書体に、資源を持たない Type3 の書体があるページは、書体の中で描くかもしれないので外さない。
+ * ページの資源の辞書は、ほかのページと共有かもしれないので、写してから外す。外した数を返す
+ */
+function removeUnusedXObjects(ctx: PDFContext, page: PDFPage, s: ContentSettings): number {
+  const res = dictOf(ctx, page.node.get(PDFName.of("Resources"))) ?? page.node.Resources();
+  const xo = res ? dictOf(ctx, res.get(PDFName.of("XObject"))) : undefined;
+  if (!res || !xo || xo.entries().length === 0) return 0;
+  const fonts = dictOf(ctx, res.get(PDFName.of("Font")));
+  if (fonts) for (const [, f] of fonts.entries()) {
+    const fd = dictOf(ctx, f);
+    if (fd && nameOf(ctx, fd.get(PDFName.of("Subtype"))) === "Type3" && !fd.has(PDFName.of("Resources"))) return 0;
+  }
+  const used = new Set<string>();
+  const seen = new Set<PDFObject>();
+  const scan = (data: Uint8Array, depth: number) => {
+    let n = 0;
+    for (const { op, args } of operations(data)) {
+      if (++n > s.maxOperationsPerPage) throw new TooManyOperations();
+      if (op !== "Do" || args[0]?.t !== "name") continue;
+      const name = args[0].v;
+      used.add(name);
+      const x = ctx.lookup(xo.get(PDFName.of(name)));
+      if (x instanceof PDFStream && depth < s.maxFormDepth && !seen.has(x) && nameOf(ctx, x.dict.get(PDFName.of("Subtype"))) === "Form" && !x.dict.has(PDFName.of("Resources"))) {
+        seen.add(x);
+        try {
+          scan(streamData(x), depth + 1);
+        } catch (e) {
+          if (e instanceof TooManyOperations) throw e;
+        }
+      }
+    }
+  };
+  scan(contentData(ctx, page.node.get(PDFName.of("Contents"))), 0);
+  const unused = xo.entries().map(([k]) => k).filter((k) => !used.has(k.decodeText()));
+  if (!unused.length) return 0;
+  const newRes = res.clone(ctx);
+  const newXo = xo.clone(ctx);
+  for (const k of unused) newXo.delete(k);
+  newRes.set(PDFName.of("XObject"), newXo);
+  page.node.set(PDFName.of("Resources"), newRes);
+  return unused.length;
+}
+
+/** 画像の箱のうち、見える所（v）の外の部分を、縦横の四角（最大 4 つ）で返す */
+function outsideParts(box: Rect, v: Rect): Rect[] {
+  const out: Rect[] = [
+    [box[0], box[1], box[2], Math.min(box[3], v[1])],
+    [box[0], Math.max(box[1], v[3]), box[2], box[3]],
+    [box[0], Math.max(box[1], v[1]), Math.min(box[2], v[0]), Math.min(box[3], v[3])],
+    [Math.max(box[0], v[2]), Math.max(box[1], v[1]), box[2], Math.min(box[3], v[3])],
+  ];
+  return out.filter((r) => r[2] - r[0] > 0 && r[3] - r[1] > 0);
 }
 
 // ---------------------------------------------------------------- 書き直す
@@ -1061,7 +1268,10 @@ function rewriteTextOp(op: Op, info: TextOp): Op[] {
 
 type Rewritten = { data: Uint8Array; res: PDFDict | undefined } | null;
 
-function needsRewrite(node: CNode, burned: Map<ImageUse, PDFRef>, memo: Map<CNode, boolean>): boolean {
+/** 画像ごとの書き直し：塗った画像（新しい参照）か、描く命令を外す（"drop"。ページの外に置いた画像） */
+type ImageEdits = Map<ImageUse, PDFRef | "drop">;
+
+function needsRewrite(node: CNode, burned: ImageEdits, memo: Map<CNode, boolean>): boolean {
   const m = memo.get(node);
   if (m !== undefined) return m;
   let v = false;
@@ -1073,7 +1283,7 @@ function needsRewrite(node: CNode, burned: Map<ImageUse, PDFRef>, memo: Map<CNod
   return v;
 }
 
-function rewriteNode(ctx: PDFContext, node: CNode, burned: Map<ImageUse, PDFRef>, memo: Map<CNode, boolean>, blocked: CNode[], actual: { count: number }): Rewritten {
+function rewriteNode(ctx: PDFContext, node: CNode, burned: ImageEdits, memo: Map<CNode, boolean>, blocked: CNode[], actual: { count: number }): Rewritten {
   if (!needsRewrite(node, burned, memo)) return null;
   if (node.hasInline) {
     blocked.push(node);
@@ -1092,14 +1302,16 @@ function rewriteNode(ctx: PDFContext, node: CNode, burned: Map<ImageUse, PDFRef>
     if (r.res) ns.dict.set(PDFName.of("Resources"), r.res);
     renames.set(opNo, ctx.register(ns));
   }
+  const drops = new Set<number>();
   for (const [opNo, u] of node.images) {
     const ref = burned.get(u);
-    if (ref) renames.set(opNo, ref);
+    if (ref === "drop") drops.add(opNo);
+    else if (ref) renames.set(opNo, ref);
   }
 
   let res = node.res;
   let xobjects: PDFDict | undefined;
-  if (renames.size) {
+  if (renames.size || drops.size) {
     res = node.res ? node.res.clone(ctx) : ctx.obj({});
     const old = dictOf(ctx, res.get(PDFName.of("XObject")));
     xobjects = old ? old.clone(ctx) : ctx.obj({});
@@ -1110,6 +1322,10 @@ function rewriteNode(ctx: PDFContext, node: CNode, burned: Map<ImageUse, PDFRef>
   let i = -1;
   for (const o of operations(node.data)) {
     i++;
+    if (drops.has(i)) {
+      if (o.args[0]?.t === "name") replacedNames.add(o.args[0].v);
+      continue;
+    }
     const rn = renames.get(i);
     if (rn && xobjects) {
       const name = freshName(xobjects, "San");
@@ -1199,7 +1415,7 @@ export async function sanitizePageContent(
   };
   const w = new Walker(ctx, visible, s, pageNo);
   w.run(root, w.initial(IDENTITY), false, 0, new Set(), false);
-  const { redactRects, redactAnnots } = scanAnnotations(ctx, page, w, visible, s);
+  const { redactRects, redactAnnots, apTextRects } = scanAnnotations(ctx, page, w, visible, s);
   // 利用者が選んだ場所（redact.ts）：ページのいちばん上に描いた濃い覆いとして入れる（下の字・画素を消し、最後に黒い四角を描く）
   const userCovers: SanCover[] = userAreas.map((rect) => ({ seq: ++w.seq, rect, kind: "user" }));
   w.covers.push(...userCovers);
@@ -1231,6 +1447,8 @@ export async function sanitizePageContent(
     const r = judgeP7(gl, view, near, w.images, s);
     if (r) gl.remove = { pattern: "P7", reason: r };
   }
+  // P7（0.7.0 から）：白い不透明な注釈・あとから重ねた不透明な画像で隠した字、画像と同じ色の字
+  await judgeP7More(ctx, w, fillIndex, s, codec);
   if (trace) {
     trace({
       type: "page", page: pageNo, operations: w.ops, images: w.imageUses.length, inlineImages: w.inlineImages.length,
@@ -1250,13 +1468,28 @@ export async function sanitizePageContent(
     for (const e of w.fillLog) trace({ type: "fill", page: pageNo, ...e, rect: RECT_ROUND(e.rect), overImages: w.imageUses.filter((u) => u.seq < e.seq && intersectionArea(e.rect, u.box) > 0).map((u) => u.seq) });
   }
   // P6：画像の画素（黒い覆いと、白などの明るい覆い）
-  const burned = new Map<ImageUse, PDFRef>();
-  const burnedReport: Array<{ rect: Rect; pixels: number; tone: "dark" | "light"; user: boolean }> = [];
+  const burned: ImageEdits = new Map();
+  const burnedReport: Array<{ rect: Rect; pixels: number; tone: "dark" | "light"; user: boolean; hidden: boolean }> = [];
+  let droppedImages = 0;
   const lightIndex = new RectIndex(w.lightCovers);
   const limits: BurnLimits = { maxBytes: s.maxImageBytes, maxPixels: s.maxImagePixels, jpegQuality: s.jpegQuality, ...(codec ? { codec } : {}) };
   for (const u of w.imageUses) {
+    // P7（0.7.0 から）：見える所（ページと、描いたときの切り抜きの重なり）に全く掛からない画像は、描く命令を外す。
+    // 見える所が画像の箱の半分未満なら、隠れた所の画素を白く塗る（見た目は変わらない）
+    const boxA = area(u.box);
+    const vis = intersect(intersect(view, u.clip), u.box);
+    const visA = vis[2] > vis[0] && vis[3] > vis[1] ? area(vis) : 0;
+    const measurable = boxA > 0 && Number.isFinite(boxA);
+    if (measurable && visA === 0) {
+      burned.set(u, "drop");
+      droppedImages++;
+      continue;
+    }
+    const hiddenCovers: SanCover[] = measurable && visA / boxA < s.hiddenImageVisibleBelow
+      ? outsideParts(u.box, vis).map((rect) => ({ seq: ++w.seq, rect, kind: "hidden" as const, tone: "light" as const }))
+      : [];
     const after = (c: SanCover) => c.seq > u.seq && intersectionArea(c.rect, u.box) > 0;
-    const over = [...coverIndex.query(u.box, bySeq).filter(after), ...lightIndex.query(u.box, bySeq).filter(after)].sort(bySeq);
+    const over = [...coverIndex.query(u.box, bySeq).filter(after), ...lightIndex.query(u.box, bySeq).filter(after), ...hiddenCovers].sort(bySeq);
     if (!over.length) continue;
     const r = await burnImage(ctx, u.stream, dictOf(ctx, u.res?.get(PDFName.of("ColorSpace"))), u.ctm, over, limits);
     const expected = over.map((c) => expectedPixels(c, u));
@@ -1270,8 +1503,8 @@ export async function sanitizePageContent(
         // 上に重なったあとの覆いの色で塗られた画素も「届いた」と数える（reached）。どの画素にも届かなかったときだけ出す
         if (!r.reached[k] && expected[k]! >= 2) {
           notDone.push({
-            pattern: "P6", reason: "unsupported_image", page: pageNo, rect: RECT_ROUND(intersect(c.rect, u.box)),
-            label: `${c.tone === "light" ? "白い四角・注釈の下の画像" : "黒い四角の下の画像"}を塗りつぶせませんでした（画像の置き方を読み取れませんでした）。画像の中身が残っているかもしれません`,
+            pattern: c.kind === "hidden" ? "P7" : "P6", reason: "unsupported_image", page: pageNo, rect: RECT_ROUND(intersect(c.rect, u.box)),
+            label: `${c.kind === "hidden" ? "ページの外・切り抜きの外に隠れた画像の部分" : c.tone === "light" ? "白い四角・注釈の下の画像" : "黒い四角の下の画像"}を塗りつぶせませんでした（画像の置き方を読み取れませんでした）。画像の中身が残っているかもしれません`,
           });
         }
       });
@@ -1280,7 +1513,11 @@ export async function sanitizePageContent(
       // 塗れない：覆いごとに「片付けられなかった所」にする（注釈は外さない。画面で「全部消えた」と言わせない）
       const reason: NotDoneReason = r.reason === "too_large" ? "image_too_large" : "unsupported_image";
       for (const c of over) {
-        notDone.push({ pattern: "P6", reason, page: pageNo, rect: RECT_ROUND(intersect(c.rect, u.box)), label: notBurnedLabel(r.reason, c.tone === "light") });
+        const hidden = c.kind === "hidden";
+        notDone.push({
+          pattern: hidden ? "P7" : "P6", reason, page: pageNo, rect: RECT_ROUND(intersect(c.rect, u.box)),
+          label: hidden ? "ページの外・切り抜きの外に隠れた画像の部分を、塗りつぶせませんでした。隠れた所の中身が残っています" : notBurnedLabel(r.reason, c.tone === "light"),
+        });
       }
       continue;
     }
@@ -1308,7 +1545,7 @@ export async function sanitizePageContent(
     // 覆いが複数あるときに全部を1つの箱にまとめると、画像全体の箱に近くなり、塗っていない所まで枠に入るため
     over.forEach((c, k) => {
       const n = r.perCover[k] ?? 0;
-      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n, tone: c.tone === "light" ? "light" : "dark", user: c.kind === "user" });
+      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n, tone: c.tone === "light" ? "light" : "dark", user: c.kind === "user", hidden: c.kind === "hidden" });
     });
   }
   // 画像の上の明るい不透明な塗りのうち、覆いにしなかったもの：塗らないが、黙って残さない（片付けられなかった所にする）
@@ -1388,6 +1625,10 @@ export async function sanitizePageContent(
     removed.push({ pattern: "P6", kind: "covered_text", page: pageNo, rect: RECT_ROUND(c.rect), count: e.chars, label: `黒い四角の下に残っていた字（${e.chars} 字）` });
   }
   for (const b of burnedReport) {
+    if (b.hidden) {
+      removed.push({ pattern: "P7", kind: "hidden_image", page: pageNo, rect: b.rect, count: b.pixels, label: `ページの外・切り抜きの外に隠れていた画像の部分（${b.pixels} 画素を白く塗りました。見た目は変わりません）` });
+      continue;
+    }
     if (b.user) {
       removed.push({ pattern: "P6", kind: "redacted_pixels", page: pageNo, rect: b.rect, count: b.pixels, label: `選んだ所の画像の中身（${b.pixels} 画素を黒く塗りました）` });
       continue;
@@ -1408,6 +1649,29 @@ export async function sanitizePageContent(
   }
   if (blocked.some((n) => n.actualText.size)) {
     notDone.push({ pattern: "P7", reason: "inline_image", page: pageNo, label: "ページに直接埋め込んだ画像があるため、ページの中に書かれた字の読み替え（/ActualText）を消せませんでした" });
+  }
+  if (droppedImages) {
+    removed.push({ pattern: "P7", kind: "hidden_image", page: pageNo, count: droppedImages, label: `ページの外・切り抜きの外に置いて見えない画像（${droppedImages} か所）を、描かないようにしました` });
+  }
+  // P5（0.7.0 から）：資源にあるが描かれない部品・画像
+  const unused = removeUnusedXObjects(ctx, page, s);
+  if (unused) {
+    removed.push({ pattern: "P5", kind: "unused_xobject", page: pageNo, count: unused, label: `ページの資源にあるが描かれない部品・画像（${unused} 個）を外しました（中の字・画像を取り出せないように）` });
+  }
+  // P7（0.7.0 から）：違う字の重ね描きは、どちらが見える字か決められないので、消さずに知らせる
+  const over = findOverdrawn(w, s);
+  if (over.count && over.rect) {
+    notDone.push({
+      pattern: "P7", reason: "overdrawn_text", page: pageNo, rect: RECT_ROUND(over.rect),
+      label: `同じ所に違う字が重ねて描かれています（${over.count} か所）。どちらが見える字か決められないため、消していません。見えている内容を確かめてください`,
+    });
+  }
+  // P8（0.7.0 から）：注釈の見た目の中だけにある字は、ページに見えている字なので消さずに知らせる
+  if (apTextRects.length) {
+    notDone.push({
+      pattern: "P8", reason: "annotation_text", page: pageNo, rect: RECT_ROUND(apTextRects.reduce(union)),
+      label: `注釈（スタンプなど ${apTextRects.length} 個）の見た目の中に字があります。ページに見えている字なので消していません。見えている字を確かめてください`,
+    });
   }
   const boxes = [...redactRects, ...userAreas];
   if (boxes.length) applyRedactionBoxes(ctx, page, boxes);
