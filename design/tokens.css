@@ -33,11 +33,16 @@
   --color-on-dark: #ffffff; /* 墨・紅の上の文字 */
   --color-accent-wash: rgb(163 32 27 / 10%); /* ページの上の枠の中（下の絵が透けて見える） */
 
+  /* ---- ロゴ（design/logo/。SVG には HEX をそのまま書く。値はここと合わせる。tests/logo.test.ts で確かめる） */
+  --color-logo-fold: #d69b98; /* 小さいとき用のマークの、紙の折り角。紅を白の上で 45% に薄めた色を、決まった値にした */
+  --logo-header: 2.75rem; /* 手順の帯の見出しのマーク（40px 以上なので、ふつうの形を使う） */
+  --logo-site: 2.5rem; /* サイトのページの墨の帯のマーク */
+
   /* ---- 文字：見出しも本文もゴシック（2026-11-05 本人が承認。見出しは太字で分ける）。いまは端末の書体 */
   --font-head: var(--font-body);
   /* 同梱の Noto Sans JP（字を絞ったもの。src/style.css の @font-face）を先に。ない字は端末の書体で出す */
   --font-body: "Noto Sans JP Omamori", "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
-  --text-base: 18px; /* 本文。役所の職員が読むので大きめ */
+  --text-base: 112.5%; /* 本文。役所の職員が読むので大きめ（ブラウザの既定 16px のとき 18px）。px で決めず、ブラウザの字の大きさの設定に従う（2026-11-05） */
   --text-small: 0.9rem;
   --text-h1: 1.6rem;
   --text-h2: 1.15rem;

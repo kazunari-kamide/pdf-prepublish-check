@@ -6,36 +6,23 @@
 //
 //   npm run og:build   … 作り直す（node site-og-image.ts --write）（@napi-rs/canvas と、同梱の書体 design/fonts/source/NotoSansJP[wght].ttf を使う）
 //
-// - 中身は、ロゴ（「守」の印）と名前と短い一言だけ。字の例（架空のものも）は入れない。
+// - 中身は、公式のロゴマーク（design/logo/mark.svg）と名前と短い一言だけ。
+//   できた画像には公式のロゴが入るので、画像の使える条件はロゴと同じ（LicenseRef-OmamoriPDF-Logo。改変版には使えない。design/logo/README.md）。字の例（架空のものも）は入れない。
 // - 色は design/tokens.css のベース色（墨）とアクセント色（紅）と、画面の下地。
 // - 通信しない。書体はリポジトリの中のファイルを読む。
 
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { GlobalFonts, createCanvas } from "@napi-rs/canvas";
+import { GlobalFonts, Image, createCanvas } from "@napi-rs/canvas";
 import { OG_IMAGE_SIZE, SITE_NAME } from "./src/site/seo.ts";
 
 const ROOT = import.meta.dirname;
 const FONT = path.join(ROOT, "design", "fonts", "source", "NotoSansJP[wght].ttf");
+const LOGO = path.join(ROOT, "design", "logo", "mark.svg");
 export const OG_IMAGE_FILE = path.join(ROOT, "src", "site", "og-image.png");
 
 const COLOR = { base: "#2b2a28", accent: "#a3201b", paper: "#fbfaf7", line: "#d9d4ca", muted: "#57534e" };
 export const OG_LINES = { lead: "公開・提出の前に、", main: "PDF を自分で確かめる", note: "見た目では分からない情報を、ブラウザの中だけで調べます" } as const;
-
-function roundRect(ctx: ReturnType<ReturnType<typeof createCanvas>["getContext"]>, x: number, y: number, w: number, h: number, r: [number, number, number, number]) {
-  const [tl, tr, br, bl] = r;
-  ctx.beginPath();
-  ctx.moveTo(x + tl, y);
-  ctx.lineTo(x + w - tr, y);
-  ctx.arcTo(x + w, y, x + w, y + tr, tr);
-  ctx.lineTo(x + w, y + h - br);
-  ctx.arcTo(x + w, y + h, x + w - br, y + h, br);
-  ctx.lineTo(x + bl, y + h);
-  ctx.arcTo(x, y + h, x, y + h - bl, bl);
-  ctx.lineTo(x, y + tl);
-  ctx.arcTo(x, y, x + tl, y, tl);
-  ctx.closePath();
-}
 
 export function renderOgImage(): Buffer {
   if (!GlobalFonts.registerFromPath(FONT, "OmamoriOg")) throw new Error("書体を読めませんでした（design/fonts/source/）");
@@ -48,21 +35,15 @@ export function renderOgImage(): Buffer {
   ctx.fillStyle = COLOR.accent;
   ctx.fillRect(0, 0, 24, height);
 
-  // ロゴ：「守」の印（画面の .seal と同じ形：紅の枠・上の角を大きく丸める）と、名前
-  const sealX = 104, sealY = 112, sealW = 120, sealH = 152;
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = COLOR.accent;
-  roundRect(ctx, sealX, sealY, sealW, sealH, [36, 36, 22, 22]);
-  ctx.stroke();
-  ctx.fillStyle = COLOR.accent;
-  ctx.font = "700 80px OmamoriOg";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("守", sealX + sealW / 2, sealY + sealH / 2 + 4);
-  ctx.textAlign = "left";
+  // ロゴ：公式のロゴマーク（design/logo/mark.svg。形・色を変えずに、明るい地に置く。design/logo/README.md）と、名前
+  const logoX = 96, logoY = 100, logoSize = 176;
+  const logo = new Image();
+  logo.src = readFileSync(LOGO);
+  ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
   ctx.fillStyle = COLOR.base;
   ctx.font = "700 92px OmamoriOg";
-  ctx.fillText(SITE_NAME, sealX + sealW + 44, sealY + sealH / 2 + 4);
+  ctx.textBaseline = "middle";
+  ctx.fillText(SITE_NAME, logoX + logoSize + 36, logoY + logoSize / 2 + 4);
 
   // 一言
   ctx.fillStyle = COLOR.base;

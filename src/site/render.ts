@@ -42,6 +42,10 @@ export interface RenderOptions {
   csp: string;
   /** サイトのページの CSS の場所（/assets/site-xxxx.css） */
   cssHref: string;
+  /** ファビコンの href（logo.ts の faviconHref）。なければ、取りに行かせない data:, にする */
+  favicon?: string;
+  /** 墨の帯に置くロゴマークの SVG（logo.ts の inlineMark。リポジトリの中のファイルから作るので、escapeHtml を通さない） */
+  brandMark?: string;
   /** ソースを公開している GitHub のリポジトリの場所。分からないときは null（リンクを出さず、文だけにする） */
   repoUrl?: string | null;
 }
@@ -69,12 +73,12 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
     ${headLines(headFor(meta), o.origin, e)}
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="${e(o.favicon ?? "data:,")}" />
     <link rel="stylesheet" href="${e(o.cssHref)}" />
   </head>
   <body class="site">
     <header class="site-band">
-      <a class="site-brand" href="/">${e(SITE_NAME)}</a>
+      <a class="site-brand" href="/">${o.brandMark ?? ""}${e(SITE_NAME)}</a>
       <nav class="site-nav" aria-label="サイトの案内">
         <a href="/">検査のページ</a>
         <a href="${ARTICLES_PATH}">記事の一覧</a>

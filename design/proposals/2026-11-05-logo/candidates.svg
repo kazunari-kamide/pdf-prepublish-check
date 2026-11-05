@@ -1,0 +1,153 @@
+<!-- SPDX-License-Identifier: LicenseRef-OmamoriPDF-Logo -->
+<!-- ロゴの案の一覧（2026-11-05）。AX2 を選んだ。説明は同じフォルダの README.md -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" font-family="sans-serif" font-size="14" fill="#2b2a28">
+  <rect width="800" height="600" fill="#fbfaf7"/>
+
+  <!-- 1段目：最初の5案 -->
+  <g transform="translate(16 16) scale(2)">
+    <path d="M26 14 C23 3 41 3 38 14" fill="none" stroke="#2b2a28" stroke-width="3" stroke-linecap="round"/>
+    <rect x="26.5" y="10" width="11" height="6" rx="3"/>
+    <path d="M15 24 C15 17 20 14 27 14 H37 C44 14 49 17 49 24 V55 C49 57.5 47 59 45 59 H19 C17 59 15 57.5 15 55 Z" fill="#a3201b"/>
+    <path d="M23 25 H36 L41 30 V51 H23 Z" fill="#ffffff"/>
+    <path d="M36 25 V30 H41 Z" fill="#d69b98"/>
+    <rect x="26" y="35" width="12" height="5"/>
+    <rect x="26" y="43" width="9" height="2.5" opacity="0.4"/>
+  </g>
+  <text x="80" y="168" text-anchor="middle">A 袋と紙</text>
+
+  <g transform="translate(176 16) scale(2)">
+    <path d="M17 16 L32 5 L47 16 V59 H17 Z" fill="#ffffff" stroke="#2b2a28" stroke-width="3.5" stroke-linejoin="round"/>
+    <circle cx="32" cy="15" r="2.4"/>
+    <rect x="24" y="23" width="16" height="3.5"/>
+    <rect x="24" y="30" width="11" height="3" opacity="0.4"/>
+    <rect x="22.5" y="38" width="19" height="16" rx="3" fill="#a3201b"/>
+    <path d="M26.5 46 L30.5 50 L37.5 42.5" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="240" y="168" text-anchor="middle">B 札と確かめ印</text>
+
+  <g transform="translate(336 16) scale(2)">
+    <path d="M12 6 H39 L51 18 V58 H12 Z" fill="#ffffff" stroke="#2b2a28" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M39 6 V18 H51" fill="none" stroke="#2b2a28" stroke-width="3.5" stroke-linejoin="round"/>
+    <rect x="19" y="23" width="20" height="3.5"/>
+    <rect x="19" y="31" width="27" height="8"/>
+    <rect x="19" y="44" width="12" height="3.5"/>
+    <circle cx="40" cy="38" r="9.5" fill="#ffffff" stroke="#a3201b" stroke-width="4"/>
+    <rect x="34" y="36.2" width="12" height="3.6" rx="1.8" fill="#a3201b"/>
+    <path d="M47 45 L56 54" fill="none" stroke="#a3201b" stroke-width="5.5" stroke-linecap="round"/>
+  </g>
+  <text x="400" y="168" text-anchor="middle">C 黒塗りの下を見る</text>
+
+  <g transform="translate(496 16) scale(2)">
+    <circle cx="32" cy="32" r="27.5" fill="none" stroke="#a3201b" stroke-width="5"/>
+    <path d="M21 14 H36 L44 22 V50 H21 Z"/>
+    <path d="M36 14 V22 H44 Z" fill="#a3201b"/>
+    <rect x="25.5" y="28" width="14" height="3.2" fill="#ffffff"/>
+    <rect x="25.5" y="35" width="14" height="3.2" fill="#ffffff"/>
+    <rect x="25.5" y="42" width="8" height="3.2" fill="#ffffff"/>
+  </g>
+  <text x="560" y="168" text-anchor="middle">D 紋（丸に紙）</text>
+
+  <g transform="translate(656 16) scale(2)">
+    <path d="M13 6 H44 L58 20 V51 C58 55 55 58 51 58 H13 C9 58 6 55 6 51 V13 C6 9 9 6 13 6 Z" fill="#a3201b"/>
+    <path d="M44 6 V17 C44 18.7 45.3 20 47 20 H58 Z" fill="#d69b98"/>
+    <text x="30" y="45" text-anchor="middle" font-size="32" font-weight="bold" fill="#ffffff">守</text>
+  </g>
+  <text x="720" y="168" text-anchor="middle">E 朱印と折り角</text>
+
+  <!-- 2段目：A の展開と、選んだ組み合わせ -->
+  <g transform="translate(16 206) scale(2)">
+    <path d="M28 14 C26 5 38 5 36 14" fill="none" stroke="#2b2a28" stroke-width="3" stroke-linecap="round"/>
+    <path d="M22 14 H42 L50 22 V55 C50 57.2 48.2 59 46 59 H18 C15.8 59 14 57.2 14 55 V22 Z" fill="#a3201b"/>
+    <circle cx="32" cy="14" r="3.4"/>
+    <path d="M21 25 H37 L43 31 V48 C43 49.7 41.7 51 40 51 H24 C22.3 51 21 49.7 21 48 Z" fill="#ffffff"/>
+    <path d="M37 25 V31 H43 Z" fill="#d69b98"/>
+    <rect x="25" y="36" width="14" height="5"/>
+  </g>
+  <text x="80" y="358" text-anchor="middle">A1 窓のある袋</text>
+
+  <g transform="translate(176 206) scale(2)">
+    <path d="M28 14 C26 5 38 5 36 14" fill="none" stroke="#2b2a28" stroke-width="3" stroke-linecap="round"/>
+    <path d="M22 14 H42 L50 22 V55 C50 57.2 48.2 59 46 59 H18 C15.8 59 14 57.2 14 55 V22 Z" fill="#a3201b"/>
+    <circle cx="32" cy="14" r="3.4"/>
+    <path d="M23 25.5 H36 L41.5 31 V50.5 H23 Z" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linejoin="round"/>
+    <path d="M36 25.5 V31 H41.5" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linejoin="round"/>
+    <rect x="27" y="37" width="10.5" height="4.5" fill="#ffffff"/>
+  </g>
+  <text x="240" y="358" text-anchor="middle">A2 白抜きの紙</text>
+
+  <g transform="translate(336 206) scale(2)">
+    <path d="M32 13 C28 4 20 8 27 13.5" fill="none" stroke="#2b2a28" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M32 13 C36 4 44 8 37 13.5" fill="none" stroke="#2b2a28" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M22 14 H42 L50 22 V55 C50 57.2 48.2 59 46 59 H18 C15.8 59 14 57.2 14 55 V22 Z" fill="#a3201b"/>
+    <circle cx="32" cy="14" r="3.6"/>
+    <rect x="25.5" y="23" width="13" height="31" rx="1.5" fill="#ffffff"/>
+    <rect x="30" y="27" width="4" height="4" opacity="0.4"/>
+    <rect x="29" y="34" width="6" height="10"/>
+    <rect x="30" y="47" width="4" height="4" opacity="0.4"/>
+  </g>
+  <text x="400" y="358" text-anchor="middle">A3 縦の名札と結び</text>
+
+  <g transform="translate(496 206) scale(2)">
+    <path d="M32 13 C28 4 20 8 27 13.5" fill="none" stroke="#2b2a28" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M32 13 C36 4 44 8 37 13.5" fill="none" stroke="#2b2a28" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M22 14 H42 L50 22 V55 C50 57.2 48.2 59 46 59 H18 C15.8 59 14 57.2 14 55 V22 Z" fill="#a3201b"/>
+    <circle cx="32" cy="14" r="3.6"/>
+    <path d="M23 25.5 H36 L41.5 31 V50.5 H23 Z" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linejoin="round"/>
+    <path d="M36 25.5 V31 H41.5" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linejoin="round"/>
+    <rect x="27.5" y="37" width="9.5" height="3" fill="#ffffff"/>
+  </g>
+  <text x="560" y="358" text-anchor="middle">AX1 行1本</text>
+
+  <g transform="translate(656 206) scale(2)">
+    <path d="M32 13 C28 4 20 8 27 13.5" fill="none" stroke="#2b2a28" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M32 13 C36 4 44 8 37 13.5" fill="none" stroke="#2b2a28" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M22 14 H42 L50 22 V55 C50 57.2 48.2 59 46 59 H18 C15.8 59 14 57.2 14 55 V22 Z" fill="#a3201b"/>
+    <circle cx="32" cy="14" r="3.6"/>
+    <path d="M23 25.5 H36 L41.5 31 V50.5 H23 Z" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linejoin="round"/>
+    <path d="M36 25.5 V31 H41.5" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linejoin="round"/>
+  </g>
+  <text x="720" y="358" text-anchor="middle">AX3 行なし</text>
+
+  <!-- 3段目：B の展開と、選んだ案 -->
+  <g transform="translate(16 396) scale(2)">
+    <path d="M17 16 L32 5 L47 16 V59 H17 Z" stroke="#2b2a28" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="32" cy="15" r="2.4" fill="#ffffff"/>
+    <rect x="24" y="23" width="16" height="3.5" fill="#ffffff"/>
+    <rect x="24" y="30" width="11" height="3" fill="#ffffff" opacity="0.5"/>
+    <rect x="22.5" y="38" width="19" height="16" rx="3" fill="#a3201b" stroke="#ffffff" stroke-width="2"/>
+    <path d="M26.5 46 L30.5 50 L37.5 42.5" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="80" y="548" text-anchor="middle">B1 墨の札</text>
+
+  <g transform="translate(176 396) scale(2)">
+    <path d="M17 16 L32 5 L47 16 V59 H17 Z" fill="#ffffff" stroke="#2b2a28" stroke-width="3.5" stroke-linejoin="round"/>
+    <circle cx="32" cy="15" r="2.4"/>
+    <rect x="23" y="22" width="18" height="6"/>
+    <rect x="23" y="31" width="12" height="2.6" opacity="0.4"/>
+    <circle cx="32" cy="46" r="8.5" fill="#a3201b"/>
+    <path d="M28 46 L31 49 L36.5 43" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="240" y="548" text-anchor="middle">B2 黒塗りと丸印</text>
+
+  <g transform="translate(336 396) scale(2)">
+    <path d="M17 16 L32 5 L47 16 V59 H17 Z" fill="#ffffff"/>
+    <path d="M17 16 L32 5 L47 16 Z" fill="#a3201b"/>
+    <path d="M17 16 L32 5 L47 16 V59 H17 Z" fill="none" stroke="#2b2a28" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M17 16 H47" fill="none" stroke="#2b2a28" stroke-width="3"/>
+    <rect x="23" y="24" width="18" height="5.5"/>
+    <path d="M24.5 43 L30 48.5 L40 37.5" fill="none" stroke="#a3201b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="400" y="548" text-anchor="middle">B3 朱の頭</text>
+
+  <g transform="translate(528 396) scale(2.5)">
+    <path d="M32 13 C28 4 20 8 27 13.5" fill="none" stroke="#2b2a28" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M32 13 C36 4 44 8 37 13.5" fill="none" stroke="#2b2a28" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M22 14 H42 L50 22 V55 C50 57.2 48.2 59 46 59 H18 C15.8 59 14 57.2 14 55 V22 Z" fill="#a3201b"/>
+    <circle cx="32" cy="14" r="3.6"/>
+    <path d="M23 25.5 H36 L41.5 31 V50.5 H23 Z" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linejoin="round"/>
+    <path d="M36 25.5 V31 H41.5" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linejoin="round"/>
+    <rect x="27.5" y="34.5" width="9.5" height="2.8" fill="#ffffff"/>
+    <rect x="27.5" y="40.5" width="6.5" height="2.8" fill="#ffffff"/>
+  </g>
+  <text x="608" y="588" text-anchor="middle" font-weight="bold">AX2 行2本（選んだ案）</text>
+</svg>

@@ -211,10 +211,10 @@ describe("白い塗りの重ね方（/BM）と、表示しないレイヤー（0
     expect(r.notDone[0]!.label).toContain("表示しないレイヤー");
   });
 
-  it("ページに直接埋め込んだ画像の上の白い四角も、片付けられなかった所にする", async () => {
-    const r = ok(await sanitizePdf(await imagePdf(gray(), "q 100 0 0 100 50 50 cm BI /W 2 /H 2 /CS /G /BPC 8 ID  EI Q 1 g 50 50 50 100 re f")));
-    expect(r.notDone).toEqual([expect.objectContaining({ reason: "inline_image", page: 1 })]);
-    expect(r.notDone[0]!.label).toContain("白い四角");
+  it("ページに直接埋め込んだ画像の上の白い四角は、画像の部品に移し替えて白く塗る（0.8.0 から）", async () => {
+    const good = ok(await sanitizePdf(await imagePdf(gray(), "q 100 0 0 100 50 50 cm BI /W 2 /H 2 /CS /G /BPC 8 ID \x10\x20\x30\x40 EI Q 1 g 50 50 50 100 re f")));
+    expect(good.notDone).toEqual([]);
+    expect(good.removed.some((x) => x.kind === "covered_pixels" && x.label.includes("白く"))).toBe(true);
   });
 });
 

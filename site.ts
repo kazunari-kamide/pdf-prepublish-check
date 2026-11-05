@@ -16,6 +16,7 @@ import path from "node:path";
 import type { Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
 import { OFFICIAL_ORIGIN } from "./htaccess.ts";
+import { faviconHref, inlineMark } from "./logo.ts";
 import { buildLicenses } from "./site-licenses.ts";
 import { GUIDE_PATHS, renderGuidePages } from "./src/site/pages.ts";
 import { escapeHtml, renderSite, sitePaths } from "./src/site/render.ts";
@@ -79,7 +80,15 @@ export function renderRobots(origin = OFFICIAL_ORIGIN): string {
 export function siteFiles(): Map<string, string> {
   const css = siteCss();
   const cssFile = siteCssFile(css);
-  const options = { origin: OFFICIAL_ORIGIN, csp: cspForMeta, cssHref: `/${cssFile}`, repoUrl: repoUrl() };
+  const options = {
+    origin: OFFICIAL_ORIGIN,
+    csp: cspForMeta,
+    cssHref: `/${cssFile}`,
+    repoUrl: repoUrl(),
+    // ロゴ（logo.ts）。同じ options を、記事・プライバシー・サイトの案内のページ・404 のページのすべてに渡すので、どの帯にも出る
+    favicon: faviconHref(),
+    brandMark: inlineMark("mark-on-dark", "site-brand-mark"),
+  };
   const files = renderSite(options);
   const licenses = buildLicenses(ROOT);
   for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);

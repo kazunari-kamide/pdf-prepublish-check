@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
     <title>お守りPDF</title>
-    <!-- アイコンを取りに行かせない（/favicon.ico への要求をなくす） -->
-    <link rel="icon" href="data:," />
+    <!-- アイコンは data: の形で差し込む（/favicon.ico への要求をなくす。logo.ts が design/logo/mark-small.svg から作る） -->
+    <link rel="icon" href="omamori:favicon" />
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="stylesheet" href="/src/site/links.css" />
   </head>
@@ -15,7 +15,7 @@
     <a class="skip" href="#results">結果へ移る</a>
     <p id="unofficial" class="unofficial" role="alert" hidden></p>
     <header class="band">
-      <h1 class="brand"><span class="seal" aria-hidden="true">守</span>お守りPDF</h1>
+      <h1 class="brand"><!--omamori:mark-->お守りPDF</h1>
       <ol class="steps" aria-label="手順">
         <li id="step-pick" data-state="now" aria-current="step">
           <span class="step-no" aria-hidden="true">1</span><span class="step-name"><span class="visually-hidden">1 </span>選ぶ</span>
@@ -56,7 +56,7 @@
         <div class="filebar" id="filebar" hidden>
           <span class="filebar-name" id="file-name"></span>
           <span class="filebar-facts" id="file-facts"></span>
-          <label class="filebar-again" for="file">別の PDF を選ぶ</label>
+          <button id="file-again" class="filebar-again" type="button">別の PDF を選ぶ</button>
         </div>
 
         <figure class="sheet-wrap" id="sheet-wrap" hidden>
@@ -78,7 +78,7 @@
           <button id="sanitize" type="button" aria-describedby="sanitize-note">片付ける</button>
           <p id="sanitize-note"></p>
           <div id="redact-left" class="not-done" hidden>
-            <h4>▲ 読み直しで残っていた所</h4>
+            <h3>▲ 読み直しで残っていた所</h3>
             <ul id="redact-left-list"></ul>
           </div>
           <div id="pick-tools" class="pick-tools" hidden>
@@ -131,7 +131,7 @@
             </fieldset>
             <button id="compress-run" class="compress-run" type="button">小さくする</button>
             <div id="compress-result" class="compress-result" hidden>
-              <p id="compress-headline" class="compress-headline"></p>
+              <p id="compress-headline" class="compress-headline" tabindex="-1"></p>
               <p id="compress-sizes" class="compress-sizes"></p>
               <ul id="compress-lines" class="compress-lines"></ul>
               <p id="compress-recheck" class="compress-recheck"></p>
