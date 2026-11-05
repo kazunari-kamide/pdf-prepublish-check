@@ -10,6 +10,7 @@
 // - 「安全です」「初めて」「唯一」「上位互換」のような言い方を、題・説明に使わない（テストで確かめる）。
 
 import { ARTICLES } from "./articles.ts";
+import { articleTags, tagBySlug } from "./tags.ts";
 import type { PageMeta } from "./types.ts";
 
 export const SITE_NAME = "お守りPDF";
@@ -90,8 +91,30 @@ export const NOINDEX_PATHS: ReadonlySet<string> = new Set(["/404.html"]);
 
 export type HeadInfo = { path: string; title: string; description: string; type: "website" | "article"; noindex?: boolean };
 
+/**
+ * タグごとの記事の一覧のページ（/articles/tags/<slug>.html。article-index.ts）の head。
+ * 題は 20〜40 字に収まる形を、長いほうから選ぶ（タグの名前の長さが違うため）。説明は 80〜120 字
+ */
+function tagHead(meta: PageMeta): HeadInfo | null {
+  const m = meta.path.match(/^\/articles\/tags\/([a-z0-9-]+)\.html$/);
+  const tag = m ? tagBySlug(m[1]!) : undefined;
+  if (!tag) return null;
+  const n = ARTICLES.filter((a) => articleTags(a).includes(tag)).length;
+  const len = (s: string) => [...s].length;
+  const titles = [
+    `「${tag.label}」の記事：PDF の残り方と直し方｜${SITE_NAME}`,
+    `「${tag.label}」の記事：残り方と直し方｜${SITE_NAME}`,
+    `「${tag.label}」の記事の一覧｜${SITE_NAME}`,
+  ];
+  const title = titles.find((t) => len(t) >= 20 && len(t) <= 40) ?? titles[titles.length - 1]!;
+  const description = `「${tag.label}」のタグの付いた記事（${n} 本）の一覧です。PDF を公開・提出する前に知っておきたい、見た目では分からない情報の残り方と、正しいやり方の手順を、型の番号と話題から探せます。`;
+  return { path: meta.path, title, description, type: "website" };
+}
+
 /** サイトのページ（記事・案内のページ）の head の値。meta は本文と同じもの */
 export function headFor(meta: PageMeta): HeadInfo {
+  const tagged = tagHead(meta);
+  if (tagged) return tagged;
   const page = PAGE_HEAD[meta.path];
   if (page) return { path: meta.path, ...page, type: "website", ...(NOINDEX_PATHS.has(meta.path) ? { noindex: true } : {}) };
   const article = ARTICLES.find((a) => meta.path === `/articles/${a.slug}.html`);

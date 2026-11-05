@@ -98,7 +98,8 @@ describe("ビルドしたあとの全ページの head", () => {
 
   it("記事は article、ほかは website。画像は同じサイトの /og-image.png、カードは大きい画像", () => {
     for (const h of pages()) {
-      const isArticle = /^articles\/(?!index\.html$).+\.html$/.test(h.file);
+      // タグごとの記事の一覧のページ（articles/tags/）は記事ではなく一覧なので website
+      const isArticle = /^articles\/(?!index\.html$|tags\/).+\.html$/.test(h.file);
       expect(meta(h, "og:type")[0], h.file).toBe(isArticle ? "article" : "website");
       expect(meta(h, "og:image")[0], h.file).toBe(OFFICIAL_ORIGIN + OG_IMAGE_PATH);
       expect(meta(h, "twitter:card")[0], h.file).toBe("summary_large_image");

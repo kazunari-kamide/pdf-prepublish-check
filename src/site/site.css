@@ -339,3 +339,83 @@ body.site {
   color: var(--color-base);
   font-weight: bold;
 }
+
+/* ---- 記事の一覧・タグの絞り込み・検索・記事の図（article-index.ts）
+ * 並べ方だけを決める。色・枠・地は決めない（デザインシート design/sheet.md の card・tag などを、D が当てる）。
+ * 札の見た目は、今の .site-tag をそのまま使う。 */
+.site-cards .card-head {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.site-cards .card-body p {
+  margin: var(--space-1) 0 0;
+}
+
+.card-tags,
+.site-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card-tags .site-tag,
+.site-tag-list .site-tag {
+  margin-right: 0;
+  min-width: 0;
+  padding: 0 var(--space-2);
+}
+
+.site-tag-group {
+  margin: var(--space-3) 0 0;
+  font-weight: bold;
+}
+
+.card-figure {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-bottom: var(--space-2);
+}
+
+.site-search {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+
+.site-search[hidden] {
+  display: none;
+}
+
+.site-search input {
+  max-width: 100%;
+  min-height: 44px;
+  font: inherit;
+}
+
+.site-figure {
+  margin: var(--space-5) 0;
+}
+
+.site-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.site-figure figcaption {
+  margin-top: var(--space-2);
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+/* カードの中のタグの並びには、一覧の行の区切り（.site-list li の下の線と余白）を当てない */
+.site-list .card-tags li {
+  padding: 0;
+  border-bottom: 0;
+}
