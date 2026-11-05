@@ -94,7 +94,7 @@ export function buildCleanView(input: {
   let scope = checked.length
     ? `読み直しで調べたのは ${checked.map(patternWithName).join("・")} です。`
     : "読み直しでは、どの型も調べられませんでした。";
-  if (notChecked.length) scope += `${notChecked.map(patternWithName).join("・")} は片付けましたが、読み直しでは調べていません（調べるルールがまだありません）。`;
+  if (notChecked.length) scope += `${notChecked.map(patternWithName).join("・")} は消しましたが、読み直しでは調べていません（調べるルールがまだありません）。`;
   // 調べた型の中でも、調べていない層があれば添える（決め打ちの中身は src/ui/scope.ts の1か所）
   if (after) scope += after.caveats.join("");
 
@@ -107,13 +107,13 @@ export function buildCleanView(input: {
   let headline: string;
   if (left === null) {
     verdict = "unsure";
-    headline = "片付けた PDF を読み直せませんでした。残っていないとは言えません。";
+    headline = "整えた PDF を読み直せませんでした。残っていないとは言えません。";
   } else if (left > 0) {
     verdict = "left";
     headline = `読み直したところ、まだ ${left} か所残っています。`;
   } else if (notDone.length > 0 || !afterClean) {
     verdict = "unsure";
-    headline = "読み直したところ、残っている所は 0 件でしたが、片付けられなかった所か、調べられなかった所があります。「全部消えた」ではありません。";
+    headline = "読み直したところ、残っている所は 0 件でしたが、消せなかった所か、調べられなかった所があります。「全部消えた」ではありません。";
   } else {
     verdict = "clean";
     headline = "読み直したところ、調べた項目で残っている所は 0 件でした。";
@@ -147,5 +147,5 @@ export const SAVE_NOTE: Record<SaveGate, string> = {
 /** 保存するファイルの名前。元の名前の後ろに「_片付け済み」をつける */
 export function cleanedFileName(original: string): string {
   const stem = original.replace(/\.pdf$/i, "").trim() || "document";
-  return `${stem}_片付け済み.pdf`;
+  return `${stem}_整えた.pdf`;
 }

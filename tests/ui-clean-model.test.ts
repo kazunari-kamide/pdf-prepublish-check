@@ -39,8 +39,8 @@ const removed: RemovedItem[] = [
   { pattern: "P12", kind: "javascript", label: "JavaScript（1 か所）を外しました", count: 1 },
 ];
 
-describe("片付けた結果", () => {
-  it("読み直して 0 件・片付けられなかった所なし → 全部緑", () => {
+describe("整えた結果", () => {
+  it("読み直して 0 件・消せなかった所なし → 全部緑", () => {
     const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: false });
     expect(c.verdict).toBe("clean");
     expect(c.before).toBe(1);
@@ -54,7 +54,7 @@ describe("片付けた結果", () => {
     expect(c.left).toBe(1);
   });
 
-  it("片付けられなかった所があれば、0 件でも全部緑と言わない", () => {
+  it("消せなかった所があれば、0 件でも全部緑と言わない", () => {
     const notDone: NotDoneItem[] = [{ pattern: "P6", reason: "unsupported_image", label: "黒い四角の下の画像を塗りつぶせませんでした", page: 1 }];
     const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone, decrypted: false });
     expect(c.verdict).toBe("unsure");
@@ -69,7 +69,7 @@ describe("片付けた結果", () => {
     expect(c.scope).toContain("見せかけの黒塗り（P6）");
     // 調べたのは P6 だけ。P1 は「片付けたが、読み直しでは調べていない」の側に名前で出る
     expect(c.scope).toMatch(/^読み直しで調べたのは 見せかけの黒塗り（P6） です。/);
-    expect(c.scope).toContain("文書情報（P1）・スクリプト・外部動作（P12） は片付けましたが");
+    expect(c.scope).toContain("文書情報（P1）・スクリプト・外部動作（P12） は消しましたが");
   });
 
   it("読み直せなかったら、残っていないとは言わない", () => {
@@ -82,7 +82,7 @@ describe("片付けた結果", () => {
     const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: true });
     expect(c.removed.map((g) => g.pattern)).toEqual(["P6", "P1", "P12"]);
     expect(c.removed[0]!.lines).toEqual(["黒い四角の下に残っていた字（4 字）（ページ 1）"]);
-    expect(c.scope).toContain("スクリプト・外部動作（P12） は片付けましたが、読み直しでは調べていません");
+    expect(c.scope).toContain("スクリプト・外部動作（P12） は消しましたが、読み直しでは調べていません");
     expect(c.notes[0]).toContain("暗号化");
     expect(c.doneMarks).toEqual([{ page: 1, rect: [10, 10, 50, 20], label: "黒い四角の下に残っていた字（4 字）" }]);
   });
@@ -103,10 +103,10 @@ describe("片付けた結果", () => {
 });
 
 describe("保存するファイルの名前", () => {
-  it("元の名前の後ろに「_片付け済み」をつける", () => {
-    expect(cleanedFileName("報告書.pdf")).toBe("報告書_片付け済み.pdf");
-    expect(cleanedFileName("a.PDF")).toBe("a_片付け済み.pdf");
-    expect(cleanedFileName(".pdf")).toBe("document_片付け済み.pdf");
+  it("元の名前の後ろに「_整えた」をつける", () => {
+    expect(cleanedFileName("報告書.pdf")).toBe("報告書_整えた.pdf");
+    expect(cleanedFileName("a.PDF")).toBe("a_整えた.pdf");
+    expect(cleanedFileName(".pdf")).toBe("document_整えた.pdf");
   });
 });
 

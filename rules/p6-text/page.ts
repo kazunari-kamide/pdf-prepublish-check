@@ -26,6 +26,7 @@ import {
   isFiniteMatrix,
   multiply,
   flattenCubic,
+  intersectionArea,
   rectsOverlap,
   signedPolygonArea,
   scaleOf,
@@ -191,7 +192,14 @@ export type PageScan = {
    * 集めた数が上限（maxOverPaintPerPage）を超えたページは null（使わず、1.9.0 までの測り方に戻す）
    */
   overPaint: OverPaint[] | null;
+  /**
+   * 図形の層（1.13.0 から）：createPageScanner に渡した箱（白い四角の注釈の箱）ごとの、下にあるページの中身の道の数と線分の数。
+   * 箱を渡さなかったときは空
+   */
+  vectorCounts: VectorCount[];
 };
+/** 図形の層の、1つの箱の下の道（塗り・線を描いた命令1つ）の数と、その線分の数（1.13.0 から） */
+export type VectorCount = { paths: number; segments: number };
 /** 白い覆いの上に描いたものの形。after 以下の順番（seq）の覆いより、あとに描いた */
 export type OverPaint = { after: number; rect: Rect; parts: Point[][]; clip?: Rect };
 
@@ -328,8 +336,10 @@ export type PageScanner = {
   result(): PageScan;
 };
 
-export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): PageScanner {
+export function createPageScanner(ctx: PDFContext, settings: P6TextSettings, vectorTargets: Rect[] = []): PageScanner {
   const covers: Cover[] = [];
+  // 図形の層（1.13.0 から）：白い四角の注釈の箱ごとに、下にある道を数える。道そのものは持たない（重いページでメモリを使わないため）
+  const vectorCounts: VectorCount[] = vectorTargets.map(() => ({ paths: 0, segments: 0 }));
   const glyphs: GlyphBox[] = [];
   // 字の位置の索引（マス目）。覆いになりうるのは、先に描いた字に重なる塗りだけなので、
   // 重ならない塗りは覆いの一覧に入れずに捨てる（図形の多い重いページで、メモリと時間を抑えるため。1.3.0 から）
@@ -487,6 +497,27 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
         return;
       }
       const devs = subpaths.filter((sp) => sp.points.length >= 2).map((sp) => ({ sp, dev: sp.points.map(([x, y]) => apply(gs.ctm, x, y)) }));
+      // 図形の層（1.13.0 から）：ページの中身（注釈の見た目は除く）で、白くない色で不透明に描いた道を、白い四角の注釈の箱ごとに数える。
+      // 道の外枠の箱の半分以上が注釈の箱に入れば「下にある」とする（面積のない縦横の線は、真ん中で見る）
+      if (vectorTargets.length > 0 && coverKind !== "annotation" && devs.length > 0) {
+        const seen = (c: Color, alpha: number) => c.luminance !== null && c.luminance < settings.lightLuminanceMin && alpha >= settings.opacityMin;
+        if ((doFill && seen(gs.fill, gs.fillAlpha)) || (doStroke && seen(gs.stroke, gs.strokeAlpha))) {
+          const box = boundsOf(devs.flatMap((d) => d.dev));
+          const a = area(box);
+          let segments = 0;
+          for (const { sp } of devs) segments += sp.points.length - 1 + (sp.closed ? 1 : 0);
+          vectorTargets.forEach((t, i) => {
+            const under =
+              a > 0
+                ? intersectionArea(box, t) >= 0.5 * a
+                : (box[0] + box[2]) / 2 >= t[0] && (box[0] + box[2]) / 2 <= t[2] && (box[1] + box[3]) / 2 >= t[1] && (box[1] + box[3]) / 2 <= t[3];
+            if (under) {
+              vectorCounts[i]!.paths++;
+              vectorCounts[i]!.segments += segments;
+            }
+          });
+        }
+      }
       // 白い覆いの上に不透明に描いたものの形（1.10.0 から。色・太さを問わない）。この塗り自身の覆いより前の覆いだけに効くよう、
       // いまの順番（paintStart）を持たせる。線は、端の丸み・角を含めるよう、両端を太さの半分だけ延ばす
       const paintStart = seq;
@@ -1080,7 +1111,7 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings): Pa
       pushCover(cover);
     },
     result() {
-      return { covers, glyphs, operations: opCount, uncheckedImages, images, marks, overPaint: overPaintOverflow ? null : overPaint };
+      return { covers, glyphs, operations: opCount, uncheckedImages, images, marks, overPaint: overPaintOverflow ? null : overPaint, vectorCounts };
     },
   };
 }

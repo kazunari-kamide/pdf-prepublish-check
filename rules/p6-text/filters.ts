@@ -29,8 +29,12 @@ export type ExcludeReason =
   /** 1.7.0 から：文字の層で、字1つ分の大きさの形のある塗り（アウトライン化した同じ字） */
   | "glyph_sized"
   /** 1.8.0 から：文字の層で、下の字がすべて、覆いの上に描いた字の中にあるもの */
-  | "same_chars_on_top";
-export type ExcludeCounter = (layer: "text" | "image", reason: ExcludeReason) => void;
+  | "same_chars_on_top"
+  /** 1.13.0 から：図形の層で、白い四角の注釈の下の道が少ないもの（罫線1本など） */
+  | "few_paths"
+  /** 1.13.0 から：図形の層で、同じ注釈の下の字を、文字の層ですでに出したもの */
+  | "text_layer_found";
+export type ExcludeCounter = (layer: "text" | "image" | "vector", reason: ExcludeReason) => void;
 
 /** 詰まり具合を測る点の数（縦横それぞれ） */
 const SOLIDITY_GRID = 10;

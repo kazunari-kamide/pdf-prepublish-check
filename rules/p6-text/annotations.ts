@@ -143,3 +143,32 @@ export function scanAnnotations(ctx: PDFContext, annots: PDFArray | undefined, s
     }
   }
 }
+
+/**
+ * 図形の層（1.13.0 から）：白い不透明な四角の注釈（/Square）の箱。見つける段の3回目で、パスで描いた字を覆っていた形。
+ * 中の色（/IC）が白っぽい（明るさが lightLuminanceMin 以上）もの。隠した注釈・半透明の注釈・中の色のない注釈は入れない。
+ * 見た目（/AP）の有無は問わない（見た目があっても、中の色で決める）
+ */
+export function whiteSquareAnnots(ctx: PDFContext, annots: PDFArray | undefined, settings: P6TextSettings): Rect[] {
+  if (!annots) return [];
+  const out: Rect[] = [];
+  for (const ref of annots.asArray()) {
+    const annot = ctx.lookup(ref);
+    if (!(annot instanceof PDFDict)) continue;
+    const subtypeObj = annot.lookup(PDFName.of("Subtype"));
+    if (!(subtypeObj instanceof PDFName) || subtypeObj.decodeText() !== "Square") continue;
+    const rect = rectOf(numbers(ctx, annot.get(PDFName.of("Rect"))));
+    if (!rect || !((rect[2] - rect[0]) * (rect[3] - rect[1]) > 0)) continue;
+    const flagsObj = annot.lookup(PDFName.of("F"));
+    const flags = flagsObj instanceof PDFNumber ? flagsObj.asNumber() : 0;
+    if (flags & (FLAG_HIDDEN | FLAG_NOVIEW)) continue;
+    const caObj = annot.lookup(PDFName.of("CA"));
+    const ca = caObj instanceof PDFNumber ? caObj.asNumber() : 1;
+    if (ca < settings.opacityMin) continue;
+    const ic = numbers(ctx, annot.get(PDFName.of("IC")));
+    const lum = ic && ic.length > 0 ? luminanceOf(ic, ic.length) : null;
+    if (lum === null || lum < settings.lightLuminanceMin) continue;
+    out.push(rect);
+  }
+  return out;
+}

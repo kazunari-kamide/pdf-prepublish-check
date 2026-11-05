@@ -20,18 +20,19 @@ import { isInflateLimitError } from "../rules/shared/inflate-limit.ts";
 import { loadPdf } from "../rules/shared/load.ts";
 import type { Rect } from "../rules/p6-text/geometry.ts";
 import { SETTINGS, TooManyOperations, makeVisibility, sanitizePageContent } from "./content.ts";
-import { cleanAnnotations, countRevisions, dropUnreachable, removeAttachments, removeDocInfo, removeStructureExtras, removeJavaScript, removeXmp } from "./structure.ts";
+import { cleanAnnotations, countRevisions, dropUnreachable, removeAttachments, removeStructureExtras, removeJavaScript, removeXmp } from "./structure.ts";
+import { applyProperties, checkEdits, checkOldValues, handleSignatures, preflightTidy as preflight, readOriginal } from "./properties.ts";
 import { cleanLeftovers } from "./leftovers.ts";
 import { pruneFonts } from "./font-prune.ts";
-import type { NotDoneItem, RemovedItem, SanitizeOptions, SanitizeResult } from "./types.ts";
+import type { NotDoneItem, PropertyChange, RemovedItem, SanitizeOptions, SanitizeResult, TidyPreflight } from "./types.ts";
 
 export type * from "./types.ts";
 export { redact } from "./redact.ts";
 export { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "./compress.ts";
 
-// 0.8.1：解くと大きすぎる中身（圧縮の爆弾）のページは stream_too_large として片付けられなかった所にし、
+// 0.9.1：解くと大きすぎる中身（圧縮の爆弾）のページは stream_too_large として片付けられなかった所にし、
 //        ページの外で止まったとき（読み込み・文書全体）は、片付けた PDF を作らない（rules/shared/inflate-limit.ts）
-export const SANITIZER_VERSION = "0.8.1";
+export const SANITIZER_VERSION = "0.9.1";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 export const MAX_INPUT_BYTES = 512 * 1024 * 1024;
@@ -51,7 +52,7 @@ export type SanitizeHooks = {
 };
 
 export type SanitizeCore =
-  | { status: "ok"; bytes: Uint8Array; pages: number; removed: RemovedItem[]; notDone: NotDoneItem[]; decrypted: boolean }
+  | { status: "ok"; bytes: Uint8Array; pages: number; removed: RemovedItem[]; notDone: NotDoneItem[]; decrypted: boolean; properties?: PropertyChange[] }
   | ErrorResult;
 
 /**
@@ -70,7 +71,9 @@ export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions =
 
 async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: SanitizeHooks): Promise<SanitizeCore> {
   if (bytes.length === 0) return { status: "error", code: "empty", message: "ファイルが空です。" };
-  if (bytes.length > MAX_INPUT_BYTES) return { status: "error", code: "too_large", message: "ファイルが大きすぎるため、片付けられません。" };
+  if (bytes.length > MAX_INPUT_BYTES) return { status: "error", code: "too_large", message: "ファイルが大きすぎるため、整えられません。" };
+  const edits = options.properties !== undefined ? checkEdits(options.properties) : null;
+  if (edits && !edits.ok) return { status: "error", code: "bad_properties", message: edits.message };
   const settings = {
     ...SETTINGS,
     ...(options.maxOperationsPerPage !== undefined ? { maxOperationsPerPage: options.maxOperationsPerPage } : {}),
@@ -83,7 +86,7 @@ async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: 
     if (loaded.code === "encrypted") {
       return {
         status: "error", code: "encrypted",
-        message: loaded.reason === "password_required" ? "パスワードが要る PDF は、片付けられません。" : "この形の暗号化は、いまは片付けられません。",
+        message: loaded.reason === "password_required" ? "パスワードが要る PDF は、整えられません。" : "この形の暗号化は、いまは整えられません。",
       };
     }
     return { status: "error", code: "unreadable", message: "PDF として読めませんでした。" };
@@ -92,6 +95,8 @@ async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: 
   const ctx = doc.context;
   const removed: RemovedItem[] = [];
   const notDone: NotDoneItem[] = [];
+  // 元のプロパティ・PDF/A の印（文書全体の片付けで XMP を外す前に読む）
+  const original = readOriginal(ctx);
 
   let pages;
   try {
@@ -137,19 +142,25 @@ async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: 
             ? "このページは図形が多すぎるため、選んだ所を消せませんでした"
             : "このページの中身を読めなかったため、選んだ所を消せませんでした"
           : heavy
-            ? "このページは図形が多すぎるため、黒い四角の下の字・見えない字の片付けを省きました"
-            : "このページの中身を読めなかったため、黒い四角の下の字・見えない字の片付けを省きました",
+            ? "このページは図形が多すぎるため、黒い四角の下の字・見えない字を整えるのを省きました"
+            : "このページの中身を読めなかったため、黒い四角の下の字・見えない字を整えるのを省きました",
       });
     }
   }
   if (hooks.afterPages) removed.push(...hooks.afterPages(doc));
 
-  // 3. 文書全体
+  // 3. 文書全体（電子署名は、注釈の片付けより先に。署名の見た目も署名と一緒に外す）
+  const sig = handleSignatures(doc, options.signatures ?? "remove");
+  removed.push(...sig.removed);
+  notDone.push(...sig.notDone);
   removed.push(...cleanAnnotations(doc, redactAnnots));
   removed.push(...removeAttachments(doc));
   removed.push(...removeJavaScript(ctx));
   removed.push(...removeXmp(ctx));
-  removed.push(...removeDocInfo(doc));
+  // 文書情報と文書の XMP：選んだ値で書き直す（指定がなければ消す）
+  const props = applyProperties(doc, original, edits?.ok ? edits.edits : null, options.pdfaMark ?? "remove");
+  removed.push(...props.removed);
+  notDone.push(...props.notDone);
   removed.push(...removeStructureExtras(doc));
   const left = cleanLeftovers(doc);
   removed.push(...left.removed);
@@ -176,9 +187,27 @@ async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: 
     // updateFieldAppearances：フォームの見た目を作り直さない（書体を足さない）。useObjectStreams：古い読み手でも読める形にする
     out = await doc.save({ useObjectStreams: false, updateFieldAppearances: false, addDefaultPage: false });
   } catch {
-    return { status: "error", code: "unreadable", message: "片付けた PDF を書き出せませんでした。" };
+    return { status: "error", code: "unreadable", message: "整えた PDF を書き出せませんでした。" };
+  }
+  if (edits) {
+    // 書き直した・消したプロパティの古い値が、書き出したバイト列に残っていないか、読み直して確かめる
+    const left = await checkOldValues(out, props.search);
+    if (left.found > 0 || left.unreadable > 0) {
+      return {
+        status: "error", code: "properties_left",
+        message: left.found > 0
+          ? "書き直した・消したプロパティの古い値が、PDF の中に残っていたため、整えた PDF を作りませんでした。"
+          : "PDF の中の一部を読み直せず、プロパティの古い値が残っていないかを確かめきれなかったため、整えた PDF を作りませんでした。",
+      };
+    }
+    return { status: "ok", bytes: out, pages: pages.length, removed, notDone, decrypted: loaded.decrypted !== null, properties: props.changes };
   }
   return { status: "ok", bytes: out, pages: pages.length, removed, notDone, decrypted: loaded.decrypted !== null };
+}
+
+/** 整える前に知らせること（今のプロパティ・PDF/A の印・電子署名の数）。画面は、これを見て同意を取ってから sanitizePdf を呼ぶ */
+export async function preflightTidy(bytes: Uint8Array): Promise<TidyPreflight> {
+  return preflight(bytes, MAX_INPUT_BYTES);
 }
 
 export async function sanitizePdf(bytes: Uint8Array, options: SanitizeOptions = {}): Promise<SanitizeResult> {

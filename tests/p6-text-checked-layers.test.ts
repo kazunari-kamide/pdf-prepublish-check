@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // 検出ルール P6：報告に「どの層を調べたか」（checkedLayers）を返すことのテスト（1.4.0 から）。
-// 1.5.0 で画像の層を見るようになり、["text", "image"] になった。
+// 1.5.0 で画像の層を見るようになり、["text", "image"] になった。1.13.0 で図形の層を足し、["text", "image", "vector"] になった。
 // 画面は、この値に "image" がない間、「画像の下の中身は、読み直しではまだ調べていません」と添える。
 // 採点用の合成 PDF は使わず、ここではテストの中で小さな PDF を作って確かめる。
 
@@ -21,22 +21,22 @@ async function coveredTextPdf(): Promise<Uint8Array> {
 
 describe("P6 の報告の checkedLayers（1.4.0 から）", () => {
   it("この版（1.5.0）が調べるのは、文字の層と画像の層", () => {
-    expect(CHECKED_LAYERS).toEqual(["text", "image"]);
+    expect(CHECKED_LAYERS).toEqual(["text", "image", "vector"]);
   });
 
   it("読めた PDF では、調べた層として CHECKED_LAYERS を返す", async () => {
     const report = await detectP6Text(await coveredTextPdf());
     expect(report.status).toBe("ok");
     expect(report.findings).toHaveLength(1);
-    expect(report.checkedLayers).toEqual(["text", "image"]);
+    expect(report.checkedLayers).toEqual(["text", "image", "vector"]);
   });
 
   it("報告の値を書き換えても、ルールの CHECKED_LAYERS と次の報告は変わらない", async () => {
     const report = await detectP6Text(await coveredTextPdf());
     report.checkedLayers.pop();
-    expect(CHECKED_LAYERS).toEqual(["text", "image"]);
+    expect(CHECKED_LAYERS).toEqual(["text", "image", "vector"]);
     const again = await detectP6Text(await coveredTextPdf());
-    expect(again.checkedLayers).toEqual(["text", "image"]);
+    expect(again.checkedLayers).toEqual(["text", "image", "vector"]);
   });
 
   it("空のファイル・読めないファイルでは、何も調べていないので空", async () => {

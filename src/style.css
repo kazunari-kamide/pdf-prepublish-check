@@ -119,16 +119,11 @@ button {
   white-space: nowrap;
 }
 
-/* 「守」の印：お守りの袋の形（上を丸く） */
-.seal {
-  display: grid;
-  place-items: center;
-  width: 1.9rem;
-  height: 2.4rem;
-  border: var(--border-strong) solid var(--color-accent);
-  border-radius: 10px 10px 6px 6px;
-  color: var(--color-accent);
-  font-size: var(--text-small);
+/* ロゴマーク（design/logo/mark.svg を logo.ts が差し込む）。伸ばさない・色を変えない（design/logo/README.md） */
+.brand-mark {
+  flex: none;
+  width: var(--logo-header);
+  height: var(--logo-header);
 }
 
 .steps {
@@ -882,13 +877,6 @@ progress {
   font-size: var(--text-small);
 }
 
-/* 書体のライセンスの一言：結果の欄のいちばん下に、小さく */
-.font-note {
-  margin: var(--space-3) 0 0;
-  font-size: var(--text-small);
-  color: var(--color-muted);
-}
-
 .items {
   list-style: none;
   margin: 0;
@@ -1471,7 +1459,7 @@ progress {
   inset: min(0px, calc((100% - var(--target-min)) / 2));
 }
 
-/* 高さの低い窓（横向きのスマートフォン・大きな拡大）：上の帯を詰め、「片付ける」が早く見えるようにする */
+/* 高さの低い窓（横向きのスマートフォン・大きな拡大）：上の帯を詰め、「整える」が早く見えるようにする */
 @media (max-height: 31rem) {
   .band {
     padding-block: var(--space-1);
@@ -1482,4 +1470,23 @@ progress {
   .zero-send {
     font-size: var(--text-small);
   }
+}
+
+/* 画面のどこに落としても受け取る：ファイルを持ってきている間だけ、画面全体を覆う。
+   線と地の色は、置き場の .drop[data-over="true"] と同じ（デザインシートが届くまで、新しい色・枠は決めない） */
+.drop-anywhere {
+  position: fixed;
+  inset: var(--space-3);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: var(--border-strong) solid var(--color-accent);
+  border-radius: var(--radius-panel);
+  background: var(--color-accent-tint);
+  text-align: center;
+  pointer-events: none;
 }

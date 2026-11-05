@@ -10,7 +10,8 @@ export function adaptP6Text(report: P6TextReport): VerifierShapedReport {
   return {
     status: report.status,
     ...(report.error ? { error: { code: report.error.code } } : {}),
-    items: report.findings.map((f) => ({
+    // 図形の層（1.13.0 から）は、検証器の形（text・image）にないので入れない。採点は eval:new の合成 PDF（eval/cases/p6-vector.ts）で数える
+    items: report.findings.flatMap((f) => (f.layer === "vector" ? [] : [f])).map((f) => ({
       pattern: f.pattern,
       layer: f.layer,
       cover: f.cover,

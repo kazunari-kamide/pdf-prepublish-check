@@ -62,7 +62,7 @@ export function buildBlockedView(leftovers: readonly RedactLeftover[], notDone: 
   const lines = all.slice(0, MAX_BLOCKED_LINES);
   if (all.length > lines.length) lines.push(`ほか ${all.length - lines.length} 件`);
   const headline = notDone.length
-    ? "黒塗りした PDF を保存の前に読み直したところ、片付けられなかった所か、残っている所がありました。保存できるファイルは作っていません。"
+    ? "黒塗りした PDF を保存の前に読み直したところ、消せなかった所か、残っている所がありました。保存できるファイルは作っていません。"
     : "黒塗りした PDF を保存の前に読み直したところ、残っている所がありました。保存できるファイルは作っていません。";
   return { headline, lines };
 }

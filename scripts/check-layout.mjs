@@ -177,7 +177,7 @@ async function checkSize(c, appUrl, size, longPdf, scanPdf) {
     // 片付ける → 読み直す
     if (await p.eval("!document.getElementById('sanitize').disabled && !document.getElementById('actions').hidden")) {
       await p.eval("document.getElementById('sanitize').click(); void 0");
-      await p.waitWhile("(() => { const s = document.getElementById('status').textContent; return s.startsWith('片付けています') || s.startsWith('片付けた PDF を、最初から'); })()", 180_000);
+      await p.waitWhile("(() => { const s = document.getElementById('status').textContent; return /^(片付けています|整えています|片付けた PDF を、最初から|整えた PDF を、最初から)/.test(s); })()", 180_000);
       await sleep(1200);
       if (await p.eval("document.getElementById('clean').hidden")) flowErrors.push("片付けた結果が出ませんでした");
       steps.push(await p.measure("片付け・読み直し", { full: true }));
@@ -213,7 +213,7 @@ async function checkSize(c, appUrl, size, longPdf, scanPdf) {
       return;
     }
     await p.eval("document.getElementById('sanitize').click(); void 0");
-    await p.waitWhile("(() => { const s = document.getElementById('status').textContent; return s.startsWith('片付けています') || s.startsWith('片付けた PDF を、最初から'); })()", 180_000);
+    await p.waitWhile("(() => { const s = document.getElementById('status').textContent; return /^(片付けています|整えています|片付けた PDF を、最初から|整えた PDF を、最初から)/.test(s); })()", 180_000);
     await sleep(800);
     if (await p.eval("document.getElementById('compress').hidden")) {
       flowErrors.push("スキャンの PDF で「ファイルを小さくする」が出ませんでした");

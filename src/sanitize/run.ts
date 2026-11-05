@@ -43,10 +43,10 @@ export function sanitizeInWorker(buffer: ArrayBuffer, timeoutMs: number = WORKER
         finish({ kind: "blocked", removed: res.removed, notDone: res.notDone, leftovers: res.leftovers, elapsedMs: elapsed() });
       } else if (res.type === "refused") finish({ kind: "refused", message: res.message, elapsedMs: elapsed() });
       else if (res.type === "error") finish({ kind: "error", message: res.message, elapsedMs: elapsed() });
-      else finish({ kind: "error", message: "片付けた結果を受け取れませんでした。", elapsedMs: elapsed() });
+      else finish({ kind: "error", message: "整えた結果を受け取れませんでした。", elapsedMs: elapsed() });
     };
-    worker.onerror = () => finish({ kind: "error", message: "片付けの Worker が止まりました。", elapsedMs: elapsed() });
-    worker.onmessageerror = () => finish({ kind: "error", message: "片付けた結果を受け取れませんでした。", elapsedMs: elapsed() });
+    worker.onerror = () => finish({ kind: "error", message: "整える処理 が止まりました。", elapsedMs: elapsed() });
+    worker.onmessageerror = () => finish({ kind: "error", message: "整えた結果を受け取れませんでした。", elapsedMs: elapsed() });
 
     const req: SanitizeRequest = areas.length ? { type: "sanitize", id, buffer, areas } : { type: "sanitize", id, buffer };
     worker.postMessage(req, [buffer]);
@@ -84,7 +84,7 @@ export function compressInWorker(
       else if (res.type === "error") finish({ kind: "error", message: res.message, elapsedMs: elapsed() });
       else finish({ kind: "error", message: "小さくした結果を受け取れませんでした。", elapsedMs: elapsed() });
     };
-    worker.onerror = () => finish({ kind: "error", message: "片付けの Worker が止まりました。", elapsedMs: elapsed() });
+    worker.onerror = () => finish({ kind: "error", message: "整える処理 が止まりました。", elapsedMs: elapsed() });
     worker.onmessageerror = () => finish({ kind: "error", message: "小さくした結果を受け取れませんでした。", elapsedMs: elapsed() });
     const req: SanitizeRequest = { type: "compress", id, buffer, maxDpi: preset.maxDpi, jpegQuality: preset.jpegQuality };
     worker.postMessage(req, [buffer]);

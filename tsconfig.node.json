@@ -4,6 +4,6 @@
     "lib": ["ES2022"],
     "types": ["node"]
   },
-  "include": ["tests", "eval", "sanitize/check", "sanitize/node", "vite.config.ts", "csp.ts", "htaccess.ts", "site.ts", "site-licenses.ts", "cli"],
+  "include": ["tests", "eval", "sanitize/check", "sanitize/node", "vite.config.ts", "csp.ts", "htaccess.ts", "site.ts", "site-licenses.ts", "logo.ts", "cli"],
   "exclude": []
 }
