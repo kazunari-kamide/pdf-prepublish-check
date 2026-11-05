@@ -47,12 +47,44 @@ function renderBlock(b: Block, o: RenderOptions): string {
   return html.replace(/\n {6}<\/section>$/, `\n        <ul class="site-links-list">\n${links.join("\n")}\n        </ul>\n      </section>`);
 }
 
-function simplePage(meta: PageMeta, lead: string, blocks: Block[], o: RenderOptions, extraClass = ""): string {
+/**
+ * 点検の一覧の段（デザインシートの「点検の一覧」の形。design/sheet.md）。
+ * 項目は本物のチェックボックスにし、字（label）を押しても印が付く。印は保存しない・どこにも送らない（スクリプトも使わない）。
+ * 見出しの「1. 」の番号は丸い札にするが、読み上げでは「1.」のまま読む。見える字は変えない。
+ * 項目のない段（使い方など）は、知らせのお知らせの形にする。
+ */
+function renderChecklistBlock(b: Block, o: RenderOptions): string {
+  if (!b.list?.length) return renderBlock(b, o).replace(`<section class="site-section">`, `<section class="site-section site-notice" data-kind="info">`);
+  const m = /^(\d+)\.\s*(.*)$/.exec(b.heading);
+  const head = m
+    ? `<span class="site-step-no">${e(m[1] ?? "")}<span class="site-sr">.</span></span><span>${e(m[2] ?? "")}</span>`
+    : `<span>${e(b.heading)}</span>`;
+  const out = [
+    `      <section class="site-section site-steps-card">`,
+    `        <h2 class="site-steps-head">${head}</h2>`,
+    ...(b.paragraphs ?? []).map((p) => `        <p>${e(p)}</p>`),
+    `        <ul class="site-checks">`,
+    ...b.list.map((li) => `          <li><label><input type="checkbox" /><span>${e(li)}</span></label></li>`),
+    `        </ul>`,
+    ...(b.note ? [`        <p class="site-note">${e(b.note)}</p>`] : []),
+    `      </section>`,
+  ];
+  return out.join("\n");
+}
+
+function simplePage(
+  meta: PageMeta,
+  lead: string,
+  blocks: Block[],
+  o: RenderOptions,
+  extraClass = "",
+  block: (b: Block, o: RenderOptions) => string = renderBlock,
+): string {
   const body = [
     `      <div class="site-page${extraClass ? ` ${extraClass}` : ""}">`,
     `      <h1>${e(meta.title)}</h1>`,
     `      <p class="site-lead">${e(lead)}</p>`,
-    ...blocks.map((b) => renderBlock(b, o)),
+    ...blocks.map((b) => block(b, o)),
     `      <p class="site-back"><a href="/">検査のページへ</a></p>`,
     `      </div>`,
   ].join("\n");
@@ -441,7 +473,7 @@ export const GUIDE_PATHS = [CHECKLIST_PATH, FAQ_PATH, TERMS_PATH, LICENSES_PATH,
 /** サイトの案内のページを全部作る。鍵は dist/ の中のファイルの名前 */
 export function renderGuidePages(o: RenderOptions, licenses: LicenseData): Map<string, string> {
   const pages = new Map<string, string>();
-  pages.set(fileFor(CHECKLIST_PATH), simplePage(CHECKLIST_META, CHECKLIST_META.description, CHECKLIST_BLOCKS, o, "site-checklist"));
+  pages.set(fileFor(CHECKLIST_PATH), simplePage(CHECKLIST_META, CHECKLIST_META.description, CHECKLIST_BLOCKS, o, "site-checklist", renderChecklistBlock));
   pages.set(fileFor(FAQ_PATH), simplePage(FAQ_META, FAQ_META.description, FAQ_BLOCKS, o));
   pages.set(fileFor(TERMS_PATH), simplePage(TERMS_META, TERMS_META.description, TERMS_BLOCKS, o));
   pages.set(fileFor(CONTACT_PATH), simplePage(CONTACT_META, CONTACT_META.description, CONTACT_BLOCKS, o));
