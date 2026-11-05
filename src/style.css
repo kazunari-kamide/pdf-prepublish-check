@@ -65,11 +65,17 @@ button {
   letter-spacing: inherit;
 }
 
-/* フォーカス：どの押せる所でも同じ形（黒の線＋黄の縁。DADS のボタンと同じ） */
+/* フォーカス：どの押せる所・入力欄でも同じ形。墨の 1 色の線を、外側に少し離して出す（2026-11-05 本人「1 色でいい」。design/sheet.css の --focus-ring） */
 :focus-visible {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-offset);
-  box-shadow: var(--focus-halo);
+  outline: var(--bw-focus) solid var(--focus-ring);
+  outline-offset: var(--focus-gap);
+}
+
+/* 字を打つ欄は、シートの角の丸み（ボタン・項目と同じ --radius-m）。印の線も、この丸みに沿う */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  border-radius: var(--radius-m);
 }
 
 /* hidden を付けた部品は、部品の display より優先して隠す */
@@ -94,8 +100,8 @@ button {
   z-index: 10;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius);
-  background: var(--color-focus);
-  color: var(--color-focus-line);
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
   font-weight: 700;
 }
 
@@ -377,8 +383,8 @@ button {
 .drop:has(input:focus-visible) {
   border-style: solid;
   border-color: var(--line-strong);
-  outline: var(--bw-2) solid var(--line-strong);
-  outline-offset: var(--bw-2);
+  outline: var(--bw-focus) solid var(--focus-ring);
+  outline-offset: var(--focus-gap);
 }
 
 .drop input:focus-visible {
@@ -440,12 +446,6 @@ button {
   color: var(--color-muted);
 }
 
-/* 見本の PDF で試す：置き場の下に、枠だけのボタン */
-.sample {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
 /*
  * 利用規約のダイアログ（<dialog>。中身は build の時に src/site/pages.ts から入る）。
  * 欄と同じ白の地・角の丸め・影 1 段。題と閉じるボタンは上に固定し、本文だけが中でスクロールする
@@ -539,6 +539,12 @@ body:has(.terms-dialog[open]) {
   font-size: var(--text-small);
 }
 
+/* 見本の PDF で試す：置き場の下に、枠だけのボタン */
+.sample {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
   margin: var(--space-3) 0 0;
   font-size: var(--text-small);
 }
@@ -1582,8 +1588,8 @@ progress {
 
 /* ページの絵（自分で黒塗りする所を、キーボードで選んでいる間だけ Tab で止まる） */
 .sheet[data-picking="true"]:focus-visible {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-offset);
+  outline: var(--bw-focus) solid var(--focus-ring);
+  outline-offset: var(--focus-gap);
 }
 
 /* ファイルを小さくする（片付けの compress）。片付けた結果の欄の中に、区切り線の下に置く */
