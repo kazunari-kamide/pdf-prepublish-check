@@ -31,8 +31,12 @@ export const SELF_GROUP_NAME = "自分で選んだ所の黒塗り";
 /** 1つの型の中で並べる行の上限。超えた分は数だけ出す */
 export const MAX_LINES_PER_GROUP = 30;
 
-/** self＝自分で選んだ所の黒塗り（片付けの redact）。pattern はどちらも片付けの型（自分で選んだ所は P6 の墨消し） */
-export type RemovedGroup = { pattern: SanitizePattern; name: string; self: boolean; lines: string[]; total: number };
+/**
+ * self＝自分で選んだ所の黒塗り（片付けの redact）。pattern はどちらも片付けの型（自分で選んだ所は P6 の墨消し）。
+ * found＝確かめた画面に、この種類の項目が出ていた（seen はその項目の数）。出ていなかった種類は「念のため消したもの」として分けて見せる。
+ * 見つかった数と消した数を 1 つの合計にすると、数が合わないように見えるため（2026-11-05 本人の画面のレビュー C2）
+ */
+export type RemovedGroup = { pattern: SanitizePattern; name: string; self: boolean; found: boolean; seen: number; lines: string[]; total: number };
 export type DoneMark = { page: number; rect: Rect; label: string };
 
 /** 本人が選んだ値として「残り」に数えない型（文書情報・XMP・他の団体の名前。欄の名前 field があるもの） */
@@ -78,7 +82,8 @@ export function buildCleanView(input: {
   for (const r of removed) {
     const self = SELF_KINDS.has(r.kind);
     const key = self ? "self" : r.pattern;
-    const g = groups.get(key) ?? { pattern: r.pattern, name: self ? SELF_GROUP_NAME : (PATTERN_NAME[r.pattern] ?? r.pattern), self, lines: [], total: 0 };
+    const seen = self ? 0 : before.rows.filter((row) => row.pattern === r.pattern).length;
+    const g = groups.get(key) ?? { pattern: r.pattern, name: self ? SELF_GROUP_NAME : (PATTERN_NAME[r.pattern] ?? r.pattern), self, found: seen > 0, seen, lines: [], total: 0 };
     g.total++;
     if (g.lines.length < MAX_LINES_PER_GROUP) g.lines.push(withPage(r.label, r.page));
     groups.set(key, g);
@@ -101,10 +106,11 @@ export function buildCleanView(input: {
     ? [...new Set(after.groups.filter((g) => g.status === "ok" && !CANDIDATE_PATTERNS.includes(g.pattern)).map((g) => g.pattern))]
     : [];
   const notChecked = [...new Set(removedGroups.map((g) => g.pattern))].filter((p) => !checked.includes(p));
-  let scope = checked.length
-    ? `読み直しで調べたのは ${checked.map(patternWithName).join("・")} です。`
-    : "読み直しでは、どの型も調べられませんでした。";
-  if (notChecked.length) scope += `${notChecked.map(patternWithName).join("・")} は消しましたが、読み直しでは調べていません（調べるルールがまだありません）。`;
+  // 読み直しで調べた種類の一覧は、下の「見た所・見なかった所」と同じなので並べない（2026-11-05 本人の画面のレビュー C3）。
+  // ここには、そこに出ないこと（消したが読み直しでは調べていない種類・調べていない層）だけを書く
+  const nameOf = (p: string) => PATTERN_NAME[p] ?? p;
+  let scope = checked.length ? "" : "読み直しでは、どの種類も調べられませんでした。";
+  if (notChecked.length) scope += `${notChecked.map(nameOf).join("・")}は消しましたが、読み直しでは調べていません（調べるルールがまだありません）。`;
   // 調べた型の中でも、調べていない層があれば添える（決め打ちの中身は src/ui/scope.ts の1か所）
   if (after) scope += after.caveats.join("");
 

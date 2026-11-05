@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "お守りPDF 通信を数える",
+  "version": "0.1.0",
+  "description": "お守りPDF のページで、PDF を入れたあとに送ったデータの大きさと要求の数を数えて見せます。外へは何も送りません。",
+  "minimum_chrome_version": "116",
+  "permissions": ["webRequest", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["https://omamoripdf.com/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": { "default_title": "お守りPDF 通信を数える", "default_popup": "popup.html" },
+  "content_security_policy": { "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'" }
+}

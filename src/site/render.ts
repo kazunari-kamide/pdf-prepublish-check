@@ -6,6 +6,7 @@
 // - ページには、スクリプトを入れない。読み込むのは、同じサイトの CSS 1つだけ。
 // - サイトの場所（https の公式の URL）は、呼ぶ側から受け取る（htaccess.ts の OFFICIAL_ORIGIN）。ここには書かない。
 
+import { CONTACT_SEND_FILE } from "../../htaccess.ts";
 import { ARTICLES } from "./articles.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS, PRIVACY_TITLE } from "./privacy.ts";
 import { SITE_NAME, headFor, headLines } from "./seo.ts";
@@ -13,13 +14,17 @@ import type { Article, FigureAsset, PageMeta, Section } from "./types.ts";
 
 export { SITE_NAME };
 export const ARTICLES_PATH = "/articles/";
-export const PRIVACY_PATH = "/privacy.html";
+export const PRIVACY_PATH = "/privacy";
 // サイトの案内のページ（中身は pages.ts）
-export const LICENSES_PATH = "/licenses.html";
-export const TERMS_PATH = "/terms.html";
-export const CONTACT_PATH = "/contact.html";
-export const FAQ_PATH = "/faq.html";
-export const CHECKLIST_PATH = "/checklist.html";
+export const LICENSES_PATH = "/licenses";
+export const TERMS_PATH = "/terms";
+export const CONTACT_PATH = "/contact";
+/** お問い合わせのフォームの送り先（PHP。server/contact-send.php から site.ts が作る。検索には載せない） */
+export const CONTACT_SEND_PATH = `/${CONTACT_SEND_FILE}`;
+export const FAQ_PATH = "/faq";
+export const CHECKLIST_PATH = "/checklist";
+/** サービス紹介のページ（持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（index.html。tests/site-pages.test.ts） */
+export const ABOUT_PATH = "/about";
 
 /** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
 export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。";
@@ -51,6 +56,8 @@ export interface RenderOptions {
   repoUrl?: string | null;
   /** 記事の図（site.ts が src/site/figures/ から assets/ に置いたもの）。鍵は記事の slug。ない記事は、図の場所を出さない */
   figures?: ReadonlyMap<string, FigureAsset>;
+  /** 参照元の決まり（<meta name="referrer">）。ふだんは no-referrer。お問い合わせのページだけ csp.ts の CONTACT_REFERRER */
+  referrer?: string;
   /** 記事の一覧のページで読み込む、検索のスクリプトの場所（site.ts が置いたもの）。なければ、検索の欄を出さない */
   searchScript?: string;
   /** 記事の一覧の見出しまわりの 3D の飾り（scene：three.js で描くファイル、loader：あとから読む役。どちらも /assets/ の中） */
@@ -61,11 +68,22 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-export const articlePath = (a: Article) => `${ARTICLES_PATH}${a.slug}.html`;
+export const articlePath = (a: Article) => `${ARTICLES_PATH}${a.slug}`;
 
-/** dist/ の中のファイルの名前（先頭の / なし）。/articles/ は articles/index.html */
+/**
+ * dist/ の中のファイルの名前（先頭の / なし）。/articles/ は articles/index.html、/privacy は privacy.html。
+ * サイトのページの場所は .html なし（2026-11-05）。本番は .htaccess の書き換えで、.html のファイルを返す（htaccess.ts）
+ */
 export function fileFor(path: string): string {
-  return (path.endsWith("/") ? `${path}index.html` : path).replace(/^\//, "");
+  return (path.endsWith("/") ? `${path}index.html` : `${path}.html`).replace(/^\//, "");
+}
+
+/** dist/ の中の HTML のファイルの名前から、サイトの場所（.html なし）を作る。fileFor の逆 */
+export function pathForFile(file: string): string {
+  const f = file.replace(/^\//, "");
+  if (f === "index.html") return "/";
+  if (f.endsWith("/index.html")) return `/${f.slice(0, -"index.html".length)}`;
+  return `/${f.replace(/\.html$/, "")}`;
 }
 
 /** どのページにも共通の枠（CSP・題・説明・canonical・上の帯・下の帯）。中身の HTML は body */
@@ -78,7 +96,7 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${e(o.csp)}" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="referrer" content="no-referrer" />
+    <meta name="referrer" content="${e(o.referrer ?? "no-referrer")}" />
     ${headLines(headFor(meta), o.origin, e)}
     <link rel="icon" href="${e(o.favicon ?? "data:,")}" />
     <link rel="stylesheet" href="${e(o.cssHref)}" />

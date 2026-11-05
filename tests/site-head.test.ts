@@ -9,6 +9,7 @@ import path from "node:path";
 import { build } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { pathForFile } from "../src/site/render.ts";
 import { BANNED_WORDS, NOINDEX_PATHS, OG_IMAGE_PATH, OG_IMAGE_SIZE } from "../src/site/seo.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -35,7 +36,8 @@ function allPages(): Head[] {
     .filter((f) => f.endsWith(".html") && !/^google[0-9a-f]+\.html$/.test(path.basename(f)))
     .map((f) => {
       const rel = path.relative(out, f).split(path.sep).join("/");
-      const url = OFFICIAL_ORIGIN + "/" + rel.replace(/(^|\/)index\.html$/, "$1");
+      // サイトの場所は .html なし（2026-11-05。本番は .htaccess の書き換えで .html のファイルを返す）
+      const url = OFFICIAL_ORIGIN + pathForFile(rel);
       const head = readFileSync(f, "utf8").split("</head>")[0] ?? "";
       return { file: rel, url, all: (re: RegExp) => [...head.matchAll(new RegExp(re.source, "g"))].map((m) => decode(m[1] ?? "")) };
     });

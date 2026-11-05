@@ -6,6 +6,7 @@
 import type { Item, PageBox, Rect, Severity, InspectSummary } from "../inspect/report";
 import { buildCoverage, hasIncomplete, type CoverageRow } from "./coverage";
 import { scopeCaveats } from "./scope";
+import { ruleOrigin, type RuleOrigin } from "./rule-origin";
 
 export type Row = {
   no: number;
@@ -28,6 +29,8 @@ export type Row = {
   content?: string;
   /** 文書情報・XMP の欄の値のとき、その欄の名前（Title・dc:title など） */
   field?: string;
+  /** 見つける段から来た型のとき、その出どころ（取り入れた PR）。最初から人が書いた型にはない（src/ui/rule-origin.ts） */
+  origin?: RuleOrigin;
 };
 
 /** 型（ルール）ごとのまとまり。見つからなかった型も並べる */
@@ -88,7 +91,9 @@ export function buildView(summary: InspectSummary): ViewModel {
       (b.rect ? b.rect[3] : 0) - (a.rect ? a.rect[3] : 0),
   );
 
-  const rows: Row[] = all.map((it, i) => ({
+  const rows: Row[] = all.map((it, i) => {
+    const origin = ruleOrigin(summary.rules[it.ruleIndex]!.ruleId, it.kind);
+    return {
     no: i + 1,
     severity: it.severity,
     severityLabel: SEVERITY_LABEL[it.severity],
@@ -104,7 +109,9 @@ export function buildView(summary: InspectSummary): ViewModel {
     ...(it.content ? { content: it.content } : {}),
     ...(it.field ? { field: it.field } : {}),
     check: it.confidence === "check",
-  }));
+    ...(origin ? { origin } : {}),
+    };
+  });
 
   const groups: Group[] = summary.rules.map((r, i) => ({
     label: r.label,

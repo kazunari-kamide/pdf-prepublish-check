@@ -19,7 +19,8 @@ export function compactDetail(detail: string): string {
 
 /**
  * 「見た所・見なかった所」の見出しの 1 行の要約。
- * 例：「14 の型のうち 13 を調べた・見つかったのは 2 つ（一部だけ 1・この版では調べていない 1）」
+ * 例：「14 種類のうち 13 を調べた・見つかったのは 2 種類（一部だけ 1・この版では調べていない 1）」。
+ * 「型」は作る側の言葉なので、画面では「種類」と言う（2026-11-05 本人の画面のレビュー B3・C4）
  * after（整えたあとの読み直し）では「残っているのは」にする
  */
 export function coverageSummary(rows: readonly CoverageRow[], phase: "before" | "after"): string {
@@ -29,7 +30,7 @@ export function coverageSummary(rows: readonly CoverageRow[], phase: "before" | 
   const failed = rows.filter((r) => r.state === "failed").length;
   const notIn = rows.filter((r) => r.state === "not_in_version").length;
   const extras = [partial ? `一部だけ ${partial}` : "", failed ? `調べられなかった ${failed}` : "", notIn ? `この版では調べていない ${notIn}` : ""].filter(Boolean);
-  const head = `${rows.length} の型のうち ${looked} を調べた・${phase === "after" ? "残っているのは" : "見つかったのは"} ${found} つ`;
+  const head = `${rows.length} 種類のうち ${looked} を調べた・${phase === "after" ? "残っているのは" : "見つかったのは"} ${found} 種類`;
   return extras.length ? `${head}（${extras.join("・")}）` : head;
 }
 
