@@ -35,6 +35,7 @@
     "fonts:check": "node design/fonts/build.mjs --check",
     "eval:blind": "node eval/blind/run.ts",
     "cli": "node cli/omamori.ts",
+    "figures:draw": "node site-figures-draw.ts",
     "eval:redact": "vitest run tests/redact-eval.test.ts --silent=false",
     "eval:compress": "vitest run tests/compress-eval.test.ts --silent=false"
   },

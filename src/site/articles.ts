@@ -16,6 +16,7 @@ export const ARTICLES: Article[] = [
   // ───────── P1 文書情報 ─────────
   {
     slug: "p1-docinfo",
+    figure: { file: "p1-docinfo.svg", alt: "見た目の本文とは別に、文書情報の作成者の欄に名前が残る" },
     pattern: "P1",
     title: "文書情報に、作った人の名前が残る",
     description: "PDF には、作成者・タイトルなどの「文書情報」が入ります。ここに職員の個人名や、別の会社の名前が残ることがあります。",
@@ -58,6 +59,7 @@ export const ARTICLES: Article[] = [
   // ───────── P2 XMP ─────────
   {
     slug: "p2-xmp",
+    figure: { file: "p2-xmp.svg", alt: "XMP の中に、編集の履歴が何回分も残る" },
     pattern: "P2",
     title: "XMP メタデータに、編集の履歴が残る",
     description: "PDF には、文書情報とは別に XMP というメタデータが入ることがあります。作成者や、編集の履歴・元のファイルの情報が残ることがあります。",
@@ -97,6 +99,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p2-parts-xmp",
+    figure: { file: "p2-parts-xmp.svg", alt: "貼り付けた画像に、ページとは別の XMP が付いたまま残る" },
     pattern: "P2",
     title: "貼り付けた画像や部品に、別の XMP が残る",
     description: "PDF 全体の XMP とは別に、貼り付けた画像やロゴの部品にも XMP が付くことがあります。元の作成者や、元のファイルの場所が残ることがあります。",
@@ -137,6 +140,7 @@ export const ARTICLES: Article[] = [
   // ───────── P3 ほかの団体の名前 ─────────
   {
     slug: "p3-foreign-org",
+    figure: { file: "p3-foreign-org.svg", alt: "流用した様式の題に、ほかの団体の名前が残る" },
     pattern: "P3",
     title: "ほかの団体の名前が、タイトルなどに残る",
     description: "ほかの団体の様式を元に書類を作ると、タイトルや文書情報に、元の団体の名前が残ることがあります。",
@@ -177,6 +181,7 @@ export const ARTICLES: Article[] = [
   // ───────── P4 保存先 ─────────
   {
     slug: "p4-internal-path",
+    figure: { file: "p4-internal-path.svg", alt: "ファイルの中に、作ったパソコンの保存先のパスが残る" },
     pattern: "P4",
     title: "作ったパソコンの場所（ファイルの保存先）が残る",
     description: "PDF の中に、作ったパソコンの利用者名や、職場のサーバーのフォルダの場所が、文字として残ることがあります。",
@@ -220,6 +225,7 @@ export const ARTICLES: Article[] = [
   // ───────── P5 前の版 ─────────
   {
     slug: "p5-revisions",
+    figure: { file: "p5-revisions.svg", alt: "上書きしても、直す前の版がファイルの中に重なって残る" },
     pattern: "P5",
     title: "修正する前の版が、ファイルの中に残る",
     description: "PDF を上書きで保存すると、直す前の中身がファイルの中に残ることがあります。差し替える前の金額や名前が分かるおそれがあります。",
@@ -260,6 +266,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p5-removed-page",
+    figure: { file: "p5-removed-page.svg", alt: "消したページが、どこからも使われない部品としてファイルに残る" },
     pattern: "P5",
     title: "消したページや使わない部品が、ファイルの中に残る",
     description: "PDF のアプリでページを消しても、そのページの中身がファイルに残ることがあります。表示されない部品の中に、字が残ることもあります。",
@@ -299,6 +306,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p5-thumbnail",
+    figure: { file: "p5-thumbnail.svg", alt: "ページの縮小画像だけが、直す前のページのまま残る" },
     pattern: "P5",
     title: "ページの縮小画像に、直す前のページが残る",
     description: "PDF には、ページの縮小画像（サムネイル）を入れておけます。ページを直しても、古い縮小画像がそのまま残ることがあります。",
@@ -338,6 +346,7 @@ export const ARTICLES: Article[] = [
   // ───────── P6 見せかけの黒塗り ─────────
   {
     slug: "p6-fake-redaction",
+    figure: { file: "p6-fake-redaction.svg", alt: "黒い四角は上に重なっているだけで、下の字の層が残っている断面の図" },
     pattern: "P6",
     title: "見せかけの黒塗り：黒い四角の下に、文字が残る",
     description: "黒い四角を上に重ねただけの黒塗りでは、下の文字がそのまま残り、コピーや検索で取り出せます。スキャンした画像の上に重ねた場合も、下の画像が残ります。",
@@ -380,6 +389,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p6-white-box",
+    figure: { file: "p6-white-box.svg", alt: "白い四角で隠した下に、字が残っている図" },
     pattern: "P6",
     title: "白い四角で隠した下に、文字や画像が残る",
     description: "白い四角や白い注釈を上に重ねて消したように見せても、下の文字や画像は残ります。黒塗りと同じく、コピーや取り出しで中身が分かります。",
@@ -418,6 +428,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p6-unapplied-redaction",
+    figure: { file: "p6-unapplied-redaction.svg", alt: "墨消しの印を付けただけで適用していないと、下の字が残る" },
     pattern: "P6",
     title: "墨消しの印を付けただけで、適用していない",
     description: "PDF のアプリの墨消しは、印を付けたあとに「適用」を押したときに、下の文字が消えます。印を付けただけで保存すると、下の文字は残ります。",
@@ -459,6 +470,7 @@ export const ARTICLES: Article[] = [
   // ───────── P7 見えない文字・意味の層 ─────────
   {
     slug: "p7-hidden-text",
+    figure: { file: "p7-hidden-text.svg", alt: "画面には見えない字が、検索やコピーで出てくる" },
     pattern: "P7",
     title: "見えないのに、検索やコピーで出てくる文字",
     description: "白い文字やページの外に置いた文字は、画面では見えません。それでも PDF の中に残り、検索やコピーで取り出せることがあります。",
@@ -499,6 +511,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p7-ocr-layer",
+    figure: { file: "p7-ocr-layer.svg", alt: "スキャンした画像の上に、見えない文字の層が重なっている" },
     pattern: "P7",
     title: "スキャンした書類の上に、見えない文字の層がある",
     description: "文字を読み取る機能（OCR）をかけたスキャンの PDF には、画像の上に見えない文字の層が入ります。画像だけを塗っても、この層の字は残ります。",
@@ -538,6 +551,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p7-bookmark-title",
+    figure: { file: "p7-bookmark-title.svg", alt: "しおり（目次）の題に、本文にはない古い見出しが残る" },
     pattern: "P7",
     title: "しおり（目次）の題に、古い見出しや名前が残る",
     description: "PDF の「しおり」は、ページへ飛ぶための目次です。本文を直しても、しおりの題が古いまま残り、消した見出しや名前が見えることがあります。",
@@ -577,6 +591,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p7-alt-text",
+    figure: { file: "p7-alt-text.svg", alt: "図に付けた代わりの説明に、画面には出ない情報が残る" },
     pattern: "P7",
     title: "図の代わりの説明（代替テキスト）に、見せない情報が残る",
     description: "図や写真には、読み上げのための「代わりの説明」を付けられます。画面には出ないので、写った人の名前や下書きの文が残っていても気づきにくくなります。",
@@ -617,6 +632,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p7-hidden-image",
+    figure: { file: "p7-hidden-image.svg", alt: "切り抜いた写真の外側も、ファイルの中に残っている" },
     pattern: "P7",
     title: "切り抜いた写真の外側や、ページの外の画像が残る",
     description: "写真を切り抜いて貼っても、切った外側の部分がファイルに残ることがあります。ページの外に置いた画像も、見えないだけで残ります。",
@@ -660,6 +676,7 @@ export const ARTICLES: Article[] = [
   // ───────── P8 注釈 ─────────
   {
     slug: "p8-annotation",
+    figure: { file: "p8-annotation.svg", alt: "確認の途中のコメントが、ページに付いたまま公開される" },
     pattern: "P8",
     title: "注釈・コメントの中身が、そのまま公開される",
     description: "PDF に付けた付箋・コメント・ハイライトなどを注釈と呼びます。確認のやりとりの中身が、そのまま公開されることがあります。",
@@ -698,6 +715,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p8-annotation-author",
+    figure: { file: "p8-annotation-author.svg", alt: "付箋やコメントに、付けた人の名前が残る" },
     pattern: "P8",
     title: "注釈に、付けた人の名前が残る",
     description: "注釈には、付けた人の名前の欄があります。アプリがパソコンのログイン名を自動で入れるため、確認した職員の名前が公開されることがあります。",
@@ -739,6 +757,7 @@ export const ARTICLES: Article[] = [
   // ───────── P9 添付 ─────────
   {
     slug: "p9-attachment",
+    figure: { file: "p9-attachment.svg", alt: "PDF の中に、元の表計算のファイルが入ったまま残る" },
     pattern: "P9",
     title: "添付ファイルが、PDF の中に入ったままになる",
     description: "PDF には、別のファイルを埋め込めます。元の Excel や Word が入ったまま公開されると、隠したはずの列や、計算の元のデータまで見られることがあります。",
@@ -777,6 +796,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p9-attachment-inside",
+    figure: { file: "p9-attachment-inside.svg", alt: "添付した PDF の中にも、見せかけの黒塗りなどが残る" },
     pattern: "P9",
     title: "添付した PDF の中にも、同じ残り方がある",
     description: "PDF に添付した別の PDF や文書の中にも、作成者の名前・注釈・見えない文字が残ることがあります。外側の PDF を確かめただけでは分かりません。",
@@ -818,6 +838,7 @@ export const ARTICLES: Article[] = [
   // ───────── P10 写真の情報 ─────────
   {
     slug: "p10-image-exif",
+    figure: { file: "p10-image-exif.svg", alt: "貼った写真に、撮った場所と機種の情報が付いている" },
     pattern: "P10",
     title: "写真に、撮った場所や機種の情報が残る",
     description: "スマートフォンなどで撮った写真には、撮った場所（位置情報）・機種・日時が入っていることがあります。PDF に貼ると、その情報も一緒に入ることがあります。",
@@ -857,6 +878,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p10-photo-thumbnail",
+    figure: { file: "p10-photo-thumbnail.svg", alt: "写真を塗っても、中の小さな見本に塗る前の絵が残る" },
     pattern: "P10",
     title: "写真の中の小さな見本に、切る前・塗る前の絵が残る",
     description: "写真のファイルの EXIF には、小さな見本の画像が入ることがあります。写真を切り抜いたり塗ったりしても、見本の方は元のままのことがあります。",
@@ -897,6 +919,7 @@ export const ARTICLES: Article[] = [
   // ───────── P11 フォーム ─────────
   {
     slug: "p11-form-value",
+    figure: { file: "p11-form-value.svg", alt: "入力できる PDF の欄に、前に入れた名前や番号が残る" },
     pattern: "P11",
     title: "フォームの欄に、入れた値が残る",
     description: "入力できる欄のある PDF（フォーム）に値を入れたまま公開すると、記入例のつもりの値や、前に入れた人の値が残ることがあります。",
@@ -934,6 +957,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "p11-hidden-field",
+    figure: { file: "p11-hidden-field.svg", alt: "表示しない欄や大きさのない欄に、値が残っている" },
     pattern: "P11",
     title: "見えない欄・ページにない欄に、値が残る",
     description: "フォームには、画面に出ない欄や、どのページにも置かれていない欄を作れます。そこに入った値は、欄を1つずつ見ても見つかりません。",
@@ -975,6 +999,7 @@ export const ARTICLES: Article[] = [
   // ───────── P12 スクリプト・動作 ─────────
   {
     slug: "p12-active-content",
+    figure: { file: "p12-active-content.svg", alt: "開いたときやボタンを押したときに、スクリプトが動いて外へつなぐ" },
     pattern: "P12",
     title: "スクリプト・外へつなぐ動き（受け取る人のための注意）",
     description: "PDF には、開いたときに動くスクリプトや、ほかのプログラム・ウェブのページを開く動きを入れられます。漏れではありませんが、要らなければ外します。",
@@ -1016,6 +1041,7 @@ export const ARTICLES: Article[] = [
   // ───────── 正しいやり方の手順 ─────────
   {
     slug: "guide-word",
+    figure: { file: "guide-word.svg", alt: "Word で作ってから PDF にするまでの 3 つの段" },
     pattern: null,
     title: "手順：Word で作る書類を、PDF にして出すまで",
     description: "Word の書類を PDF にして出すまでの手順です。作成者の名前・コメント・変更の履歴などを残さないようにします。",
@@ -1055,6 +1081,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "guide-excel",
+    figure: { file: "guide-excel.svg", alt: "Excel の表を PDF にするまでの 3 つの段" },
     pattern: null,
     title: "手順：Excel の表を、PDF にして出すまで",
     description: "Excel の表を PDF にして出すまでの手順です。隠したシート・行・列や、コメント、作成者の名前などを残さないようにします。",
@@ -1094,6 +1121,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "guide-ichitaro",
+    figure: { file: "guide-ichitaro.svg", alt: "一太郎の書類を PDF にするまでの 3 つの段" },
     pattern: null,
     title: "手順：一太郎で作る書類を、PDF にして出すまで",
     description: "一太郎の書類を PDF にして出すまでの手順です。作成者の名前・付箋などの書き込み・隠した文字を残さないようにします。",
@@ -1130,6 +1158,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "guide-acrobat-redaction",
+    figure: { file: "guide-acrobat-redaction.svg", alt: "墨消しは、印を付けてから適用し、下の字まで消す" },
     pattern: null,
     title: "手順：Acrobat の墨消しで、下の文字まで消す",
     description: "Adobe Acrobat の墨消しの機能で、黒塗りの下の文字まで消すための手順です。四角形の注釈や図形で塗るのとは違います。",
@@ -1167,6 +1196,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "guide-scan",
+    figure: { file: "guide-scan.svg", alt: "スキャンした書類は、紙の段階で塗ってから読み取る" },
     pattern: null,
     title: "手順：スキャンした書類を、黒塗りして出す",
     description: "紙をスキャンして PDF にする書類で、黒塗りの下が残らないようにする手順です。画像の上に黒い図形を重ねるだけでは、下の画像が残ります。",
@@ -1207,6 +1237,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "guide-photo",
+    figure: { file: "guide-photo.svg", alt: "写真は、撮った時の情報を消してから貼る" },
     pattern: null,
     title: "手順：写真を貼る前に、撮った時の情報を消す",
     description: "書類に写真を貼る前に、撮った場所（位置情報）・機種・撮った人の名前など、写真の中の情報を消すための手順です。切り抜いた写真の見本にも気をつけます。",
@@ -1240,6 +1271,7 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "guide-shrink",
+    figure: { file: "guide-shrink.svg", alt: "ファイルを小さくしても、隠れた情報はそのまま残る" },
     pattern: null,
     title: "手順：ファイルを小さくする前に、隠れた情報を消す",
     description: "PDF の容量を小さくしても、隠れた情報が消えるとは限りません。小さくする前に何を確かめるか、小さくしたあとに何を見るかの手順です。",
