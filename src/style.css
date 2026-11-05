@@ -693,25 +693,22 @@ body:has(#workspace[data-state="empty"]) .steps {
   color: var(--text-muted);
 }
 
-/* 本文の中のリンク（案 C）：太字＋黄のマーカー（字の下半分の帯）。下線は引かない。色だけに頼らない（design/sheet.md「案 C」の強調・リンク） */
+/* 本文の中のリンク：太字＋下線（D166。黄のマーカーはやめた）。色は墨 900（白の地で 4.5:1 以上）。色だけに頼らず、下線で示す */
 .terms-note a,
-.sample-button span,
-.about-more span,
+.about-more,
 .origin-text a {
   color: var(--text-strong);
   font-weight: var(--fw-strong);
-  text-decoration: none;
-  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
 }
 
-/* 押せる所に乗ったとき：帯を字の上の方まで広げる（色を変えずに形で示す） */
-.terms-note a:hover,
-.sample-button:hover span,
-.about-more:hover span,
-.origin-text a:hover {
-  background: linear-gradient(transparent 25%, var(--marker-ki) 25%, var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
+/* 指を置いたとき・フォーカスのとき：下線を太くする（形で示す） */
+.terms-note a:is(:hover, :focus-visible),
+.about-more:is(:hover, :focus-visible),
+.origin-text a:is(:hover, :focus-visible) {
+  text-decoration-thickness: 3px;
 }
 
 /*
@@ -807,42 +804,52 @@ body:has(.terms-dialog[open]) {
   font-size: var(--text-small);
 }
 
-/* 見本の PDF で試す：枠のすぐ下に、文字のリンクくらいの目立たせ方（A5）。押せる高さは 44px を保つ */
-/* 見本の PDF で試す：面の外、すぐ下に、マーカーのリンクくらいの目立たせ方（A5）。押せる高さは 44px を保つ
-   （箱は 44px、マーカーは中の字の span にだけ引く） */
+/* 見本の PDF で試す：白地に枠線のボタン（D166）。主役の紅の「PDF を選ぶ」と競わないよう、塗らない。
+   「（架空の申請書）」はボタンのすぐ下に小さく。右に「どんなものが残る？」の下線のリンク */
 .sample {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--sp-2);
-  margin: var(--sp-2) 0 0;
+  align-items: flex-start;
+  gap: var(--sp-2) var(--sp-4);
+  margin: var(--sp-3) 0 0;
   padding-inline: var(--sp-2);
+}
+
+.sample-try {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
 }
 
 .sample-button {
   min-height: var(--target-min);
-  padding: 0;
-  border: 0;
-  background: none;
+  padding: 0 var(--sp-4);
+  border: var(--border-strong) solid var(--line-control);
+  border-radius: var(--radius);
+  background: var(--surface-card);
   color: var(--text-strong);
   font: inherit;
   font-weight: var(--fw-strong);
   cursor: pointer;
 }
 
+/* 指を置いたとき：枠を墨にし、地を薄い墨にする（紅は使わない） */
+.sample-button:hover {
+  border-color: var(--text-strong);
+  background: var(--surface-subtle);
+}
+
 .sample-note {
   font-size: var(--fs-small);
   color: var(--text-muted);
-  margin-right: var(--sp-3);
 }
 
-/* 紹介のページの「残り方」へ 1 本（見本と同じ目立たせ方） */
+/* 紹介のページの「残り方」へ 1 本（下線の文字リンク。押せる高さは 44px を保つ） */
 .about-more {
   display: inline-flex;
   align-items: center;
   min-height: var(--target-min);
-  color: var(--text-strong);
-  text-decoration: none;
 }
 
 /* 提出先の容量に合わせて小さくする入口：見本のリンクのすぐ下に、開けて選ぶ形（見本と同じくらいの控えめさ） */

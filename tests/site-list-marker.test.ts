@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 関係する記事の一覧の行で、型の番号の札と黄のマーカーが重ならないことを確かめる（2026-11-05 夜。design/sheet.md「案 C」の強調・リンク）。
-// - 行のリンクにはクラスが付き、本文のリンクの決まり（リンク全体にマーカー）から外れる
-// - マーカーは題の字（.site-list-title の中の span）だけに引き、札（.site-tag）は帯の外に置く
-// - 指を置いたときに、下線とマーカーを二重にしない
+// 関係する記事の一覧の行と、本文のリンクの形を確かめる（D166：黄のマーカーをやめ、リンクは下線にそろえる。2026-11-06）。
+// - 行のリンクにはクラスが付き、本文のリンクの決まり（下線）から外れる
+// - 行にはマーカーも下線も引かず、指を置いたら行の地の色を変える
+// - 本文のリンクは下線。指を置いたら下線を太くする
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -26,10 +26,11 @@ describe("関係する記事の一覧の札とマーカー", () => {
     expect(html).not.toMatch(/<ul class="site-list">\s*<li><a href=/);
   });
 
-  it("マーカーは題の字だけ。指を置いたときに下線を足さない", () => {
-    expect(css).toMatch(/\.site-list-title > span \{[^}]*--marker-ki/);
-    expect(css).not.toMatch(/\.site-list-link \{[^}]*linear-gradient/);
-    const hover = css.match(/\.site-main :is\(p, dd\) a:not\(\[class\]\):hover,[\s\S]*?\{([^}]*)\}/)![1]!;
-    expect(hover).not.toMatch(/text-decoration:\s*underline/);
+  it("マーカーはどこにも引かない。行は指を置いたら地の色を変え、本文のリンクは下線を太くする", () => {
+    expect(css).not.toMatch(/--marker-ki/);
+    expect(css).toMatch(/\.site \.site-list-link:is\(:hover, :focus-visible\) \{[^}]*background: var\(--surface-sunken\)/);
+    expect(css).toMatch(/\.site-main :is\(p, dd\) a:not\(\[class\]\),[\s\S]*?\{[^}]*text-decoration-line: underline/);
+    const hover = css.match(/\.site-main :is\(p, dd\) a:not\(\[class\]\):is\(:hover, :focus-visible\),[\s\S]*?\{([^}]*)\}/)![1]!;
+    expect(hover).toMatch(/text-decoration-thickness: 3px/);
   });
 });

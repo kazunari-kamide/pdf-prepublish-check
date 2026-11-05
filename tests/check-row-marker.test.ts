@@ -20,7 +20,8 @@ describe("検出の行の題のマーカー", () => {
     expect(css).toMatch(/\.items > li:has\(> \.item\.is-selected\) \{[^}]*box-shadow: inset 0 0 0 var\(--bw-2\) var\(--danger\)/);
   });
 
-  it("本文のリンクのマーカーは残す", () => {
-    expect(css).toMatch(/\.origin-text a \{[^}]*--marker-ki/);
+  it("本文のリンクは、マーカーでなく下線（D166）", () => {
+    expect(css).toMatch(/\.origin-text a \{[^}]*text-decoration-line: underline/);
+    expect(css).not.toMatch(/--marker-ki/);
   });
 });
