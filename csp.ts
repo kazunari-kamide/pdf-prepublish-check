@@ -38,5 +38,7 @@ export const securityHeaders: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
   "Cross-Origin-Opener-Policy": "same-origin",
+  // frame-ancestors 'none' が分からない古いブラウザでも、ほかのページへの埋め込みを止める
+  "X-Frame-Options": "DENY",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
 };

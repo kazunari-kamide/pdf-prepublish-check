@@ -24,3 +24,9 @@
   flex-basis: 100%;
   margin: 0;
 }
+
+/* 公式のサイトの場所の1文（サイトのページの下の帯と同じ文。src/site/render.ts の OFFICIAL_NOTE） */
+.site-links .site-official {
+  color: var(--color-base);
+  font-weight: bold;
+}

@@ -26,8 +26,10 @@ const decode = (s: string) => s.replace(/&#39;/g, "'");
 function fakeHtaccess(csp: string, headerCsp = `${decode(csp)}; frame-ancestors 'none'`): string {
   return `AddType text/javascript .mjs
 AddType application/wasm .wasm
+ErrorDocument 404 /404.html
 <IfModule mod_headers.c>
   Header always set Content-Security-Policy "${headerCsp}"
+  Header always set Strict-Transport-Security "max-age=86400" "expr=%{HTTPS} == 'on'"
 </IfModule>
 `;
 }
@@ -42,10 +44,12 @@ function fakeDist(
   mkdirSync(path.join(dir, "assets"));
   writeFileSync(
     path.join(dir, "index.html"),
-    `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><script type="module" src="/assets/index.js"></script></head><body></body></html>`,
+    `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><script type="module" src="/assets/index-Ab12Cd34.js"></script></head><body></body></html>`,
   );
-  writeFileSync(path.join(dir, "assets", "index.js"), "console.log(1);\n");
+  writeFileSync(path.join(dir, "assets", "index-Ab12Cd34.js"), "console.log(1);\n");
   if (htaccess !== null) writeFileSync(path.join(dir, ".htaccess"), htaccess);
+  // 自前の 404 のページ（.htaccess の ErrorDocument が指す）。index.html と同じ CSP
+  writeFileSync(path.join(dir, "404.html"), `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body></body></html>`);
   for (const [name, v] of Object.entries(files)) {
     const to = path.join(dir, "assets", name);
     if (typeof v === "string") writeFileSync(to, v);
@@ -62,29 +66,29 @@ function run(dir: string) {
 
 describe("check-dist の PDF.js の例外", () => {
   it("pdfjs-dist と同じ写しで、CSP に connect-src 'none' があれば通す", () => {
-    const r = run(fakeDist(CSP_OK, { "pdf.min-a.mjs": { copy: "pdf.min.mjs" }, "pdf.worker.min-b.mjs": { copy: "pdf.worker.min.mjs" } }));
+    const r = run(fakeDist(CSP_OK, { "pdf.min-Aa11Bb22.mjs": { copy: "pdf.min.mjs" }, "pdf.worker.min-Cc33Dd44.mjs": { copy: "pdf.worker.min.mjs" } }));
     expect(r.out).toContain("例外として許したファイル");
     expect(r.code).toBe(0);
   });
 
   it("1バイトでも変えた PDF.js は止める", () => {
-    const r = run(fakeDist(CSP_OK, { "pdf.min-a.mjs": { copyAndAppend: "pdf.min.mjs" } }));
+    const r = run(fakeDist(CSP_OK, { "pdf.min-Aa11Bb22.mjs": { copyAndAppend: "pdf.min.mjs" } }));
     expect(r.code).toBe(1);
-    expect(r.out).toContain("pdf.min-a.mjs に fetch( が入っています");
+    expect(r.out).toContain("pdf.min-Aa11Bb22.mjs に fetch( が入っています");
   });
 
   it("CSP に connect-src 'none' がなければ、写しでも止める", () => {
-    const r = run(fakeDist(CSP_OPEN, { "pdf.min-a.mjs": { copy: "pdf.min.mjs" } }));
+    const r = run(fakeDist(CSP_OPEN, { "pdf.min-Aa11Bb22.mjs": { copy: "pdf.min.mjs" } }));
     expect(r.code).toBe(1);
     expect(r.out).toContain("CSP に connect-src 'none' がありません");
-    expect(r.out).toContain("pdf.min-a.mjs に fetch( が入っています");
+    expect(r.out).toContain("pdf.min-Aa11Bb22.mjs に fetch( が入っています");
   });
 
   it("自分たちのファイルの fetch は止める（.js も .mjs も）", () => {
-    const r = run(fakeDist(CSP_OK, { "own.js": "fetch('/x');\n", "own.mjs": "new WebSocket('ws://x');\n" }));
+    const r = run(fakeDist(CSP_OK, { "own-Ee55Ff66.js": "fetch('/x');\n", "own-Gg77Hh88.mjs": "new WebSocket('ws://x');\n" }));
     expect(r.code).toBe(1);
-    expect(r.out).toContain("own.js に fetch( が入っています");
-    expect(r.out).toContain("own.mjs に WebSocket が入っています");
+    expect(r.out).toContain("own-Ee55Ff66.js に fetch( が入っています");
+    expect(r.out).toContain("own-Gg77Hh88.mjs に WebSocket が入っています");
   });
 });
 
@@ -99,6 +103,22 @@ describe("check-dist の .htaccess（docs/deploy.md）", () => {
     const r = run(fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK, "default-src 'self'; connect-src 'self'; script-src 'self'; frame-ancestors 'none'")));
     expect(r.code).toBe(1);
     expect(r.out).toContain(".htaccess の CSP が、<meta> の CSP（＋ frame-ancestors 'none'）と食い違っています");
+  });
+
+  it("ErrorDocument の 404 のページ・HSTS がなければ止める", () => {
+    const dir = fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace(/^ {2}Header always set Strict-Transport-Security.*\n/m, ""));
+    rmSync(path.join(dir, "404.html"));
+    const r = run(dir);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(".htaccess に Strict-Transport-Security のヘッダーがありません");
+    expect(r.out).toContain(".htaccess の ErrorDocument 404 が指す 404.html が、dist/ にありません");
+  });
+
+  it("assets/ にハッシュのない名前のファイルがあれば止める", () => {
+    const r = run(fakeDist(CSP_OK, { "plain.js": "console.log(2);\n", "font-Ab12Cd34.woff2": "x" }));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("assets/plain.js の名前に中身のハッシュがありません");
+    expect(r.out).not.toContain("assets/font-Ab12Cd34.woff2 の名前");
   });
 
   it(".mjs の種類の指定がなければ止める", () => {
