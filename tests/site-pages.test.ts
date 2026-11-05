@@ -326,13 +326,28 @@ describe("検査のページ（index.html）", () => {
   const html = read("index.html");
   it("下の帯のリンクは、サイトのページの下の帯と同じ並び", () => {
     const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
-    const links = [...foot.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]);
+    const links = [...foot.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]);
     expect(links).toEqual(FOOT_LINKS.map(([h, l]) => [h, l]));
+    // このページ（検査のページ）へのリンクだけ、今いるページの印（D3）
+    expect([...foot.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1])).toEqual(["/"]);
   });
 
-  it("提出のために小さくする入口：置き場の近くに、名前のついた上限の選択（既定は「選ばない」＝ふつうの検査）", () => {
-    const entry = html.match(/<div class="limit-entry" id="limit-row">[\s\S]*?<\/div>/)![0];
-    expect(entry).toContain('<label class="limit-title" for="size-limit">提出のためにファイルを小さくする</label>');
+  it("最初の画面：紹介の 1 行と進み具合を、ヘッダーの外（2 列の上）に置く。送らないことの一文は置き場の中の 1 か所だけ", () => {
+    const band = html.match(/<header class="band">[\s\S]*?<\/header>/)![0];
+    expect(band).not.toContain('class="steps"');
+    const guide = html.match(/<div class="guide" id="guide">[\s\S]*?<\/ol>\s*<\/div>/)![0];
+    expect(guide).toContain('<p class="hero" id="hero">公開する前の PDF に、消したつもりの情報が残っていないか確かめます</p>');
+    expect(guide).toContain('<ol class="steps" aria-label="手順">');
+    expect(html.indexOf('id="guide"')).toBeLessThan(html.indexOf('id="workspace"'));
+    const main = html.match(/<main[\s\S]*?<\/main>/)![0];
+    expect(main.match(/どこにも送りません/g)).toHaveLength(1);
+    expect(band).not.toContain("送信しません");
+  });
+
+  it("提出のために小さくする入口：見本のすぐ下に、開けて選ぶ上限（既定は「選ばない」＝ふつうの検査）", () => {
+    const entry = html.match(/<details class="limit-entry" id="limit-row">[\s\S]*?<\/details>/)![0];
+    expect(entry).toContain("<summary>提出先の容量に合わせて小さくしたいとき</summary>");
+    expect(entry).toContain('<label class="limit-title" for="size-limit">容量の上限</label>');
     expect([...entry.matchAll(/<option value="([^"]*)">/g)].map((m) => m[1])).toEqual([""]);
     expect(html.indexOf('id="limit-row"')).toBeGreaterThan(html.indexOf('id="sample-row"'));
   });
