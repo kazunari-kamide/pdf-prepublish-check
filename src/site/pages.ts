@@ -190,7 +190,7 @@ export const CONTACT_META: PageMeta = {
 export const CONTACT_KINDS: ReadonlyArray<{ value: string; label: string; note?: string }> = [
   { value: "question", label: "質問" },
   { value: "bug", label: "不具合" },
-  { value: "security", label: "セキュリティの弱点", note: "弱点の詳しい中身は書かず、連絡先だけ書いてください。こちらから連絡します。" },
+  { value: "security", label: "セキュリティの弱点", note: "何が起きるか・再現の手順・ブラウザの種類と版を書いてください。メールアドレスも必ず書いてください。" },
   { value: "other", label: "その他" },
 ];
 /** 入力の決まり。server/contact-send.php の BODY_MIN_CHARS・BODY_MAX_CHARS・EMAIL_MAX_CHARS・URL_MAX と同じ（tests/contact-php.test.ts で照らす） */
@@ -233,7 +233,9 @@ export const CONTACT_BLOCKS: Block[] = [
   {
     heading: "セキュリティの弱点を見つけたとき",
     paragraphs: [
-      "弱点の詳しい中身は、フォームには書かないでください。種類で「セキュリティの弱点」を選び、連絡先のメールアドレスだけを書いて送ってください。こちらから連絡し、詳しい中身の受け取り方を決めます。",
+      "種類で「セキュリティの弱点」を選び、弱点の詳しい中身を本文に書いて送ってください。何が起きるか、再現の手順、使ったブラウザの種類と版があると、早く調べられます。",
+      "追加で聞くことがあるので、メールアドレスを必ず書いてください。",
+      "再現に使う PDF は、架空の名前・番号で作ったものにしてください。業務の PDF の中身や、実在の人名・団体名は書かないでください。",
       "直すまでの間は、中身を公開しないでください。",
     ],
   },
@@ -318,7 +320,7 @@ export function renderContactResults(o: RenderOptions): { done: string; error: s
       heading: "このあと",
       list: [
         "メールアドレスを書いたときは、そのアドレスにお返しします。日にちがかかることがあります。",
-        "セキュリティの弱点のときは、書いてもらったアドレスに、こちらから連絡します。",
+        "セキュリティの弱点のときは、追加で聞くことがあれば、書いてもらったアドレスに、こちらから連絡します。",
         "届いたメールは、対応が済んだら消します。長くても、届いてから 90 日で消します。",
       ],
     }),

@@ -184,14 +184,18 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     expect(siteCss()).toMatch(/\.site-form-trap \{[^}]*left: -10000px/);
   });
 
-  it("お問い合わせ：フォームのすぐ上に「書かないで」の注意、セキュリティの弱点には「連絡先だけ」", () => {
+  it("お問い合わせ：フォームのすぐ上に「書かないで」の注意、セキュリティの弱点には「中身を書き、メールアドレスも必ず」", () => {
     const c = page("contact.html");
     const warn = c.indexOf('<p class="site-form-warn"><span aria-hidden="true">▲ </span>PDF や個人情報、見つかった字の中身は書かないでください。</p>');
     expect(warn).toBeGreaterThan(0);
     expect(c.indexOf("<form")).toBeGreaterThan(warn);
     // 注意とフォームの間に、ほかの段落を挟まない
     expect(c.slice(warn + 1, c.indexOf("<form"))).not.toMatch(/<p\b/);
-    expect(c).toMatch(/セキュリティの弱点<span class="site-form-hint">弱点の詳しい中身は書かず、連絡先だけ書いてください。こちらから連絡します。<\/span>/);
+    expect(c).toMatch(/セキュリティの弱点<span class="site-form-hint">何が起きるか・再現の手順・ブラウザの種類と版を書いてください。メールアドレスも必ず書いてください。<\/span>/);
+    // セキュリティの弱点の節：中身を本文に書いてよい。メールアドレスは必ず。架空の名前・番号で再現し、直すまで公開しない（2026-11-05 本人が決定）
+    for (const s of ["弱点の詳しい中身を本文に書いて", "メールアドレスを必ず書いてください", "架空の名前・番号で作ったもの", "実在の人名・団体名は書かないでください", "直すまでの間は、中身を公開しないでください"]) expect(c, s).toContain(s);
+    expect(c).not.toContain("連絡先だけ");
+    expect(c).not.toContain("フォームには書かないでください");
   });
 
   it("よくある質問：10 問以上。送らないこと・サーバーの記録・「見つからなかった」の意味を答える", () => {
