@@ -446,6 +446,99 @@ button {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
+/*
+ * 利用規約のダイアログ（<dialog>。中身は build の時に src/site/pages.ts から入る）。
+ * 欄と同じ白の地・角の丸め・影 1 段。題と閉じるボタンは上に固定し、本文だけが中でスクロールする
+ */
+.terms-dialog {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  color: var(--color-base);
+  box-shadow: var(--shadow-panel);
+}
+
+.terms-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.terms-dialog::backdrop {
+  background: var(--color-backdrop);
+}
+
+body:has(.terms-dialog[open]) {
+  overflow: hidden;
+}
+
+.terms-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.terms-dialog-title {
+  margin: 0;
+  font-size: var(--text-h1);
+}
+
+.terms-dialog-close {
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.terms-dialog-close:hover {
+  background: var(--color-chip);
+}
+
+.terms-dialog-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5);
+}
+
+.terms-dialog-body .site-lead {
+  margin: 0 0 var(--space-5);
+  padding-left: var(--space-4);
+  border-left: var(--border-strong) solid var(--color-base);
+}
+
+.terms-dialog-body .site-section {
+  margin: 0 0 var(--space-5);
+}
+
+.terms-dialog-body .site-section h3 {
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-line);
+  font-size: var(--text-h2);
+}
+
+.terms-dialog-body p,
+.terms-dialog-body ul {
+  margin: 0 0 var(--space-3);
+}
+
+.terms-dialog-body li {
+  margin-bottom: var(--space-2);
+}
+
+.terms-dialog-page {
+  font-size: var(--text-small);
+}
+
   margin: var(--space-3) 0 0;
   font-size: var(--text-small);
 }

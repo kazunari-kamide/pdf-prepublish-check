@@ -32,6 +32,7 @@
   --color-accent-tint: #f7e9e8; /* 危ない所の枠の中の薄い色 */
   --color-on-dark: #ffffff; /* 墨・紅の上の文字 */
   --color-accent-wash: rgb(163 32 27 / 10%); /* ページの上の枠の中（下の絵が透けて見える） */
+  --color-backdrop: rgb(43 42 40 / 55%); /* ダイアログ（利用規約）の外。墨を透かしたもの（新しい色ではない） */
 
   /* ---- ロゴ（design/logo/。SVG には HEX をそのまま書く。値はここと合わせる。tests/logo.test.ts で確かめる） */
   --color-logo-fold: #d69b98; /* 小さいとき用のマークの、紙の折り角。紅を白の上で 45% に薄めた色を、決まった値にした */

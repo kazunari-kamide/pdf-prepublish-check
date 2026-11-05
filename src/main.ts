@@ -34,6 +34,7 @@ import { buildRulesetView } from "./ui/ruleset";
 import { sampleFile } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
+import { setupTermsDialog } from "./ui/terms-dialog";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -1590,7 +1591,11 @@ ui.compressDownload.addEventListener("click", (e) => {
 });
 
 
+// 「利用規約」のリンクを押したとき、ページを移らずにダイアログで読めるようにする（src/ui/terms-dialog.ts）
+setupTermsDialog();
+
 // 公式のサイトで動いていなければ、画面の上に知らせる（丸写しの目印。守りの中心にはしない。src/ui/official.ts）
+
 if (!isOfficialHost(location.hostname)) {
   const note = el<HTMLParagraphElement>("unofficial");
   note.textContent = UNOFFICIAL_NOTE;

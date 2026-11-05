@@ -18,7 +18,7 @@ import {
   escapeHtml,
   fileFor,
   layout,
-  renderSection,
+  renderSectionAt,
   type RenderOptions,
 } from "./render.ts";
 import type { PageMeta, Section } from "./types.ts";
@@ -33,13 +33,13 @@ interface Link {
 type Block = Section & { links?: Link[] };
 
 /** repo: で始まるリンクを、GitHub のリポジトリの場所につなぐ。repoUrl が分からなければ null（リンクを出さない） */
-function resolve(href: string, o: RenderOptions): string | null {
+function resolve(href: string, o: Pick<RenderOptions, "repoUrl">): string | null {
   if (!href.startsWith("repo:")) return href;
   return o.repoUrl ? `${o.repoUrl}${href.slice("repo:".length)}` : null;
 }
 
-function renderBlock(b: Block, o: RenderOptions): string {
-  const html = renderSection(b);
+function renderBlock(b: Block, o: Pick<RenderOptions, "repoUrl">, level: 2 | 3 = 2): string {
+  const html = renderSectionAt(b, level);
   const links = (b.links ?? [])
     .map((l) => ({ href: resolve(l.href, o), label: l.label }))
     .map((l) => (l.href ? `          <li><a href="${e(l.href)}">${e(l.label)}</a></li>` : `          <li>${e(l.label)}（場所は、公式のサイトのこのページで示します）</li>`));
@@ -432,6 +432,33 @@ export const NOT_FOUND_BLOCKS: Block[] = [
     ],
   },
 ];
+
+// ---------------------------------------------------------------- 検査のページの利用規約のダイアログ
+
+/** index.html の中で、利用規約のダイアログに置き換える目印（site.ts の transformIndexHtml が置き換える） */
+export const TERMS_DIALOG_MARKER = "<!-- terms-dialog -->";
+
+/**
+ * 検査のページ（index.html）に埋め込む、利用規約のダイアログ（<dialog>）。
+ * 文は利用規約のページと同じ TERMS_META・TERMS_BLOCKS から作る（2 か所で文がずれないように）。
+ * 検査のページは通信をしないので、開くときに取りに行かず、ビルドの時にページの中へ入れておく。
+ * data-page は、押したときにダイアログで開くリンクの場所（src/ui/terms-dialog.ts が、この href のリンクだけを止める）
+ */
+export function renderTermsDialog(o: Pick<RenderOptions, "repoUrl">): string {
+  return [
+    `<dialog class="terms-dialog" id="terms-dialog" aria-labelledby="terms-dialog-title" data-page="${e(TERMS_PATH)}">`,
+    `  <div class="terms-dialog-head">`,
+    `    <h2 class="terms-dialog-title" id="terms-dialog-title" tabindex="-1">${e(TERMS_META.title)}</h2>`,
+    `    <button type="button" class="terms-dialog-close" id="terms-dialog-close">閉じる</button>`,
+    `  </div>`,
+    `  <div class="terms-dialog-body" tabindex="0" role="region" aria-label="${e(TERMS_META.title)}の本文">`,
+    `      <p class="site-lead">${e(TERMS_META.description)}</p>`,
+    ...TERMS_BLOCKS.map((b) => renderBlock(b, o, 3)),
+    `      <p class="terms-dialog-page"><a href="${e(TERMS_PATH)}" data-terms-page>利用規約のページで開く</a></p>`,
+    `  </div>`,
+    `</dialog>`,
+  ].join("\n");
+}
 
 // ---------------------------------------------------------------- まとめ
 
