@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# 依存の更新を知らせる（CLAUDE.md §11-3・§11-4）。PR を出すだけで、マージするかは人が決める。
+# - 出たばかりの版は避ける（cooldown：出てから 14 日たつまで PR を出さない。docs/licenses.md の版の選び方と同じ考え）
+# - 新しい依存を足すときは、これまでどおりライセンスを確かめて docs/licenses.md を直す（Dependabot は足さず、版を上げるだけ）
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "配信の道具の更新"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "依存の更新"
+    # 画面で動く部品（pdfjs-dist・pdf-lib）は、細工した PDF への備えに関わるので、ほかと分けて1つずつ出す
+    groups:
+      dev-tools:
+        patterns: ["*"]
+        exclude-patterns: ["pdfjs-dist", "pdf-lib"]
+        update-types: ["minor", "patch"]

@@ -263,7 +263,7 @@ describe("P2 部品・アプリのデータ（p2-parts 1.1.0）", () => {
 describe("書体に残った字形：Type3（1.1.0）", () => {
   it("描かれていない字形の数", async () => {
     const r = await detectFontGlyphs(await pdf(fg.CASES, "fg-l03"));
-    expect(r.findings).toEqual([{ pattern: "P7", font: expect.any(Number), fontType: "type3", glyphs: 6, used: 2, leftover: 4 }]);
+    expect(r.findings).toEqual([{ pattern: "P7", font: expect.any(Number), fontType: "type3", subsetBy: "type3", glyphs: 6, used: 2, leftover: 4 }]);
   });
 });
 
@@ -338,5 +338,18 @@ describe("P4 Mac の共有ボリューム（1.2.0）", () => {
     expect(findPaths("file:///Volumes/KAKUU-NAS/a.ai").map((h) => h.kind)).toEqual(["server"]);
     expect(findPaths("/Volumes/Macintosh HD/Users/kakuu/a.ai").map((h) => h.kind)).toEqual(["user_path"]);
     expect(findPaths("/Volumes/Macintosh HD/Applications/x see /Volumes")).toEqual([]);
+  });
+});
+
+describe("書体に残った字形：印の無い部分埋め込み（1.2.0）", () => {
+  it("印が無くても、中身が部分埋め込みの形なら数える", async () => {
+    const r = await detectFontGlyphs(await pdf(fg.CASES, "fg-l04"));
+    expect(r.findings).toMatchObject([{ pattern: "P7", fontType: "truetype", subsetBy: "tables", leftover: 5 }]);
+  });
+  it("使う字形だけの書体と、全部を埋め込んだ書体は出さない", async () => {
+    const c5 = await detectFontGlyphs(await pdf(fg.CASES, "fg-c05"));
+    expect(c5).toMatchObject({ findings: [], checkedFonts: 1, fullFonts: 0 });
+    const c6 = await detectFontGlyphs(await pdf(fg.CASES, "fg-c06"));
+    expect(c6).toMatchObject({ findings: [], checkedFonts: 0, fullFonts: 1 });
   });
 });
