@@ -29,6 +29,7 @@
     "eval:new": "node eval/new-rules.ts",
     "check:sanitized": "node sanitize/check/cli.ts",
     "check:browser": "node scripts/check-browser.mjs",
+    "check:layout": "node scripts/check-layout.mjs",
     "check:live": "node scripts/check-live.mjs",
     "fonts:build": "node design/fonts/build.mjs",
     "fonts:check": "node design/fonts/build.mjs --check",
