@@ -10,7 +10,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { cspForMeta } from "../csp.ts";
-import { OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { NOT_FOUND_PAGE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 import { SHIPPED_FONT_DIR, SHIPPED_ROOTS, buildLicenses, copyrightLines, githubRepo, tableUnder } from "../site-licenses.ts";
 import { renderSitemap, repoUrl, siteCss, siteFiles } from "../site.ts";
 import {
@@ -22,11 +22,12 @@ import {
   FAQ_META,
   GUIDE_PATHS,
   LICENSES_META,
+  NOT_FOUND_META,
   TERMS_BLOCKS,
   TERMS_META,
   renderGuidePages,
 } from "../src/site/pages.ts";
-import { FOOT_LINKS, escapeHtml, fileFor } from "../src/site/render.ts";
+import { FOOT_LINKS, OFFICIAL_NOTE, escapeHtml, fileFor } from "../src/site/render.ts";
 import type { Section } from "../src/site/types.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -38,12 +39,29 @@ const pages = renderGuidePages(opts, licenses.data);
 const files = siteFiles();
 
 describe("ページの形", () => {
-  it("5 枚あり、sitemap にも並ぶ", () => {
-    expect([...pages.keys()].sort()).toEqual(["checklist.html", "contact.html", "faq.html", "licenses.html", "terms.html"]);
+  it("5 枚と 404 のページがあり、5 枚は sitemap にも並ぶ（404 は並べない）", () => {
+    expect([...pages.keys()].sort()).toEqual(["404.html", "checklist.html", "contact.html", "faq.html", "licenses.html", "terms.html"]);
     for (const p of GUIDE_PATHS) {
       expect(files.has(fileFor(p)), p).toBe(true);
       expect(renderSitemap()).toContain(`<loc>${OFFICIAL_ORIGIN}${p}</loc>`);
     }
+    expect(files.has("404.html")).toBe(true);
+    expect(renderSitemap()).not.toContain("404.html");
+  });
+
+  it("404 のページは、.htaccess の ErrorDocument が指す場所にあり、検査のページ・記事の一覧へつながる", () => {
+    expect(NOT_FOUND_PAGE).toBe(NOT_FOUND_META.path);
+    const p = pages.get("404.html")!;
+    expect(p).toContain("ページが見つかりません");
+    expect(p).toContain('href="/articles/"');
+    // どの場所の 404 でも読めるよう、CSS は / から始まる場所で読む
+    expect(p).toMatch(/<link rel="stylesheet" href="\/assets\//);
+  });
+
+  it("どのページの下の帯にも、公式のサイトの場所の1文がある（検査のページも同じ文）", () => {
+    for (const [name, page] of pages) expect(page, name).toContain(`<p class="site-official">${escapeHtml(OFFICIAL_NOTE)}</p>`);
+    for (const [name, page] of files) if (name.endsWith(".html")) expect(page, name).toContain(escapeHtml(OFFICIAL_NOTE));
+    expect(read("index.html")).toContain(`<p class="site-official">${OFFICIAL_NOTE}</p>`);
   });
 
   for (const [name, page] of pages) {

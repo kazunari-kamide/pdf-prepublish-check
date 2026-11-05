@@ -8,6 +8,8 @@
 // - サイトのページ（記事・プライバシー。site.ts が作る）も含め、すべての HTML に同じ CSP の <meta> があり、
 //   直接書いたスクリプト・style がなく、外から読み込んでいないか（公式の URL を指す canonical のリンクと、GitHub を指す <a> のリンクだけは許す）
 // - 検索エンジンの確認のファイル（public/ の googleXXXX.html）は、中身が決まった1行のときだけ通す（src/site/search-console.ts）
+// - assets/ のファイルは、名前に中身のハッシュが付いている（.htaccess で 1 年キャッシュさせるため）
+// - 自前の 404 のページ（404.html）がある（.htaccess の ErrorDocument が指す）
 // - JavaScript（.js・.mjs）に、外と通信する仕組みが入っていないか（ライブラリが持ち込むこともあるため、ビルドのあとでも見る）
 //
 // 例外は1つだけ（2026-11-03 本人が決定。理由は docs/no-network.md）：
@@ -18,7 +20,7 @@
 //   自分たちのコードを PDF.js のファイルに混ぜると (1) が崩れて止まる。
 
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
 
@@ -73,6 +75,11 @@ if (htaccess !== null) {
   }
   if (!/^\s*AddType text\/javascript \.mjs\s*$/m.test(htaccess)) problems.push(".htaccess に AddType text/javascript .mjs がありません");
   if (!/^\s*AddType application\/wasm \.wasm\s*$/m.test(htaccess)) problems.push(".htaccess に AddType application/wasm .wasm がありません");
+  if (!/^\s*Options -Indexes\s*$/m.test(htaccess)) problems.push(".htaccess に Options -Indexes がありません");
+  if (!/^\s*Header always set Strict-Transport-Security "max-age=\d+[^"]*" "expr=%\{HTTPS\} == 'on'"\s*$/m.test(htaccess)) problems.push(".htaccess に Strict-Transport-Security のヘッダーがありません（https の応答だけに付ける形で）");
+  const notFound = htaccess.match(/^\s*ErrorDocument 404 \/(\S+)\s*$/m);
+  if (!notFound) problems.push(".htaccess に ErrorDocument 404 がありません");
+  else if (!existsSync(path.join(DIST, notFound[1]))) problems.push(`.htaccess の ErrorDocument 404 が指す ${notFound[1]} が、dist/ にありません`);
 }
 
 // ---- すべての HTML（index.html と、サイトのページ）
@@ -101,6 +108,14 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
   if (inlineScript.length) problems.push(`${rel} に直接書いたスクリプトが ${inlineScript.length} か所あります`);
   if (/<style\b/.test(text) || /\sstyle="/.test(text)) problems.push(`${rel} に直接書いた style があります`);
   if (/(src|href)="(https?:)?\/\//.test(text.replace(canonical, "").replace(githubLink, "<a"))) problems.push(`${rel} が外のサイトから読み込んでいます`);
+}
+
+// ---- assets/ のファイルは、名前に中身のハッシュが付いていること（.htaccess で 1 年そのまま使わせるため。htaccess.ts の CACHE_ASSETS）
+// Vite が付ける 8 字（-xxxxxxxx）か、site.ts が付ける 16 進 10 字。名前が変わらずに中身だけ変わるファイルを置くと、古いものが残る
+for (const f of files) {
+  const rel = path.relative(DIST, f).replace(/\\/g, "/");
+  if (!rel.startsWith("assets/")) continue;
+  if (!/-([A-Za-z0-9_-]{8}|[0-9a-f]{10})\.[A-Za-z0-9]+$/.test(rel)) problems.push(`${rel} の名前に中身のハッシュがありません（assets/ は長くキャッシュさせるため、ハッシュの付いた名前だけを置く）`);
 }
 
 // ---- PDF.js の写しを見分ける：pdfjs-dist のファイルの SHA-256 と、版を、package-lock.json と照らす
