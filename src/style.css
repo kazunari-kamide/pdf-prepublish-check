@@ -1222,6 +1222,32 @@ progress {
   color: var(--color-muted);
 }
 
+/* 出どころの札：見つける段から来た型の項目の下に 1 行（design/README.md「出どころの札」）。紅は使わず、補足の色で控えめに */
+.items > li > .origin-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  margin: 2px 0 var(--space-1);
+  font-size: var(--text-small);
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.origin-mark {
+  padding: 0 var(--space-2);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-full);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.origin-text a {
+  color: var(--color-base);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* ---------------------------------------------------------------- 3 片付ける */
 
 .actions {

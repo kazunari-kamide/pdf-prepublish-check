@@ -118,6 +118,7 @@
 | 種類ごとの囲み | `.group` | `data-status` が `found`（紅の札）・`scope`（札の地に墨の字の「範囲」）。左に札 `.fuda`、右に `.group-body` |
 | 見た所・見なかった所 | `.coverage-list` | 型ごとに1行。`li[data-state]` が `checked`・`partial`・`failed`・`not_in_version`。見つかった型は `data-found`。理由は `.coverage-reason` |
 | 項目 | `.item` | 押せる（button）。角を丸めた枠。番号・深刻度の札・ページ・何が残っているか・なぜ危ないか。確かめてほしい所は `data-check`（点線）と `.sev-check` の札 |
+| 出どころの札 | `.origin-note`・`.origin-mark` | 見つける段（Claude が公開 PDF から見つけた回）から来た型の項目だけ、項目の下に 1 行。補足の大きさ・補足の色の字。左に墨の細い枠だけの丸い札「見つけた型」（飾り。`aria-hidden`）、続けて「このルール：Claude が公開 PDF から見つけ、人が確かめて取り入れました（PR #N）」。PR #N は GitHub の PR へのリンク（下線。別のタブで開き、`noreferrer`）。紅は使わない（危なさの印と混ぜない）。表は `src/ui/rule-origin.ts`（2026-11-05） |
 | お知らせ | `.notices`・`.render-note`・`.scope-note` | 左に墨の線、札の地。省いたページ・調べなかった画像など |
 | 全部緑 | `.verified[data-state="clean"]` | 緑の枠 |
 | 整えるボタン | `.actions button` | 墨の地に白の字、高さ 56px。押せないときは札の地と補足の色の字 |
