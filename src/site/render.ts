@@ -30,11 +30,12 @@ export const CHECKLIST_PATH = "/checklist";
 export const ABOUT_PATH = "/about";
 
 /** どのページの下にも置く、公式のサイトの場所の1文（検査のページ check.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
-export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。";
+export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com です。ソースコードは公開しています。";
 
 /** どのページの下にも置く、サイトの案内のリンク（検査のページ check.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
 export const FOOT_LINKS: ReadonlyArray<readonly [string, string]> = [
   [INSPECTOR_PATH, "検査のページ"],
+  [ABOUT_PATH, "お守りPDF について"],
   [ARTICLES_PATH, "記事の一覧"],
   [CHECKLIST_PATH, "公開前の自己点検"],
   [FAQ_PATH, "よくある質問"],
@@ -89,24 +90,32 @@ export function pathForFile(file: string): string {
   return `/${f.replace(/\.html$/, "")}`;
 }
 
-/** layout に足せるもの（サービスの紹介のページ about.ts だけが使う） */
+/** layout に足せるもの（サービスの紹介のページ about.ts だけが使う。上の帯・下の帯は、どのページも同じ形） */
 export interface LayoutExtra {
   /** body に足す class（site の後ろに付ける） */
   bodyClass?: string;
   /** サイトの CSS の後に読む、そのページだけの CSS の場所（同じサイトの assets/ の中） */
   extraCssHref?: string;
-  /** 上の帯の案内のリンクの HTML（字は呼ぶ側で escapeHtml を通す）。なければ、どのページにも同じ並び */
-  navHtml?: string;
 }
 
-/** 上の帯の案内のリンク（どのページにも同じ並び） */
-export function siteNavLinks(): string {
-  return [
-    `        <a href="${INSPECTOR_PATH}">検査のページ</a>`,
-    `        <a href="${ABOUT_PATH}">お守りPDF について</a>`,
-    `        <a href="${ARTICLES_PATH}">記事の一覧</a>`,
-    `        <a href="${PRIVACY_PATH}">プライバシー</a>`,
-  ].join("\n");
+/** 上の帯の案内（どのページにも同じ並び。検査のページへは、ロゴと右端の「PDF を確かめる」から行く） */
+export const NAV_LINKS: ReadonlyArray<readonly [string, string]> = [
+  [ABOUT_PATH, "お守りPDF について"],
+  [ARTICLES_PATH, "記事の一覧"],
+  [FAQ_PATH, "よくある質問"],
+  [PRIVACY_PATH, "プライバシー"],
+];
+
+/** リンクの並び。今いるページ（current）へのリンクにだけ aria-current="page" を付ける（上の帯・下の帯） */
+function linksHtml(links: ReadonlyArray<readonly [string, string]>, current: string): string {
+  return links
+    .map(([href, label]) => `        <a href="${escapeHtml(href)}"${href === current ? ' aria-current="page"' : ""}>${escapeHtml(label)}</a>`)
+    .join("\n");
+}
+
+/** 上の帯の案内のリンク（今いるページの場所を渡すと、そのリンクに印を付ける） */
+export function siteNavLinks(current = ""): string {
+  return linksHtml(NAV_LINKS, current);
 }
 
 /** どのページにも共通の枠（CSP・題・説明・canonical・上の帯・下の帯）。中身の HTML は body */
@@ -129,18 +138,19 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions, x: Layout
     <header class="site-band">
       <a class="site-brand" href="${INSPECTOR_PATH}">${o.brandMark ?? ""}${e(SITE_NAME)}</a>
       <nav class="site-nav" aria-label="サイトの案内">
-${x.navHtml ?? siteNavLinks()}
+${siteNavLinks(meta.path)}
       </nav>
+      <a class="site-band-cta" href="${INSPECTOR_PATH}">PDF を確かめる</a>
     </header>
     <main class="site-main">
 ${body}
     </main>
     <footer class="site-foot">
       <nav class="site-foot-links" aria-label="サイトの案内（下）">
-${FOOT_LINKS.map(([href, label]) => `        <a href="${href}">${e(label)}</a>`).join("\n")}
+${linksHtml(FOOT_LINKS, meta.path)}
       </nav>
       <p class="site-official">${e(OFFICIAL_NOTE)}</p>
-      <p>PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</p>
+      <p>PDF はこの端末のブラウザの中だけで読みます。どこにも送りません。</p>
     </footer>
   </body>
 </html>
@@ -167,7 +177,7 @@ export function renderSectionAt(s: Section, level: 2 | 3): string {
 /** 記事の最後に置く、検査のページへのつなぎ */
 export function toInspector(): string {
   return `      <aside class="site-cta" aria-label="検査のページへ">
-        <p>手元の PDF に、この記事のようなものが残っていないかを確かめられます。PDF は、このパソコンのブラウザの中だけで読みます。</p>
+        <p>手元の PDF に、この記事のようなものが残っていないかを確かめられます。PDF は、この端末のブラウザの中だけで読みます。</p>
         <p><a class="site-cta-link" href="${INSPECTOR_PATH}">検査のページで確かめる</a></p>
         <p class="site-note">見つけられるのは、検査のページに並べた種類だけです。すべての漏れを見つけられるわけではありません。</p>
       </aside>`;

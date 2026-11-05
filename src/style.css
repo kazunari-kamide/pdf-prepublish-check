@@ -49,6 +49,32 @@ body {
   container: page / inline-size;
 }
 
+/* 日本語の改行（2026-11-05 夜のレビュー 8）：見出しと短い札は、語のまとまりで折り、行の長さをそろえる。
+   本文は、最後の行が 1〜2 字だけにならないようにする。語のまとまりが行より長いときは、折ってはみ出さない */
+h2,
+h3,
+h4,
+#status,
+.clean-count,
+.clean-candidates,
+.step-name,
+.step-note,
+.group-head,
+.item-title,
+.save-note,
+.verified p {
+  word-break: auto-phrase;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.results p,
+.results li,
+.item-detail,
+.item-why {
+  text-wrap: pretty;
+}
+
 h1,
 h2,
 h3,
@@ -126,7 +152,9 @@ select {
   align-items: center;
   gap: var(--space-2);
   margin: 0;
+  font-family: var(--font-head);
   font-size: var(--text-h2);
+  font-weight: 700; /* ロゴの字は太字（サイトのページの .site-brand と同じ。同梱の書体は 700 まで） */
   white-space: nowrap;
 }
 
@@ -464,12 +492,34 @@ body:has(#workspace[data-state="empty"]) .steps {
   min-width: 0;
 }
 
-/* 結果を見ているとき：PDF の欄は中身の高さで止め、右をスクロールしてもページが見えるよう上に貼り付ける（D1） */
+/* 結果を見ているとき：PDF の欄は中身の高さで止め、右をスクロールしてもページが見えるよう上に貼り付ける（D1）。
+   角の丸みは外の箱が持ち（overflow: hidden）、スクロールするのは中の絵の欄だけにする（スクロールバーで角が四角くならない・
+   ファイルの帯は上に残る。2026-11-05 夜のレビュー 15） */
 .workspace[data-state="result"] .stage {
   align-self: start;
   position: sticky;
-  top: var(--space-4);
-  max-height: calc(100dvh - 2 * var(--space-4));
+  top: var(--sp-4);
+  max-height: calc(100dvh - 2 * var(--sp-4));
+  overflow: hidden;
+}
+
+.workspace[data-state="result"] .sheet-wrap {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* 縮小したページの列も上に貼り付け、列の中だけをスクロールする（今のページの縮小が画面の外へ流れないように） */
+.workspace[data-state="result"] .thumbs {
+  align-self: start;
+  position: sticky;
+  top: var(--sp-4);
+  max-height: calc(100dvh - 2 * var(--sp-4));
   overflow-y: auto;
 }
 
@@ -804,7 +854,7 @@ body:has(.terms-dialog[open]) {
 
 .filebar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2) var(--space-4);
   width: 100%;
@@ -814,30 +864,37 @@ body:has(.terms-dialog[open]) {
   padding: var(--space-2) var(--space-4);
 }
 
+/* 帯は 1 行に（ボタンが 2 行目に落ちないように。2026-11-05 夜のレビュー 16）。入りきらないときは、ファイル名の方を「…」で切る
+   （名前は、押さえておけば全部が title で読める。大きさ・ページ数は切らない） */
 .filebar-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 700;
-  overflow-wrap: anywhere;
 }
 
 .filebar-facts {
+  flex: 1 0 auto;
+  white-space: nowrap;
   font-size: var(--text-small);
   color: var(--color-muted);
 }
 
-.filebar-again {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--target-min);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font: inherit;
+/* 今のページ（2 ページ以上のときだけ）。絵の下ではなく帯に出す（絵が長いと画面の外になるため） */
+.filebar-page {
   font-size: var(--text-small);
   font-weight: 700;
-  cursor: pointer;
+  white-space: nowrap;
+}
+
+.filebar-page:empty {
+  display: none;
+}
+
+.filebar-again {
+  margin-left: auto;
 }
 
 .sheet-wrap {
@@ -875,21 +932,25 @@ body:has(.terms-dialog[open]) {
   min-height: 0.75rem;
 }
 
-/* 番号の札を、枠の左上の外に出す（色だけに頼らない） */
+/* 番号の札：枠の左上の角に、小さく重ねる（色だけに頼らない）。白の縁で、札どうしが近くても境が見える。
+   前は枠の上の外に出していたので、上の行の字を隠していた。近い札どうしは、画面が横へずらす（src/ui/badges.ts。2026-11-05 夜のレビュー 1） */
 .mark-no {
   position: absolute;
-  left: calc(-1 * var(--border-mark));
-  bottom: calc(100% + 3px);
-  min-width: 1.5rem;
-  padding: 0 var(--space-2);
-  border: var(--border-strong) solid var(--color-accent);
-  border-radius: var(--radius-full);
+  top: -0.7rem;
+  left: -0.7rem;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.25rem;
+  border: 0;
+  border-radius: var(--radius-pill);
   background: var(--color-accent);
   color: var(--color-on-dark);
-  font-size: var(--text-small);
+  font-size: 0.75rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.4rem;
   text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 0 0 2px var(--surface-card);
 }
 
 /* 選んだ枠：太く、札を白抜きに（形も変える） */
@@ -912,8 +973,12 @@ body:has(.terms-dialog[open]) {
 }
 
 .mark.mark-candidate .mark-no {
-  border-color: var(--line-strong);
   background: var(--line-strong);
+}
+
+/* 選んだ枠は、ほかの枠と札より前に出す（入れ子の枠の下に隠れないように） */
+.mark.is-selected {
+  z-index: 2;
 }
 
 /* 片付けた所：緑の点線の細い枠と「済」の札。押せない（残っている所の枠と、色・線・字で見分ける） */
@@ -924,9 +989,7 @@ body:has(.terms-dialog[open]) {
 }
 
 .mark.mark-done .mark-no {
-  left: calc(-1 * var(--border-done));
   background: var(--color-ok);
-  border-color: var(--color-ok);
 }
 
 .thumb-count.thumb-done {
@@ -946,7 +1009,8 @@ body:has(.terms-dialog[open]) {
   border-left-width: var(--bw-accent);
   border-radius: var(--radius-m);
   background: var(--info-bg);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   font-size: var(--text-small);
 }
 
@@ -979,6 +1043,21 @@ body:has(.terms-dialog[open]) {
 }
 
 /* 整えて通ったときは、上の文を出さない（C1）。空のときは印（◯）も出さない */
+/* 何も見つからないとき：同じ意味の緑の箱があるので、見た目では隠す（読み上げには残す） */
+#status[data-quiet="true"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 読み上げのためにフォーカスを移す見出し（押せない。tabindex="-1"）には、フォーカスの四角を出さない（下線と二重になる。2026-11-05 夜のレビュー 9） */
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 #status:empty {
   display: none;
 }
@@ -1011,7 +1090,8 @@ progress {
   border: var(--bw-1) solid var(--info);
   border-left-width: var(--bw-accent);
   border-radius: var(--radius-m);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   background: var(--info-bg);
 }
 
@@ -1026,32 +1106,24 @@ progress {
   font-size: var(--text-small);
 }
 
-/* 種類ごとの囲み：左に縦書きの札、右に見出しと項目（案 E2） */
+/* 種類ごとの囲み：枠の色は 1 つ。強調は左の辺を太くするだけ（design/sheet.md「枠」。角丸の枠に色の違う帯を足さない。
+   2026-11-05 夜のレビュー 3）。狭い画面でも同じ形（上の帯にしない） */
 .group {
-  display: grid;
-  grid-template-columns: var(--width-fuda) minmax(0, 1fr);
-  margin-top: var(--space-3);
+  margin-top: var(--sp-3);
   border: var(--bw-1) solid var(--line-default);
   border-radius: var(--radius-l);
   background: var(--surface-card);
-  overflow: hidden;
 }
 
-/* 左の色の帯（字は出さない。2026-11-05 本人の画面のレビュー B4） */
-.fuda {
-  display: block;
-  background: var(--color-accent);
+.group[data-status="found"] {
+  border-color: var(--danger-line);
+  border-left-width: var(--bw-accent);
 }
 
-/* 見た所・見なかった所：札は墨の字に札の地（緑にしない。「調べた」は「すべて大丈夫」ではないため） */
-.group[data-status="scope"] .fuda {
-  background: var(--color-chip);
-  color: var(--color-base);
-}
-
-/* 見えている個人情報らしい字（候補）：紅にせず、知らせの形（墨の帯・「ｉ」の印）。黒塗りにするかは本人が決める（2026-11-05 夜のレビュー §0） */
-.group[data-status="candidate"] .fuda {
-  background: var(--line-strong);
+/* 見えている個人情報らしい字（候補）：紅にせず、知らせの形（墨の太い左の辺・「ｉ」の印）。黒塗りにするかは本人が決める（2026-11-05 夜のレビュー §0） */
+.group[data-status="candidate"] {
+  border-color: var(--line-strong);
+  border-left-width: var(--bw-accent);
 }
 
 .group[data-status="candidate"] .group-name::before {
@@ -1060,7 +1132,13 @@ progress {
 
 .group-body {
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--pad-box-y) var(--pad-box-x);
+}
+
+/* 左の辺が太い囲みは、太い分を差し引いて、字の左端をほかの箱とそろえる */
+.group[data-status="found"] > .group-body,
+.group[data-status="candidate"] > .group-body {
+  padding-left: var(--pad-box-x-accent);
 }
 
 .group-head {
@@ -1183,13 +1261,13 @@ progress {
 
 .props summary {
   min-height: var(--target-min);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--pad-box-x);
   font-weight: 700;
   cursor: pointer;
 }
 
 .props-body {
-  padding: 0 var(--space-4) var(--space-3);
+  padding: 0 var(--pad-box-x) var(--pad-box-y);
   font-size: var(--text-small);
 }
 
@@ -1238,15 +1316,7 @@ progress {
 }
 
 .props-go {
-  min-height: var(--target-min);
-  margin-top: var(--space-3);
-  padding: var(--space-1) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-weight: 700;
-  cursor: pointer;
+  margin-top: var(--sp-3);
 }
 
 /* 幅 480px（字が 18px のとき）より狭いとき */
@@ -1309,12 +1379,6 @@ progress {
 }
 
 /* 「自分で黒塗りする所を選ぶ」は、結果の一覧の下に移した（B1）。前は .actions の中にあり、ボタンの形をそこから受けていた */
-.pick-tools button {
-  border-radius: var(--radius);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
 
 .pick-tools p {
   margin: var(--space-1) 0 0;
@@ -1323,17 +1387,6 @@ progress {
 
 .pick-tools .pick-toggle {
   width: auto;
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-size: var(--text-small);
-}
-
-.pick-tools .pick-toggle[aria-pressed="true"] {
-  border: var(--border-strong) solid var(--color-base);
-  background: var(--color-chip);
 }
 
 .pick-help {
@@ -1357,41 +1410,54 @@ progress {
 
 .pick-tools .pick-remove {
   width: auto;
-  min-height: var(--target-min);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-control-line);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-size: var(--text-small);
 }
 
 .items {
   list-style: none;
-  margin: 0;
+  margin: var(--sp-2) 0 0;
   padding: 0;
+}
+
+/* 1 つの項目＝1 つの li（番号・題・中身・ボタンを、同じ行のまとまりに入れる）。項目どうしは細い線で区切る。
+   枠の三重の入れ子（結果の欄 ▸ 種類 ▸ 項目）をやめる（2026-11-05 夜のレビュー 4） */
+.items > li {
+  padding: var(--sp-1) var(--sp-2) var(--sp-2);
+  border-top: var(--bw-1) solid var(--line-hair);
+  border-radius: var(--radius-m);
+}
+
+.items > li:first-child {
+  border-top-color: transparent;
+}
+
+/* 選んだ項目：li の地の色と内側の線（太さは変えないので、押しても動かない）。前後の区切りの線は隠す */
+.items > li:has(> .item.is-selected) {
+  background: var(--danger-bg);
+  box-shadow: inset 0 0 0 var(--bw-2) var(--danger-line);
+  border-top-color: transparent;
+}
+
+.items > li:has(> .item.is-selected) + li {
+  border-top-color: transparent;
 }
 
 .item {
   display: block;
   width: 100%;
   min-height: var(--target-min);
-  margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  padding: var(--sp-1) 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  color: inherit;
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.item:hover {
-  background: var(--surface-subtle);
-}
-
-/* 選んだ項目：線を太く、紅に（線の太さでも示す） */
-.item.is-selected {
-  border: var(--bw-2) solid var(--danger-line);
-  background: var(--danger-bg);
+.item:hover .item-title {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 .item > span {
@@ -1446,9 +1512,6 @@ progress {
   color: var(--color-base);
 }
 
-.item[data-check] {
-  border-style: dashed;
-}
 
 .item-page {
   color: var(--color-muted);
@@ -1461,9 +1524,8 @@ progress {
   font-size: var(--text-small);
 }
 
-/* 閉じた形を詰める：行の高さと上下の余白を小さく。中身の行（.reveal）も項目のすぐ下に寄せる */
+/* 閉じた形を詰める：行の高さを小さく。中身の行（.reveal）も項目のすぐ下に寄せる */
 .items .item {
-  padding-block: var(--space-1);
   line-height: 1.5;
 }
 
@@ -1533,7 +1595,7 @@ progress {
   margin: var(--space-3) 0 var(--space-4);
 }
 
-.actions button {
+.actions #sanitize {
   width: 100%;
   min-height: var(--button-height-large);
   padding: var(--space-2) var(--space-4);
@@ -1546,7 +1608,18 @@ progress {
   cursor: pointer;
 }
 
-.actions button:disabled {
+/* 何も見つからないとき：「念のため整える」は第 2 の形（枠だけ・墨の字・ふつうの大きさ。2026-11-05 夜のレビュー 7） */
+.actions #sanitize[data-weight="sub"] {
+  /* 第 2 の形（.btn-sub と同じ見た目。「整える」だけは主と第 2 を切り替えるので、ここに書く） */
+  min-height: var(--target-min);
+  border-width: var(--bw-1);
+  border-color: var(--line-control);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font-size: var(--fs-small);
+}
+
+.actions #sanitize:disabled {
   border-color: var(--color-control-line);
   background: var(--color-chip);
   color: var(--color-muted);
@@ -1558,14 +1631,48 @@ progress {
   font-size: var(--text-small);
 }
 
+/* ---------------------------------------------------------------- 第 2 の形のボタン（枠だけ）：1 つの部品（2026-11-05 夜のレビュー 10）
+   別の PDF にする・中身を見る・黒塗りに加える・候補をすべて加える・自分で黒塗りする所を選ぶ・外す・この欄を消す・報告書・小さくする・一覧へ戻る。
+   押した形（aria-pressed）は、線の太さを変えず、内側の線と地の色で示す（押しても 1px 動かない） */
+.btn-sub {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-height: var(--target-min);
+  padding: 0 var(--sp-4);
+  border: var(--bw-1) solid var(--line-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-sub:hover {
+  background: var(--surface-subtle);
+}
+
+.btn-sub[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 var(--bw-1) var(--line-strong);
+  background: var(--surface-sunken);
+}
+
+.back-to-list {
+  margin-top: var(--sp-3);
+}
+
 /* ---------------------------------------------------------------- 4 読み直す：片付けた結果 */
 
 .clean {
   margin: var(--space-3) 0;
   padding: var(--space-4);
   background: var(--ok-bg);
-  border: var(--bw-1) solid var(--ok-line);
-  border-top-width: var(--bw-accent);
+  /* 4 辺とも同じ太さ（上だけ太くすると、角でくさびの形になる。sheet.md「枠」。2026-11-05 夜のレビュー 12） */
+  border: var(--bw-2) solid var(--ok-line);
   border-radius: var(--radius-l);
 }
 
@@ -1720,21 +1827,7 @@ progress {
 /* 処理の報告書：保存のボタンより控えめな、枠だけのボタン */
 .report-download {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--target-min);
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.report-download:hover {
-  text-decoration: underline;
+  margin-top: var(--sp-3);
 }
 
 .report-note {
@@ -1745,7 +1838,8 @@ progress {
 
 .not-done {
   margin: var(--space-3) 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   background: var(--danger-bg);
   border: var(--bw-1) solid var(--danger-line);
   border-left-width: var(--bw-accent);
@@ -1777,24 +1871,7 @@ progress {
 
 .sanitize-more summary,
 .clean-more summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: var(--target-min);
   font-weight: 700;
-  cursor: pointer;
-}
-
-/* 開け閉めの印（「見た所・見なかった所」と同じ形） */
-.sanitize-more summary::before,
-.clean-more summary::before {
-  content: "▶";
-  font-size: 0.8em;
-}
-
-.sanitize-more[open] summary::before,
-.clean-more[open] summary::before {
-  content: "▼";
 }
 
 .sanitize-list {
@@ -1832,7 +1909,8 @@ progress {
   border-left-width: var(--bw-accent);
   border-radius: var(--radius-m);
   background: var(--ok-bg);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   color: var(--color-ok);
   font-weight: 700;
 }
@@ -1841,9 +1919,22 @@ progress {
   margin: 0;
 }
 
+/* 何も見つからないときの箱の 2 行目：見つけられる範囲の一文（同じ塊に入れる。ふつうの太さ・補足の大きさ） */
+.verified .verified-scope {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-small);
+  font-weight: normal;
+  color: var(--text-strong);
+}
+
+.verified-scope:empty {
+  display: none;
+}
+
 .scope-note {
   margin: var(--space-4) 0 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   border: var(--bw-1) solid var(--info);
   border-left-width: var(--bw-accent);
   border-radius: var(--radius-m);
@@ -1920,50 +2011,68 @@ progress {
   .stage {
     padding: var(--space-3);
   }
-  /* 狭いときは、札を囲みの上の横書きの帯にする（縦書きの札が幅を取らないように） */
-  .group {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .fuda {
-    height: var(--width-fuda);
-  }
   /* 狭いときは縦に積むので、PDF の欄を上に貼り付けない（D1） */
-  .workspace[data-state="result"] .stage {
+  .workspace[data-state="result"] .stage,
+  .workspace[data-state="result"] .thumbs {
     position: static;
     max-height: none;
     overflow: visible;
   }
-  .group-body {
-    padding: var(--space-3);
+  .workspace[data-state="result"] .sheet-wrap {
+    overflow: visible;
+  }
+  /* 狭い画面では、ファイルの帯は折り返してよい（ファイル名は 1 行で「…」、大きさとボタンは次の行へ） */
+  .filebar {
+    flex-wrap: wrap;
+  }
+  .filebar-name,
+  .filebar-facts {
+    flex: 1 1 auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .filebar-name {
+    flex-basis: 100%;
+  }
+  /* 20：狭い画面の手順は 1 行に。名前と一言は今の段だけ、ほかの段は番号の丸（済んだ段は ✓）だけにする（名前は読み上げに残す） */
+  .steps {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--sp-1);
+  }
+  .steps li {
+    flex: none;
+    padding: var(--sp-1);
+  }
+  .steps li[data-state="now"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: var(--sp-3);
+  }
+  .steps li:not([data-state="now"]) .step-name,
+  .steps #step-verify[data-state="todo"] .step-note {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .steps li:not([data-state="now"]) {
+    column-gap: 0;
   }
 }
 
 /* 黒塗りの候補（個人情報らしい字）を、選んだ所に加えるボタン（押した状態は、印と字でも示す。色だけにしない） */
-.pick-all,
-.pick-candidate {
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font: inherit;
-  font-size: var(--text-small);
-  cursor: pointer;
-}
 
 .pick-all {
-  margin: 0 0 var(--space-2);
+  margin: var(--sp-2) 0;
 }
 
 .pick-candidate {
   margin: var(--space-1) 0 var(--space-2);
 }
 
-.pick-candidate[aria-pressed="true"] {
-  border: var(--border-strong) solid var(--color-base);
-  background: var(--color-chip);
-}
 
 /* ページの絵（自分で黒塗りする所を、キーボードで選んでいる間だけ Tab で止まる） */
 .sheet[data-picking="true"]:focus-visible {
@@ -2040,14 +2149,6 @@ progress {
 
 .compress-run {
   width: auto;
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .compress-run:disabled {
@@ -2094,9 +2195,11 @@ progress {
   content: "▲ ";
 }
 
-/* プロパティの一覧の見出しの下の一言（閉じていても読める） */
+/* プロパティの一覧の見出しの下の一言（閉じていても読める）。開け閉めの印の右の字と、左をそろえる */
 .props summary .props-warn {
   display: block;
+  flex-basis: 100%;
+  padding-left: calc(0.8em + var(--sp-1));
   margin-top: var(--space-1);
   font-size: var(--text-small);
   font-weight: 400;
@@ -2191,21 +2294,6 @@ progress {
   overflow-wrap: anywhere;
 }
 
-.reveal-toggle {
-  min-height: var(--target-min);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-base);
-  font: inherit;
-  cursor: pointer;
-}
-
-.reveal-toggle[aria-pressed="true"] {
-  border: var(--border-strong) solid var(--color-base);
-  background: var(--color-chip);
-}
 
 .reveal-note {
   margin: 0 0 var(--space-2);
@@ -2292,8 +2380,43 @@ progress {
   content: "ｉ ";
 }
 
-.verified[data-state="clean"] p::before {
+.verified[data-state="clean"] p:first-child::before {
   content: "✓ ";
+}
+
+/* 開け閉めの印を 1 つの形に（結果の欄の中。ブラウザの既定の大きな ▶ は出さない）。2 行になっても、印は 1 行目の字の高さにそろえる。
+   「見た所・見なかった所」は、見出しの前に同じ形の印を付ける（.coverage-summary .group-head::before）。2026-11-05 夜のレビュー 13 */
+.results summary {
+  list-style: none;
+}
+
+/* 閉じているときは、中身をはっきり隠す（閉じた details の中身にも箱の大きさが残り、押せる所の重なりに数えられていたため。
+   C の PR の残り：報告書のボタンと知らせ、「中身を見る」と下の帯） */
+.results details:not([open]) > :not(summary) {
+  display: none;
+}
+
+.results summary::-webkit-details-marker {
+  display: none;
+}
+
+.results summary:not(.coverage-summary) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: first baseline;
+  gap: 0 var(--sp-1);
+  min-height: var(--target-min);
+  padding-block: var(--sp-2);
+}
+
+.results summary:not(.coverage-summary)::before {
+  content: "▶";
+  flex: none;
+  font-size: 0.8em;
+}
+
+.results details[open] > summary:not(.coverage-summary)::before {
+  content: "▼";
 }
 
 /* 押せる所のカーソル：チェックボックス・ラジオボタンとその字・開け閉めの見出しも指の形。押せないものは ⊘ */

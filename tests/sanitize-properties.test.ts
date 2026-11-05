@@ -125,7 +125,7 @@ describe("プロパティを書き直す：文書情報と XMP の両方に、�
     absent(r.bytes, "Kakuu PDF Writer 1.0");
     const actions = Object.fromEntries(r.properties!.map((p) => [p.key, p.action]));
     expect(actions).toEqual({ title: "removed", author: "set", subject: "absent", keywords: "absent", creator: "removed", producer: "removed", created: "removed", modified: "removed" });
-    // 消した欄：8 項目のうち 5 個（題・作成したアプリ・PDF を作ったアプリ・作成日・更新日）と、独自の欄 1 個
+    // 消した欄：8 項目のうち 5 個（タイトル・作成したソフト・PDF に変換したソフト・作成日・更新日）と、独自の欄 1 個
     expect(r.removed.find((x) => x.kind === "docinfo")?.count).toBe(6);
   });
 
