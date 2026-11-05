@@ -40,6 +40,7 @@ describe("登録したルール", () => {
       "p9-attach",
       "pii",
       "props-diff",
+      "unused-images",
     ]);
   });
 });

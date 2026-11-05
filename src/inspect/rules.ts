@@ -25,6 +25,7 @@ import { detectAltText, type AltKind, type AltReport } from "../../rules/alt-tex
 import { detectInfoXmpDiff, type DiffReport } from "../../rules/props/index.ts";
 import { detectExtras, type ExtrasReport } from "../../rules/extras/index.ts";
 import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/index.ts";
+import { detectUnusedImages, type UnusedImageReport } from "../../rules/unused-images/index.ts";
 import { detectP2Parts, type P2PartsFinding, type P2PartsReport } from "../../rules/p2-parts/index.ts";
 import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
@@ -562,6 +563,8 @@ const P2_PARTS_KIND: Record<P2PartsFinding["kind"], { title: string; why: string
   person: { title: "画像や部品に付いた作成の記録（XMP）に、名前が残っています", why: "画像や部品を取り出すと、作った人の名前を誰でも見られます。", severity: "medium" },
   path: { title: "画像や部品に付いた作成の記録に、パソコンのフォルダの名前が残っています", why: "元のファイルの置き場所から、使った人のログイン名などが分かります。", severity: "medium" },
   gps: { title: "画像や部品に付いた作成の記録に、位置情報（GPS）が残っています", why: "写真を撮った場所などが分かります。", severity: "high" },
+  serial: { title: "画像に付いた作成の記録に、カメラの製造番号が残っています", why: "画像を取り出すと、撮った機械を特定できる番号を誰でも見られます。", severity: "medium" },
+  camera: { title: "画像に付いた作成の記録に、カメラの機種が残っています", why: "画像を取り出すと、撮った機械の機種を誰でも見られます。", severity: "low" },
   private_data: { title: "作ったアプリの私的なデータ（編集用のデータ）が残っています", why: "見た目には出ませんが、元の編集用のデータに、作った人の名前や消した部分が入っていることがあります。", severity: "low" },
 };
 const P2_OWNER: Record<P2PartsFinding["owner"], string> = {
@@ -615,6 +618,39 @@ const p3 = defineRule<P3Report>({
       page: null,
       rect: null,
     })),
+});
+
+// ---------------------------------------------------------------- 描かれていない資源に残る画像
+
+const unusedImages = defineRule<UnusedImageReport>({
+  id: "unused-images",
+  label: "描かれていない画像",
+  pattern: "P5",
+  detect: (b, ctx) => detectUnusedImages(b, ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}),
+  items: (r) =>
+    r.findings.map((f): Item => ({
+      pattern: "P5",
+      // 【仮】ほとんど同じ＝墨消し前の元の画像のおそれ。比べられなかった同じ大きさのものは中
+      severity: f.match === "similar" ? "high" : f.match === "uncompared" ? "medium" : "low",
+      title:
+        f.match === "similar"
+          ? "描かれていない画像が残っています。墨消しする前の元の画像のおそれがあります"
+          : "ページの資源に、描かれていない画像が残っています",
+      why:
+        f.match === "similar"
+          ? "ページに描かれた画像とほとんど同じで、一部だけ違います。画像を取り出すと、塗る前の元の画像を見られることがあります。"
+          : "画面には出ませんが、画像を取り出すと見られます。意図したものでなければ消してください。",
+      detail: [
+        `${f.width}×${f.height} 画素`,
+        f.diffRatio !== undefined && f.match !== "no_same_size" ? `描かれた画像との違い：${(f.diffRatio * 100).toFixed(2)}%` : "",
+        f.match === "uncompared" ? "描かれた画像と同じ大きさ（中身は比べられませんでした）" : "",
+      ]
+        .filter(Boolean)
+        .join("／"),
+      page: f.page,
+      rect: null,
+    })),
+  notices: (r) => (r.limits.length ? [{ kind: "partial", message: "中身が多すぎる・読めない所があったため、一部の描く命令は調べていません。", pages: [] }] : []),
 });
 
 /** 画面で使う検出ルール。一覧には、この並びで出す */
@@ -969,4 +1005,4 @@ const fontGlyphs = defineRule<FontGlyphReport>({
 });
 
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, extras, p1, p3, p2, infoXmpDiff, p2Parts, p4, p9, p8, p11, p12, p10, pii];
+export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, p4, p9, p8, p11, p12, p10, pii];

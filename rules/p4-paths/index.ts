@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P4（ファイルパス・内部ホスト名）1.1.0。
+// 検出ルール P4（ファイルパス・内部ホスト名）1.2.0。
 // 文書情報・XMP・注釈・リンク先・ファイル指定・ページの字（1.1.0 から）の中の、パソコンや庁内のサーバーの場所を示す字を見分けて数える。
 // 値そのものは返さない（種類・場所・字数だけ）。
 //
 // 種類（kind）：
 //   user_path：ユーザーのフォルダを含むパス（C:\Users\<名前>\…・/Users/<名前>/…・/home/<名前>/…）。chars はユーザーの名前の字数
-//   server：共有フォルダ（\\<サーバー>\…・smb://<サーバー>/…）と、点の無いホスト名・内向きの IP アドレスの URL（http や https で、ホスト名が fileserver01 のようなもの）。chars はサーバー名の字数
+//   server：Mac の共有ボリューム（/Volumes/<ボリューム名>/…。1.2.0 から。chars はボリューム名の字数）、共有フォルダ（\\<サーバー>\…・smb://<サーバー>/…）と、点の無いホスト名・内向きの IP アドレスの URL（http や https で、ホスト名が fileserver01 のようなもの）。chars はサーバー名の字数
 //   drive_path：ドライブ名から始まるパス（D:\広報\…）で、ユーザーのフォルダを含まないもの。chars はパス全体の字数
 // file:// の URL は、中のパスとして見る。
 // 場所（where）：info（文書情報）・xmp（文書全体と部品の XMP）・annotation（注釈の内容・作成者・件名）・link（リンクや動作の行き先の URL とファイル）・filespec（添付などのファイル指定の名前）
@@ -19,7 +19,7 @@ import { dictOf, lookup, N, nameOf, openPdf, streamData, textOf, type RuleError 
 import { readPageTexts } from "../common/page-text.ts";
 
 export const RULE_ID = "p4-paths";
-export const RULE_VERSION = "1.1.0";
+export const RULE_VERSION = "1.2.0";
 
 export type P4Kind = "user_path" | "server" | "drive_path";
 export type P4Where = "info" | "xmp" | "annotation" | "link" | "filespec" | "body";
@@ -61,6 +61,9 @@ const USER = /(?:^|[\\/])(?:Users|Documents and Settings|home)[\\/]+([^\\/\s"'<>
 function classify(path: string): PathHit | null {
   const u = path.match(USER);
   if (u) return { kind: "user_path", chars: [...u[1]!].length, value: path };
+  // Mac の共有ボリューム。起動ディスクの既定の名前（Macintosh HD）は、手元のディスクなので数えない
+  const vol = path.match(/^\/Volumes\/([^/"'<>|\r\n]+)\//);
+  if (vol && vol[1]!.trim().toLowerCase() !== "macintosh hd") return { kind: "server", chars: [...vol[1]!.trim()].length, value: path };
   const unc = path.match(/^(?:\\\\|\/\/)([^\\/\s"'<>|]+)[\\/]/);
   if (unc) return { kind: "server", chars: [...unc[1]!].length, value: path };
   if (/^[A-Za-z]:[\\/]/.test(path)) return { kind: "drive_path", chars: [...path].length, value: path };
@@ -110,6 +113,7 @@ export function findPaths(text: string): PathHit[] {
   for (const m of noUrl.matchAll(/(?<![A-Za-z0-9])[A-Za-z]:(?:\\|\/(?!\/))[^\s"'<>|*?]*/g)) push(classify(m[0]));
   // Mac・Linux のユーザーのフォルダ
   for (const m of noUrl.matchAll(/(?<![\w:/])\/(?:Users|home)\/[^\s"'<>|]+/g)) push(classify(m[0]));
+  for (const m of noUrl.matchAll(/(?<![\w:/])\/Volumes\/[^/"'<>|\r\n]+\/[^\s"'<>|]*/g)) push(classify(m[0]));
   // 内向きのサーバーの URL（点の無いホスト名・内向きの IP アドレス）
   for (const m of noUrl.matchAll(/\bhttps?:\/\/([^\s"'<>/:?#]+)/gi)) {
     const host = m[1]!;
