@@ -18,10 +18,18 @@ import { cspForMeta } from "./csp.ts";
 import { OFFICIAL_ORIGIN } from "./htaccess.ts";
 import { buildLicenses } from "./site-licenses.ts";
 import { GUIDE_PATHS, renderGuidePages } from "./src/site/pages.ts";
-import { renderSite, sitePaths } from "./src/site/render.ts";
+import { escapeHtml, renderSite, sitePaths } from "./src/site/render.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
+import { INSPECTOR_HEAD, OG_IMAGE_PATH, headLines, type HeadInfo } from "./src/site/seo.ts";
 
 const ROOT = import.meta.dirname;
+
+const INSPECTOR_HEAD_INFO: HeadInfo = { ...INSPECTOR_HEAD, type: "website" };
+
+/** OGP・X のカードの画像。リポジトリの src/site/og-image.png をそのまま配る（作り方は site-og-image.ts） */
+export function ogImage(): Buffer {
+  return readFileSync(path.join(ROOT, "src", "site", "og-image.png"));
+}
 
 /** サイトのページの CSS。tokens.css の後に site.css をつなぐ */
 export function siteCss(): string {
@@ -101,18 +109,26 @@ export function sitePages(): Plugin {
     name: "omamori-site-pages",
     transformIndexHtml: {
       order: "pre",
-      handler() {
+      handler(html) {
         const meta = verificationMeta();
-        return meta ? [{ tag: "meta", attrs: meta, injectTo: "head" }] : [];
+        // 検査のページの題・説明・canonical・OGP・X のカード（中身は src/site/seo.ts）
+        const head = headLines(INSPECTOR_HEAD_INFO, OFFICIAL_ORIGIN, escapeHtml);
+        if (!/<title>[^<]*<\/title>/.test(html)) throw new Error("index.html に <title> がありません（題・説明を入れる場所）");
+        return { html: html.replace(/<title>[^<]*<\/title>/, head), tags: meta ? [{ tag: "meta", attrs: meta, injectTo: "head" }] : [] };
       },
     },
     generateBundle() {
       for (const [fileName, source] of siteFiles()) this.emitFile({ type: "asset", fileName, source });
+      this.emitFile({ type: "asset", fileName: OG_IMAGE_PATH.slice(1), source: ogImage() });
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = (req.url ?? "/").split("?")[0] ?? "/";
         const name = url.endsWith("/") ? `${url}index.html` : url;
+        if (name === OG_IMAGE_PATH) {
+          res.setHeader("Content-Type", "image/png");
+          return res.end(ogImage());
+        }
         const body = name === "/index.html" ? undefined : siteFiles().get(name.replace(/^\//, ""));
         if (body === undefined) return next();
         res.setHeader("Content-Type", TYPES[path.extname(name)] ?? "application/octet-stream");
