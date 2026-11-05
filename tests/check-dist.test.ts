@@ -275,7 +275,7 @@ describe("check-dist のお問い合わせ（docs/contact.md）", () => {
     const extra = run(withContact(contactCsp(CSP_OK), { "contact-config.php": "<?php return [];\n" }));
     expect(extra.code).toBe(1);
     expect(extra.out).toContain("contact-config.php を配るものに入れています");
-    const mail = run(withContact(contactCsp(CSP_OK), { "contact-send.php": FAKE_PHP + "// owner@real-domain.jp\n" }));
+    const mail = run(withContact(contactCsp(CSP_OK), { "contact-send.php": FAKE_PHP + "// owner@not-a-real-site.invalid\n" }));
     expect(mail.code).toBe(1);
     expect(mail.out).toContain("メールアドレスらしい字があります");
     const raw = run(withContact(contactCsp(CSP_OK), { "contact-send.php": "<?php\n$PAGES = []; // @@PAGES@@\n" }));

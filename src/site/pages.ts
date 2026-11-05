@@ -20,6 +20,7 @@ import {
   escapeHtml,
   fileFor,
   layout,
+  renderSection,
   renderSectionAt,
   type RenderOptions,
 } from "./render.ts";

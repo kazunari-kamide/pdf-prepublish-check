@@ -97,7 +97,7 @@ if (htaccess !== null) {
     if (!block || !contactCsp) problems.push(".htaccess に、お問い合わせのページの CSP（<FilesMatch>）がありません");
     else if (contactCsp !== contactCspOf(header[1])) problems.push(".htaccess のお問い合わせのページの CSP が、ふつうの CSP の form-action を 'self' にしただけのものと食い違っています");
     else if (names.join() !== `${CONTACT_PAGE_FILE},${CONTACT_SEND_FILE}`) problems.push(`.htaccess のお問い合わせの <FilesMatch> が、ほかのファイルにも当たるか、どちらかに当たりません（当たる：${names.join("・") || "なし"}）`);
-    if ((htaccess.match(/form-action 'self'/g) ?? []).length !== 1) problems.push(".htaccess で form-action 'self' が、お問い合わせの <FilesMatch> の外にもあります");
+    if ((htaccess.match(/^\s*Header\b[^\n]*form-action 'self'/gm) ?? []).length !== 1) problems.push(".htaccess で form-action 'self' が、お問い合わせの <FilesMatch> の外にもあります");
   }
   const notFound = htaccess.match(/^\s*ErrorDocument 404 \/(\S+)\s*$/m);
   if (!notFound) problems.push(".htaccess に ErrorDocument 404 がありません");
@@ -219,7 +219,7 @@ if (allowed.length) {
   for (const a of allowed) console.log(`  - ${a}`);
 }
 if (allowedHtml.length) {
-  console.log("\n例外として通した HTML（検索エンジンの確認のファイル・記事の一覧の検索のスクリプト）：");
+  console.log("\n例外として通したもの（検索エンジンの確認のファイル・記事の一覧の検索のスクリプト・お問い合わせの送り先）：");
   for (const a of allowedHtml) console.log(`  - ${a}`);
 }
 if (problems.length) {

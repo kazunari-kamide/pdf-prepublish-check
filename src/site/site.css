@@ -872,6 +872,7 @@ body.site:has(.site-cards) {
 .site .site-form-submit {
   min-height: var(--button-height);
   padding: 0 var(--sp-6);
+  font: inherit;
   border: 0;
   border-radius: var(--radius-m);
   background: var(--surface-strong);
