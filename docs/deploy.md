@@ -5,17 +5,28 @@
 
 ## 流れ
 
-`main` に入ると、GitHub Actions（`.github/workflows/deploy.yml`）が次の順に動く。手で動かすこともできる（Actions の画面の「Run workflow」）。
+`main` に入ると、GitHub Actions（`.github/workflows/deploy.yml`）が動く。手で動かすこともできる（Actions の画面の「Run workflow」）。ジョブは 2 つに分けている。依存のライブラリやビルドの道具が、配信の Secrets に手を届かせないようにするため。
 
-1. `npm ci`（`package-lock.json` のとおりに入れる）
+**① ビルドとテスト（`build`。Environment なし・Secrets なし）**
+
+1. `npm ci --ignore-scripts`（`package-lock.json` のとおりに入れる。依存のインストールのスクリプトは動かさない。2026-11-05 の時点で、スクリプトを持つ依存は macOS でだけ使う `fsevents` だけで、これがなくてもビルドとテストは通る）
 2. `npm run build`（型の確かめ → `vite build` → `scripts/check-dist.mjs`）
 3. `npm test`
-4. 配信するファイルの SHA-256 をログに出す
-5. `lftp` で `dist/` を FTPS で上げる。先に `assets/` を足し、あとで `index.html`・`.htaccess` を上げて、`dist/` にないものを消す（`mirror -R --delete`）
-6. `npm run check:live`：本番のヘッダー・ファイルの種類・中身を確かめる
-7. `npm run check:browser -- --url https://omamoripdf.com/`：本番を本物のブラウザで開き、外への要求が0件かを確かめる（docs/no-network.md の層 4）
+4. 配信するファイルごとの SHA-256 の一覧（`dist.sha256`）をログに出し、一覧そのもののハッシュをジョブの出力にする
+5. `dist/` と `dist.sha256` を成果物にする（`.htaccess` が落ちないよう、`.` で始まるファイルも含める。7 日で消える）
 
-6 か 7 で合わなければ、配信は済んでいても、ジョブは失敗になる。失敗したら、本番の状態をすぐ確かめる。
+**② 配信（`deploy`。Environment「production」。①のあとに動く）**
+
+1. 確かめのスクリプトのためにコードを取り出し、Node を用意する。**npm は動かさない**（`check-live` と `check-browser` は、`node:` の部品と `csp.ts`・`htaccess.ts` しか読まない。`check-browser` は、手元の `vite preview` を立てるときだけ `vite` を読む）
+2. 成果物を受け取る。受け取った中身が食い違えば止める（`digest-mismatch: error`）
+3. ハッシュを照らす：一覧のハッシュが①の出力と同じこと、`dist/` のファイルが一覧と1つも違わないこと、一覧にないファイルがないこと
+4. `lftp` で `dist/` を FTPS で上げる。先に `assets/` を足し、あとで `index.html`・`.htaccess` を上げて、`dist/` にないものを消す（`mirror -R --delete`）
+5. `node scripts/check-live.mjs`：本番のヘッダー・ファイルの種類・中身を確かめる
+6. `node scripts/check-browser.mjs --url https://omamoripdf.com/`：本番を本物のブラウザで開き、外への要求が0件かを確かめる（docs/no-network.md の層 4）
+
+5 か 6 で合わなければ、配信は済んでいても、ジョブは失敗になる。失敗したら、本番の状態をすぐ確かめる。
+
+依存の更新は Dependabot が PR で知らせる（`.github/dependabot.yml`。GitHub Actions と npm を週に1回。出てから 14 日たつまでは知らせない）。マージするかは人が決める。
 
 ## Secrets（Environment「production」。値はここにもログにも書かない）
 
@@ -38,7 +49,24 @@
 ## .htaccess（CSP などをヘッダーで返す）
 
 - `dist/.htaccess` は、`npm run build` のときに `htaccess.ts` が `csp.ts` から作る。CSP の値は `csp.ts` の1か所だけに書く。
-- 中身：CSP・`X-Content-Type-Options: nosniff`・`Referrer-Policy: no-referrer` などのヘッダー、`.mjs` を `text/javascript`・`.wasm` を `application/wasm` で返す指定、`www` つきと `http` から `https://omamoripdf.com/` への 301。
+- 中身：CSP・`X-Content-Type-Options: nosniff`・`Referrer-Policy: no-referrer`・`X-Frame-Options: DENY` などのヘッダー、`.mjs` を `text/javascript`・`.wasm` を `application/wasm` で返す指定、`www` つきと `http` から `https://omamoripdf.com/` への 301。
+- `Options -Indexes`：`index.html` のないフォルダ（`assets/` など）を開いても、ファイルの一覧を出さない。
+- 見つからないときは、自前の 404 のページ（`ErrorDocument 404 /404.html`。`site.ts` が作る）を返す。ヘッダーは `Header always set` で付けるので、404 の応答にも同じ CSP などが付く。
+- キャッシュ（`Cache-Control`）：ふだんは `no-cache`（毎回、新しい版があるかを確かめさせる。古い画面が残らないように）。名前に中身のハッシュが付いた `assets/` の、見つかった応答（200）だけ `max-age=31536000, immutable`。`assets/` に名前の変わらないファイルを置くと古いものが残るので、`scripts/check-dist.mjs` が、ハッシュのない名前を止める。
+- HSTS（`Strict-Transport-Security`）：https の応答にだけ付ける（`"expr=%{HTTPS} == 'on'"`）。値は `htaccess.ts` の `HSTS`。延ばし方は下。
+
+### HSTS の延ばし方
+
+HSTS は、一度ブラウザに覚えさせると、期間が切れるまで取り消せない（https で開けなくなると、その間はサイトに入れない）。そのため短い期間で始め、本番で問題がないことを確かめてから延ばす。
+
+1. **いま**：`max-age=86400`（1 日）
+2. 1 週間、`check-live` が通り、https の証明書の更新（自動）が一度でも済んでいれば：`max-age=604800`（1 週）
+3. さらに 2 週間問題がなければ：`max-age=2592000`（30 日）
+4. さらに 1 か月問題がなければ：`max-age=31536000`（1 年）
+5. `includeSubDomains`：`www` など、使っているサブドメインがすべて https で開けると確かめてから。使っていないサブドメインも含めて縛ることになる。
+6. `preload`（ブラウザに最初から組み込ませる）：取り消しに数か月かかる。1〜5 が済み、ドメインを長く使うと決めてから、本人が決める。
+
+延ばすときは `htaccess.ts` の `HSTS` と、`tests/htaccess.test.ts` の期待を直す（`check-live` は `HSTS` の値と照らす）。縮めるときも同じ（ただし、すでに覚えたブラウザは、前の期間が切れるまで忘れない）。
 - `index.html` の `<meta>` の CSP も残す。ヘッダーの CSP は、`<meta>` の CSP に `frame-ancestors 'none'`（`<meta>` では効かない）を足しただけで、ほかは同じ値。2つの CSP は両方とも効くが、値が同じなので食い違わない。`.htaccess` が効かなかったときの守りにもなる。食い違いは `scripts/check-dist.mjs` が止める。
 - Xserver の「HTTPS転送設定」は、`public_html` の `.htaccess` に転送の行を書く仕組みなので（推測。Xserver のマニュアルで確かめていない）、配信のたびに上書きされても転送が消えないよう、同じ転送を `.htaccess` に書いている。
 
@@ -63,11 +91,17 @@
 - トップページの `csp.ts` のヘッダーが、同じ値で1つずつ付いている（サーバーが別の値を足して二重になっても止まる）
 - サイトのページ（記事の一覧・記事1つ・プライバシー）も 200 で返り、同じヘッダーが付いている
 - トップページが、外のサイトからスクリプトを読み込んでいない
+- https の応答に `Strict-Transport-Security`（`htaccess.ts` の `HSTS`）が付いている。`Cache-Control` が、トップページは `no-cache`、`assets/` のファイルは `max-age=31536000, immutable`
+- 見つからない場所（一番上と `assets/` の中）が、404 で、自前の 404 のページ（`dist/404.html` と同じ中身）を、同じヘッダー・`no-cache` で返す。`assets/` を開いても、ファイルの一覧が出ない
 - `.mjs` が `text/javascript`、`.wasm` が `application/wasm` で返る（今は `.wasm` を配っていないので、省いたと表示する）
 - `dist/` のファイルが本番と1バイトも違わない。`.htaccess` は外から読めない
 - `http://` と `www` つきは、301 で `https://omamoripdf.com/` へ（`www` の名前が引けないときは、省いたと表示する）
 
 ## まだ確かめていないこと
+
+- Xserver の `.htaccess` で、`Options -Indexes` が許されているか（許されていないと、サイト全体が 500 になる。推測。マージのあとの配信の `check-live` で分かる。500 になったら、この行を外して配信し直す）。
+- `Header` の `expr=`（`%{HTTPS}`・`%{REQUEST_STATUS}`）が Xserver の Apache で効くか。効かないと、HSTS が付かないか、`assets/` が `no-cache` のままになる。`check-live` で分かる。
+- 成果物の受け渡し（upload-artifact v7.0.2・download-artifact v8.0.2。2026-11-05 時点のいちばん新しい版を SHA で固定）が、初回の配信で動くか。
 
 - Xserver の前に立つ nginx のキャッシュなどで、静的ファイルにヘッダーが付かないことがあるか。初回の配信のあと `check:live` で確かめる。
 - GitHub Actions の Ubuntu で、`check:browser` の Chrome が headless で動くか。初回の配信で確かめる。
