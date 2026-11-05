@@ -145,12 +145,18 @@ describe("ページの HTML", () => {
     expect(page).toContain("&lt;b&gt;&#39;");
   });
 
-  it("CSS は中身のハッシュの名前で1つだけ置き、どのページもそれを読む", () => {
+  it("CSS は中身のハッシュの名前で1つだけ置き、どのページもそれを読む（サービスの紹介のページだけ、その後にもう1つ読む）", () => {
     const css = [...files.keys()].filter((n) => n.endsWith(".css"));
-    expect(css).toHaveLength(1);
-    expect(css[0]).toMatch(/^assets\/site-[0-9a-f]{10}\.css$/);
-    for (const [, page] of html) expect(page).toContain(`href="/${css[0]}"`);
-    expect(files.get(css[0]!)).toContain("--color-base");
+    const site = css.filter((n) => /^assets\/site-[0-9a-f]{10}\.css$/.test(n));
+    const about = css.filter((n) => /^assets\/about-[0-9a-f]{10}\.css$/.test(n));
+    expect(site).toHaveLength(1);
+    expect(about).toHaveLength(1);
+    expect(css).toHaveLength(2);
+    for (const [, page] of html) expect(page).toContain(`href="/${site[0]}"`);
+    expect(files.get(site[0]!)).toContain("--color-base");
+    for (const [name, page] of html) expect(page.includes(`href="/${about[0]}"`), name).toBe(name === "about.html");
+    const aboutPage = files.get("about.html")!;
+    expect(aboutPage.indexOf(`href="/${site[0]}"`)).toBeLessThan(aboutPage.indexOf(`href="/${about[0]}"`));
   });
 });
 

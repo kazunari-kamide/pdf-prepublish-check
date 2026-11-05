@@ -20,6 +20,8 @@ export const TERMS_PATH = "/terms.html";
 export const CONTACT_PATH = "/contact.html";
 export const FAQ_PATH = "/faq.html";
 export const CHECKLIST_PATH = "/checklist.html";
+// サービスの紹介のページ（LP。中身は about.ts）。#106 が入ったら、ほかのページと同じく .html を外す（"/about"）
+export const ABOUT_PATH = "/about.html";
 
 /** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
 export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです。ほかの場所で動いているものは、改変されている可能性があります。";
@@ -66,8 +68,28 @@ export function fileFor(path: string): string {
   return (path.endsWith("/") ? `${path}index.html` : path).replace(/^\//, "");
 }
 
+/** layout に足せるもの（サービスの紹介のページ about.ts だけが使う） */
+export interface LayoutExtra {
+  /** body に足す class（site の後ろに付ける） */
+  bodyClass?: string;
+  /** サイトの CSS の後に読む、そのページだけの CSS の場所（同じサイトの assets/ の中） */
+  extraCssHref?: string;
+  /** 上の帯の案内のリンクの HTML（字は呼ぶ側で escapeHtml を通す）。なければ、どのページにも同じ並び */
+  navHtml?: string;
+}
+
+/** 上の帯の案内のリンク（どのページにも同じ並び） */
+export function siteNavLinks(): string {
+  return [
+    `        <a href="/">検査のページ</a>`,
+    `        <a href="${ABOUT_PATH}">お守りPDFとは</a>`,
+    `        <a href="${ARTICLES_PATH}">記事の一覧</a>`,
+    `        <a href="${PRIVACY_PATH}">プライバシー</a>`,
+  ].join("\n");
+}
+
 /** どのページにも共通の枠（CSP・題・説明・canonical・上の帯・下の帯）。中身の HTML は body */
-export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
+export function layout(meta: PageMeta, body: string, o: RenderOptions, x: LayoutExtra = {}): string {
   const e = escapeHtml;
   return `<!doctype html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
@@ -79,15 +101,14 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
     <meta name="referrer" content="no-referrer" />
     ${headLines(headFor(meta), o.origin, e)}
     <link rel="icon" href="${e(o.favicon ?? "data:,")}" />
-    <link rel="stylesheet" href="${e(o.cssHref)}" />
+    <link rel="stylesheet" href="${e(o.cssHref)}" />${x.extraCssHref ? `
+    <link rel="stylesheet" href="${e(x.extraCssHref)}" />` : ""}
   </head>
-  <body class="site">
+  <body class="site${x.bodyClass ? ` ${e(x.bodyClass)}` : ""}">
     <header class="site-band">
       <a class="site-brand" href="/">${o.brandMark ?? ""}${e(SITE_NAME)}</a>
       <nav class="site-nav" aria-label="サイトの案内">
-        <a href="/">検査のページ</a>
-        <a href="${ARTICLES_PATH}">記事の一覧</a>
-        <a href="${PRIVACY_PATH}">プライバシー</a>
+${x.navHtml ?? siteNavLinks()}
       </nav>
     </header>
     <main class="site-main">
@@ -201,9 +222,9 @@ export function renderPrivacy(o: RenderOptions): string {
   return layout(PRIVACY_META, body, o);
 }
 
-/** 検索エンジンに知らせるページの一覧（トップ・記事の一覧・各記事・プライバシー） */
+/** 検索エンジンに知らせるページの一覧（トップ・サービスの紹介・記事の一覧・各記事・プライバシー） */
 export function sitePaths(): string[] {
-  return ["/", ARTICLES_PATH, ...ARTICLES.map(articlePath), PRIVACY_PATH];
+  return ["/", ABOUT_PATH, ARTICLES_PATH, ...ARTICLES.map(articlePath), PRIVACY_PATH];
 }
 
 /** 記事・プライバシーの HTML のページを作る（記事の一覧とタグのページは article-index.ts）。鍵は dist/ の中のファイルの名前 */
