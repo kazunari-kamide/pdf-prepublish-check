@@ -4,7 +4,7 @@
 // 確認の方法は2つ。どちらもブラウザからの通信は増えない（検索エンジンが読みに来たときに見るだけ）。
 //
 // 1. メタタグ：下の GOOGLE_SITE_VERIFICATION に、渡された確認のコード（content="…" の中の値）を入れる。
-//    空でなければ、ビルドの時にトップページ（index.html）の <head> に
+//    空でなければ、ビルドの時に検査のページ（check.html）の <head> に
 //    <meta name="google-site-verification" content="…" /> が入る（site.ts）。
 // 2. 確認のファイル：渡された googleXXXX.html を、そのまま public/ に置く。ビルドで dist/ の一番上に写る。
 //    scripts/check-dist.mjs は、中身が「google-site-verification: <ファイルの名前>」の1行のときだけ、このファイルを通す。

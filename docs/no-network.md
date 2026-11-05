@@ -16,7 +16,7 @@
 
 | 層 | 何を見るか | どこで |
 |---|---|---|
-| 1. 自分たちのコード | `src/`・`rules/`・`index.html` に、`fetch`・`XMLHttpRequest`・`WebSocket`・`sendBeacon`・外の URL・`innerHTML`・`eval` がないこと | `tests/no-network.test.ts`（`npm test`） |
+| 1. 自分たちのコード | `src/`・`rules/`・`check.html`（検査のページ）に、`fetch`・`XMLHttpRequest`・`WebSocket`・`sendBeacon`・外の URL・`innerHTML`・`eval` がないこと | `tests/no-network.test.ts`（`npm test`） |
 | 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` に `connect-src 'none'` があること。サイトのページ（記事・プライバシー）を含む、すべての HTML に同じ CSP があり（お問い合わせのページだけは、`form-action 'self'` だけが違う CSP）、スクリプトを直接書かず、外から読み込まないこと（公式の URL を指す canonical だけは許す） | `scripts/check-dist.mjs`（`npm run build` の最後） |
 | 3. CSP | ページ全体の読み込み先と送り先を絞る（`connect-src 'none'`、`img-src 'self' data: blob:` など） | `csp.ts` |
 | 4. 本物のブラウザ | 合成 PDF を入れて、ページを開いてから閉じるまでの要求を「最初の表示」と「PDF を入れた後」に分けて数え、どちらも外への要求が0件であること。サイトのページも1つずつ開き、外への要求が0件であること | `scripts/check-browser.mjs`（`npm run check:browser`） |

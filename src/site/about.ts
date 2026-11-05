@@ -15,6 +15,7 @@ import {
   ARTICLES_PATH,
   CHECKLIST_PATH,
   FAQ_PATH,
+  INSPECTOR_PATH,
   PRIVACY_PATH,
   articlePath,
   escapeHtml,
@@ -33,7 +34,7 @@ export const ABOUT_META: PageMeta = {
 };
 
 /** 「架空の見本で試す」の行き先（検査のページが ?sample=1 で見本を読み込む。検査のページの側は別に作る） */
-export const SAMPLE_HREF = "/?sample=1";
+export const SAMPLE_HREF = `${INSPECTOR_PATH}?sample=1`;
 
 /** 記事の slug から場所を作る（記事の一覧にない slug なら、ビルドを止める） */
 function articleHref(slug: string): string {
@@ -195,7 +196,7 @@ function hero(): string {
               <li>無料・登録なし</li>
               <li>ソースを公開（AGPL-3.0）</li>
             </ul>
-            <p class="lp-actions">${button("/", "PDF を確かめる")} ${button(SAMPLE_HREF, "架空の見本で試す", "secondary")}</p>
+            <p class="lp-actions">${button(INSPECTOR_PATH, "PDF を確かめる")} ${button(SAMPLE_HREF, "架空の見本で試す", "secondary")}</p>
           </div>
           <div class="lp-hero-art">
 ${paperStack("open")}
@@ -239,7 +240,7 @@ ${head("lp-how", "手順", "選んで、確かめて、整えて、読み直す�
         <ol class="lp-steps">
 ${items}
         </ol>
-        <p class="lp-more"><a href="/">検査のページで試す</a></p>
+        <p class="lp-more"><a href="${INSPECTOR_PATH}">検査のページで試す</a></p>
         </div>
       </section>`;
 }
@@ -376,7 +377,7 @@ function closing(): string {
           <div>
             <h2 id="lp-closing-title">出す前に、<wbr />一度だけ<wbr />確かめる。</h2>
             <p>無料・登録なし。選んだ PDF はどこにも送信しません。</p>
-            <p class="lp-actions">${button("/", "PDF を確かめる")} <a class="lp-closing-link" href="${e(SAMPLE_HREF)}">架空の見本で試す</a></p>
+            <p class="lp-actions">${button(INSPECTOR_PATH, "PDF を確かめる")} <a class="lp-closing-link" href="${e(SAMPLE_HREF)}">架空の見本で試す</a></p>
           </div>
 ${paperStack("closed")}
         </div>

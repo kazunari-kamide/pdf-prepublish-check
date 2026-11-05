@@ -64,7 +64,7 @@ export function buildHtaccess(): string {
     "# 見つからないときは、自前のページを返す（下のヘッダーは always なので、404 の応答にも付く）",
     `ErrorDocument 404 ${NOT_FOUND_PAGE}`,
     "",
-    "# CSP などのヘッダー。index.html の <meta> の CSP と同じ値に、frame-ancestors 'none' を足したもの",
+    "# CSP などのヘッダー。検査のページ（check.html）の <meta> の CSP と同じ値に、frame-ancestors 'none' を足したもの",
     "<IfModule mod_headers.c>",
     ...headers,
     "  # HSTS は条件を付けずに付ける（配信先の前の nginx が https を受けるため、%{HTTPS} では見分けられない。",
@@ -99,6 +99,7 @@ export function buildHtaccess(): string {
     "  # アドレスは変えない（中で回すだけ）。下の .html なしの書き換えより前に置く",
     `  RewriteRule ${CONTACT_REWRITE}`,
     ...LICENSE_TEXTS_RULES.map((l) => `  ${l}`),
+    ...CHECK_PAGE_RULES.map((l) => `  ${l}`),
     ...CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)),
     "</IfModule>",
     "",
@@ -106,9 +107,33 @@ export function buildHtaccess(): string {
 }
 
 /**
+ * 検査のページの場所（2026-11-05）。ファイルは dist/check.html で、.html なしの書き換え（CLEAN_URL_RULES）で /check として開く。
+ * / には、ハッカソンのあとに いろいろな PDF の機能を置くため、検査のページを /check に移した。
+ */
+export const CHECK_PATH = "/check";
+/** 検査のページの、dist/ の中のファイルの名前（元は リポジトリの一番上の check.html。vite.config.ts の入口） */
+export const CHECK_PAGE_FILE = "check.html";
+
+/**
+ * 検査のページへ移す規則。.html なしの書き換えより前に置く。
+ * - / は /check へ 302（一時的）。ハッカソンの間だけ。301 にすると、ブラウザが覚えて、あとで / を使えなくなる。
+ *   置き換え先に ? を書かないので、? のあと（?sample=1・utm_source など）は、そのまま付いて渡る。
+ * - /check/ は /check へ 301（/check という名前のフォルダは作らない。scripts/check-dist.mjs が同じ名前のフォルダを止める）。
+ * - 前の検査のページの /index.html は /check へ 301（外から来た要求だけ。記事の一覧の articles/index.html には当たらない）。
+ * - /check.html は、CLEAN_URL_RULES の 1 つ目で /check へ 301 になる。
+ */
+export const CHECK_PAGE_RULES: readonly string[] = [
+  `# 検査のページは ${CHECK_PATH}（${CHECK_PAGE_FILE}）。/ はハッカソンの間だけ ${CHECK_PATH} へ 302（301 はブラウザが覚えるので使わない）。? のあとはそのまま渡る`,
+  `RewriteRule ^$ ${CHECK_PATH} [R=302,L]`,
+  `RewriteRule ^${CHECK_PATH.slice(1)}/$ ${CHECK_PATH} [R=301,L]`,
+  "RewriteCond %{ENV:REDIRECT_STATUS} ^$",
+  `RewriteRule ^index\\.html$ ${CHECK_PATH} [R=301,L]`,
+];
+
+/**
  * サイトのページを .html なしの場所で開く書き換え（2026-11-05。ファイルは dist/ の .html のまま）。
  * - 1つ目：.html 付きで来た要求を、.html なしへ 301 で移す（外からのリンクや検索の結果を切らさないため）。
- *   ファイルがあるときだけ。index.html（検査のページ・記事の一覧）と、検索エンジンの確認のファイル（googleXXXX.html）は移さない。
+ *   ファイルがあるときだけ。index.html（記事の一覧）と、検索エンジンの確認のファイル（googleXXXX.html）は移さない。
  *   REDIRECT_STATUS が空のとき（外から来た要求そのもの）だけにする。書き換えたあとや、ErrorDocument の 404 のページを
  *   返すときの中の要求では動かさない（動くと、見つからない .html が 404 でなく 301 になり、書き換えと輪になる）。
  *   %1 は、すぐ上の RewriteCond（THE_REQUEST）の組なので、THE_REQUEST の条件を最後に置く。

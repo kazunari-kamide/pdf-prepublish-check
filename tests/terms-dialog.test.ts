@@ -16,7 +16,7 @@ import { TERMS_PATH, escapeHtml } from "../src/site/render.ts";
 import { isOutside, isPlainClick } from "../src/ui/terms-click.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const index = readFileSync(path.join(ROOT, "index.html"), "utf8");
+const index = readFileSync(path.join(ROOT, "check.html"), "utf8");
 const REPO = "https://github.com/example-owner/example-repo";
 const dialog = renderTermsDialog({ repoUrl: REPO });
 const termsPage = renderGuidePages({ origin: OFFICIAL_ORIGIN, csp: cspForMeta, cssHref: "/assets/site.css", repoUrl: REPO }, buildLicenses(ROOT).data).get("terms.html")!;
@@ -51,7 +51,7 @@ describe("利用規約のダイアログの中身", () => {
 });
 
 describe("検査のページへの埋め込み", () => {
-  it("index.html に目印がちょうど 1 つあり、ビルドの時にダイアログに置き換わる", () => {
+  it("check.html に目印がちょうど 1 つあり、ビルドの時にダイアログに置き換わる", () => {
     expect(index.split(TERMS_DIALOG_MARKER)).toHaveLength(2);
     const out = withTermsDialog(index, REPO);
     expect(out).not.toContain(TERMS_DIALOG_MARKER);

@@ -8,7 +8,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CLEAN_URL_RULES, CONTACT_REWRITE, LICENSE_TEXTS_RULES } from "../htaccess.ts";
+import { CHECK_PAGE_RULES, CLEAN_URL_RULES, CONTACT_REWRITE, LICENSE_TEXTS_RULES } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts", "check-dist.mjs");
@@ -45,6 +45,7 @@ ErrorDocument 404 /404.html
   RewriteEngine On
   RewriteRule ${CONTACT_REWRITE}
 ${LICENSE_TEXTS_RULES.map((l) => `  ${l}`).join("\n")}
+${CHECK_PAGE_RULES.map((l) => `  ${l}`).join("\n")}
 ${CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)).join("\n")}
 </IfModule>
 `;
@@ -59,12 +60,12 @@ function fakeDist(
   dirs.push(dir);
   mkdirSync(path.join(dir, "assets"));
   writeFileSync(
-    path.join(dir, "index.html"),
+    path.join(dir, "check.html"),
     `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><script type="module" src="/assets/index-Ab12Cd34.js"></script></head><body></body></html>`,
   );
   writeFileSync(path.join(dir, "assets", "index-Ab12Cd34.js"), "console.log(1);\n");
   if (htaccess !== null) writeFileSync(path.join(dir, ".htaccess"), htaccess);
-  // 自前の 404 のページ（.htaccess の ErrorDocument が指す）。index.html と同じ CSP
+  // 自前の 404 のページ（.htaccess の ErrorDocument が指す）。check.html と同じ CSP
   writeFileSync(path.join(dir, "404.html"), `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body></body></html>`);
   // お問い合わせの送り先（docs/contact.md）
   writeFileSync(path.join(dir, "contact-send.php"), FAKE_PHP);
@@ -144,6 +145,30 @@ describe("check-dist の .htaccess（docs/deploy.md）", () => {
     expect(r.code).toBe(1);
     expect(r.out).toContain("AddType text/javascript .mjs がありません");
   });
+
+  it("/ を検査のページ（/check）へ 302 で移す規則がない・.html なしの書き換えより後ろなら止める（2026-11-05）", () => {
+    const ht = fakeHtaccess(CSP_OK);
+    const rule = "  RewriteRule ^$ /check [R=302,L]\n";
+    expect(ht).toContain(rule);
+    const missing = run(fakeDist(CSP_OK, {}, ht.replace(rule, "")));
+    expect(missing.code).toBe(1);
+    expect(missing.out).toContain("/ を検査のページ（/check）へ移す規則（htaccess.ts の CHECK_PAGE_RULES）がありません");
+    const block = `${CHECK_PAGE_RULES.map((l) => `  ${l}`).join("\n")}\n`;
+    // 規則を、.html なしの書き換えのあと（rewrite の区切りの最後）へ動かす
+    const moved = ht.replace(block, "");
+    const end = moved.lastIndexOf("</IfModule>");
+    const late = run(fakeDist(CSP_OK, {}, `${moved.slice(0, end)}${block}${moved.slice(end)}`));
+    expect(late.code).toBe(1);
+    expect(late.out).toContain("/ を検査のページへ移す規則が、.html なしの書き換えより後ろにあります");
+  });
+
+  it("検査のページ（check.html）がなければ止める", () => {
+    const dir = fakeDist(CSP_OK, {});
+    rmSync(path.join(dir, "check.html"));
+    const r = run(dir);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("検査のページ（check.html）がありません");
+  });
 });
 
 describe("check-dist のサイトのページ（site.ts）", () => {
@@ -185,10 +210,10 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     expect(r.out).toContain("articles/a.html に CSP の <meta> がありません");
   });
 
-  it("CSP が index.html と違うページは止める", () => {
+  it("CSP が check.html（検査のページ）と違うページは止める", () => {
     const r = run(withPages({ "privacy.html": page(CSP_OPEN) }));
     expect(r.code).toBe(1);
-    expect(r.out).toContain("privacy.html の CSP が、index.html の CSP と食い違っています");
+    expect(r.out).toContain("privacy.html の CSP が、check.html の CSP と食い違っています");
   });
 
   it("ほかのサイトを指す canonical や、外のスクリプトは止める", () => {
@@ -300,7 +325,7 @@ describe("check-dist のお問い合わせ（docs/contact.md）", () => {
     for (const csp of [CSP_OK, contactCsp(CSP_OK).replace("connect-src &#39;none&#39;; ", "")]) {
       const r = run(withContact(csp));
       expect(r.code).toBe(1);
-      expect(r.out).toContain("contact.html の CSP が、index.html の CSP と食い違っています");
+      expect(r.out).toContain("contact.html の CSP が、check.html の CSP と食い違っています");
     }
   });
 
@@ -308,7 +333,7 @@ describe("check-dist のお問い合わせ（docs/contact.md）", () => {
     const dir = withContact(contactCsp(CSP_OK), { "privacy.html": page(contactCsp(CSP_OK)) });
     const r = run(dir);
     expect(r.code).toBe(1);
-    expect(r.out).toContain("privacy.html の CSP が、index.html の CSP と食い違っています");
+    expect(r.out).toContain("privacy.html の CSP が、check.html の CSP と食い違っています");
   });
 
   it(".htaccess にお問い合わせの <FilesMatch> がない・ほかのファイルにも当たるなら止める", () => {

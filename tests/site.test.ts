@@ -120,7 +120,7 @@ describe("ページの HTML", () => {
       // 外を指すのは canonical と、GitHub へ移る <a> のリンクだけ
       expect(page.replace(/<link rel="canonical" href="[^"]+" \/>/, "").replace(/<a href="https:\/\/github\.com\/[^"]*"/g, "<a")).not.toMatch(/(src|href)="(https?:)?\/\//);
       // 検査のページ（/）へつながる
-      expect(page).toContain('href="/"');
+      expect(page).toContain('href="/check"');
     });
   }
 
@@ -129,7 +129,7 @@ describe("ページの HTML", () => {
       const band = page.split('<header class="site-band">')[1]!.split("</header>")[0]!;
       const nav = band.split('<nav class="site-nav"')[1]!.split("</nav>")[0]!;
       expect([...nav.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), name).toEqual(NAV_LINKS.map(([h, l]) => [h, l]));
-      expect(band, name).toContain('<a class="site-band-cta" href="/">PDF を確かめる</a>');
+      expect(band, name).toContain('<a class="site-band-cta" href="/check">PDF を確かめる</a>');
       const here = pathForFile(name);
       const current = [...page.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1]);
       const expected = [...NAV_LINKS, ...FOOT_LINKS].filter(([h]) => h === here).map(([h]) => h);

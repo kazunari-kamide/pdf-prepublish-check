@@ -17,6 +17,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { CHECK_PAGE_FILE, CHECK_PATH } from "../htaccess.ts";
 import { startTestServer } from "../extension/test-page/serve.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -32,7 +33,7 @@ if (!chromePath) {
   console.error("Chrome が見つかりません。CHROME_PATH で場所を指定してください。");
   process.exit(2);
 }
-if (!existsSync(path.join(ROOT, "dist/index.html"))) {
+if (!existsSync(path.join(ROOT, "dist", CHECK_PAGE_FILE))) {
   console.error("dist/ がありません。先に npm run build をしてください。");
   process.exit(2);
 }
@@ -49,7 +50,7 @@ const testServer = await startTestServer();
 const testUrl = `http://127.0.0.1:${testServer.address().port}/`;
 
 const preview = await (await import("vite")).preview({ root: ROOT, logLevel: "silent", preview: { host: "127.0.0.1", port: 0, strictPort: false, open: false } });
-const appUrl = preview.resolvedUrls.local[0];
+const appUrl = new URL(CHECK_PATH, preview.resolvedUrls.local[0]).href;
 
 // ---- Chrome（pipe でつなぐ）
 const profile = mkdtempSync(path.join(tmpdir(), "omamori-ext-"));

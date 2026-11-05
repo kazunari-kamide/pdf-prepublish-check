@@ -15,7 +15,7 @@ const LOGO_DIR = path.join(import.meta.dirname, "design", "logo");
 
 export type LogoName = "mark" | "mark-on-dark" | "mark-small";
 
-/** index.html の中の、差し込む場所の目印 */
+/** check.html（検査のページ）の中の、差し込む場所の目印 */
 export const MARK_PLACEHOLDER = "<!--omamori:mark-->";
 export const FAVICON_PLACEHOLDER = 'href="omamori:favicon"';
 
@@ -40,10 +40,10 @@ export function faviconHref(): string {
   return `data:image/svg+xml,${encodeURIComponent(logoSvg("mark-small"))}`;
 }
 
-/** index.html の目印を、ロゴに置き換える。目印が見つからなければ止める（ロゴが抜けたまま配らない） */
+/** check.html の目印を、ロゴに置き換える。目印が見つからなければ止める（ロゴが抜けたまま配らない） */
 export function injectLogo(html: string): string {
   for (const p of [MARK_PLACEHOLDER, FAVICON_PLACEHOLDER]) {
-    if (html.split(p).length !== 2) throw new Error(`index.html に、ロゴを差し込む目印 ${p} がちょうど1つありません`);
+    if (html.split(p).length !== 2) throw new Error(`check.html に、ロゴを差し込む目印 ${p} がちょうど1つありません`);
   }
   return html.replace(MARK_PLACEHOLDER, inlineMark("mark", "brand-mark")).replace(FAVICON_PLACEHOLDER, `href="${faviconHref()}"`);
 }

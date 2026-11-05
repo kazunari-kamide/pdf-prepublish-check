@@ -14,6 +14,7 @@ import {
   CONTACT_PATH,
   CONTACT_SEND_PATH,
   FAQ_PATH,
+  INSPECTOR_PATH,
   LICENSES_PATH,
   PRIVACY_PATH,
   TERMS_PATH,
@@ -88,7 +89,7 @@ function simplePage(
     `      <h1>${e(meta.title)}</h1>`,
     `      <p class="site-lead">${e(lead)}</p>`,
     ...blocks.map((b) => block(b, o)),
-    `      <p class="site-back"><a href="/">検査のページへ</a></p>`,
+    `      <p class="site-back"><a href="${INSPECTOR_PATH}">検査のページへ</a></p>`,
     `      </div>`,
   ].join("\n");
   return layout(meta, body, o);
@@ -297,7 +298,7 @@ export function renderContact(o: RenderOptions): string {
     `      <p class="site-lead">${e(CONTACT_META.description)}</p>`,
     ...CONTACT_BLOCKS.map((b) => renderBlock(b, co)),
     contactForm(),
-    `      <p class="site-back"><a href="/">検査のページへ</a></p>`,
+    `      <p class="site-back"><a href="${INSPECTOR_PATH}">検査のページへ</a></p>`,
     `      </div>`,
   ].join("\n");
   return layout(CONTACT_META, body, co);
@@ -311,7 +312,7 @@ export function renderContactResults(o: RenderOptions): { done: string; error: s
   const page = (title: string, description: string, inner: string[]) =>
     layout(
       { path: CONTACT_SEND_PATH, title, description },
-      [`      <div class="site-page">`, `      <h1>${e(title)}</h1>`, ...inner, `      <p class="site-back"><a href="/">検査のページへ</a></p>`, `      </div>`].join("\n"),
+      [`      <div class="site-page">`, `      <h1>${e(title)}</h1>`, ...inner, `      <p class="site-back"><a href="${INSPECTOR_PATH}">検査のページへ</a></p>`, `      </div>`].join("\n"),
       co,
     );
   const done = page("受け付けました", "お守りPDF へのお問い合わせを受け付けました。返事がほしいとメールアドレスを書いたときは、そのアドレスにお返しします。", [
@@ -566,7 +567,7 @@ export function renderLicenses(o: RenderOptions, d: LicenseData): string {
       p(e("この一覧には、このサイトのファイルに入り、あなたのブラウザで動く部品と書体だけを並べています。開発・テスト・配信にだけ使う道具は、このサイトのファイルに入らないので並べていません（ソースのリポジトリの docs/licenses.md に一覧があります）。")),
       p(e("この一覧は、ビルドの時に package-lock.json と docs/licenses.md から作っています。著作権の表示とライセンスの全文は、それぞれの部品に付いているライセンスの文から、そのまま写しています。")),
     ]),
-    `      <p class="site-back"><a href="/">検査のページへ</a></p>`,
+    `      <p class="site-back"><a href="${INSPECTOR_PATH}">検査のページへ</a></p>`,
     `      </div>`,
   ].join("\n");
   return layout(LICENSES_META, body, o);
@@ -589,7 +590,7 @@ export const NOT_FOUND_BLOCKS: Block[] = [
       "公式のサイトは omamoripdf.com だけです。ほかの場所で、このページに似たものが出たときは、改変されている可能性があります。",
     ],
     links: [
-      { href: "/", label: "検査のページ" },
+      { href: INSPECTOR_PATH, label: "検査のページ" },
       { href: ARTICLES_PATH, label: "記事の一覧" },
       { href: FAQ_PATH, label: "よくある質問" },
     ],
@@ -598,11 +599,11 @@ export const NOT_FOUND_BLOCKS: Block[] = [
 
 // ---------------------------------------------------------------- 検査のページの利用規約のダイアログ
 
-/** index.html の中で、利用規約のダイアログに置き換える目印（site.ts の transformIndexHtml が置き換える） */
+/** check.html（検査のページ）の中で、利用規約のダイアログに置き換える目印（site.ts の transformIndexHtml が置き換える） */
 export const TERMS_DIALOG_MARKER = "<!-- terms-dialog -->";
 
 /**
- * 検査のページ（index.html）に埋め込む、利用規約のダイアログ（<dialog>）。
+ * 検査のページ（check.html）に埋め込む、利用規約のダイアログ（<dialog>）。
  * 文は利用規約のページと同じ TERMS_META・TERMS_BLOCKS から作る（2 か所で文がずれないように）。
  * 検査のページは通信をしないので、開くときに取りに行かず、ビルドの時にページの中へ入れておく。
  * data-page は、押したときにダイアログで開くリンクの場所（src/ui/terms-dialog.ts が、この href のリンクだけを止める）

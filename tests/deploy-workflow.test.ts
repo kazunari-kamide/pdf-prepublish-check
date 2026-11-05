@@ -69,7 +69,9 @@ describe("配信の手順（deploy.yml）", () => {
     const cmds = runs(deploy).join("\n");
     expect(cmds).not.toMatch(/\bnpm\b|\bnpx\b/);
     expect(cmds).toContain("node scripts/check-live.mjs");
-    expect(cmds).toContain("node scripts/check-browser.mjs --url https://omamoripdf.com/");
+    // 本番では、検査のページ（/check。2026-11-05 に / から移した）を開く
+    expect(cmds).toContain("node scripts/check-browser.mjs --url https://omamoripdf.com/check");
+    expect(cmds).not.toMatch(/--url https:\/\/omamoripdf\.com\/(\s|$)/);
   });
 
   it("本番の確かめのスクリプトは、npm で入れる部品を読み込まない（vite は手元の preview のときだけ、あとから読む）", () => {

@@ -6,7 +6,10 @@
 // - ページには、スクリプトを入れない。読み込むのは、同じサイトの CSS 1つだけ。
 // - サイトの場所（https の公式の URL）は、呼ぶ側から受け取る（htaccess.ts の OFFICIAL_ORIGIN）。ここには書かない。
 
-import { CONTACT_SEND_FILE } from "../../htaccess.ts";
+import { CHECK_PATH, CONTACT_SEND_FILE } from "../../htaccess.ts";
+
+/** 検査のページの場所（htaccess.ts の CHECK_PATH。/ はハッカソンの間だけ、ここへ 302） */
+export const INSPECTOR_PATH = CHECK_PATH;
 import { ARTICLES } from "./articles.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS, PRIVACY_TITLE } from "./privacy.ts";
 import { SITE_NAME, headFor, headLines } from "./seo.ts";
@@ -23,15 +26,15 @@ export const CONTACT_PATH = "/contact";
 export const CONTACT_SEND_PATH = `/${CONTACT_SEND_FILE}`;
 export const FAQ_PATH = "/faq";
 export const CHECKLIST_PATH = "/checklist";
-/** サービスの紹介のページ（LP。中身は about.ts。持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（index.html。tests/site-pages.test.ts）。ファイルは about.html（fileFor） */
+/** サービスの紹介のページ（LP。中身は about.ts。持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（check.html。tests/site-pages.test.ts）。ファイルは about.html（fileFor） */
 export const ABOUT_PATH = "/about";
 
-/** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
+/** どのページの下にも置く、公式のサイトの場所の1文（検査のページ check.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
 export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com です。ソースコードは公開しています。";
 
-/** どのページの下にも置く、サイトの案内のリンク（検査のページ index.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
+/** どのページの下にも置く、サイトの案内のリンク（検査のページ check.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
 export const FOOT_LINKS: ReadonlyArray<readonly [string, string]> = [
-  ["/", "検査のページ"],
+  [INSPECTOR_PATH, "検査のページ"],
   [ABOUT_PATH, "お守りPDF について"],
   [ARTICLES_PATH, "記事の一覧"],
   [CHECKLIST_PATH, "公開前の自己点検"],
@@ -133,11 +136,11 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions, x: Layout
   </head>
   <body class="site${x.bodyClass ? ` ${e(x.bodyClass)}` : ""}">
     <header class="site-band">
-      <a class="site-brand" href="/">${o.brandMark ?? ""}${e(SITE_NAME)}</a>
+      <a class="site-brand" href="${INSPECTOR_PATH}">${o.brandMark ?? ""}${e(SITE_NAME)}</a>
       <nav class="site-nav" aria-label="サイトの案内">
 ${siteNavLinks(meta.path)}
       </nav>
-      <a class="site-band-cta" href="/">PDF を確かめる</a>
+      <a class="site-band-cta" href="${INSPECTOR_PATH}">PDF を確かめる</a>
     </header>
     <main class="site-main">
 ${body}
@@ -175,7 +178,7 @@ export function renderSectionAt(s: Section, level: 2 | 3): string {
 export function toInspector(): string {
   return `      <aside class="site-cta" aria-label="検査のページへ">
         <p>手元の PDF に、この記事のようなものが残っていないかを確かめられます。PDF は、この端末のブラウザの中だけで読みます。</p>
-        <p><a class="site-cta-link" href="/">検査のページで確かめる</a></p>
+        <p><a class="site-cta-link" href="${INSPECTOR_PATH}">検査のページで確かめる</a></p>
         <p class="site-note">見つけられるのは、検査のページに並べた種類だけです。すべての漏れを見つけられるわけではありません。</p>
       </aside>`;
 }
@@ -252,7 +255,7 @@ export function renderPrivacy(o: RenderOptions): string {
 
 /** 検索エンジンに知らせるページの一覧（トップ・サービスの紹介・記事の一覧・各記事・プライバシー） */
 export function sitePaths(): string[] {
-  return ["/", ABOUT_PATH, ARTICLES_PATH, ...ARTICLES.map(articlePath), PRIVACY_PATH];
+  return [INSPECTOR_PATH, ABOUT_PATH, ARTICLES_PATH, ...ARTICLES.map(articlePath), PRIVACY_PATH];
 }
 
 /** 記事・プライバシーの HTML のページを作る（記事の一覧とタグのページは article-index.ts）。鍵は dist/ の中のファイルの名前 */
