@@ -737,6 +737,14 @@ function placeAt(e: HTMLElement, f: { left: number; top: number; width: number; 
   e.style.height = `${f.height * 100}%`;
 }
 
+/** 押す所の位置：CSS の変数で渡し、大きさの下限（44px）は CSS で決める（.mark-hit） */
+function hitAt(e: HTMLElement, f: { left: number; top: number; width: number; height: number }) {
+  e.style.setProperty("--x", `${f.left * 100}%`);
+  e.style.setProperty("--y", `${f.top * 100}%`);
+  e.style.setProperty("--w", `${f.width * 100}%`);
+  e.style.setProperty("--h", `${f.height * 100}%`);
+}
+
 function placeMarks(s: Session, page: number) {
   ui.marks.replaceChildren();
   const box = s.boxes.get(page);
@@ -755,13 +763,23 @@ function placeMarks(s: Session, page: number) {
   for (const m of s.marksByPage.get(page)?.marks ?? []) {
     const f = toFraction(box, m.rect);
     if (!f) continue;
-    const mark = make("button", undefined, `mark sev-${m.severity}`);
+    // 見た目の枠（隠した所の大きさのまま）と、押す所（枠を中心に縦横とも 44px 以上）を分ける。
+    // 枠を大きくすると、細い黒塗りの所が太い枠に見えるため。押す所は透明で、上に重ねる
+    const frame = make("div", undefined, `mark sev-${m.severity}`);
+    frame.id = `mark-frame-${m.no}`;
+    frame.setAttribute("aria-hidden", "true");
+    frame.append(make("span", String(m.no), "mark-no"));
+    placeAt(frame, f);
+    const mark = make("button", undefined, "mark-hit");
     mark.type = "button";
     mark.id = `mark-${m.no}`;
-    mark.append(make("span", String(m.no), "mark-no"));
     mark.setAttribute("aria-label", `番号 ${m.no}：${m.title}`);
-    if (s.selected === m.no) mark.classList.add("is-selected");
-    placeAt(mark, f);
+    if (s.selected === m.no) {
+      mark.classList.add("is-selected");
+      frame.classList.add("is-selected");
+    }
+    hitAt(mark, f);
+    ui.marks.append(frame);
     mark.addEventListener("click", () => {
       if (picking) return; // 選んでいる間は、枠を押しても動かない（ドラッグを邪魔しない）
       const item = document.getElementById(`item-${m.no}`);
@@ -779,6 +797,7 @@ function markSelected(no: number | null) {
   for (const e of document.querySelectorAll(".is-selected")) e.classList.remove("is-selected");
   if (no === null) return;
   document.getElementById(`mark-${no}`)?.classList.add("is-selected");
+  document.getElementById(`mark-frame-${no}`)?.classList.add("is-selected");
   document.getElementById(`item-${no}`)?.classList.add("is-selected");
   // 選んだ項目だけを開く（ページの上の枠を押したときも、その項目の説明が開く）
   for (const e of document.querySelectorAll<HTMLElement>(".item[aria-expanded]")) e.setAttribute("aria-expanded", String(e.id === `item-${no}`));

@@ -305,10 +305,14 @@ body:has(#workspace:not([data-state="empty"])) .hero {
 }
 
 /* PDF の欄と結果の欄のあいだの仕切り：見た目は墨の細い線、つまむ所は 44px。結果を見ているときだけ出す */
+/*
+ * つまむ所は、要素そのものを 44px にする（前は ::after で広げていたが、check:layout は要素の箱で測るため）。
+ * 列の幅は前と同じになるよう、左右の負の余白で吸う（前：幅 --sp-2・左右 −--sp-2 で、列の幅は −--sp-2）
+ */
 .splitter {
   position: relative;
-  width: var(--sp-2);
-  margin: 0 calc(-1 * var(--sp-2));
+  width: var(--target-min);
+  margin: 0 calc((var(--target-min) + var(--sp-2)) / -2);
   cursor: col-resize;
   touch-action: none;
 }
@@ -322,16 +326,6 @@ body:has(#workspace:not([data-state="empty"])) .hero {
   width: var(--bw-2);
   transform: translateX(-50%);
   background: var(--line-default);
-}
-
-.splitter::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: var(--target-min);
-  transform: translateX(-50%);
 }
 
 .splitter:hover::before,
@@ -764,7 +758,6 @@ body:has(.terms-dialog[open]) {
   background: var(--color-accent-wash);
   min-width: 0.75rem;
   min-height: 0.75rem;
-  cursor: pointer;
 }
 
 /* 番号の札を、枠の左上の外に出す（色だけに頼らない） */
@@ -875,8 +868,9 @@ body:has(.terms-dialog[open]) {
   color: var(--color-ok);
 }
 
+/* 印は置き場の側（.drop-note）とそろえて ✓（「◯」は選んでいないラジオボタンに見えるため。A7） */
 #status[data-tone="ok"]::before {
-  content: "◯ ";
+  content: "✓ ";
 }
 
 progress {
@@ -1167,7 +1161,8 @@ progress {
   touch-action: none;
 }
 
-.sheet[data-picking="true"] .mark {
+.sheet[data-picking="true"] .mark,
+.sheet[data-picking="true"] .mark-hit {
   pointer-events: none;
 }
 
@@ -1960,11 +1955,26 @@ progress {
   color: var(--color-muted);
 }
 
-/* ページの絵の上の印：見た目はそのままで、押せる所だけを 44px まで広げる（透明の余白。指で押しやすく） */
-.mark::after {
-  content: "";
+/*
+ * ページの絵の上の、見つかった所の押す所（透明）。見た目の枠（.mark）はそのままの大きさで描き、押す所だけを、
+ * 枠を中心に縦横とも 44px 以上にする（check:layout は要素の箱で測るので、::after で広げるのでは数えられない）。
+ * --x・--y・--w・--h は、ページの上の位置（%）。幅と左は横の長さ、高さと上は縦の長さに対して決まる
+ */
+.mark-hit {
   position: absolute;
-  inset: min(0px, calc((100% - var(--target-min)) / 2));
+  left: calc(var(--x) + (var(--w) - max(var(--w), var(--target-min))) / 2);
+  top: calc(var(--y) + (var(--h) - max(var(--h), var(--target-min))) / 2);
+  width: max(var(--w), var(--target-min));
+  height: max(var(--h), var(--target-min));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* 見た目の枠（見つかった所・消した所・自分で選んだ所）は押せない。押すのは上の .mark-hit */
+.mark {
+  pointer-events: none;
 }
 
 /* 高さの低い窓（横向きのスマートフォン・大きな拡大）：上の帯を詰め、「整える」が早く見えるようにする */
