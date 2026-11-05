@@ -64,8 +64,18 @@ export interface RenderOptions {
   referrer?: string;
   /** 記事の一覧のページで読み込む、検索のスクリプトの場所（site.ts が置いたもの）。なければ、検索の欄を出さない */
   searchScript?: string;
-  /** 記事の一覧の見出しまわりの 3D の飾り（scene：three.js で描くファイル、loader：あとから読む役。どちらも /assets/ の中） */
+  /** 記事の一覧の見出しまわりの 3D の飾り（scene：three.js で描くファイル、loader：あとから読む役。どちらも /assets/ の中）。
+   * 案 C（2026-11-05 夜）でやめた。渡しても、記事の一覧には出さない */
   hero?: { scene: string; loader: string };
+  /** 記事の一覧のサムネ（site-thumbs.ts が src/site/thumbs/ から assets/ に置いたもの）。鍵は記事の slug。16:9 と正方形の 2 つ */
+  thumbs?: ReadonlyMap<string, { wide: ThumbFile; square: ThumbFile }>;
+}
+
+/** サムネの 1 つのファイル（/assets/thumbs/<名前>-<ハッシュ>.svg と、ファイルから読んだ大きさ） */
+export interface ThumbFile {
+  href: string;
+  width: number;
+  height: number;
 }
 
 export function escapeHtml(s: string): string {

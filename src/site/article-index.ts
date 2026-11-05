@@ -17,6 +17,9 @@ import type { Article } from "./types.ts";
 
 const e = escapeHtml;
 
+/** 記事の一覧の 3D の飾りを出すか（案 C でやめた。2026-11-05 夜） */
+const SHOW_3D = false;
+
 /** 検索で探す字（題・説明・型の番号・タグ）。ページの中の data-search に入れる */
 export function searchText(a: Article): string {
   return [a.title, a.description, a.pattern ?? "", ...articleTags(a).map((t) => t.label)].join(" ");
@@ -27,17 +30,28 @@ function tagLink(t: Tag, text: string, inPage: boolean): string {
   return `<a class="tag site-tag" href="${tagPath(t)}"${inPage ? ` data-tag="${e(t.slug)}" data-tag-label="${e(t.label)}"` : ""}>${text}</a>`;
 }
 
-function card(a: Article, o: RenderOptions, current?: Tag): string {
-  const fig = o.figures?.get(a.slug);
-  const tags = articleTags(a).map((t) => (t === current ? `<li><span class="tag site-tag" aria-current="page">${e(t.label)}</span></li>` : `<li>${tagLink(t, e(t.label), !current)}</li>`));
+/**
+ * 記事の札（案 C：白いパネル 1 枚。中に枠・面を重ねない。design/sheet.md「案 C」）。
+ * 上（狭い画面は左）にサムネ、その下に「型の番号・タグ」の 1 行、題（記事へのリンク）、説明。
+ * サムネは、すぐ横に題があるので飾りとして扱う（alt を空にする）。広い画面は 16:9、狭い画面は正方形を出す（CSS で切り替える）。
+ * タグは札の中にはリンクで並べない（上の「タグで絞り込む」から選ぶ。札の中のリンクを 1 つにして、すっきりさせる）
+ */
+function card(a: Article, o: RenderOptions): string {
+  const th = o.thumbs?.get(a.slug);
+  const tags = articleTags(a);
+  const meta = `${a.pattern ? `<span class="card-pattern">${e(a.pattern)}</span>` : ""}${e(tags.map((t) => t.label).join("・"))}`;
   return [
-    `          <li class="card" data-article="${e(a.slug)}" data-tags="${e(articleTags(a).map((t) => t.slug).join(" "))}" data-search="${e(searchText(a))}">`,
-    // 一覧の小さな図は、すぐ横に題があるので飾りとして扱う（alt を空にする）
-    ...(fig ? [`            <img class="card-figure" src="${e(fig.href)}" alt="" width="${fig.width}" height="${fig.height}" loading="lazy" />`] : []),
-    `            <a class="card-head" href="${articlePath(a)}">${a.pattern ? `<span class="tag site-tag">${e(a.pattern)}</span>` : ""}${e(a.title)}</a>`,
+    `          <li class="card" data-article="${e(a.slug)}" data-tags="${e(tags.map((t) => t.slug).join(" "))}" data-search="${e(searchText(a))}">`,
+    ...(th
+      ? [
+          `            <img class="card-thumb card-thumb-wide" src="${e(th.wide.href)}" alt="" width="${th.wide.width}" height="${th.wide.height}" loading="lazy" />`,
+          `            <img class="card-thumb card-thumb-square" src="${e(th.square.href)}" alt="" width="${th.square.width}" height="${th.square.height}" loading="lazy" />`,
+        ]
+      : []),
     `            <div class="card-body">`,
-    `              <p>${e(a.description)}</p>`,
-    `              <ul class="card-tags" aria-label="タグ">${tags.join("")}</ul>`,
+    `              <p class="card-meta">${meta}</p>`,
+    `              <a class="card-head" href="${articlePath(a)}">${e(a.title)}</a>`,
+    `              <p class="card-desc">${e(a.description)}</p>`,
     `            </div>`,
     `          </li>`,
   ].join("\n");
@@ -72,7 +86,7 @@ function list(heading: string, items: Article[], o: RenderOptions, current?: Tag
     `      <section class="site-section" data-search-section>`,
     `        <h2>${e(heading)}</h2>`,
     `        <ul class="site-list site-cards">`,
-    ...items.map((a) => card(a, o, current)),
+    ...items.map((a) => card(a, o)),
     `        </ul>`,
     `      </section>`,
   ];
@@ -96,7 +110,8 @@ function searchBox(): string {
 function hero(o: RenderOptions): string[] {
   const title = `<h1>${e(ARTICLES_META.title)}</h1>`;
   const lead = `<p class="site-lead">${e(ARTICLES_META.description)}</p>`;
-  if (!o.hero) return [`      ${title}`, `      ${lead}`];
+  // 見出しの右の 3D の飾りは、案 C でやめた（2026-11-05 夜 本人が決定。サムネで足りるため。design/sheet.md「案 C」）
+  if (!SHOW_3D || !o.hero) return [`      ${title}`, `      ${lead}`];
   return [
     `      <div class="site-hero" data-scene="${e(o.hero.scene)}">`,
     `        <div class="site-hero-text">`,
@@ -119,7 +134,7 @@ export function renderArticleIndex(o: RenderOptions): string {
     ...list("正しいやり方の手順", ARTICLES.filter((a) => !a.pattern), o),
     toInspector(),
     ...(o.searchScript ? [`      <script type="module" src="${e(o.searchScript)}"></script>`] : []),
-    ...(o.hero ? [`      <script type="module" src="${e(o.hero.loader)}"></script>`] : []),
+    ...(SHOW_3D && o.hero ? [`      <script type="module" src="${e(o.hero.loader)}"></script>`] : []),
   ].join("\n");
   return layout(ARTICLES_META, body, o);
 }

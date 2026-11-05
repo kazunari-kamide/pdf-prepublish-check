@@ -19,6 +19,7 @@ import { CHECK_PAGE_FILE, CHECK_PATH, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, LICE
 import { faviconHref, inlineMark } from "./logo.ts";
 import { buildFigures } from "./site-figures.ts";
 import { buildLicenses } from "./site-licenses.ts";
+import { buildThumbs } from "./site-thumbs.ts";
 import { renderAbout } from "./src/site/about.ts";
 import { renderIndexPages, usedTags } from "./src/site/article-index.ts";
 import { tagPath } from "./src/site/tags.ts";
@@ -162,6 +163,7 @@ export async function buildHeroScene(entry = heroScripts().scene.entry): Promise
 /** dist/ に置く字でないファイル（記事の図・書体）。鍵は dist/ の中の名前 */
 export function siteBinaryFiles(): Map<string, Uint8Array> {
   const files = new Map(buildFigures().files);
+  for (const [name, buf] of buildThumbs().files) files.set(name, buf);
   for (const [name, buf] of siteFonts().files) files.set(name, buf);
   return files;
 }
@@ -210,12 +212,10 @@ export function siteFiles(): Map<string, string> {
     brandMark: inlineMark("mark", "site-brand-mark"), // 帯は白の地（design/sheet.md）なので、明るい地のマーク
   };
   const files = renderSite({ ...options, figures: figures.assets });
-  // 記事の一覧（検索のスクリプトと、3D の飾りの読み込み役を読む）と、タグごとの一覧のページ
-  const hero = heroScripts();
-  const heroOption = { scene: `/${hero.scene.file}`, loader: `/${hero.loader.file}` };
-  for (const [name, page] of renderIndexPages({ ...options, figures: figures.assets, searchScript: `/${search.file}`, hero: heroOption })) files.set(name, page);
+  // 記事の一覧（検索のスクリプトを読む）と、タグごとの一覧のページ。札にはサムネ（site-thumbs.ts）を出す。
+  // 3D の飾り（heroScripts）は、案 C でやめた（2026-11-05 夜 本人が決定）。作り方は残すが、配らない
+  for (const [name, page] of renderIndexPages({ ...options, figures: figures.assets, thumbs: buildThumbs().assets, searchScript: `/${search.file}` })) files.set(name, page);
   files.set(search.file, search.source);
-  files.set(hero.loader.file, hero.loader.source); // scene は束ねるのに時間がかかるので、generateBundle と開発のサーバーで作る
   // サービスの紹介のページ（LP）と、そのページだけの CSS
   const about = aboutCss();
   files.set(fileFor(ABOUT_PATH), renderAbout(options, `/${about.file}`));
@@ -340,7 +340,6 @@ export function sitePages(): Plugin {
     },
     async generateBundle() {
       for (const [fileName, source] of siteFiles()) this.emitFile({ type: "asset", fileName, source });
-      this.emitFile({ type: "asset", fileName: heroScripts().scene.file, source: await buildHeroScene() });
       this.emitFile({ type: "asset", fileName: OG_IMAGE_PATH.slice(1), source: ogImage() });
       for (const [fileName, source] of siteBinaryFiles()) this.emitFile({ type: "asset", fileName, source });
     },
