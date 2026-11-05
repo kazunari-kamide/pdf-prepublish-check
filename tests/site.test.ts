@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // サイトのページ（記事・プライバシーの説明。src/site/ と site.ts）を確かめる。
-// - 記事は 15 本（P1〜P12 を1本ずつ、手順 3 本）。どのページにも題・説明・canonical・同じ CSP があり、検査のページへつながる
+// - 記事は、P1〜P12 のどの型にも解説が1本以上あり、手順の記事もある（本数は決めない）。どのページにも題・説明・canonical・同じ CSP があり、検査のページと関係する記事へつながる
 // - スクリプトを入れない。字は HTML として解釈させない
 // - 使わない言い方（断定・「初めて」など）と、外の URL を書かない
 
@@ -28,10 +28,38 @@ function texts(): string[] {
 }
 
 describe("記事の数と形", () => {
-  it("型の解説が P1〜P12 の1本ずつ、手順が3本", () => {
+  it("P1〜P12 のどの型にも解説が1本以上あり、型の番号は P1〜P12 だけ", () => {
+    const all = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
     const patterns = ARTICLES.map((a) => a.pattern).filter((p) => p !== null);
-    expect(patterns).toEqual(Array.from({ length: 12 }, (_, i) => `P${i + 1}`));
-    expect(ARTICLES.filter((a) => a.pattern === null).map((a) => a.slug)).toEqual(["guide-word", "guide-acrobat-redaction", "guide-scan"]);
+    for (const p of all) expect(patterns, p).toContain(p);
+    for (const p of patterns) expect(all, p).toContain(p);
+  });
+
+  it("手順の記事がある（Word・Acrobat の墨消し・スキャンの書類を含む）", () => {
+    const guides = ARTICLES.filter((a) => a.pattern === null).map((a) => a.slug);
+    for (const s of ["guide-word", "guide-acrobat-redaction", "guide-scan"]) expect(guides).toContain(s);
+    for (const s of guides) expect(s).toMatch(/^guide-/);
+  });
+
+  it("同じ型の解説は並べて置く（記事の一覧で型ごとにまとまる）", () => {
+    const patterns = ARTICLES.map((a) => a.pattern).filter((p) => p !== null);
+    const runs = patterns.filter((p, i) => i === 0 || patterns[i - 1] !== p);
+    expect(new Set(runs).size).toBe(runs.length);
+  });
+
+  it("関係する記事は1つ以上あり、どれも記事の一覧にあって、自分自身・重なりがない", () => {
+    const slugs = new Set(ARTICLES.map((a) => a.slug));
+    for (const a of ARTICLES) {
+      expect(a.related.length, a.slug).toBeGreaterThan(0);
+      expect(new Set(a.related).size, a.slug).toBe(a.related.length);
+      expect(a.related, a.slug).not.toContain(a.slug);
+      for (const r of a.related) expect(slugs.has(r), `${a.slug} → ${r}`).toBe(true);
+    }
+  });
+
+  it("どの記事も、ほかの記事の「関係する記事」から1つ以上つながっている", () => {
+    const linked = new Set(ARTICLES.flatMap((a) => a.related));
+    for (const a of ARTICLES) expect(linked.has(a.slug), a.slug).toBe(true);
   });
 
   it("名前が重ならず、URL に使える字だけ", () => {
@@ -47,7 +75,8 @@ describe("記事の数と形", () => {
   });
 
   it("手順の記事は、アプリの版によって画面が違うことを書く", () => {
-    for (const a of ARTICLES.filter((x) => x.slug === "guide-word" || x.slug === "guide-acrobat-redaction")) {
+    const apps = ["guide-word", "guide-excel", "guide-ichitaro", "guide-acrobat-redaction", "guide-photo"];
+    for (const a of ARTICLES.filter((x) => apps.includes(x.slug))) {
       expect(a.sections.some((s) => s.note?.includes("版によって")), a.slug).toBe(true);
     }
   });
@@ -61,9 +90,12 @@ describe("記事の数と形", () => {
 });
 
 describe("ページの HTML", () => {
-  it("記事 15 本・一覧・プライバシーの 17 枚", () => {
-    expect(html.map(([n]) => n).sort()).toEqual(
-      ["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`)].sort(),
+  it("記事のすべてと、一覧・プライバシーのページがある", () => {
+    const names = html.map(([n]) => n);
+    expect(names).toEqual(expect.arrayContaining(["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`)]));
+    // 記事の場所にある HTML は、記事の一覧と記事だけ
+    expect(names.filter((n) => n.startsWith("articles/")).sort()).toEqual(
+      ["articles/index.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`)].sort(),
     );
   });
 
@@ -87,9 +119,17 @@ describe("ページの HTML", () => {
     for (const a of ARTICLES) expect(files.get(`articles/${a.slug}.html`)).toContain("検査のページで確かめる");
   });
 
+  it("記事の最後に、関係する記事へのリンクがある", () => {
+    for (const a of ARTICLES) {
+      const page = files.get(`articles/${a.slug}.html`)!;
+      expect(page, a.slug).toContain('aria-label="関係する記事"');
+      for (const r of a.related) expect(page, `${a.slug} → ${r}`).toContain(`href="/articles/${r}.html"`);
+    }
+  });
+
   it("字は HTML として解釈させない", () => {
     const page = renderArticle(
-      { slug: "x", pattern: null, title: "<script>alert(1)</script>", description: "\"><img src=x>", sections: [{ heading: "a&b", paragraphs: ["<b>'"] }] },
+      { slug: "x", pattern: null, title: "<script>alert(1)</script>", description: "\"><img src=x>", sections: [{ heading: "a&b", paragraphs: ["<b>'"] }], related: [] },
       { origin: OFFICIAL_ORIGIN, csp: cspForMeta, cssHref: "/assets/site.css" },
     );
     expect(page).not.toContain("<script>alert");
@@ -132,7 +172,9 @@ describe("sitemap.xml・robots.txt", () => {
   it("トップ・記事の一覧・各記事・プライバシーを、公式の URL で並べる", () => {
     const xml = renderSitemap();
     for (const p of sitePaths()) expect(xml).toContain(`<loc>${OFFICIAL_ORIGIN}${p}</loc>`);
-    expect(sitePaths()).toHaveLength(18);
+    // 記事の場所は、記事の一覧と記事の本数だけ（ほかのページが増えても、この数は変わらない）
+    expect(sitePaths().filter((p) => p.startsWith("/articles/"))).toHaveLength(ARTICLES.length + 1);
+    expect(new Set(sitePaths()).size).toBe(sitePaths().length);
     expect(files.get("sitemap.xml")).toBe(xml);
   });
 
