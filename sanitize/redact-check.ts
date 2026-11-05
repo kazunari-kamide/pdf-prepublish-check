@@ -86,6 +86,8 @@ export async function checkAreas(bytes: Uint8Array, areas: RedactArea[], opts: {
       }
       if (pixels) out.push({ check: "area", kind: "pixels", page: pageNo, rect: round(rect), count: pixels, label: `選んだ所に、塗られていない画像の画素が ${pixels} 個残っています` });
       if (unchecked) out.push({ check: "area", kind: "unchecked_image", page: pageNo, rect: round(rect), count: unchecked, label: `選んだ所の画像（${unchecked} 個）を読み直せず、塗られたかを確かめられませんでした` });
+      const pat = read.patternText.filter((b) => touches(b, rect)).length;
+      if (pat) out.push({ check: "area", kind: "pattern_text", page: pageNo, rect: round(rect), count: pat, label: `選んだ所に、字の入った模様（${pat} か所）が残っています` });
       const inline = read.inlineImages.filter((b) => touches(b, rect)).length;
       if (inline) out.push({ check: "area", kind: "inline_image", page: pageNo, rect: round(rect), count: inline, label: `選んだ所に、ページに直接埋め込んだ画像（${inline} 個）が残っています` });
 

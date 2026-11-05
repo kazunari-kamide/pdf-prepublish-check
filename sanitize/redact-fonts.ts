@@ -53,7 +53,7 @@ function utf16Hex(text: string): string {
 }
 
 /** コード → 字 の表から、対応表（CMap）を作る */
-function buildCMap(map: Array<[number, string]>, twoByte: boolean): string {
+export function buildCMap(map: Array<[number, string]>, twoByte: boolean): string {
   const w = twoByte ? 4 : 2;
   const code = (c: number) => `<${c.toString(16).padStart(w, "0").toUpperCase()}>`;
   const lines = [
@@ -80,12 +80,13 @@ export type FontUsage = { usage: Map<PDFObject, Usage>; scannedRes: Set<PDFDict>
  * 文書の中で使う字のコードを、書体ごとに数える（ページ・部品・注釈の見た目）。
  * candidates は、pages（1から）で使う書体（部品の中も）。参照（PDFRef）で置いた書体だけを見る（直接書いた書体は、書き直しで写されて見分けられないため）
  */
-export function fontUsage(doc: PDFDocument, pages: Set<number>): FontUsage | null {
+export function fontUsage(doc: PDFDocument, pages: Set<number>, maxOps = Infinity): FontUsage | null {
   const ctx = doc.context;
   const scannedRes = new Set<PDFDict>();
   const usage = new Map<PDFObject, Usage>();
   const fontKey = (o: PDFObject): PDFObject => o;
   let broken = false;
+  let ops = 0;
 
   const fontsIn = (res: PDFDict | undefined): Map<string, PDFObject> => {
     const out = new Map<string, PDFObject>();
@@ -105,6 +106,7 @@ export function fontUsage(doc: PDFDocument, pages: Set<number>): FontUsage | nul
       for (const g of cur.info.decode(bytes)) cur.codes.add(g.code);
     };
     for (const { op, args } of operations(data)) {
+      if (++ops > maxOps) throw new Error("too many operations");
       if (op === "Tf") {
         const ref = args[0]?.t === "name" ? fonts.get(args[0].v) : undefined;
         if (!ref) {

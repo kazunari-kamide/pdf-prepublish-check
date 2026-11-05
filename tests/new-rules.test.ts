@@ -322,8 +322,8 @@ describe("描かれていない資源に残る画像（unused-images）", () => 
     const r = await detectUnusedImages(await pdf(uic.CASES, "ui-l01"));
     expect(r.findings).toEqual([{ pattern: "P5", page: 1, width: 40, height: 30, match: "similar", diffRatio: 0.01, bytes: 1200 }]);
   });
-  it("片付けると、ページの資源の描かれない画像は外れる。描かれた部品の資源の中に残るものは、まだ外れない（C に頼む）", async () => {
-    for (const [id, left] of [["ui-l01", 0], ["ui-l03", 0], ["ui-l02", 1]] as const) {
+  it("片付けると、ページの資源と、描かれた部品の資源の中の、描かれない画像が外れる（部品の中は片付け 0.8.0 から）", async () => {
+    for (const [id, left] of [["ui-l01", 0], ["ui-l03", 0], ["ui-l02", 0]] as const) {
       const s = await sanitizePdf(await pdf(uic.CASES, id));
       expect(s.status).toBe("ok");
       if (s.status !== "ok") continue;
