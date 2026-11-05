@@ -19,10 +19,10 @@ describe("内訳を 1 行に", () => {
 describe("見た所・見なかった所の要約", () => {
   const rows = [row("checked", 2), row("checked", 0, 1), row("checked"), row("partial"), row("not_in_version"), row("failed")];
   it("型の数・調べた数・見つかった型の数と、言い切れないものの内訳", () => {
-    expect(coverageSummary(rows, "before")).toBe("6 の型のうち 4 を調べた・見つかったのは 2 つ（一部だけ 1・調べられなかった 1・この版では調べていない 1）");
+    expect(coverageSummary(rows, "before")).toBe("6 種類のうち 4 を調べた・見つかったのは 2 種類（一部だけ 1・調べられなかった 1・この版では調べていない 1）");
   });
   it("整えたあとは「残っているのは」", () => {
-    expect(coverageSummary([row("checked"), row("checked")], "after")).toBe("2 の型のうち 2 を調べた・残っているのは 0 つ");
+    expect(coverageSummary([row("checked"), row("checked")], "after")).toBe("2 種類のうち 2 を調べた・残っているのは 0 種類");
   });
 });
 

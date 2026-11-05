@@ -72,9 +72,9 @@ const PAGE_HEAD: Record<string, { title: string; description: string }> = {
       "お探しのページは見つかりませんでした。場所が変わったか、なくなった可能性があります。検査のページや記事の一覧から探してください。公式のサイトは omamoripdf.com だけです。",
   },
   "/contact": {
-    title: "お問い合わせ：質問・不具合・脆弱性の知らせ方｜お守りPDF",
+    title: "お問い合わせ：質問・不具合・弱点の知らせ方｜お守りPDF",
     description:
-      "お守りPDF への質問・不具合の知らせは、GitHub の Issues で受け付けています。PDF や個人情報は貼らないでください。脆弱性は、公開の Issues ではなく、非公開の報告の窓口から知らせてください。",
+      "お守りPDF への質問・不具合・セキュリティの弱点の知らせは、このページのフォームだけで受け付けています。PDF や個人情報、見つかった字の中身は書かないでください。返事がほしいときだけ、メールアドレスを書いてください。",
   },
 };
 
@@ -90,9 +90,9 @@ const ARTICLE_EXTRA: Record<string, string> = {
 
 /**
  * 検索に載せないページ。カードを付けず `<meta name="robots" content="noindex">` にし、sitemap にも入れない（canonical は付ける）
- * （404.html：.htaccess の ErrorDocument が、どの場所でも返すページ。tests/site-head.test.ts）
+ * （404.html：.htaccess の ErrorDocument が、どの場所でも返すページ。contact-send.php：お問い合わせを送ったあとの結果のページ。tests/site-head.test.ts）
  */
-export const NOINDEX_PATHS: ReadonlySet<string> = new Set(["/404"]);
+export const NOINDEX_PATHS: ReadonlySet<string> = new Set(["/404", "/contact-send.php"]);
 
 export type HeadInfo = { path: string; title: string; description: string; type: "website" | "article"; noindex?: boolean };
 
@@ -128,7 +128,13 @@ export function headFor(meta: PageMeta): HeadInfo {
     const extra = ARTICLE_EXTRA[article.slug] ?? "";
     return { path: meta.path, title: `${meta.title}｜${SITE_NAME}`, description: `${meta.description}${extra}${tail}`, type: "article" };
   }
-  return { path: meta.path, title: meta.path === "/" ? SITE_NAME : `${meta.title}｜${SITE_NAME}`, description: meta.description, type: "website" };
+  return {
+    path: meta.path,
+    title: meta.path === "/" ? SITE_NAME : `${meta.title}｜${SITE_NAME}`,
+    description: meta.description,
+    type: "website",
+    ...(NOINDEX_PATHS.has(meta.path) ? { noindex: true } : {}),
+  };
 }
 
 /** OGP と X のカードの <meta>（字は呼ぶ側の escape を通す） */

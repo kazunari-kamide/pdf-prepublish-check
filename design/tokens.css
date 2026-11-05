@@ -83,5 +83,5 @@
   --button-height-large: 56px;
   --width-thumbs: 7.5rem;
   --width-results: 30rem;
-  --width-fuda: 2.75rem; /* 種類ごとの札の幅 */
+  --width-fuda: 0.5rem; /* 種類ごとの札（色の帯）の幅。字は出さない（2026-11-05 本人の画面のレビュー B4） */
 }

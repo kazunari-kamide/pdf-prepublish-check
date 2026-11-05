@@ -2,7 +2,7 @@
 //
 // 出どころの札の部品（画面だけ。DOM を使う）。どの型に出すかの表と字は src/ui/rule-origin.ts。
 
-import { ORIGIN_TEXT, parseRepo, prUrl, type RuleOrigin } from "./rule-origin";
+import { ORIGIN_MARK, ORIGIN_TEXT, parseRepo, prUrl, type RuleOrigin } from "./rule-origin";
 
 /**
  * リポジトリの場所（ビルドの時に入れた <meta name="omamori-repo">）。GitHub のリポジトリの形でなければ null。
@@ -21,7 +21,7 @@ export function originNote(doc: Document, origin: RuleOrigin, repo: string | nul
   p.className = "origin-note";
   const mark = doc.createElement("span");
   mark.className = "origin-mark";
-  mark.textContent = "見つけた型";
+  mark.textContent = ORIGIN_MARK;
   // 札の字は飾り。読み上げでは、続く文を読む（同じことを 2 回読ませない）
   mark.setAttribute("aria-hidden", "true");
   const text = doc.createElement("span");

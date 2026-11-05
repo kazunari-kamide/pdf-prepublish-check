@@ -7,10 +7,12 @@
 // - ライセンスの一覧の中身は、ビルドの時に site-licenses.ts が package-lock.json・docs/licenses.md から作って渡す。
 // - 記事の中身（articles.ts）と、記事のページの作り方（render.ts の記事の部分）は、ここでは扱わない。
 
+import { CONTACT_REFERRER, withFormActionSelf } from "../../csp.ts";
 import {
   ARTICLES_PATH,
   CHECKLIST_PATH,
   CONTACT_PATH,
+  CONTACT_SEND_PATH,
   FAQ_PATH,
   LICENSES_PATH,
   PRIVACY_PATH,
@@ -18,6 +20,7 @@ import {
   escapeHtml,
   fileFor,
   layout,
+  renderSection,
   renderSectionAt,
   type RenderOptions,
 } from "./render.ts";
@@ -173,34 +176,160 @@ export const TERMS_BLOCKS: Block[] = [
 
 // ---------------------------------------------------------------- お問い合わせ
 
+// お問い合わせは、このページのフォームだけで受け付ける（2026-11-05 本人が決定。GitHub の Issues・非公開の報告の案内は出さない）。
+// フォームは、同じサイトの PHP（server/contact-send.php。site.ts が dist/contact-send.php にする）へ、ブラウザのふつうの送信で送る。スクリプトは使わない。
+// このページと送り先だけ、CSP の form-action を 'self' にする（csp.ts の withFormActionSelf）。
+
 export const CONTACT_META: PageMeta = {
   path: CONTACT_PATH,
   title: "お問い合わせ",
-  description: "お守りPDF への質問・不具合の知らせは、GitHub の Issues で受け付けています。PDF や個人情報は貼らないでください。",
+  description: "お守りPDF への質問・不具合・セキュリティの弱点の知らせは、このページのフォームだけで受け付けています。PDF や個人情報、見つかった字の中身は書かないでください。",
 };
+
+/** フォームの種類。value は server/contact-send.php の KINDS と同じ（tests/contact-php.test.ts で照らす） */
+export const CONTACT_KINDS: ReadonlyArray<{ value: string; label: string; note?: string }> = [
+  { value: "question", label: "質問" },
+  { value: "bug", label: "不具合" },
+  { value: "security", label: "セキュリティの弱点", note: "弱点の詳しい中身は書かず、連絡先だけ書いてください。こちらから連絡します。" },
+  { value: "other", label: "その他" },
+];
+/** 入力の決まり。server/contact-send.php の BODY_MIN_CHARS・BODY_MAX_CHARS・EMAIL_MAX_CHARS・URL_MAX と同じ（tests/contact-php.test.ts で照らす） */
+export const CONTACT_BODY_MIN = 10;
+export const CONTACT_BODY_MAX = 4000;
+export const CONTACT_EMAIL_MAX = 254;
+export const CONTACT_URL_MAX = 2;
+/**
+ * 人には見えない欄の名前（ボットだけが埋める）。server/contact-send.php の TRAP_FIELD と同じ。
+ * website などの意味のある名前にすると、ブラウザの自動入力が埋めて、正しい送信が黙って捨てられるため、意味のない名前にする
+ */
+export const CONTACT_TRAP_FIELD = "hp_x7q";
+/**
+ * PHP がフォームのページを返すときに、中身を入れる印（server/contact-send.php の ERRORS_MARK・ERRORS_TOP_MARK・TOKEN_FIELD）。
+ * 静かな contact.html では、何も入らない（印はコメントと空の値のまま）
+ */
+export const CONTACT_ERRORS_MARK = "<!--CONTACT_ERRORS-->";
+export const CONTACT_ERRORS_TOP_MARK = "<!--CONTACT_ERRORS_TOP-->";
+export const CONTACT_TOKEN_FIELD = 'name="t" value=""';
+/** フォームのすぐ上に置く注意 */
+export const CONTACT_WARNING = "PDF や個人情報、見つかった字の中身は書かないでください。";
 
 export const CONTACT_BLOCKS: Block[] = [
   {
     heading: "知らせ方",
-    paragraphs: ["質問・不具合・直してほしい所は、GitHub の Issues に書いてください。メールでは受け付けていません。"],
-    links: [{ href: "repo:/issues", label: "GitHub の Issues を開く" }],
+    paragraphs: [
+      "質問・不具合・直してほしい所・セキュリティの弱点は、このページの下のフォームから送ってください。ほかの窓口では受け付けていません。",
+      "送った中身は、運営者にだけメールで届きます。公開はしません。",
+    ],
   },
   {
     heading: "書く前に、必ず読んでください",
     list: [
-      "業務の PDF や、実在の人名・団体名が入った PDF を、添付しないでください。Issues は誰でも読めます。",
+      "PDF のファイルは送れません。業務の PDF の中身や、実在の人名・団体名を書き写さないでください。",
       "見つかった字の中身（黒塗りの下の字・名前・番号など）を、そのまま書かないでください。種類と数だけで十分です。",
-      "再現のための PDF が要るときは、架空の名前と番号で作った PDF を使ってください。",
       "ブラウザの種類と版、どの手順で何が起きたかを書いてもらえると、調べやすくなります。",
+      "名前は要りません。メールアドレスは、返事がほしいときだけ書いてください。",
     ],
-    note: "個人情報らしいものが貼られていたときは、見つけしだい見えないようにします。",
   },
   {
-    heading: "脆弱性（セキュリティの弱点）を見つけたとき",
-    paragraphs: ["公開の Issues には書かず、GitHub の非公開の報告（private vulnerability reporting）で知らせてください。"],
-    links: [{ href: "repo:/security/advisories/new", label: "非公開で報告する（GitHub）" }],
+    heading: "セキュリティの弱点を見つけたとき",
+    paragraphs: [
+      "弱点の詳しい中身は、フォームには書かないでください。種類で「セキュリティの弱点」を選び、連絡先のメールアドレスだけを書いて送ってください。こちらから連絡し、詳しい中身の受け取り方を決めます。",
+      "直すまでの間は、中身を公開しないでください。",
+    ],
   },
 ];
+
+function contactForm(): string {
+  const kinds = CONTACT_KINDS.map((k) =>
+    [
+      `            <li><label><input type="radio" name="kind" value="${e(k.value)}" required /><span>${e(k.label)}`,
+      k.note ? `<span class="site-form-hint">${e(k.note)}</span>` : "",
+      `</span></label></li>`,
+    ].join(""),
+  );
+  return [
+    `      <section class="site-section" aria-labelledby="contact-form-head">`,
+    `        <h2 id="contact-form-head">フォーム</h2>`,
+    `        <p class="site-form-warn"><span aria-hidden="true">▲ </span>${e(CONTACT_WARNING)}</p>`,
+    `        ${CONTACT_ERRORS_MARK}`,
+    `        <form class="site-form" method="post" action="${CONTACT_SEND_PATH}" accept-charset="UTF-8">`,
+    // ページを開いた時刻の印（サーバーの秘密の値で署名したもの）。本番では、PHP がフォームを返すときに入れる
+    `          <input type="hidden" ${CONTACT_TOKEN_FIELD} />`,
+    `          <fieldset class="site-form-field">`,
+    `            <legend>種類<span class="site-form-need">（必ず選ぶ）</span></legend>`,
+    `            <ul class="site-form-choices">`,
+    ...kinds,
+    `            </ul>`,
+    `          </fieldset>`,
+    `          <div class="site-form-field">`,
+    `            <label for="contact-body">本文<span class="site-form-need">（必ず書く。${CONTACT_BODY_MIN}〜${CONTACT_BODY_MAX} 字）</span></label>`,
+    `            <textarea id="contact-body" name="body" rows="8" minlength="${CONTACT_BODY_MIN}" maxlength="${CONTACT_BODY_MAX}" required aria-describedby="contact-body-hint"></textarea>`,
+    `            <p class="site-form-hint" id="contact-body-hint">URL は ${CONTACT_URL_MAX} つまで。同じ本文は、続けて送れません。</p>`,
+    `          </div>`,
+    `          <div class="site-form-field">`,
+    `            <label for="contact-email">メールアドレス<span class="site-form-need">（返事がほしいときだけ）</span></label>`,
+    `            <input id="contact-email" name="email" type="email" maxlength="${CONTACT_EMAIL_MAX}" autocomplete="email" inputmode="email" aria-describedby="contact-email-hint" />`,
+    `            <p class="site-form-hint" id="contact-email-hint">返事のためだけに使います。セキュリティの弱点のときは、必ず書いてください。</p>`,
+    `          </div>`,
+    // 人には見えない欄（ボットだけが埋める）。読み上げにも出さず、Tab でも止まらない
+    `          <div class="site-form-trap" aria-hidden="true">`,
+    `            <label for="contact-${CONTACT_TRAP_FIELD}">この欄は空のままにしてください</label>`,
+    `            <input id="contact-${CONTACT_TRAP_FIELD}" name="${CONTACT_TRAP_FIELD}" type="text" tabindex="-1" autocomplete="off" />`,
+    `          </div>`,
+    `          <p><button type="submit" class="site-form-submit">送る</button></p>`,
+    `        </form>`,
+    `        <p class="site-note">送った中身の扱い（何を受け取り、何に使い、いつ消すか）は、<a href="${PRIVACY_PATH}">プライバシーについて</a>に書いています。続けて送ることはできません。</p>`,
+    `      </section>`,
+  ].join("\n");
+}
+
+/** お問い合わせのページ（静かな contact.html と、PHP が返すフォームのページの、もとの HTML） */
+export function renderContact(o: RenderOptions): string {
+  // このページだけ、同じサイトへのフォームの送信を許す CSP と、同じサイトへだけ送り元を付ける参照元の決まりにする
+  const co: RenderOptions = { ...o, csp: withFormActionSelf(o.csp), referrer: CONTACT_REFERRER };
+  const body = [
+    `      <div class="site-page">`,
+    `      <h1>${e(CONTACT_META.title)}</h1>`,
+    // 送れなかったときに、PHP がここへ「直す所は下にある」の一言を入れる（ページの上で気づけるように）
+    `      ${CONTACT_ERRORS_TOP_MARK}`,
+    `      <p class="site-lead">${e(CONTACT_META.description)}</p>`,
+    ...CONTACT_BLOCKS.map((b) => renderBlock(b, co)),
+    contactForm(),
+    `      <p class="site-back"><a href="/">検査のページへ</a></p>`,
+    `      </div>`,
+  ].join("\n");
+  return layout(CONTACT_META, body, co);
+}
+
+/** 送り先の PHP が返す、結果のページ（受け付けた・送れなかった）。送れなかったときの一言は、PHP が CONTACT_MESSAGE_MARK の所に入れる */
+export const CONTACT_MESSAGE_MARK = "<!--CONTACT_MESSAGE-->";
+
+export function renderContactResults(o: RenderOptions): { done: string; error: string } {
+  const co: RenderOptions = { ...o, csp: withFormActionSelf(o.csp), referrer: CONTACT_REFERRER };
+  const page = (title: string, description: string, inner: string[]) =>
+    layout(
+      { path: CONTACT_SEND_PATH, title, description },
+      [`      <div class="site-page">`, `      <h1>${e(title)}</h1>`, ...inner, `      <p class="site-back"><a href="/">検査のページへ</a></p>`, `      </div>`].join("\n"),
+      co,
+    );
+  const done = page("受け付けました", "お守りPDF へのお問い合わせを受け付けました。返事がほしいとメールアドレスを書いたときは、そのアドレスにお返しします。", [
+    `      <p class="site-lead">お問い合わせを受け付けました。ありがとうございます。</p>`,
+    renderSection({
+      heading: "このあと",
+      list: [
+        "メールアドレスを書いたときは、そのアドレスにお返しします。日にちがかかることがあります。",
+        "セキュリティの弱点のときは、書いてもらったアドレスに、こちらから連絡します。",
+        "届いたメールは、対応が済んだら消します。長くても、届いてから 90 日で消します。",
+      ],
+    }),
+  ]);
+  const error = page("送れませんでした", "お守りPDF へのお問い合わせを、送れませんでした。理由を読み、お問い合わせのページから、もう一度送ってください。", [
+    `      <p class="site-form-warn" role="alert"><span aria-hidden="true">▲ </span>${CONTACT_MESSAGE_MARK}</p>`,
+    `      <p>ブラウザの「戻る」で前のページに戻ると、書いた中身が残っていることがあります。</p>`,
+    `      <p><a href="${CONTACT_PATH}">お問い合わせのページへ</a></p>`,
+  ]);
+  return { done, error };
+}
 
 // ---------------------------------------------------------------- よくある質問
 
@@ -298,7 +427,7 @@ export const FAQ_BLOCKS: Block[] = [
   },
   {
     heading: "誤りを見つけました。どこに知らせればよいですか？",
-    paragraphs: ["GitHub の Issues で受け付けています。PDF や個人情報は貼らないでください。"],
+    paragraphs: ["お問い合わせのページのフォームで受け付けています。PDF や個人情報、見つかった字の中身は書かないでください。"],
     links: [{ href: CONTACT_PATH, label: "お問い合わせ" }],
   },
 ];
@@ -503,7 +632,7 @@ export function renderGuidePages(o: RenderOptions, licenses: LicenseData): Map<s
   pages.set(fileFor(CHECKLIST_PATH), simplePage(CHECKLIST_META, CHECKLIST_META.description, CHECKLIST_BLOCKS, o, "site-checklist", renderChecklistBlock));
   pages.set(fileFor(FAQ_PATH), simplePage(FAQ_META, FAQ_META.description, FAQ_BLOCKS, o));
   pages.set(fileFor(TERMS_PATH), simplePage(TERMS_META, TERMS_META.description, TERMS_BLOCKS, o));
-  pages.set(fileFor(CONTACT_PATH), simplePage(CONTACT_META, CONTACT_META.description, CONTACT_BLOCKS, o));
+  pages.set(fileFor(CONTACT_PATH), renderContact(o));
   pages.set(fileFor(LICENSES_PATH), renderLicenses(o, licenses));
   pages.set(fileFor(NOT_FOUND_META.path), simplePage(NOT_FOUND_META, NOT_FOUND_META.description, NOT_FOUND_BLOCKS, o));
   return pages;

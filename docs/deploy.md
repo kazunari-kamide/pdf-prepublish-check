@@ -71,6 +71,13 @@ HSTS は、一度ブラウザに覚えさせると、期間が切れるまで取
 - `index.html` の `<meta>` の CSP も残す。ヘッダーの CSP は、`<meta>` の CSP に `frame-ancestors 'none'`（`<meta>` では効かない）を足しただけで、ほかは同じ値。2つの CSP は両方とも効くが、値が同じなので食い違わない。`.htaccess` が効かなかったときの守りにもなる。食い違いは `scripts/check-dist.mjs` が止める。
 - Xserver の「HTTPS転送設定」は、`public_html` の `.htaccess` に転送の行を書く仕組みなので（推測。Xserver のマニュアルで確かめていない）、配信のたびに上書きされても転送が消えないよう、同じ転送を `.htaccess` に書いている。
 
+## お問い合わせのフォーム（PHP）
+
+- `dist/contact-send.php` は、配信で `public_html/` に上がる（ほかのファイルと同じ）。届け先などの本物の設定（`contact-config.php`）と迷惑防止の記録（`contact-data/`）は、`public_html` の **1 つ上**に本人が置く。配信用の FTP アカウントはそこに入れないので、配信（`mirror --delete`）で消えたり上書きされたりしない。
+- お問い合わせのページの場所は `/contact`（`/contact.html` は 301 で移す）。`.htaccess` が `/contact` を中で `contact-send.php` へ回し、PHP がフォームを返す。
+- `.htaccess` は、`contact.html` と `contact-send.php` にだけ、CSP の `form-action 'self'` と `Referrer-Policy: same-origin` を返す（`<FilesMatch>`。値は `csp.ts` の `contactHeaders`）。
+- 決まり・本人がすること（送信元のアドレス・SPF・DKIM・設定のファイルの置き方）は `docs/contact.md`。
+
 ## 開いた回数の数え方（アクセス解析）
 
 - ページには解析のスクリプトを入れない（2026-11-05 本人が決定。`docs/no-network.md` の「通信の決まり」）。そのため、解析のための Secrets はない。
@@ -95,7 +102,8 @@ HSTS は、一度ブラウザに覚えさせると、期間が切れるまで取
 - https の応答に `Strict-Transport-Security`（`htaccess.ts` の `HSTS`）が付いている。`Cache-Control` が、トップページは `no-cache`、`assets/` のファイルは `max-age=31536000, immutable`
 - 見つからない場所（一番上と `assets/` の中）が、404 で、自前の 404 のページ（`dist/404.html` と同じ中身）を、同じヘッダー・`no-cache` で返す。`assets/` を開いても、ファイルの一覧が出ない
 - `.mjs` が `text/javascript`、`.wasm` が `application/wasm` で返る（今は `.wasm` を配っていないので、省いたと表示する）
-- `dist/` のファイルが本番と1バイトも違わない。`.htaccess` は外から読めない
+- お問い合わせのページと `contact-send.php` だけ、`form-action 'self'` の CSP と `same-origin` の参照元の決まり。`/contact` と `contact-send.php` は、PHP のソースを出さずにフォームを返し、中身は `dist/contact.html` と開いた時刻の印だけが違う。`/contact.html` は `/contact` へ 301
+- `dist/` のファイルが本番と1バイトも違わない（`contact-send.php` と `contact.html` は、PHP が返すので上で別に照らす）。`.htaccess` は外から読めない
 - `http://` と `www` つきは、301 で `https://omamoripdf.com/` へ（`www` の名前が引けないときは、省いたと表示する）
 
 ## まだ確かめていないこと
