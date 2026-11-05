@@ -73,6 +73,7 @@ export type NotDoneReason =
   | "uncertain_cover" // 画像の上の白い塗りが、下を隠さない重ね方（Multiply など）・半透明・表示しないレイヤーの中にあり、塗らなかった
   | "too_many_operations" // 命令が多すぎるページ（重いページ）
   | "unreadable_page" // ページの中身を読めない
+  | "stream_too_large" // 解くと大きすぎる中身（圧縮の爆弾など）があり、ページを書き換えられない（0.7.1 から）
   | "field_shared" // 選んだ所のフォームの欄が、ほかの所にも見た目を持っていて、欄ごとは外せない（redact.ts）
   // 0.7.0 から
   | "accessibility_text" // 読み上げ用の説明（/Alt・/E・/TU）。読み上げに使うので消さない
@@ -197,7 +198,7 @@ type TraceRect = [number, number, number, number];
 /** 確かめの道具に渡す記録（数と名前だけ） */
 export type SanitizeTraceEvent =
   | { type: "page"; page: number; operations: number; images: number; inlineImages: number; darkCovers: number; lightCovers: number; lightSkipped: number; fillLog: number }
-  | { type: "page_error"; page: number; error: "too_many_operations" | "unreadable_page" }
+  | { type: "page_error"; page: number; error: "too_many_operations" | "unreadable_page" | "stream_too_large" }
   /** ページの外にはみ出した画像を切り詰めたか（0.10.0 から） */
   | { type: "crop"; page: number; imageSeq: number; ok: boolean; reason?: string }
   | {

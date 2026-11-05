@@ -8,9 +8,10 @@
 
 import { ARTICLES } from "./articles.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS, PRIVACY_TITLE } from "./privacy.ts";
-import type { Article, PageMeta, Section } from "./types.ts";
+import { SITE_NAME, headFor, headLines } from "./seo.ts";
+import type { Article, FigureAsset, PageMeta, Section } from "./types.ts";
 
-export const SITE_NAME = "お守りPDF";
+export { SITE_NAME };
 export const ARTICLES_PATH = "/articles/";
 export const PRIVACY_PATH = "/privacy.html";
 // サイトの案内のページ（中身は pages.ts）
@@ -48,6 +49,10 @@ export interface RenderOptions {
   brandMark?: string;
   /** ソースを公開している GitHub のリポジトリの場所。分からないときは null（リンクを出さず、文だけにする） */
   repoUrl?: string | null;
+  /** 記事の図（site.ts が src/site/figures/ から assets/ に置いたもの）。鍵は記事の slug。ない記事は、図の場所を出さない */
+  figures?: ReadonlyMap<string, FigureAsset>;
+  /** 記事の一覧のページで読み込む、検索のスクリプトの場所（site.ts が置いたもの）。なければ、検索の欄を出さない */
+  searchScript?: string;
 }
 
 export function escapeHtml(s: string): string {
@@ -64,7 +69,6 @@ export function fileFor(path: string): string {
 /** どのページにも共通の枠（CSP・題・説明・canonical・上の帯・下の帯）。中身の HTML は body */
 export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
   const e = escapeHtml;
-  const title = meta.path === "/" ? SITE_NAME : `${meta.title}｜${SITE_NAME}`;
   return `<!doctype html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <html lang="ja">
@@ -73,9 +77,7 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
     <meta http-equiv="Content-Security-Policy" content="${e(o.csp)}" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
-    <title>${e(title)}</title>
-    <meta name="description" content="${e(meta.description)}" />
-    <link rel="canonical" href="${e(o.origin + meta.path)}" />
+    ${headLines(headFor(meta), o.origin, e)}
     <link rel="icon" href="${e(o.favicon ?? "data:,")}" />
     <link rel="stylesheet" href="${e(o.cssHref)}" />
   </head>
@@ -115,12 +117,24 @@ export function renderSection(s: Section): string {
 }
 
 /** 記事の最後に置く、検査のページへのつなぎ */
-function toInspector(): string {
+export function toInspector(): string {
   return `      <aside class="site-cta" aria-label="検査のページへ">
         <p>手元の PDF に、この記事のようなものが残っていないかを確かめられます。PDF は、このパソコンのブラウザの中だけで読みます。</p>
         <p><a class="site-cta-link" href="/">検査のページで確かめる</a></p>
         <p class="site-note">見つけられるのは、検査のページに並べた種類だけです。すべての漏れを見つけられるわけではありません。</p>
       </aside>`;
+}
+
+/** 記事の図（ないときは何も出さない。大きさを書いて、読み込む前から場所を取る） */
+export function figureHtml(f: FigureAsset | undefined): string[] {
+  if (!f) return [];
+  const e = escapeHtml;
+  return [
+    `      <figure class="site-figure">`,
+    `        <img src="${e(f.href)}" alt="${e(f.alt)}" width="${f.width}" height="${f.height}" />`,
+    ...(f.caption ? [`        <figcaption>${e(f.caption)}</figcaption>`] : []),
+    `      </figure>`,
+  ];
 }
 
 /** 記事の最後に置く、関係する記事へのつなぎ（slug が記事の一覧にないときは止める） */
@@ -150,6 +164,7 @@ export function renderArticle(a: Article, o: RenderOptions): string {
     `      <p class="site-kicker">${e(kicker)}</p>`,
     `      <h1>${e(a.title)}</h1>`,
     `      <p class="site-lead">${e(a.description)}</p>`,
+    ...figureHtml(o.figures?.get(a.slug)),
     ...a.sections.map(renderSection),
     toInspector(),
     ...(a.related.length ? [toRelated(a)] : []),
@@ -165,29 +180,7 @@ export const ARTICLES_META: PageMeta = {
   description: "PDF を公開・提出する前に知っておきたい、見た目では分からない情報の残り方（12 の型）と、正しいやり方の手順をまとめました。",
 };
 
-export function renderArticleIndex(o: RenderOptions): string {
-  const e = escapeHtml;
-  const item = (a: Article) =>
-    `          <li><a href="${articlePath(a)}">${a.pattern ? `<span class="site-tag">${e(a.pattern)}</span>` : ""}${e(a.title)}</a><p>${e(a.description)}</p></li>`;
-  const body = [
-    `      <h1>${e(ARTICLES_META.title)}</h1>`,
-    `      <p class="site-lead">${e(ARTICLES_META.description)}</p>`,
-    `      <section class="site-section">`,
-    `        <h2>型の解説</h2>`,
-    `        <ul class="site-list">`,
-    ...ARTICLES.filter((a) => a.pattern).map(item),
-    `        </ul>`,
-    `      </section>`,
-    `      <section class="site-section">`,
-    `        <h2>正しいやり方の手順</h2>`,
-    `        <ul class="site-list">`,
-    ...ARTICLES.filter((a) => !a.pattern).map(item),
-    `        </ul>`,
-    `      </section>`,
-    toInspector(),
-  ].join("\n");
-  return layout(ARTICLES_META, body, o);
-}
+// 記事の一覧のページと、タグごとの一覧のページは article-index.ts（検索・タグの絞り込み）
 
 export const PRIVACY_META: PageMeta = { path: PRIVACY_PATH, title: PRIVACY_TITLE, description: PRIVACY_DESCRIPTION };
 
@@ -206,10 +199,9 @@ export function sitePaths(): string[] {
   return ["/", ARTICLES_PATH, ...ARTICLES.map(articlePath), PRIVACY_PATH];
 }
 
-/** サイトの HTML のページを全部作る。鍵は dist/ の中のファイルの名前 */
+/** 記事・プライバシーの HTML のページを作る（記事の一覧とタグのページは article-index.ts）。鍵は dist/ の中のファイルの名前 */
 export function renderSite(o: RenderOptions): Map<string, string> {
   const pages = new Map<string, string>();
-  pages.set(fileFor(ARTICLES_PATH), renderArticleIndex(o));
   for (const a of ARTICLES) pages.set(fileFor(articlePath(a)), renderArticle(a, o));
   pages.set(fileFor(PRIVACY_PATH), renderPrivacy(o));
   return pages;

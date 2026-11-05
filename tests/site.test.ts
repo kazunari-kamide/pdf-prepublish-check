@@ -8,9 +8,11 @@
 import { describe, expect, it } from "vitest";
 import { cspForMeta } from "../csp.ts";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
-import { renderRobots, renderSitemap, siteFiles, verificationMeta } from "../site.ts";
+import { renderRobots, renderSitemap, searchScript, siteFiles, verificationMeta } from "../site.ts";
+import { usedTags } from "../src/site/article-index.ts";
 import { ARTICLES } from "../src/site/articles.ts";
 import { GUIDE_PATHS } from "../src/site/pages.ts";
+import { tagPath } from "../src/site/tags.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS } from "../src/site/privacy.ts";
 import { escapeHtml, renderArticle, sitePaths } from "../src/site/render.ts";
 import type { Section } from "../src/site/types.ts";
@@ -94,9 +96,9 @@ describe("ページの HTML", () => {
   it("記事のすべてと、一覧・プライバシー・サイトの案内のページ（tests/site-pages.test.ts）がある", () => {
     const names = html.map(([n]) => n);
     expect(names).toEqual(expect.arrayContaining(["articles/index.html", "privacy.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...GUIDE_PATHS.map((p) => p.slice(1))]));
-    // 記事の場所にある HTML は、記事の一覧と記事だけ
+    // 記事の場所にある HTML は、記事の一覧と記事と、タグごとの一覧のページ（tests/article-index.test.ts）だけ
     expect(names.filter((n) => n.startsWith("articles/")).sort()).toEqual(
-      ["articles/index.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`)].sort(),
+      ["articles/index.html", ...ARTICLES.map((a) => `articles/${a.slug}.html`), ...usedTags().map((t) => tagPath(t).slice(1))].sort(),
     );
   });
 
@@ -106,7 +108,10 @@ describe("ページの HTML", () => {
       expect(page).toMatch(/<meta name="description" content="[^"]{20,}" \/>/);
       expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/`);
       expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(cspForMeta)}" />`);
-      expect(page).not.toMatch(/<script\b/);
+      // スクリプトを持たない。例外は1つだけ：記事の一覧のページの、検索のスクリプト（2026-11-05 本人が決定。src/site/article-search.js）
+      const scripts = page.match(/<script\b[^>]*>/g) ?? [];
+      if (name === "articles/index.html") expect(scripts).toEqual([`<script type="module" src="/${searchScript().file}">`]);
+      else expect(scripts).toEqual([]);
       expect(page).not.toMatch(/\sstyle=/);
       expect(page).not.toMatch(/\son[a-z]+=/);
       // 外を指すのは canonical と、GitHub へ移る <a> のリンクだけ

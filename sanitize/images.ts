@@ -27,10 +27,10 @@ import {
   PDFRef,
   PDFStream,
   PDFString,
-  decodePDFRawStream,
   type PDFContext,
   type PDFObject,
 } from "pdf-lib";
+import { decodeStream, inflateCap, isInflateLimitError, peelOuterFilters } from "../rules/shared/inflate-limit.ts";
 import { apply, type Matrix, type Rect } from "../rules/p6-text/geometry.ts";
 import type { SanCover } from "./geometry.ts";
 import { coverContains } from "./geometry.ts";
@@ -171,8 +171,7 @@ function colorModel(ctx: PDFContext, cs: PDFObject | undefined, spaces: PDFDict 
       if (!base || base.kind !== "direct" || !(hv instanceof PDFNumber)) return null;
       let lookup: Uint8Array | null = null;
       if (lk instanceof PDFString || lk instanceof PDFHexString) lookup = lk.asBytes();
-      else if (lk instanceof PDFRawStream) lookup = decodePDFRawStream(lk).decode();
-      else if (lk instanceof PDFStream) lookup = lk.getContents();
+      else if (lk instanceof PDFStream) lookup = decodeStream(lk);
       if (!lookup) return null;
       return { kind: "indexed", base: base.comps, hival: Math.max(0, Math.min(255, Math.floor(hv.asNumber()))), lookup, baseCmyk: base.cmyk };
     }
@@ -455,9 +454,10 @@ export async function burnImage(ctx: PDFContext, stream: PDFStream, colorSpaces:
 function decodeMemory(ctx: PDFContext, stream: PDFStream, L: Layout): Uint8Array | BurnFailure {
   let data: Uint8Array;
   try {
-    data = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
-  } catch {
-    return "broken";
+    data = decodeStream(stream);
+  } catch (e) {
+    // 解くと大きすぎる（圧縮の爆弾など）：途中で止めた。塗れない・切れないので「大きすぎる」にする
+    return isInflateLimitError(e) ? "too_large" : "broken";
   }
   const parms = decodeParms(ctx, stream.dict);
   if (parms) {
@@ -490,6 +490,8 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
   }
   const png = predictor >= 10;
   const srcRowLen = L.rowLen + (png ? 1 : 0);
+  // 流して塗るときも、解く大きさは 1 つの流れの上限まで（rules/shared/inflate-limit.ts）
+  if (srcRowLen * L.height > inflateCap()) return { ok: false, reason: "too_large" };
   const bpp = Math.max(1, Math.ceil((L.comps * L.bpc) / 8));
   const painter = makePainter(L, ctm, covers);
 
@@ -500,6 +502,8 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
   const outChunks: Uint8Array[] = [];
   // 壊れた圧縮で途中で止まっても、捕まえない失敗（unhandled rejection）を出さないよう、両方に catch をつけておく
   let failed = false;
+  // 要る行を読み終えたら、残りは解かずに止める（辞書の大きさより大きく膨らむ流れで、余りをためないため）
+  let enough = false;
   const collect = (async () => {
     for await (const c of cs.readable as unknown as AsyncIterable<Uint8Array>) outChunks.push(c);
   })().catch(() => {
@@ -511,7 +515,7 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
     for (let i = 0; i < contents.length; i += FEED_BYTES) await dw.write(contents.subarray(i, i + FEED_BYTES));
     await dw.close();
   })().catch(() => {
-    failed = true;
+    if (!enough) failed = true;
   });
 
   const BATCH_ROWS = Math.max(1, Math.floor((4 << 20) / L.rowLen));
@@ -553,6 +557,10 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
           inBatch = 0;
         }
       }
+      if (y >= L.height) {
+        enough = true;
+        break;
+      }
       carry = buf.slice(at);
     }
     await feed;
@@ -592,13 +600,14 @@ async function burnStreaming(ctx: PDFContext, stream: PDFRawStream, L: Layout, c
  * 解くために、画像1つだけを描いた小さな PDF（1×1 のページ）を作って道具に渡す。色は Decode などをかけたあとのものになる
  */
 
-/** 画像の道具（PDF.js）で、JPEG・CCITT・JBIG2 の画像の画素を取り出す。取り出せない・大きさが合わないときは null */
-async function decodeViaCodec(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined, codec: ImageCodec, width: number, height: number): Promise<DecodedImage | null> {
+/** 画像の道具（PDF.js）で、JPEG・CCITT・JBIG2 の画像の画素を取り出す。解くと大きすぎるときは too_large、取り出せない・大きさが合わないときは broken */
+async function decodeViaCodec(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined, codec: ImageCodec, width: number, height: number): Promise<DecodedImage | BurnFailure> {
   const d = stream.dict;
   let pdf: Uint8Array;
   try {
     const one = await PDFDocument.create({ updateMetadata: false });
-    const copy = PDFObjectCopier.for(ctx, one.context).copy(stream) as PDFStream;
+    // 外側の圧縮は、上限つきでこちらで解いてから渡す（PDF.js には解く大きさの上限を渡せないため）
+    const copy = PDFObjectCopier.for(ctx, one.context).copy(peelOuterFilters(stream)) as PDFStream;
     // 名前で呼ぶ色空間（リソースの /ColorSpace の中のもの）は、中身に置き換える
     const cs = d.get(PDFName.of("ColorSpace"));
     if (cs instanceof PDFName && colorSpaces?.get(cs)) copy.dict.set(PDFName.of("ColorSpace"), PDFObjectCopier.for(ctx, one.context).copy(colorSpaces.get(cs)!));
@@ -610,8 +619,8 @@ async function decodeViaCodec(ctx: PDFContext, stream: PDFStream, colorSpaces: P
     page.node.set(PDFName.of("Resources"), one.context.obj({ XObject: { I: ref } }));
     page.node.set(PDFName.of("Contents"), one.context.register(one.context.stream("q 1 0 0 1 0 0 cm /I Do Q")));
     pdf = await one.save({ useObjectStreams: false });
-  } catch {
-    return null;
+  } catch (e) {
+    return isInflateLimitError(e) ? "too_large" : "broken";
   }
   let decoded: DecodedImage | null;
   try {
@@ -619,7 +628,7 @@ async function decodeViaCodec(ctx: PDFContext, stream: PDFStream, colorSpaces: P
   } catch {
     decoded = null;
   }
-  if (!decoded || decoded.width !== width || decoded.height !== height) return null;
+  if (!decoded || decoded.width !== width || decoded.height !== height) return "broken";
   return decoded;
 }
 
@@ -634,7 +643,7 @@ async function burnDecoded(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFD
   const codec = limits.codec;
   if (!codec || (format === "bitonal" && !codec.bitonal)) return { ok: false, reason: "no_codec" };
   const decoded = await decodeViaCodec(ctx, stream, colorSpaces, codec, width, height);
-  if (!decoded) return { ok: false, reason: "broken" };
+  if (typeof decoded === "string") return { ok: false, reason: decoded };
 
   const gray1 = decoded.kind === "gray1";
   const L: Layout = gray1
@@ -710,7 +719,7 @@ async function cropStream(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDi
     const codec = limits.codec;
     if (!codec || (BITONAL.has(filters[0]!) && !codec.bitonal)) return "no_codec";
     const decoded = await decodeViaCodec(ctx, stream, colorSpaces, codec, width, height);
-    if (!decoded) return "broken";
+    if (typeof decoded === "string") return decoded;
     const gray1 = decoded.kind === "gray1";
     L = gray1 ? { bpc: 1, comps: 1, rowLen: Math.ceil(width / 8) } : { bpc: 8, comps: 3, rowLen: width * 3 };
     if (decoded.data.length < L.rowLen * height) return "broken";

@@ -162,7 +162,12 @@ export function buildView(summary: InspectSummary): ViewModel {
     tone = "neutral";
   }
   const heavyPages = [
-    ...new Set(summary.rules.flatMap((r) => r.notices.filter((n) => n.reason === "heavy").flatMap((n) => n.pages))),
+    // 解くと大きすぎる中身のあるページも、絵を描かない（PDF.js には、解く大きさの上限を渡せないため）
+    ...new Set(
+      summary.rules.flatMap((r) =>
+        r.notices.filter((n) => n.reason === "heavy" || (n.kind === "skipped_pages" && n.reason === "too_large")).flatMap((n) => n.pages),
+      ),
+    ),
   ].sort((a, b) => a - b);
   return { verdict, headline, tone, rows, groups, heavyPages, notices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
 }

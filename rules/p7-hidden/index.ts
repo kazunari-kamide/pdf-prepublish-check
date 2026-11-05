@@ -20,8 +20,8 @@ import {
   PDFRawStream,
   PDFRef,
   PDFStream,
-  decodePDFRawStream,
-} from "pdf-lib";
+  } from "pdf-lib";
+import { decodeStream, isInflateLimitError, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import { operations, type Op, type Tok } from "../shared/content-lexer.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { readFont, type FontInfo } from "../shared/fonts.ts";
@@ -36,7 +36,8 @@ import { readPattern, readShading, tileRange, type PatternPaint } from "../share
 const MAX_PATTERN_TILES = 64;
 
 export const RULE_ID = "p7-hidden";
-export const RULE_VERSION = "1.4.0";
+// 1.4.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
+export const RULE_VERSION = "1.4.1";
 
 export type P7Reason =
   | "hidden_layer"
@@ -115,7 +116,7 @@ export type P7Report = {
   error?: { code: "empty" | "unreadable" | "encrypted"; message: string };
   pages: number | null;
   findings: P7Finding[];
-  skippedPages: Array<{ page: number; reason: "too_many_operations" | "unreadable_page" }>;
+  skippedPages: Array<{ page: number; reason: "too_many_operations" | "unreadable_page" | "stream_too_large" }>;
   /** 見えないが P7 では数えなかった字の数。p6＝濃い覆いの下（P6 で数える）、ocrLayer＝画像と重なる見えない字（文字認識の層） */
   excluded: { p6: number; ocrLayer: number };
   /** 文字認識の層（スキャン画像の上の見えない字）があるページ（1.1.0 から）。危険の発見には数えず、お知らせに使う */
@@ -342,7 +343,7 @@ function contentBytes(ctx: PDFContext, contents: PDFObject | undefined): Uint8Ar
   const parts: Uint8Array[] = [];
   const push = (o: PDFObject | undefined) => {
     const s = o instanceof PDFRef ? ctx.lookup(o) : o;
-    if (s instanceof PDFRawStream) parts.push(decodePDFRawStream(s).decode());
+    if (s instanceof PDFRawStream) parts.push(decodeStream(s));
   };
   if (v instanceof PDFArray) for (let i = 0; i < v.size(); i++) push(v.get(i));
   else push(v);
@@ -730,8 +731,9 @@ class PageScanner {
             const fres = dictOf(ctx, xo.dict.get(PDFName.of("Resources"))) ?? resources;
             let data2: Uint8Array;
             try {
-              data2 = decodePDFRawStream(xo).decode();
-            } catch {
+              data2 = decodeStream(xo);
+            } catch (e) {
+              rethrowIfInflateLimit(e);
               break;
             }
             forms.add(xo);
@@ -1157,7 +1159,10 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
         if (f) report.findings.push({ pattern: "P7", page: pageNo, reason: f, rect: padRect(im.box), chars: 0 });
       }
     } catch (e) {
-      report.skippedPages.push({ page: pageNo, reason: e instanceof TooManyOperations ? "too_many_operations" : "unreadable_page" });
+      report.skippedPages.push({
+        page: pageNo,
+        reason: e instanceof TooManyOperations ? "too_many_operations" : isInflateLimitError(e) ? "stream_too_large" : "unreadable_page",
+      });
     }
   });
   return report;

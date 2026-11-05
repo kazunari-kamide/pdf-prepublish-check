@@ -16,6 +16,7 @@
 //   4. 文書の根からたどれないものを捨て、1つの版として書き出す（P5）。圧縮の設定・パスワードはまだ入れない
 
 import type { PDFDocument, PDFObject } from "pdf-lib";
+import { isInflateLimitError } from "../rules/shared/inflate-limit.ts";
 import { loadPdf } from "../rules/shared/load.ts";
 import type { Rect } from "../rules/p6-text/geometry.ts";
 import { SETTINGS, TooManyOperations, makeVisibility, sanitizePageContent } from "./content.ts";
@@ -29,6 +30,9 @@ export type * from "./types.ts";
 export { redact } from "./redact.ts";
 export { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "./compress.ts";
 
+// 0.9.1：解くと大きすぎる中身（圧縮の爆弾）のページは stream_too_large として片付けられなかった所にし、
+//        ページの外で止まったとき（読み込み・文書全体）は、片付けた PDF を作らない（rules/shared/inflate-limit.ts）
+// 0.10.0：白い四角の注釈の下の図形を箱の中だけ消し、ページの外にはみ出した画像を見える所だけに切り詰める
 export const SANITIZER_VERSION = "0.10.0";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
@@ -52,8 +56,21 @@ export type SanitizeCore =
   | { status: "ok"; bytes: Uint8Array; pages: number; removed: RemovedItem[]; notDone: NotDoneItem[]; decrypted: boolean; properties?: PropertyChange[] }
   | ErrorResult;
 
-/** 片付けの本体（sanitizePdf と redact が使う） */
+/**
+ * 片付けの本体（sanitizePdf と redact が使う）。
+ * 解くと大きすぎる所で、ページの外（読み込み・文書全体の片付け・書き出し）が止まったときは、片付けた PDF を作らない
+ * （どこを片付けられなかったか言えないまま、保存させないため）。
+ */
 export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions = {}, hooks: SanitizeHooks = {}): Promise<SanitizeCore> {
+  try {
+    return await sanitizeBody(bytes, options, hooks);
+  } catch (e) {
+    if (isInflateLimitError(e)) return { status: "error", code: "too_large", message: "解くと大きすぎる所があるため、片付けられません。" };
+    throw e;
+  }
+}
+
+async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: SanitizeHooks): Promise<SanitizeCore> {
   if (bytes.length === 0) return { status: "error", code: "empty", message: "ファイルが空です。" };
   if (bytes.length > MAX_INPUT_BYTES) return { status: "error", code: "too_large", message: "ファイルが大きすぎるため、整えられません。" };
   const edits = options.properties !== undefined ? checkEdits(options.properties) : null;
@@ -103,6 +120,19 @@ export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions =
       for (const a of r.redactAnnots) redactAnnots.add(a);
     } catch (e) {
       const heavy = e instanceof TooManyOperations;
+      if (isInflateLimitError(e)) {
+        // 解くと大きすぎる中身（圧縮の爆弾など）：このページは書き換えずに残すので、片付けられなかった所にする
+        options.trace?.({ type: "page_error", page: pageNo, error: "stream_too_large" });
+        notDone.push({
+          pattern: "P6",
+          reason: "stream_too_large",
+          page: pageNo,
+          label: areas.length
+            ? "このページは、解くと大きすぎる中身があるため、選んだ所を消せませんでした"
+            : "このページは、解くと大きすぎる中身があるため、黒い四角の下の字・見えない字の片付けを省きました",
+        });
+        continue;
+      }
       options.trace?.({ type: "page_error", page: pageNo, error: heavy ? "too_many_operations" : "unreadable_page" });
       notDone.push({
         pattern: "P6",

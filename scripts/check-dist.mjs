@@ -8,6 +8,7 @@
 // - サイトのページ（記事・プライバシー。site.ts が作る）も含め、すべての HTML に同じ CSP の <meta> があり、
 //   直接書いたスクリプト・style がなく、外から読み込んでいないか（公式の URL を指す canonical のリンクと、GitHub を指す <a> のリンクだけは許す）
 // - 検索エンジンの確認のファイル（public/ の googleXXXX.html）は、中身が決まった1行のときだけ通す（src/site/search-console.ts）
+// - サイトのページ（index.html 以外）はスクリプトを持たない。例外は、記事の一覧のページの検索のスクリプト 1 つだけ（src/site/article-search.js）
 // - assets/ のファイルは、名前に中身のハッシュが付いている（.htaccess で 1 年キャッシュさせるため）
 // - 自前の 404 のページ（404.html）がある（.htaccess の ErrorDocument が指す）
 // - JavaScript（.js・.mjs）に、外と通信する仕組みが入っていないか（ライブラリが持ち込むこともあるため、ビルドのあとでも見る）
@@ -106,6 +107,20 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
   }
   const inlineScript = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/\bsrc=/.test(m[1]) || m[2].trim() !== "");
   if (inlineScript.length) problems.push(`${rel} に直接書いたスクリプトが ${inlineScript.length} か所あります`);
+  // サイトのページ（index.html 以外）はスクリプトを持たない。例外は1つだけ：記事の一覧のページが、検索のスクリプトを1つ読み込む
+  // （2026-11-05 本人が決定。src/site/article-search.js。題・説明・タグをページの中で探すだけで、通信しない）
+  if (rel !== "index.html") {
+    const scripts = [...text.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
+    const allowed = rel === "articles/index.html" ? scripts.filter((s) => /^<script type="module" src="\/assets\/article-search-[0-9a-f]{10}\.js">$/.test(s)) : [];
+    if (scripts.length !== allowed.length || allowed.length > 1) problems.push(`${rel} にスクリプトがあります（サイトのページで許すのは、記事の一覧のページの検索のスクリプト 1 つだけ）`);
+    for (const s of allowed) {
+      const src = s.match(/src="\/([^"]+)"/)[1];
+      if (!existsSync(path.join(DIST, src))) problems.push(`${rel} が読み込む ${src} が、dist/ にありません`);
+      else if (/\.(innerHTML|outerHTML)\b|insertAdjacentHTML|document\.write|\beval\s*\(|new\s+Function\s*\(/.test(readFileSync(path.join(DIST, src), "utf8"))) {
+        problems.push(`${src} に、字を HTML として解釈させる書き方か eval があります`);
+      } else allowedHtml.push(`${rel}（検索のスクリプト ${src} を読み込む。サイトのページで、ただ1つの例外）`);
+    }
+  }
   if (/<style\b/.test(text) || /\sstyle="/.test(text)) problems.push(`${rel} に直接書いた style があります`);
   if (/(src|href)="(https?:)?\/\//.test(text.replace(canonical, "").replace(githubLink, "<a"))) problems.push(`${rel} が外のサイトから読み込んでいます`);
 }
@@ -165,7 +180,7 @@ if (allowed.length) {
   for (const a of allowed) console.log(`  - ${a}`);
 }
 if (allowedHtml.length) {
-  console.log("\nCSP の <meta> がなくても通した HTML：");
+  console.log("\n例外として通した HTML（検索エンジンの確認のファイル・記事の一覧の検索のスクリプト）：");
   for (const a of allowedHtml) console.log(`  - ${a}`);
 }
 if (problems.length) {

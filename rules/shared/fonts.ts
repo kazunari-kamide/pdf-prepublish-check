@@ -17,10 +17,10 @@ import {
   PDFRawStream,
   PDFStream,
   StandardFontEmbedder,
-  decodePDFRawStream,
   type PDFContext,
   type PDFObject,
 } from "pdf-lib";
+import { decodeStream } from "./inflate-limit.ts";
 import { operations, type Tok } from "./content-lexer.ts";
 
 export type Glyph = {
@@ -127,8 +127,7 @@ function arrOf(ctx: PDFContext, obj: PDFObject | undefined): PDFArray | undefine
 
 function streamBytes(ctx: PDFContext, obj: PDFObject | undefined): Uint8Array | undefined {
   const v = obj ? ctx.lookup(obj) : undefined;
-  if (v instanceof PDFRawStream) return decodePDFRawStream(v).decode();
-  if (v instanceof PDFStream) return v.getContents();
+  if (v instanceof PDFStream) return decodeStream(v);
   return undefined;
 }
 
