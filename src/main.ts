@@ -1173,6 +1173,7 @@ async function handle(file: File) {
   setStep(ui.stepCheck, "now");
   ui.stepCheckNote.textContent = "確かめています";
   ui.fileName.textContent = file.name;
+  ui.fileName.title = file.name;
   ui.fileFacts.textContent = "";
   ui.filePage.textContent = "";
   ui.filebar.hidden = false;
@@ -1642,6 +1643,7 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.verified.hidden = true;
   ui.resultTitle.textContent = "読み直した結果（種類ごと）";
   ui.fileName.textContent = file.name;
+  ui.fileName.title = file.name;
   ui.fileFacts.textContent = keepUnits(`整えた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`);
 }
 

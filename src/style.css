@@ -747,17 +747,19 @@ body:has(.terms-dialog[open]) {
   padding: var(--space-2) var(--space-4);
 }
 
+/* 帯は 1 行に（ボタンが 2 行目に落ちないように。2026-11-05 夜のレビュー 16）。入りきらないときは、ファイル名の方を「…」で切る
+   （名前は、押さえておけば全部が title で読める。大きさ・ページ数は切らない） */
 .filebar-name {
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-/* 大きさなどは 1 行に。入りきらないときは「…」で切る（ボタンが 2 行目に落ちないように。2026-11-05 夜のレビュー 16） */
-.filebar-facts {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.filebar-facts {
+  flex: 1 0 auto;
   white-space: nowrap;
   font-size: var(--text-small);
   color: var(--color-muted);
@@ -1902,6 +1904,19 @@ progress {
   .workspace[data-state="result"] .sheet-wrap {
     overflow: visible;
   }
+  /* 狭い画面では、ファイルの帯は折り返してよい（ファイル名は 1 行で「…」、大きさとボタンは次の行へ） */
+  .filebar {
+    flex-wrap: wrap;
+  }
+  .filebar-name,
+  .filebar-facts {
+    flex: 1 1 auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .filebar-name {
+    flex-basis: 100%;
+  }
   /* 20：狭い画面の手順は 1 行に。名前と一言は今の段だけ、ほかの段は番号の丸（済んだ段は ✓）だけにする（名前は読み上げに残す） */
   .steps {
     display: flex;
@@ -2244,6 +2259,12 @@ progress {
    「見た所・見なかった所」は、見出しの前に同じ形の印を付ける（.coverage-summary .group-head::before）。2026-11-05 夜のレビュー 13 */
 .results summary {
   list-style: none;
+}
+
+/* 閉じているときは、中身をはっきり隠す（閉じた details の中身にも箱の大きさが残り、押せる所の重なりに数えられていたため。
+   C の PR の残り：報告書のボタンと知らせ、「中身を見る」と下の帯） */
+.results details:not([open]) > :not(summary) {
+  display: none;
 }
 
 .results summary::-webkit-details-marker {
