@@ -66,10 +66,9 @@ describe("整えた結果", () => {
     const broken = summary([rule({ pattern: "P6", label: "見せかけの黒塗り" }), rule({ pattern: "P1", label: "文書情報", status: "error", message: "調べられませんでした。" })]);
     const c = buildCleanView({ before: buildView(found), after: buildView(broken), removed, notDone: [], decrypted: false });
     expect(c.verdict).toBe("unsure");
-    expect(c.scope).toContain("見せかけの黒塗り（P6）");
-    // 調べたのは P6 だけ。P1 は「片付けたが、読み直しでは調べていない」の側に名前で出る
-    expect(c.scope).toMatch(/^読み直しで調べたのは 見せかけの黒塗り（P6） です。/);
-    expect(c.scope).toContain("文書情報（P1）・スクリプト・外部動作（P12） は消しましたが");
+    // 調べた種類の一覧は「見た所・見なかった所」と重なるので並べない。P1 は「消したが、読み直しでは調べていない」の側に名前で出る
+    expect(c.scope).not.toContain("見せかけの黒塗り");
+    expect(c.scope).toMatch(/^文書情報・スクリプト・外部動作は消しましたが/);
   });
 
   it("読み直せなかったら、残っていないとは言わない", () => {
@@ -82,7 +81,7 @@ describe("整えた結果", () => {
     const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: true });
     expect(c.removed.map((g) => g.pattern)).toEqual(["P6", "P1", "P12"]);
     expect(c.removed[0]!.lines).toEqual(["黒い四角の下に残っていた字（4 字）（ページ 1）"]);
-    expect(c.scope).toContain("スクリプト・外部動作（P12） は消しましたが、読み直しでは調べていません");
+    expect(c.scope).toContain("スクリプト・外部動作は消しましたが、読み直しでは調べていません");
     expect(c.notes[0]).toContain("暗号化");
     expect(c.doneMarks).toEqual([{ page: 1, rect: [10, 10, 50, 20], label: "黒い四角の下に残っていた字（4 字）" }]);
   });
@@ -151,25 +150,35 @@ describe("保存のボタンを押せるか（saveGate）", () => {
   });
 });
 
+describe("見つかった所と、念のため消したもの（数が合わないように見せない）", () => {
+  it("確かめた画面に項目があった種類だけを found にし、その項目の数を seen に入れる", () => {
+    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed, notDone: [], decrypted: false });
+    expect(c.removed.map((g) => [g.pattern, g.found, g.seen, g.total])).toEqual([
+      ["P6", true, 1, 1],
+      ["P1", false, 0, 1],
+      ["P12", false, 0, 1],
+    ]);
+  });
+});
+
 describe("読み直しの範囲の文", () => {
-  it("同じ型は1回だけ、用語集の名前で並べる（P4・P10・P11 も番号だけにしない）", () => {
+  it("読み直しで調べた種類の一覧は並べない（「見た所・見なかった所」と重なるため）", () => {
     const after = summary([
       rule({ ruleId: "p7-hidden", pattern: "P7", label: "隠れたテキスト" }),
       rule({ ruleId: "font-glyphs", pattern: "P7", label: "書体に残った字形" }),
       rule({ ruleId: "p4-paths", pattern: "P4", label: "ファイルパス・内部ホスト名" }),
     ]);
     const c = buildCleanView({ before: buildView(found), after: buildView(after), removed: [], notDone: [], decrypted: false });
-    expect(c.scope).toBe("読み直しで調べたのは 隠れたテキスト（P7）・ファイルパス・内部ホスト名（P4） です。");
+    expect(c.scope).toBe("");
   });
 });
 
 describe("型の名前（「P11（P11）」と番号を重ねない）", () => {
-  it("読み直しで調べた型は、P10・P11 も名前で出す", () => {
+  it("消したが読み直していない種類は、名前で出し、画面に P の番号を出さない", () => {
     const after = buildView(summary([rule({ pattern: "P10", label: "画像の位置情報など" }), rule({ pattern: "P11", label: "フォームの入力値" })]));
-    const c = buildCleanView({ before: buildView(empty), after, removed: [], notDone: [], decrypted: false });
-    expect(c.scope).toContain("画像の位置情報など（P10）");
-    expect(c.scope).toContain("フォームの入力値（P11）");
-    expect(c.scope).not.toMatch(/(P\d+)（）/);
+    const c = buildCleanView({ before: buildView(empty), after, removed, notDone: [], decrypted: false });
+    expect(c.scope).toContain("見せかけの黒塗り・文書情報・スクリプト・外部動作は消しましたが");
+    expect(c.scope).not.toMatch(/P\d+/);
   });
 
   it("いまの一覧（RULES）の型は、どれも名前がある", () => {

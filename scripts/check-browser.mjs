@@ -9,6 +9,8 @@
 //   npm run check:browser -- --self-test                     … 数える仕組みの点検。わざと外へ要求を出し、失敗になることを確かめる
 //   npm run check:browser -- --url https://omamoripdf.com/   … vite preview の代わりに、配信したサイト（本番）を開く（docs/deploy.md）
 //   npm run check:browser -- --no-sanitize                   … 「片付ける」を押さない（検査だけを確かめる）
+//   npm run check:browser -- --limit 3 <PDF のパス>          … 入口で「提出のためにファイルを小さくする」の上限（MB）を選んでから置く。
+//                                                              整えたあと、上限の一文（#compress-limit）が出るまで待ち、その文と「そのほかの操作」が開いたかを出す
 //
 // - 既定では、検査のあとに「片付ける」を押し、読み直すまで待ち、「片付けた PDF を保存する」を押して、保存された PDF を確かめる。
 //   片付け・読み直し・保存の間の要求も数える。保存先は一時フォルダで、終わったら消す。
@@ -48,12 +50,14 @@ let shotsDir = null;
 let selfTest = false;
 let liveUrl = null;
 let sanitize = true;
+let limitMb = null;
 const pdfs = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--shots") shotsDir = path.resolve(args[++i]);
   else if (args[i] === "--self-test") selfTest = true;
   else if (args[i] === "--url") liveUrl = new URL(args[++i]).href;
   else if (args[i] === "--no-sanitize") sanitize = false;
+  else if (args[i] === "--limit") limitMb = String(Number(args[++i]));
   else pdfs.push(path.resolve(args[i]));
 }
 if (!pdfs.length) pdfs.push(...DEFAULT_PDFS.slice(0, selfTest ? 1 : undefined).map((p) => path.join(ROOT, p)));
@@ -145,6 +149,12 @@ try {
     if (r.cleaned) {
       console.log(`  片付け：${r.cleaned.status}`);
       if (r.cleaned.count) console.log(`  読み直し：${r.cleaned.count}`);
+      if (r.cleaned.limit) {
+        console.log(`  上限まで小さくする：${r.cleaned.limit.text}`);
+        console.log(`  「そのほかの操作」：${r.cleaned.limit.toolsOpen ? "開いている" : "閉じている"}`);
+        console.log(`  上の文：${r.cleaned.limit.status || "（なし）"}`);
+        console.log(`  前後の数：${r.cleaned.limit.cleanCount}`);
+      }
       console.log(`  保存：${r.cleaned.saved}${r.cleaned.saveTries > 1 ? `（${r.cleaned.saveTries} 回目で保存）` : ""}`);
       if (r.tries > 1) console.log(`  やり直し：${r.tries} 回目で通った`);
     }
@@ -328,6 +338,11 @@ async function checkOne(c, pdf) {
     // ここまでが「最初の表示」。ここから後が「PDF を入れた後」
     const firstAll = all.length;
     const firstBlocked = blocked.length;
+    if (limitMb !== null) {
+      // 入口の上限を選ぶ（置く時に読まれる）。選べなければ止める（知らないうちに、ふつうの検査で通らないように）
+      const ok = await evaluate(`(() => { const s = document.getElementById('size-limit'); s.value = ${JSON.stringify(limitMb)}; s.dispatchEvent(new Event('change', { bubbles: true })); return s.value === ${JSON.stringify(limitMb)}; })()`);
+      if (!ok) throw new Error(`上限 ${limitMb}MB を選べませんでした（#size-limit の選択肢にありません）`);
+    }
     const { root } = await c.send("DOM.getDocument", {}, sessionId);
     const { nodeId } = await c.send("DOM.querySelector", { nodeId: root.nodeId, selector: "#file" }, sessionId);
     await c.send("DOM.setFileInputFiles", { nodeId, files: [pdf] }, sessionId);
@@ -360,6 +375,17 @@ async function checkOne(c, pdf) {
     let cleanShot = null;
     if (sanitize && !selfTest) {
       cleaned = await pressSanitize(c, sessionId, evaluate, pdf);
+      if (limitMb !== null && cleaned.pressed) {
+        // 上限まで小さくする流れ：上限の一文が出るまで、最大 180 秒待つ
+        for (let i = 0; i < 900 && (await evaluate("document.getElementById('compress-limit').hidden")); i++) await sleep(200);
+        cleaned.limit = {
+          text: await evaluate("document.getElementById('compress-limit').hidden ? '（上限の一文が出ませんでした）' : document.getElementById('compress-limit').textContent"),
+          toolsOpen: await evaluate("document.getElementById('clean-tools').open"),
+          status: await evaluate("document.getElementById('status').textContent"),
+          cleanCount: await evaluate("document.getElementById('clean-count').textContent"),
+        };
+        await evaluate("document.getElementById('compress-limit').scrollIntoView({ block: 'center' }); void 0");
+      }
       if (cleaned.pressed && shotsDir) {
         await sleep(1500); // 縮小した絵を描く時間
         cleanShot = await screenshot(c, sessionId, evaluate, path.join(shotsDir, `${path.basename(pdf, ".pdf")}-cleaned.png`));

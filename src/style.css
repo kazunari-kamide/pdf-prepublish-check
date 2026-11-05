@@ -382,6 +382,15 @@ select {
   min-width: 0;
 }
 
+/* 結果を見ているとき：PDF の欄は中身の高さで止め、右をスクロールしてもページが見えるよう上に貼り付ける（D1） */
+.workspace[data-state="result"] .stage {
+  align-self: start;
+  position: sticky;
+  top: var(--space-4);
+  max-height: calc(100dvh - 2 * var(--space-4));
+  overflow-y: auto;
+}
+
 .drop {
   display: flex;
   flex-direction: column;
@@ -782,6 +791,11 @@ body:has(.terms-dialog[open]) {
   font-weight: 700;
 }
 
+/* 整えて通ったときは、上の文を出さない（C1）。空のときは印（◯）も出さない */
+#status:empty {
+  display: none;
+}
+
 #status[data-tone="problem"] {
   color: var(--color-accent);
 }
@@ -835,17 +849,10 @@ progress {
   overflow: hidden;
 }
 
+/* 左の色の帯（字は出さない。2026-11-05 本人の画面のレビュー B4） */
 .fuda {
-  display: grid;
-  place-items: center;
-  padding: var(--space-3) 0;
-  writing-mode: vertical-rl;
-  text-orientation: upright;
-  letter-spacing: 0.15em;
-  font-weight: 700;
-  font-size: var(--text-small);
+  display: block;
   background: var(--color-accent);
-  color: var(--color-on-dark);
 }
 
 /* 見た所・見なかった所：札は墨の字に札の地（緑にしない。「調べた」は「すべて大丈夫」ではないため） */
@@ -1103,7 +1110,20 @@ progress {
   border-top: 1px solid var(--color-line);
 }
 
-.actions .pick-toggle {
+/* 「自分で黒塗りする所を選ぶ」は、結果の一覧の下に移した（B1）。前は .actions の中にあり、ボタンの形をそこから受けていた */
+.pick-tools button {
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pick-tools p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+}
+
+.pick-tools .pick-toggle {
   width: auto;
   min-height: var(--target-min);
   padding: var(--space-1) var(--space-4);
@@ -1113,7 +1133,7 @@ progress {
   font-size: var(--text-small);
 }
 
-.actions .pick-toggle[aria-pressed="true"] {
+.pick-tools .pick-toggle[aria-pressed="true"] {
   border: var(--border-strong) solid var(--color-base);
   background: var(--color-chip);
 }
@@ -1137,7 +1157,7 @@ progress {
   border-top: 1px solid var(--color-line);
 }
 
-.actions .pick-remove {
+.pick-tools .pick-remove {
   width: auto;
   min-height: var(--target-min);
   padding: 0 var(--space-3);
@@ -1254,6 +1274,17 @@ progress {
 
 .items > li > .reveal {
   margin: 2px 0 var(--space-1);
+}
+
+/* 中身の行：「中身：」・字・ボタンの 3 列。ボタンはいつも右端で、長い字は字の欄の中で折り返す（B5） */
+.items > li > .reveal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+/* 開いたときにだけ出す、種類の番号（P6 など。B3） */
+.item-code {
+  color: var(--color-muted);
 }
 
 .item-why {
@@ -1527,15 +1558,52 @@ progress {
   font-size: var(--text-small);
 }
 
-.removed summary {
+/* 開けて読む欄：整えると消すもの（B1）・くわしい内容・そのほかの操作（C3） */
+.sanitize-more,
+.clean-more {
+  margin-top: var(--space-2);
+  border-top: var(--bw-1) solid var(--line-hair);
+}
+
+.sanitize-more summary,
+.clean-more summary {
   display: flex;
   align-items: center;
+  gap: var(--space-1);
   min-height: var(--target-min);
   font-weight: 700;
   cursor: pointer;
 }
 
-.removed-group h4 {
+/* 開け閉めの印（「見た所・見なかった所」と同じ形） */
+.sanitize-more summary::before,
+.clean-more summary::before {
+  content: "▶";
+  font-size: 0.8em;
+}
+
+.sanitize-more[open] summary::before,
+.clean-more[open] summary::before {
+  content: "▼";
+}
+
+.sanitize-list {
+  margin: 0;
+  font-size: var(--text-small);
+}
+
+.removed-section h4 {
+  font-size: 1rem;
+  margin: var(--space-3) 0 0;
+}
+
+.removed-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.removed-group h5 {
   font-size: var(--text-small);
   margin: var(--space-2) 0 0;
 }
@@ -1625,10 +1693,13 @@ progress {
     grid-template-columns: minmax(0, 1fr);
   }
   .fuda {
-    writing-mode: horizontal-tb;
-    justify-content: start;
-    padding: var(--space-1) var(--space-4);
-    letter-spacing: var(--tracking);
+    height: var(--width-fuda);
+  }
+  /* 狭いときは縦に積むので、PDF の欄を上に貼り付けない（D1） */
+  .workspace[data-state="result"] .stage {
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
   .group-body {
     padding: var(--space-3);

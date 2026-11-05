@@ -72,8 +72,8 @@
         <div class="filebar" id="filebar" hidden>
           <span class="filebar-name" id="file-name"></span>
           <span class="filebar-facts" id="file-facts"></span>
-          <button id="file-again" class="filebar-again" type="button">別の PDF を選ぶ</button>
-          <button id="go-home" class="filebar-again" type="button">最初の画面に戻る</button>
+          <!-- 1 つにまとめた（2026-11-05 本人の画面のレビュー B7）。最初の画面に戻り、そこで置く・選ぶ・見本を試す -->
+          <button id="go-home" class="filebar-again" type="button">別の PDF にする</button>
         </div>
 
         <figure class="sheet-wrap" id="sheet-wrap" hidden>
@@ -98,19 +98,15 @@
           <div id="consent" class="consent" hidden></div>
           <button id="sanitize" type="button" aria-describedby="sanitize-note tidy-summary">整える</button>
           <p id="sanitize-note"></p>
-          <p id="tidy-summary" class="tidy-summary"></p>
+          <!-- 消す対象の列挙とプロパティの扱いは、開けて読む（2026-11-05 本人の画面のレビュー B1） -->
+          <details id="sanitize-more" class="sanitize-more">
+            <summary>整えると消すもの</summary>
+            <p id="sanitize-list" class="sanitize-list"></p>
+            <p id="tidy-summary" class="tidy-summary"></p>
+          </details>
           <div id="redact-left" class="not-done" hidden>
             <h3>▲ 読み直しで残っていた所</h3>
             <ul id="redact-left-list"></ul>
-          </div>
-          <div id="pick-tools" class="pick-tools" hidden>
-            <button id="pick-toggle" class="pick-toggle" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
-            <p id="pick-help" class="pick-help" hidden>ページの絵の上を、黒塗りしたい所の角から角へ、ドラッグしてください。キーボードでは、ページの絵に移って Enter で枠を出し、矢印キーで動かし、Shift と矢印キーで大きさを変え、Enter で決めます（Esc でやめます）。選んだ所は、墨の点線の枠で出ます。</p>
-            <p id="pick-help-candidates" class="pick-help" hidden>個人情報の候補から選ぶ：下の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します。</p>
-            <div id="picks" class="picks" hidden>
-              <p id="pick-count" aria-live="polite"></p>
-              <ul id="pick-list"></ul>
-            </div>
           </div>
         </div>
 
@@ -132,44 +128,50 @@
             <h4>▲ 消せなかった所</h4>
             <ul id="not-done-list"></ul>
           </div>
-          <div id="before-after" class="before-after" hidden>
-            <h4>型ごとの数（整える前 → 読み直したあと）</h4>
-            <ul id="before-after-list"></ul>
-          </div>
-          <details id="removed" class="removed" open>
-            <summary id="removed-title">取り除いたもの</summary>
-            <div id="removed-groups"></div>
-          </details>
-          <ul id="clean-notes" class="clean-notes" hidden></ul>
-          <p id="clean-scope" class="clean-scope"></p>
-          <a id="report-download" class="report-download" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
-          <label id="report-contents" class="save-confirm" hidden>
-            <input id="report-contents-box" type="checkbox" />
-            <span>見つけた字の中身も、報告書に入れる（初めは入れません。入れたら、取り扱いに気をつけてください）</span>
-          </label>
-          <p class="report-note">前後の SHA-256・消した所と字数・調べた範囲を、文字だけで残します。字の中身は、上で選んだときだけ入れます。ファイル名は載せません。</p>
-
-          <section id="compress" class="compress" aria-labelledby="compress-title" hidden>
-            <h4 id="compress-title" tabindex="-1">ファイルを小さくする（必要なときだけ）</h4>
-            <p class="compress-note">提出先に容量の上限があるときに使います。整えた PDF の画像を縮めて書き直します。字・図形は変えません。小さくしたあとも、もう一度最初から検査し直します。</p>
-            <p id="compress-limit" class="compress-limit" tabindex="-1" hidden></p>
-            <fieldset class="compress-presets" id="compress-presets">
-              <legend>画像の細かさ</legend>
-            </fieldset>
-            <button id="compress-run" class="compress-run" type="button">小さくする</button>
-            <div id="compress-result" class="compress-result" hidden>
-              <p id="compress-headline" class="compress-headline" tabindex="-1"></p>
-              <p id="compress-sizes" class="compress-sizes"></p>
-              <ul id="compress-lines" class="compress-lines"></ul>
-              <p id="compress-recheck" class="compress-recheck"></p>
-              <a id="compress-download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="compress-save-note" hidden>小さくした PDF を保存する</a>
-              <p id="compress-save-note" class="save-note"></p>
-              <label id="compress-confirm" class="save-confirm" hidden>
-                <input id="compress-confirm-box" type="checkbox" />
-                <span>言い切れない所があると分かったうえで保存する</span>
-              </label>
+          <!-- 保存のボタンが主役。ほかは開けて読む 2 つにまとめる（2026-11-05 本人の画面のレビュー C3） -->
+          <details id="clean-more" class="clean-more">
+            <summary>くわしい内容</summary>
+            <div id="before-after" class="before-after" hidden>
+              <h4>種類ごとの数（整える前 → 読み直したあと）</h4>
+              <ul id="before-after-list"></ul>
             </div>
-          </section>
+            <div id="removed" class="removed">
+              <div id="removed-groups"></div>
+            </div>
+            <ul id="clean-notes" class="clean-notes" hidden></ul>
+            <p id="clean-scope" class="clean-scope"></p>
+          </details>
+          <details id="clean-tools" class="clean-more">
+            <summary>そのほかの操作（報告書・小さくする）</summary>
+            <a id="report-download" class="report-download" download="処理の報告書.txt" hidden>処理の報告書を保存する</a>
+            <label id="report-contents" class="save-confirm" hidden>
+              <input id="report-contents-box" type="checkbox" />
+              <span>見つけた字の中身も、報告書に入れる（初めは入れません。入れたら、取り扱いに気をつけてください）</span>
+            </label>
+            <p class="report-note">前後の SHA-256・消した所と字数・調べた範囲を、文字だけで残します。字の中身は、上で選んだときだけ入れます。ファイル名は載せません。</p>
+
+            <section id="compress" class="compress" aria-labelledby="compress-title" hidden>
+              <h4 id="compress-title" tabindex="-1">ファイルを小さくする（必要なときだけ）</h4>
+              <p class="compress-note">提出先に容量の上限があるときに使います。整えた PDF の画像を縮めて書き直します。字・図形は変えません。小さくしたあとも、もう一度最初から検査し直します。</p>
+              <p id="compress-limit" class="compress-limit" tabindex="-1" hidden></p>
+              <fieldset class="compress-presets" id="compress-presets">
+                <legend>画像の細かさ</legend>
+              </fieldset>
+              <button id="compress-run" class="compress-run" type="button">小さくする</button>
+              <div id="compress-result" class="compress-result" hidden>
+                <p id="compress-headline" class="compress-headline" tabindex="-1"></p>
+                <p id="compress-sizes" class="compress-sizes"></p>
+                <ul id="compress-lines" class="compress-lines"></ul>
+                <p id="compress-recheck" class="compress-recheck"></p>
+                <a id="compress-download" class="download" download aria-disabled="true" tabindex="0" aria-describedby="compress-save-note" hidden>小さくした PDF を保存する</a>
+                <p id="compress-save-note" class="save-note"></p>
+                <label id="compress-confirm" class="save-confirm" hidden>
+                  <input id="compress-confirm-box" type="checkbox" />
+                  <span>言い切れない所があると分かったうえで保存する</span>
+                </label>
+              </div>
+            </section>
+          </details>
         </section>
 
         <div id="notices" class="notices" hidden>
@@ -179,11 +181,25 @@
 
         <div id="groups" class="groups"></div>
 
+        <div id="pick-tools" class="pick-tools" hidden>
+          <button id="pick-toggle" class="pick-toggle" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
+          <p id="pick-help" class="pick-help" hidden>ページの絵の上を、黒塗りしたい所の角から角へ、ドラッグしてください。キーボードでは、ページの絵に移って Enter で枠を出し、矢印キーで動かし、Shift と矢印キーで大きさを変え、Enter で決めます（Esc でやめます）。選んだ所は、墨の点線の枠で出ます。</p>
+          <p id="pick-help-candidates" class="pick-help" hidden>個人情報の候補から選ぶ：上の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します。</p>
+          <div id="picks" class="picks" hidden>
+            <p id="pick-count" aria-live="polite"></p>
+            <ul id="pick-list"></ul>
+          </div>
+        </div>
+
+        <!-- 誠実さを伝える一文。結果の一覧のすぐ下に、埋もれさせずに出す（2026-11-05 本人の画面のレビュー B8） -->
+        <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。</p>
+
+        <div id="coverage-slot"></div>
+
         <details id="props" class="props" hidden></details>
 
         <details id="ruleset" class="ruleset" hidden></details>
 
-        <p class="scope-note" id="scope-note" hidden>見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。見つけた字の中身は、頭の数文字だけを出し、残りは伏せます。「中身を見る」で全部を出します（このパソコンの画面の中だけで、どこにも送りません）。</p>
       </aside>
     </main>
 
