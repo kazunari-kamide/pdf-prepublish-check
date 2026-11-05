@@ -9,7 +9,8 @@
 //   四角でない道・画像・部品があれば、覆いにしない（読み切れないため）。
 // - タイルの中に字を描く命令があれば、hasText を返す（呼ぶ側で、タイルを並べて字の箱を作る）。
 
-import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFStream, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { decodeStream, rethrowIfInflateLimit } from "./inflate-limit.ts";
 import { operations } from "./content-lexer.ts";
 
 export type Matrix6 = [number, number, number, number, number, number];
@@ -113,10 +114,11 @@ function streamBytes(s: PDFStream): Uint8Array | null {
   try {
     if (s instanceof PDFRawStream) {
       if (s.contents.length > MAX_PATTERN_BYTES) return null;
-      return decodePDFRawStream(s).decode();
+      return decodeStream(s);
     }
     return s.getContents();
-  } catch {
+  } catch (e) {
+    rethrowIfInflateLimit(e);
     return null;
   }
 }

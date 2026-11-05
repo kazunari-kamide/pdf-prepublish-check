@@ -4,8 +4,9 @@
 // 画像を明るさ（0〜1）の並びに解き、字の箱の下の画素の明るさの、いちばん暗い・明るい・平均を返す。
 // 解けない画像・大きすぎる画像は null（呼ぶ側は「分からない」として、字を消さない）。
 
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFObjectCopier, PDFRawStream, PDFRef, PDFStream, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFObjectCopier, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
 import { apply, type Matrix, type Rect } from "../rules/p6-text/geometry.ts";
+import { decodeStream, isInflateLimitError, peelOuterFilters } from "../rules/shared/inflate-limit.ts";
 import { luminanceOf } from "../rules/p6-text/page.ts";
 import type { ImageCodec } from "./types.ts";
 
@@ -13,7 +14,8 @@ import type { ImageCodec } from "./types.ts";
 export async function onePagePdf(ctx: PDFContext, stream: PDFStream, colorSpaces: PDFDict | undefined): Promise<Uint8Array> {
   const one = await PDFDocument.create({ updateMetadata: false });
   const copier = PDFObjectCopier.for(ctx, one.context);
-  const copy = copier.copy(stream) as PDFStream;
+  // 外側の圧縮は、上限つきでこちらで解いてから渡す（PDF.js には解く大きさの上限を渡せないため）。超えたら InflateLimitError
+  const copy = copier.copy(peelOuterFilters(stream)) as PDFStream;
   const cs = stream.dict.get(PDFName.of("ColorSpace"));
   if (cs instanceof PDFName && colorSpaces?.get(cs)) copy.dict.set(PDFName.of("ColorSpace"), copier.copy(colorSpaces.get(cs)!));
   copy.dict.delete(PDFName.of("SMask"));
@@ -60,7 +62,7 @@ export async function decodeLuma(ctx: PDFContext, stream: PDFStream, colorSpaces
   const predictor = parms instanceof PDFDict ? num(ctx, parms, "Predictor") : 0;
   if (n > 0 && bpc === 8 && predictor <= 1 && !d.has(PDFName.of("Decode")) && stream instanceof PDFRawStream) {
     try {
-      const raw = decodePDFRawStream(stream).decode();
+      const raw = decodeStream(stream);
       if (raw.length >= w * h * n) {
         const luma = new Float32Array(w * h);
         const c = new Array<number>(n);
@@ -70,7 +72,9 @@ export async function decodeLuma(ctx: PDFContext, stream: PDFStream, colorSpaces
         }
         return { w, h, luma };
       }
-    } catch {
+    } catch (e) {
+      // 解くと大きすぎる：画像の道具（PDF.js）にも回さない（道具の中で、上限なしに解いてしまうため）
+      if (isInflateLimitError(e)) return null;
       // 手元で解けない形（JPEG など）：画像の道具に回す
     }
   }

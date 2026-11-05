@@ -20,7 +20,8 @@
 // 端末名・数字の入った英数字のアカウント（user01 など）、素材の配布元の名前（photoshop:Credit などは見ない）。
 // 値そのものは返さない（字数だけ。includeValues のときだけ値も返す）。
 
-import { PDFDict, PDFName, PDFRawStream, PDFRef, PDFStream, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { PDFDict, PDFName, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { decodeStreamUpTo, inflateCap } from "../shared/inflate-limit.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { loadPdf } from "../shared/load.ts";
 
@@ -173,7 +174,7 @@ async function inflate(data: Uint8Array, limits: P2PartsReport["limits"]): Promi
         const { done, value } = await reader.read();
         if (done) break;
         total += value.length;
-        if (total > MAX_INFLATED_BYTES) {
+        if (total > inflateCap(MAX_INFLATED_BYTES)) {
           tooLarge = true;
           await reader.cancel().catch(() => undefined);
           break;
@@ -226,8 +227,9 @@ function streamBytes(s: PDFStream, limits: P2PartsReport["limits"]): Uint8Array 
       limits.push({ reason: "stream_too_large" });
       return null;
     }
-    const out = s instanceof PDFRawStream ? decodePDFRawStream(s).decode() : raw;
-    if (out.length > MAX_STREAM_BYTES) {
+    // 上限までだけ解く（途中で止める）
+    const out = decodeStreamUpTo(s, MAX_STREAM_BYTES);
+    if (out === null) {
       limits.push({ reason: "stream_too_large" });
       return null;
     }
