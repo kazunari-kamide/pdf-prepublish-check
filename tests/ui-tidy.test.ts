@@ -76,7 +76,7 @@ describe("整える前に聞く・整える・読み直す", () => {
     expect(c.chosen).toBeGreaterThan(0);
     expect(c.left).toBe(0);
     expect(saveGate(c)).not.toBe("blocked");
-    expect(c.propertyLines).toContain("題（Title）：書き直しました（本人が選んだ値）");
+    expect(c.propertyLines).toContain("タイトル（Title）：書き直しました（本人が選んだ値）");
     expect(c.propertyLines.join("")).not.toMatch(/Kakuu|Sample form/);
     // 本人が選ばなかったら、同じ値は「残り」になる（選んだ欄だけを外していることの確かめ）
     const noChoice = buildCleanView({ before, after, removed: r.removed, notDone: r.notDone, decrypted: false });

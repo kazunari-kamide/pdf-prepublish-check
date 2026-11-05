@@ -67,7 +67,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   { key: "P12", name: "スクリプト・外部動作", match: byPattern("P12"), missing: NO_RULE },
   {
     key: "個人情報",
-    name: "本文の個人情報の候補",
+    name: "個人情報らしい字",
     match: (r) => r.ruleId === "pii" || r.ruleId.startsWith("pii-"),
     missing: "本文の名前・番号などを探すルールは、この版にはまだ入っていません。",
   },
