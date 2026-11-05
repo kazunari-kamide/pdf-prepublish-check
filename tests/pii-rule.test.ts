@@ -216,6 +216,32 @@ describe("PDF から探す", () => {
     expect(r.counts).toMatchObject({ total: 2, high: 2, check: 0 });
   });
 
+  it("includeText を渡したときだけ、見つけた字そのものを 1 件ごとに返す（渡さないときは text がない）", async () => {
+    const pdf = await makePdf([[{ text: "氏名：朝霧澄香", x: 100, y: 700 }, { text: "携帯 090-0274-1883", x: 100, y: 680 }]]);
+    const withText = await detectPii(pdf, { includeText: true });
+    expect(withText.findings.map((f) => [f.type, f.text])).toEqual([
+      ["name", "朝霧澄香"],
+      ["phone", "090-0274-1883"],
+    ]);
+    // 中身のほかは、渡さないときと同じ
+    const plain = await detectPii(pdf);
+    expect(withText.findings.map(({ text: _t, ...rest }) => rest)).toEqual(plain.findings);
+    expect(plain.findings.every((f) => !("text" in f))).toBe(true);
+    expect(JSON.stringify(await detectPii(pdf, { includeText: false }))).not.toContain("朝霧");
+    // 件数だけの形（記録に使う）には、渡しても中身が入らない
+    expect(JSON.stringify(countsOnly(withText))).not.toContain("朝霧");
+  });
+
+  it("includeText：縦書き・表の欄で見つけた字も、その範囲の字を返す", async () => {
+    const vertical = await detectPii(await makePdf([[{ text: "電話　〇九〇―〇四八一―二三三七", x: 500, y: 780, vertical: true }]]), { includeText: true });
+    expect(vertical.findings.map((f) => f.text)).toEqual(["〇九〇―〇四八一―二三三七"]);
+    const table = await detectPii(
+      await makePdf([[{ text: "氏名", x: 100, y: 700 }, { text: "朝霧澄香", x: 100, y: 680 }]]),
+      { includeText: true },
+    );
+    expect(table.findings.filter((f) => f.type === "name").map((f) => f.text)).toEqual(["朝霧澄香"]);
+  });
+
   it("縦書き（Identity-V）：列として読み、箱は縦長", async () => {
     const pdf = await makePdf([[{ text: "電話　〇九〇―〇四八一―二三三七", x: 500, y: 780, vertical: true }]]);
     const r = await detectPii(pdf);
