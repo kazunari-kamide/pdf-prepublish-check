@@ -36,9 +36,11 @@ describe("記事の一覧のサムネ", () => {
   });
 
   it("リポジトリの SVG は、描くコードから書いたものと同じ", () => {
+    // 改行は LF にそろえて比べる（Windows で取り出すと CRLF になることがあるため）
+    const read = (f: string) => readFileSync(path.join(THUMBS_DIR, f), "utf8").replace(/\r\n/g, "\n");
     for (const name of Object.keys(MOTIFS)) {
-      expect(readFileSync(path.join(THUMBS_DIR, `${name}.svg`), "utf8"), name).toBe(thumbSvg(name));
-      expect(readFileSync(path.join(THUMBS_DIR, `${name}-sq.svg`), "utf8"), `${name}-sq`).toBe(thumbSvg(name, true));
+      expect(read(`${name}.svg`), name).toBe(thumbSvg(name));
+      expect(read(`${name}-sq.svg`), `${name}-sq`).toBe(thumbSvg(name, true));
     }
   });
 
