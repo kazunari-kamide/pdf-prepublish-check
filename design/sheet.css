@@ -1,0 +1,149 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * デザインシート（案）。画面（src/）とサイト（src/site/）で共通に使う、色の段・面の重なり・枠・見出しの段・余白・強調・お知らせの色。
+ * 考え方と使い分けは design/sheet.md。見本は design/sheet-sample.html。
+ * 2026-11-05：案として置く。design/tokens.css の今の値は変えない（同じ名前の変数は、同じ値を指す）。当てるのは B・G。
+ * 外から何も読み込まない（CLAUDE.md §2-1）。
+ */
+
+:root {
+  /* ================= 1. 色の段（素の色。部品からは直接使わず、2. の役の名前から使う） */
+
+  /* 墨（ベース色）。暖かい灰色の 10 段。900 が今の --color-base */
+  --ink-50: #f7f5f1;
+  --ink-100: #efece6; /* = --color-sunken */
+  --ink-200: #e2ded6;
+  --ink-300: #d9d4ca; /* = --color-line */
+  --ink-400: #b5afa4;
+  --ink-500: #8a857c; /* = --color-control-line */
+  --ink-600: #6b665e;
+  --ink-700: #57534e; /* = --color-muted */
+  --ink-800: #3d3b38;
+  --ink-900: #2b2a28; /* = --color-base */
+
+  /* 紅（アクセント色）。700 が今の --color-accent。300 はロゴの折り角 */
+  --beni-50: #fbf3f2;
+  --beni-100: #f7e9e8; /* = --color-accent-tint */
+  --beni-200: #efcfcd;
+  --beni-300: #d69b98;
+  --beni-700: #a3201b; /* = --color-accent */
+  --beni-800: #861a16;
+  --beni-900: #5e1310;
+
+  /* 緑（状態の色。2026-11-03 本人が承認）。700 が今の --color-ok */
+  --midori-50: #f2f7f5;
+  --midori-100: #e7f0ed; /* = --color-ok-tint */
+  --midori-200: #c9ded7;
+  --midori-700: #2f6f5e; /* = --color-ok */
+  --midori-800: #245748;
+
+  /* 黄（フォーカスだけ。2026-11-05 本人が承認） */
+  --ki-300: #ffd43d; /* = --color-focus */
+
+  /* ================= 2. 役の名前（部品はこちらを使う。暗い色の画面では、ここだけを差し替える） */
+
+  /* 面の重なり：白が基本（2026-11-05 本人の返事）。白の上の白は、枠・見出しの地・影で段を分ける。へこんだ台だけ薄い墨の地 */
+  --surface-page: #ffffff; /* 画面の下地（今の --color-paper #FBFAF7 から白に変える案） */
+  --surface-card: #ffffff; /* カード・欄（--line-default の枠で下地と分ける） */
+  --surface-raised: #ffffff; /* 浮いた欄（枠＋影を1段だけ付ける） */
+  --surface-sunken: var(--ink-100); /* ページの並び・中央の台・表の見出しの行 */
+  --surface-subtle: var(--ink-50); /* 表の縞・お知らせの地・節の見出しの地 */
+  --surface-strong: var(--ink-900); /* 上の帯・主のボタン */
+
+  /* 文字 */
+  --text-strong: var(--ink-900); /* 本文・見出し */
+  --text-muted: var(--ink-700); /* 補足 */
+  --text-on-strong: #ffffff; /* 墨・紅・緑の地の上 */
+  --text-danger: var(--beni-700);
+  --text-ok: var(--midori-700);
+
+  /* 枠（4段。弱い順） */
+  --line-hair: var(--ink-200); /* 表の行の間など、いちばん弱い区切り（飾り） */
+  --line-default: var(--ink-300); /* カードの縁・節の区切り（飾り） */
+  --line-control: var(--ink-500); /* 押せる所の枠（WCAG 1.4.11 の 3:1 以上） */
+  --line-strong: var(--ink-900); /* 見出しの左の線・選んだもの */
+
+  /* 状態（色だけで示さない。必ず印と字を添える。design/sheet.md の「お知らせ」） */
+  --danger: var(--beni-700); /* ▲ 危ない・残っている */
+  --danger-bg: var(--beni-50);
+  --danger-line: var(--beni-700);
+  --ok: var(--midori-700); /* ✓ 済・見つからない */
+  --ok-bg: var(--midori-50);
+  --ok-line: var(--midori-700);
+  --check: var(--ink-900); /* ？ 確かめる（新しい色は足さず、墨の点線で分ける） */
+  --check-bg: var(--surface-card);
+  --info: var(--ink-900); /* ｉ 知らせ */
+  --info-bg: var(--surface-subtle);
+
+  --focus-ring: var(--ki-300);
+
+  /* ================= 3. 枠の太さ・角の丸み・影 */
+  --bw-1: 1px; /* 飾りの線 */
+  --bw-2: 2px; /* 押せる所・カードの強い縁 */
+  --bw-accent: 4px; /* 見出し・お知らせの左の線 */
+  --bw-mark: 3px; /* ページの上の枠（= --border-mark） */
+
+  --radius-s: 4px; /* PDF のページ・小さな札の内側 */
+  --radius-m: 8px; /* ボタン・項目・お知らせ（= --radius） */
+  --radius-l: 12px; /* カード・欄（= --radius-panel） */
+  --radius-pill: 999px; /* 件数の札・手順の札 */
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 8%), 0 2px 8px rgb(0 0 0 / 6%); /* 浮いた欄（1段だけ。重ねない） */
+
+  /* ================= 4. 文字の段（rem で書き、ブラウザの字の大きさの設定に付いていく） */
+  --fs-root: 112.5%; /* 18px（ブラウザの既定 16px のとき）。px で決めると、字の大きさの設定が効かない */
+  --fs-display: 2rem; /* ページの題（1 ページに 1 つ） */
+  --fs-h1: 1.6rem;
+  --fs-h2: 1.3rem;
+  --fs-h3: 1.1rem;
+  --fs-body: 1rem;
+  --fs-small: 0.9rem; /* これより小さくしない（18px × 0.9 = 16.2px） */
+  --fw-body: 400;
+  --fw-strong: 700;
+  --lh-body: 1.7;
+  --lh-head: 1.4;
+  --measure: 40em; /* 本文の 1 行の長さの上限（約 40 字） */
+
+  /* ================= 5. 余白の段（今の --space-1〜6 と同じ値に、7・8 を足す） */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem; /* 大きな節の間 */
+  --sp-8: 4rem; /* ページの上下 */
+}
+
+/* ================= 暗い色の画面（案。いまは使わない）
+ * 2026-11-05 本人の答え：暗い色の設定の人にも、白をもとにした明るい画面で出す。
+ * そのため prefers-color-scheme: dark では切り替えない。下の値は、data-theme="dark" を付けたときだけ効く案として残す。
+ */
+:root[data-theme="dark"] {
+  --surface-page: #1c1b1a;
+  --surface-card: #262523;
+  --surface-raised: #302e2b;
+  --surface-sunken: #161514;
+  --surface-subtle: #2c2a28;
+  --surface-strong: #ece8e1;
+  --text-strong: #ece8e1;
+  --text-muted: #b8b2a8;
+  --text-on-strong: #1c1b1a;
+  --text-danger: #f0928c;
+  --text-ok: #7cc2ac;
+  --line-hair: #3a3835;
+  --line-default: #45423e;
+  --line-control: #9a958c;
+  --line-strong: #ece8e1;
+  --danger: #f0928c;
+  --danger-bg: #3a2422;
+  --danger-line: #f0928c;
+  --ok: #7cc2ac;
+  --ok-bg: #1f2f2a;
+  --ok-line: #7cc2ac;
+  --check: #ece8e1;
+  --check-bg: #262523;
+  --info: #ece8e1;
+  --info-bg: #2c2a28;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 40%), 0 2px 8px rgb(0 0 0 / 30%);
+}
