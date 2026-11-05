@@ -1056,9 +1056,20 @@ body:has(.terms-dialog[open]) {
   outline-offset: 3px;
 }
 
-.mark.is-selected .mark-no {
+/* 選んだ札：白い丸に、その枠の色の太い縁と字（紅 7.55:1、墨 14.34:1。白の地に対して）。
+   見えている候補（墨の札）を選んだときも同じ形にする。前は候補の墨の地が残り、黒い丸に紅の字（1.90:1）で読みにくかった。
+   縁は内側の影で描き、札の大きさを変えない（2026-11-06 朝） */
+.mark.is-selected .mark-no,
+.mark.is-selected.mark-candidate .mark-no,
+.mark.is-selected.mark-pick .mark-no {
   background: var(--color-surface);
   color: var(--color-accent);
+  box-shadow: inset 0 0 0 2px currentColor, 0 0 0 2px var(--surface-card);
+}
+
+.mark.is-selected.mark-candidate .mark-no,
+.mark.is-selected.mark-pick .mark-no {
+  color: var(--color-base);
 }
 
 /* 見えている候補の枠：墨の点線（見えない情報の紅の実線と、色と線の形で分ける）。札も墨 */
@@ -1566,12 +1577,8 @@ progress {
   cursor: pointer;
 }
 
-/* 乗ったとき：題に黄のマーカー（下線は引かない。案 C） */
-.item:hover .item-title {
-  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
+/* 検出の行の題には、乗っても選んでもマーカーを引かない（題は折り返す箱なので、帯が 2 行目だけに出てしまう）。
+   選んだこと・乗ったことは、行の紅の枠と地の色で示す（2026-11-06 朝） */
 
 .item > span {
   display: block;
