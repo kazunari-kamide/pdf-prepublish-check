@@ -8,12 +8,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { CLEAN_URL_RULES, LICENSE_TEXTS_DIR, LICENSE_TEXTS_RULES, NOT_FOUND_PAGE, OFFICIAL_ORIGIN, OLD_LICENSE_TEXTS_DIR, buildHtaccess } from "../htaccess.ts";
+import { CHECK_PAGE_FILE, CHECK_PAGE_RULES, CHECK_PATH, CLEAN_URL_RULES, LICENSE_TEXTS_DIR, LICENSE_TEXTS_RULES, NOT_FOUND_PAGE, OFFICIAL_ORIGIN, OLD_LICENSE_TEXTS_DIR, buildHtaccess } from "../htaccess.ts";
 import { cleanUrlRoute, siteFiles } from "../site.ts";
 import { ABOUT_PATH, fileFor, pathForFile } from "../src/site/render.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const DIST_FILES = new Set(["index.html", "privacy.html", "404.html", "articles/index.html", "articles/p6-fake-redaction.html", "articles/tags/document-info.html", "google0123abcd.html", "assets/site-0123456789.css", "sitemap.xml"]);
+const DIST_FILES = new Set(["check.html", "privacy.html", "404.html", "articles/index.html", "articles/p6-fake-redaction.html", "articles/tags/document-info.html", "google0123abcd.html", "assets/site-0123456789.css", "sitemap.xml"]);
 const exists = (f: string) => DIST_FILES.has(f);
 
 describe("場所の扱い（cleanUrlRoute。本番の .htaccess と同じ決まり）", () => {
@@ -28,11 +28,40 @@ describe("場所の扱い（cleanUrlRoute。本番の .htaccess と同じ決ま�
     expect(cleanUrlRoute("/articles/tags/document-info", exists)).toEqual({ kind: "rewrite", url: "/articles/tags/document-info.html" });
     expect(cleanUrlRoute("/articles/p6-fake-redaction?from=x", exists)).toEqual({ kind: "rewrite", url: "/articles/p6-fake-redaction.html?from=x" });
   });
-  it("検査のページ・記事の一覧の index.html、検索エンジンの確認のファイル、ほかのファイルは、そのまま", () => {
-    for (const u of ["/", "/index.html", "/articles/", "/articles/index.html", "/google0123abcd.html", "/assets/site-0123456789.css", "/sitemap.xml"]) expect(cleanUrlRoute(u, exists), u).toBeNull();
+  it("記事の一覧の index.html、検索エンジンの確認のファイル、ほかのファイルは、そのまま", () => {
+    for (const u of ["/articles/", "/articles/index.html", "/google0123abcd.html", "/assets/site-0123456789.css", "/sitemap.xml"]) expect(cleanUrlRoute(u, exists), u).toBeNull();
   });
-  it("検査のページの /?sample=1（#109）は、そのまま。サービス紹介の /about（#109）は、about.html ができれば .html なしで開ける", () => {
-    expect(cleanUrlRoute("/?sample=1", exists)).toBeNull();
+  it("検査のページは /check（check.html）。/ は /check へ 302（? のあとも引き継ぐ）。/check.html・/check/・前の /index.html は /check へ 301", () => {
+    expect(CHECK_PATH).toBe("/check");
+    expect(fileFor(CHECK_PATH)).toBe(CHECK_PAGE_FILE);
+    expect(pathForFile(CHECK_PAGE_FILE)).toBe(CHECK_PATH);
+    expect(cleanUrlRoute("/check", exists)).toEqual({ kind: "rewrite", url: "/check.html" });
+    expect(cleanUrlRoute("/check?sample=1", exists)).toEqual({ kind: "rewrite", url: "/check.html?sample=1" });
+    expect(cleanUrlRoute("/", exists)).toEqual({ kind: "temporary", location: "/check" });
+    expect(cleanUrlRoute("/?sample=1", exists)).toEqual({ kind: "temporary", location: "/check?sample=1" });
+    expect(cleanUrlRoute("/?utm_source=x&sample=1", exists)).toEqual({ kind: "temporary", location: "/check?utm_source=x&sample=1" });
+    expect(cleanUrlRoute("/check.html", exists)).toEqual({ kind: "redirect", location: "/check" });
+    expect(cleanUrlRoute("/check.html?sample=1", exists)).toEqual({ kind: "redirect", location: "/check?sample=1" });
+    expect(cleanUrlRoute("/check/", exists)).toEqual({ kind: "redirect", location: "/check" });
+    expect(cleanUrlRoute("/index.html", exists)).toEqual({ kind: "redirect", location: "/check" });
+    expect(cleanUrlRoute("/index.html?sample=1", exists)).toEqual({ kind: "redirect", location: "/check?sample=1" });
+  });
+  it(".htaccess の検査のページの規則：/ は 302（301 にしない）で、https の 301 のあと、.html なしの書き換えの前", () => {
+    const ht = buildHtaccess();
+    const block = CHECK_PAGE_RULES.map((l) => `  ${l}`).join("\n");
+    expect(ht).toContain(block);
+    expect(CHECK_PAGE_RULES).toContain("RewriteRule ^$ /check [R=302,L]");
+    expect(CHECK_PAGE_RULES).toContain("RewriteRule ^check/$ /check [R=301,L]");
+    expect(CHECK_PAGE_RULES.join("\n")).not.toMatch(/\^\$ \S+ \[R=301/);
+    // 置き換え先に ? を書かない（書くと、? のあとが引き継がれない）
+    for (const l of CHECK_PAGE_RULES.filter((x) => x.startsWith("RewriteRule"))) expect(l.split(" ")[2], l).not.toContain("?");
+    // /index.html の 301 は、外から来た要求だけ（すぐ上の条件）
+    const at = CHECK_PAGE_RULES.indexOf("RewriteRule ^index\\.html$ /check [R=301,L]");
+    expect(CHECK_PAGE_RULES[at - 1]).toBe("RewriteCond %{ENV:REDIRECT_STATUS} ^$");
+    expect(ht.indexOf(block)).toBeGreaterThan(ht.indexOf("RewriteCond %{HTTPS} !on"));
+    expect(ht.indexOf(block)).toBeLessThan(ht.indexOf(CLEAN_URL_RULES[0]!));
+  });
+  it("サービス紹介の /about（#109）は、about.html ができれば .html なしで開ける", () => {
     expect(fileFor(ABOUT_PATH)).toBe("about.html");
     const withAbout = (f: string) => f === "about.html" || exists(f);
     expect(cleanUrlRoute(ABOUT_PATH, withAbout)).toEqual({ kind: "rewrite", url: "/about.html" });
@@ -116,13 +145,16 @@ describe("サイトの中の場所は .html なし", () => {
   it("sitemap.xml の場所は .html なしで、ページのファイルと1対1", () => {
     const locs = [...files.get("sitemap.xml")!.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!);
     expect(locs.filter((u) => u.endsWith(".html"))).toEqual([]);
+    // 検査のページは /check（check.html は vite が作るので siteFiles にはない）。/ は 302 なので載せない
+    expect(locs).toContain(`${OFFICIAL_ORIGIN}${CHECK_PATH}`);
+    expect(locs).not.toContain(`${OFFICIAL_ORIGIN}/`);
     for (const u of locs) {
       const p = u.slice(OFFICIAL_ORIGIN.length);
-      if (p !== "/") expect(files.has(fileFor(p)), u).toBe(true);
+      if (p !== CHECK_PATH) expect(files.has(fileFor(p)), u).toBe(true);
     }
   });
-  it("検査のページ（index.html）の下の帯のリンクも .html なし（中身・CSP は変えない）", () => {
-    const html = readFileSync(path.join(ROOT, "index.html"), "utf8");
+  it("検査のページ（check.html）の下の帯のリンクも .html なし（中身・CSP は変えない）", () => {
+    const html = readFileSync(path.join(ROOT, "check.html"), "utf8");
     expect(html).not.toMatch(/href="\/[^"]*\.html"/);
   });
 });

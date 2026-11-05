@@ -4,7 +4,7 @@
 // - 言い方の決まり：件数は「18万件以上」。言い切り・誇張（seo.ts の BANNED_WORDS と、「通信ゼロ」など）を使わない。「見張り」「監視」と言わない
 // - 測っていない数字の空欄（【 】）を、ページに残さない（埋まらない文は外す）
 // - スクリプト・直接書いた style がなく、読み込むのは同じサイトの CSS 2 つだけ
-// - 中のリンクが、あるページ・あるページの中の場所を指す。見本のボタンは /?sample=1
+// - 中のリンクが、あるページ・あるページの中の場所を指す。見本のボタンは /check?sample=1
 // - sitemap に入り、どのサイトのページの上の帯からも来られる
 
 import { describe, expect, it } from "vitest";
@@ -45,17 +45,17 @@ describe("サービスの紹介のページ", () => {
     for (const c of css) expect(c).toMatch(/^\/assets\/(site|about)-[0-9a-f]{10}\.css$/);
   });
 
-  it("中のリンクは、あるページか、このページの中の場所を指す。見本のボタンは /?sample=1", () => {
+  it("中のリンクは、あるページか、このページの中の場所を指す。見本のボタンは /check?sample=1", () => {
     const hrefs = [...main.matchAll(/href="([^"]+)"/g)].map((m) => m[1]!.replace(/&amp;/g, "&"));
     const ids = new Set([...page.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
     for (const h of hrefs) {
       if (h.startsWith("https://github.com/")) continue; // ソースの場所（ビルドの時に決まる）
       if (h.startsWith("#")) expect(ids.has(h.slice(1)), h).toBe(true);
-      else if (h === "/" || h === SAMPLE_HREF) continue;
+      else if (h === "/check" || h === SAMPLE_HREF) continue;
       else expect(files.has(fileFor(h.split("#")[0]!)), h).toBe(true);
     }
     expect(hrefs).toContain(SAMPLE_HREF);
-    expect(SAMPLE_HREF).toBe("/?sample=1");
+    expect(SAMPLE_HREF).toBe("/check?sample=1");
   });
 
   it("残り方のカードと型の札は、記事のある型を指し、型は P1〜P12 を 1 回ずつ並べる", () => {

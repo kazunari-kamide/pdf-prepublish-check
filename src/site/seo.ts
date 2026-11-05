@@ -9,6 +9,7 @@
 //   「直接書いたスクリプト」の確かめに当たるため（PR に理由を書いた）。
 // - 「安全です」「初めて」「唯一」「上位互換」のような言い方を、題・説明に使わない（テストで確かめる）。
 
+import { CHECK_PATH } from "../../htaccess.ts";
 import { ARTICLES } from "./articles.ts";
 import { articleTags, tagBySlug } from "./tags.ts";
 import type { PageMeta } from "./types.ts";
@@ -21,9 +22,9 @@ export const OG_IMAGE_ALT = "お守りPDF のロゴと「公開・提出の前�
 /** 題・説明に使わない言い方（言い切り・比べての誇張） */
 export const BANNED_WORDS = ["安全です", "初めて", "唯一", "上位互換", "完璧", "100%", "絶対"];
 
-/** 検査のページ（index.html）の head */
+/** 検査のページ（check.html。/check で開く）の head */
 export const INSPECTOR_HEAD = {
-  path: "/",
+  path: CHECK_PATH,
   title: "お守りPDF｜公開前の PDF に残る情報を、ブラウザの中で確かめる",
   description:
     "黒塗りの下に残った文字、作成者の名前、前の版の残り、添付ファイルなど、PDF の見た目では分からない情報を、公開・提出の前に確かめて片付けます。PDF はブラウザの中だけで読み、どこにも送りません。",
@@ -130,7 +131,7 @@ export function headFor(meta: PageMeta): HeadInfo {
   }
   return {
     path: meta.path,
-    title: meta.path === "/" ? SITE_NAME : `${meta.title}｜${SITE_NAME}`,
+    title: meta.path === CHECK_PATH ? SITE_NAME : `${meta.title}｜${SITE_NAME}`,
     description: meta.description,
     type: "website",
     ...(NOINDEX_PATHS.has(meta.path) ? { noindex: true } : {}),

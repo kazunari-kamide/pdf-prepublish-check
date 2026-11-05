@@ -33,7 +33,7 @@ const FORBIDDEN: Array<[string, RegExp]> = [
 ];
 
 describe("通信しない", () => {
-  const files = [...listFiles(path.join(ROOT, "src")), ...listFiles(path.join(ROOT, "rules")), path.join(ROOT, "index.html")];
+  const files = [...listFiles(path.join(ROOT, "src")), ...listFiles(path.join(ROOT, "rules")), path.join(ROOT, "check.html")];
 
   it("調べるファイルがある", () => {
     expect(files.length).toBeGreaterThan(0);

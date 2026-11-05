@@ -15,7 +15,7 @@ import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { build as viteBuild, type Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
-import { CONTACT_PAGE_FILE, CONTACT_SEND_FILE, LICENSE_TEXTS_DIR, OFFICIAL_ORIGIN, OLD_LICENSE_TEXTS_DIR } from "./htaccess.ts";
+import { CHECK_PAGE_FILE, CHECK_PATH, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, LICENSE_TEXTS_DIR, OFFICIAL_ORIGIN, OLD_LICENSE_TEXTS_DIR } from "./htaccess.ts";
 import { faviconHref, inlineMark } from "./logo.ts";
 import { buildFigures } from "./site-figures.ts";
 import { buildLicenses } from "./site-licenses.ts";
@@ -224,7 +224,7 @@ export function verificationMeta(code = GOOGLE_SITE_VERIFICATION): { name: strin
  */
 export function withTermsDialog(html: string, repo: string | null = repoUrl()): string {
   const count = html.split(TERMS_DIALOG_MARKER).length - 1;
-  if (count !== 1) throw new Error(`index.html に利用規約のダイアログの目印 ${TERMS_DIALOG_MARKER} が 1 つではありません（${count} 個）`);
+  if (count !== 1) throw new Error(`${CHECK_PAGE_FILE} に利用規約のダイアログの目印 ${TERMS_DIALOG_MARKER} が 1 つではありません（${count} 個）`);
   return html.replace(TERMS_DIALOG_MARKER, () => renderTermsDialog({ repoUrl: repo }));
 }
 
@@ -246,11 +246,12 @@ function isFile(p: string): boolean {
   }
 }
 
-export type CleanUrlRoute = { kind: "redirect"; location: string } | { kind: "rewrite"; url: string } | null;
+export type CleanUrlRoute = { kind: "redirect"; location: string } | { kind: "temporary"; location: string } | { kind: "rewrite"; url: string } | null;
 
 /**
  * 本番の .htaccess の書き換え（htaccess.ts の CLEAN_URL_RULES）と同じ決まりで、場所をどう扱うかを決める。
  * exists は、dist/ の中のファイルの名前（先頭の / なし）があるか。
+ * - / は検査のページ（/check）へ 302（kind: "temporary"）。/check/ と、前の検査のページの /index.html は /check へ 301（htaccess.ts の CHECK_PAGE_RULES）
  * - .html 付き（index.html・googleXXXX.html を除く）で、ファイルがあれば、.html なしへ 301（? のあとはそのまま）
  * - .html なしで、同じ名前の .html があれば、そのファイルで返す（アドレスはそのまま）
  */
@@ -271,6 +272,9 @@ export function cleanUrlRoute(rawUrl: string, exists: (file: string) => boolean)
     const name = file.slice(OLD_LICENSE_TEXTS_DIR.length + 1);
     if (!name.includes("/") && name.endsWith(".txt")) return { kind: "redirect", location: `/${LICENSE_TEXTS_DIR}/${name}${query}` };
   }
+  // 検査のページ（htaccess.ts の CHECK_PAGE_RULES と同じ）
+  if (file === "") return { kind: "temporary", location: `${CHECK_PATH}${query}` };
+  if (file === `${CHECK_PATH.slice(1)}/` || file === "index.html") return { kind: "redirect", location: `${CHECK_PATH}${query}` };
   if (decoded.endsWith(".html")) {
     if (/(^|\/)index\.html$/.test(decoded) || /^\/google[0-9a-z]+\.html$/.test(decoded) || !exists(file)) return null;
     return { kind: "redirect", location: `${pathname.replace(/^\/+/, "/").replace(/\.html$/, "")}${query}` };
@@ -282,8 +286,8 @@ export function cleanUrlRoute(rawUrl: string, exists: (file: string) => boolean)
 function cleanUrlMiddleware(exists: (file: string) => boolean) {
   return (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(): void }, next: () => void) => {
     const route = cleanUrlRoute(req.url ?? "/", exists);
-    if (route?.kind === "redirect") {
-      res.statusCode = 301;
+    if (route?.kind === "redirect" || route?.kind === "temporary") {
+      res.statusCode = route.kind === "redirect" ? 301 : 302;
       res.setHeader("Location", route.location);
       return res.end();
     }
@@ -301,7 +305,7 @@ export function sitePages(): Plugin {
         const meta = verificationMeta();
         // 検査のページの題・説明・canonical・OGP・X のカード（中身は src/site/seo.ts）
         const head = headLines(INSPECTOR_HEAD_INFO, OFFICIAL_ORIGIN, escapeHtml);
-        if (!/<title>[^<]*<\/title>/.test(html)) throw new Error("index.html に <title> がありません（題・説明を入れる場所）");
+        if (!/<title>[^<]*<\/title>/.test(html)) throw new Error(`${CHECK_PAGE_FILE} に <title> がありません（題・説明を入れる場所）`);
         // 検査のページの出どころの札（src/ui/rule-origin.ts）が PR へのリンクに使う、リポジトリの場所。分からなければ入れない（札は字だけになる）
         const repo = repoUrl();
         const tags = [
@@ -323,7 +327,7 @@ export function sitePages(): Plugin {
       server.middlewares.use(cleanUrlMiddleware((file) => isFile(path.join(dist, file))));
     },
     configureServer(server) {
-      server.middlewares.use(cleanUrlMiddleware((file) => siteFiles().has(file)));
+      server.middlewares.use(cleanUrlMiddleware((file) => file === CHECK_PAGE_FILE || siteFiles().has(file)));
       server.middlewares.use((req, res, next) => {
         const url = (req.url ?? "/").split("?")[0] ?? "/";
         const name = url.endsWith("/") ? `${url}index.html` : url;
@@ -342,7 +346,7 @@ export function sitePages(): Plugin {
           );
           return;
         }
-        const body = name === "/index.html" ? undefined : (siteFiles().get(key) ?? siteBinaryFiles().get(key));
+        const body = name === `/${CHECK_PAGE_FILE}` ? undefined : (siteFiles().get(key) ?? siteBinaryFiles().get(key));
         if (body === undefined) return next();
         res.setHeader("Content-Type", TYPES[path.extname(name)] ?? "application/octet-stream");
         res.end(body);

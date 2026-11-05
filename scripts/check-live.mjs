@@ -6,9 +6,11 @@
 //   npm run check:live -- --url https://example.invalid/        … 確かめる先を変える
 //
 // 確かめること（1つでも合わなければ失敗）：
-// - トップページが 200 で返り、csp.ts のヘッダー（CSP・nosniff・no-referrer など）が、同じ値で1つずつ付いている
+// - 検査のページ（/check）が 200 で返り、csp.ts のヘッダー（CSP・nosniff・no-referrer など）が、同じ値で1つずつ付いている
+// - / は /check へ 302（? のあとも引き継ぐ。301 にしない）。302 の応答にも、同じヘッダーと HSTS が付いている。
+//   /check/・/check.html・前の /index.html は /check へ 301（htaccess.ts の CHECK_PAGE_RULES）
 // - サイトのページ（記事の一覧・記事1つ・タグのページ・プライバシー）も .html なしの場所で 200 で返り、同じヘッダーが付いている。.html 付きの場所は .html なしへ 301
-// - トップページが、外のサイトからスクリプトを読み込んでいない（アクセス解析のスクリプトは入れない。docs/no-network.md）
+// - 検査のページが、外のサイトからスクリプトを読み込んでいない（アクセス解析のスクリプトは入れない。docs/no-network.md）
 // - https の応答に Strict-Transport-Security が付き、Cache-Control が HTML は no-cache・assets/ は 1 年（htaccess.ts）
 // - 見つからない場所は、404 で自前の 404 のページ（dist/404.html と同じ中身）を、同じヘッダーをつけて返す。assets/ を開いてもファイルの一覧は出ない
 // - .mjs が text/javascript、.wasm が application/wasm で返る（dist/ に .wasm がなければ、省いたと表示する）
@@ -24,13 +26,15 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { contactHeaders, securityHeaders } from "../csp.ts";
-import { CACHE_ASSETS, CACHE_DEFAULT, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, HSTS, LICENSE_TEXTS_DIR, NOT_FOUND_PAGE, OFFICIAL_HOST, OLD_LICENSE_TEXTS_DIR } from "../htaccess.ts";
+import { CACHE_ASSETS, CACHE_DEFAULT, CHECK_PAGE_FILE, CHECK_PATH, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, HSTS, LICENSE_TEXTS_DIR, NOT_FOUND_PAGE, OFFICIAL_HOST, OLD_LICENSE_TEXTS_DIR } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(ROOT, "dist");
 const args = process.argv.slice(2);
 const urlArg = args.indexOf("--url");
 const base = new URL(urlArg >= 0 ? args[urlArg + 1] : `https://${OFFICIAL_HOST}/`);
+// 検査のページ（2026-11-05 に / から /check へ移した）
+const checkUrl = new URL(CHECK_PATH.slice(1), base);
 
 const problems = [];
 const notes = [];
@@ -60,18 +64,18 @@ async function get(url, method = "GET") {
   return fetch(url, { method, redirect: "manual", cache: "no-store", headers: { "Cache-Control": "no-cache" } });
 }
 
-// ---- トップページのヘッダー。つながるまで少し待つ（配信の直後のため）
+// ---- 検査のページ（/check）のヘッダー。つながるまで少し待つ（配信の直後のため）
 let top = null;
 for (let i = 0; i < 6 && !top; i++) {
   try {
-    top = await get(base);
+    top = await get(checkUrl);
   } catch (e) {
-    if (i === 5) problems.push(`${base.href} につながりません（${e?.cause?.code ?? e?.message ?? e}）`);
+    if (i === 5) problems.push(`${checkUrl.href} につながりません（${e?.cause?.code ?? e?.message ?? e}）`);
     else await sleep(10_000);
   }
 }
 if (top) {
-  if (top.status !== 200) problems.push(`${base.href} が ${top.status} を返しました（200 のはず）`);
+  if (top.status !== 200) problems.push(`${checkUrl.href} が ${top.status} を返しました（200 のはず）`);
   for (const [name, want] of Object.entries(securityHeaders)) {
     const got = top.headers.get(name);
     if (got === null) problems.push(`ヘッダー ${name} がありません`);
@@ -93,7 +97,7 @@ const tagFile = files.find((f) => /^articles\/tags\/.+\.html$/.test(f));
 const pagesWithFolder = files.filter((f) => f.endsWith(".html") && !f.endsWith("index.html") && files.some((g) => g.startsWith(`${f.slice(0, -".html".length)}/`)));
 
 // ---- .html 付きの場所は、.html なしへ 301（外からのリンクや検索の結果を切らさないため）
-for (const f of [...new Set(["privacy.html", CONTACT_PAGE_FILE, articleFile, tagFile, ...pagesWithFolder].filter(Boolean))]) {
+for (const f of [...new Set([CHECK_PAGE_FILE, "privacy.html", CONTACT_PAGE_FILE, articleFile, tagFile, ...pagesWithFolder].filter(Boolean))]) {
   try {
     const r = await get(new URL(f, base), "HEAD");
     const loc = r.headers.get("location");
@@ -102,6 +106,38 @@ for (const f of [...new Set(["privacy.html", CONTACT_PAGE_FILE, articleFile, tag
     else ok.push(`${f} → 301 → ${pageUrlFor(f)}`);
   } catch (e) {
     problems.push(`${f} の移し先を確かめられませんでした（${e?.message ?? e}）`);
+  }
+}
+
+// ---- / は検査のページ（/check）へ 302。ハッカソンの間だけの一時的な移しなので、301 にしない（ブラウザが覚えるため）。
+// ? のあと（?sample=1 など）も引き継ぐ。302 の応答にも、ほかと同じヘッダーと HSTS が付く。
+// /check/ と、前の検査のページの /index.html は /check へ 301（htaccess.ts の CHECK_PAGE_RULES。/check.html は上の .html 付きで見た）
+{
+  const moves = [
+    ["", CHECK_PATH, 302],
+    ["?sample=1", `${CHECK_PATH}?sample=1`, 302],
+    [`${CHECK_PATH.slice(1)}/`, CHECK_PATH, 301],
+    ["index.html", CHECK_PATH, 301],
+  ];
+  for (const [from, to, status] of moves) {
+    const label = `/${from}`;
+    try {
+      const r = await get(new URL(from, base), status === 302 ? "GET" : "HEAD");
+      const loc = r.headers.get("location");
+      const want = new URL(to.slice(1), base).href;
+      if (r.status !== status || !loc || new URL(loc, base).href !== want) {
+        problems.push(`${label} が ${r.status}（行き先 ${loc ?? "なし"}）を返しました（${status} で ${want} のはず）`);
+        continue;
+      }
+      ok.push(`${label} → ${status} → ${to}`);
+      if (status !== 302) continue;
+      const bad = Object.entries(securityHeaders).filter(([name, want]) => r.headers.get(name) !== want).map(([name]) => name);
+      if (base.protocol === "https:" && r.headers.get("strict-transport-security") !== HSTS) bad.push("Strict-Transport-Security");
+      if (bad.length) problems.push(`${label} の 302 の応答のヘッダーが違います（${bad.join("・")}）`);
+      else ok.push(`${label} の 302 の応答のヘッダー`);
+    } catch (e) {
+      problems.push(`${label} の移し先を確かめられませんでした（${e?.message ?? e}）`);
+    }
   }
 }
 
@@ -172,8 +208,8 @@ if (top) {
     else ok.push(`Strict-Transport-Security（${HSTS}）`);
   } else notes.push("http の場所を確かめているため、Strict-Transport-Security は確かめていません");
   const cc = top.headers.get("cache-control");
-  if (cc !== CACHE_DEFAULT) problems.push(`トップページの Cache-Control が ${cc ?? "（なし）"} です（${CACHE_DEFAULT} のはず）`);
-  else ok.push(`トップページの Cache-Control（${CACHE_DEFAULT}）`);
+  if (cc !== CACHE_DEFAULT) problems.push(`検査のページの Cache-Control が ${cc ?? "（なし）"} です（${CACHE_DEFAULT} のはず）`);
+  else ok.push(`検査のページの Cache-Control（${CACHE_DEFAULT}）`);
 }
 {
   const asset = files.find((f) => f.startsWith("assets/") && f.endsWith(".css")) ?? files.find((f) => f.startsWith("assets/"));
@@ -214,14 +250,14 @@ try {
 }
 
 // ---- アクセス解析のスクリプトを入れていない（開いた回数は、サーバーの記録で数える。docs/no-network.md）
-// 本番のトップページの HTML が dist/ と1バイトも違わないことは下で確かめる。ここでは、外から読み込むスクリプトがないことを見る
+// 本番の検査のページの HTML が dist/ と1バイトも違わないことは下で確かめる。ここでは、外から読み込むスクリプトがないことを見る
 if (top) {
   try {
-    const html = await (await get(base)).text();
-    if (/<script\b[^>]*\bsrc="(https?:)?\/\//.test(html)) problems.push("トップページが、外のサイトからスクリプトを読み込んでいます");
-    else ok.push("トップページに、外から読み込むスクリプトがない");
+    const html = await (await get(checkUrl)).text();
+    if (/<script\b[^>]*\bsrc="(https?:)?\/\//.test(html)) problems.push("検査のページが、外のサイトからスクリプトを読み込んでいます");
+    else ok.push("検査のページに、外から読み込むスクリプトがない");
   } catch (e) {
-    problems.push(`トップページの中身を確かめられませんでした（${e?.message ?? e}）`);
+    problems.push(`検査のページの中身を確かめられませんでした（${e?.message ?? e}）`);
   }
 }
 

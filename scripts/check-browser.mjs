@@ -7,7 +7,7 @@
 //   npm run check:browser -- --shots <フォルダ>              … スクリーンショットも撮る
 //   npm run check:browser -- <PDF のパス>...                  … 入れる PDF を変える（既定は下の DEFAULT_PDFS）
 //   npm run check:browser -- --self-test                     … 数える仕組みの点検。わざと外へ要求を出し、失敗になることを確かめる
-//   npm run check:browser -- --url https://omamoripdf.com/   … vite preview の代わりに、配信したサイト（本番）を開く（docs/deploy.md）
+//   npm run check:browser -- --url https://omamoripdf.com/check   … vite preview の代わりに、配信したサイト（本番）の検査のページを開く（docs/deploy.md）
 //   npm run check:browser -- --no-sanitize                   … 「片付ける」を押さない（検査だけを確かめる）
 //   npm run check:browser -- --limit 3 <PDF のパス>          … 入口で「提出のためにファイルを小さくする」の上限（MB）を選んでから置く。
 //                                                              整えたあと、上限の一文（#compress-limit）が出るまで待ち、その文と「そのほかの操作」が開いたかを出す
@@ -34,6 +34,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { CHECK_PAGE_FILE, CHECK_PATH } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_PDFS = [
@@ -61,7 +62,7 @@ for (let i = 0; i < args.length; i++) {
   else pdfs.push(path.resolve(args[i]));
 }
 if (!pdfs.length) pdfs.push(...DEFAULT_PDFS.slice(0, selfTest ? 1 : undefined).map((p) => path.join(ROOT, p)));
-if (!liveUrl && !existsSync(path.join(ROOT, "dist", "index.html"))) {
+if (!liveUrl && !existsSync(path.join(ROOT, "dist", CHECK_PAGE_FILE))) {
   console.error("dist/ がありません。先に npm run build を実行してください。");
   process.exit(1);
 }
@@ -85,7 +86,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // --url のときは、手元の vite preview を立てずに、配信したサイトを開く
 // vite は、手元の vite preview を立てるときだけ読み込む（本番を開く --url のときは要らない。配信のジョブでは npm を動かさず、vite を入れないため）
 const server = liveUrl ? null : await (await import("vite")).preview({ root: ROOT, logLevel: "silent", preview: { host: "127.0.0.1", port: 0, strictPort: false, open: false } });
-const appUrl = liveUrl ?? server.resolvedUrls.local[0];
+// 手元では、検査のページ（/check。2026-11-05 に / から移した）を開く
+const appUrl = liveUrl ?? new URL(CHECK_PATH, server.resolvedUrls.local[0]).href;
 const origin = new URL(appUrl).origin;
 
 // 立ち上げのやり直しと、待つ時間（配信の直後の CI は遅いことがあるため、長めにとる）
@@ -421,7 +423,7 @@ async function checkOne(c, pdf) {
 
 // ---------------------------------------------------------------- サイトのページ
 
-/** dist/ の HTML から、サイトのページの場所（.html なし。本番の .htaccess と同じに、vite preview が .html のファイルを返す）を作る（index.html と、検索エンジンの確認のファイルは除く） */
+/** dist/ の HTML から、サイトのページの場所（.html なし。本番の .htaccess と同じに、vite preview が .html のファイルを返す）を作る（検査のページ check.html と、検索エンジンの確認のファイルは除く） */
 function sitePagePaths() {
   const out = [];
   if (!existsSync(path.join(ROOT, "dist"))) return out;
@@ -429,7 +431,7 @@ function sitePagePaths() {
     for (const name of readdirSync(dir, { withFileTypes: true })) {
       const r = rel ? `${rel}/${name.name}` : name.name;
       if (name.isDirectory()) walk(path.join(dir, name.name), r);
-      else if (r.endsWith(".html") && r !== "index.html" && !/^google[0-9a-z]+\.html$/.test(r)) out.push(r.endsWith("/index.html") ? `/${r.slice(0, -"index.html".length)}` : `/${r.slice(0, -".html".length)}`);
+      else if (r.endsWith(".html") && r !== CHECK_PAGE_FILE && !/^google[0-9a-z]+\.html$/.test(r)) out.push(r.endsWith("/index.html") ? `/${r.slice(0, -"index.html".length)}` : `/${r.slice(0, -".html".length)}`);
     }
   };
   walk(path.join(ROOT, "dist"), "");

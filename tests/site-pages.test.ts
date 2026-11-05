@@ -62,7 +62,7 @@ describe("ページの形", () => {
   it("どのページの下の帯にも、公式のサイトの場所の1文がある（検査のページも同じ文）", () => {
     for (const [name, page] of pages) expect(page, name).toContain(`<p class="site-official">${escapeHtml(OFFICIAL_NOTE)}</p>`);
     for (const [name, page] of files) if (name.endsWith(".html")) expect(page, name).toContain(escapeHtml(OFFICIAL_NOTE));
-    expect(read("index.html")).toContain(`<p class="site-official">${OFFICIAL_NOTE}</p>`);
+    expect(read("check.html")).toContain(`<p class="site-official">${OFFICIAL_NOTE}</p>`);
   });
 
   for (const [name, page] of pages) {
@@ -72,7 +72,7 @@ describe("ページの形", () => {
       expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}${pathForFile(name)}" />`);
       // お問い合わせのページだけ、form-action 'self' だけが違う CSP（docs/contact.md）
       expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(name === "contact.html" ? cspForContactMeta : cspForMeta)}" />`);
-      expect(page).toContain('href="/"');
+      expect(page).toContain('href="/check"');
       expect(page).not.toMatch(/<script\b|\sstyle=|\son[a-z]+=/);
       // 下の帯に、サイトの案内のリンクが全部ある
       for (const [href] of FOOT_LINKS) expect(page).toContain(`href="${href}"`);
@@ -204,9 +204,9 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     const f = page("faq.html");
     expect(f).not.toContain("小さくする機能はありません");
     expect(f).toContain("「ファイルを小さくする」");
-    expect(read("index.html")).toContain("ファイルを小さくする（必要なときだけ）");
+    expect(read("check.html")).toContain("ファイルを小さくする（必要なときだけ）");
     // 画面の手順は「整える」。サイトのページで「片付ける」と書くと、画面のどこを押すのか分からなくなる
-    expect(read("index.html")).toMatch(/<span class="step-name">[^<]*<span class="visually-hidden">3 <\/span>整える<\/span>/);
+    expect(read("check.html")).toMatch(/<span class="step-name">[^<]*<span class="visually-hidden">3 <\/span>整える<\/span>/);
     for (const [name, p] of pages) expect(p, name).not.toMatch(/片付け/);
     expect(files.get("privacy.html")).not.toMatch(/片付け/);
   });
@@ -322,14 +322,14 @@ describe("配るものに入る部品（SHIPPED_ROOTS）が、コードの読み
   });
 });
 
-describe("検査のページ（index.html）", () => {
-  const html = read("index.html");
+describe("検査のページ（check.html）", () => {
+  const html = read("check.html");
   it("下の帯のリンクは、サイトのページの下の帯と同じ並び", () => {
     const foot = html.match(/<footer class="site-links"[\s\S]*?<\/footer>/)![0];
     const links = [...foot.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]);
     expect(links).toEqual(FOOT_LINKS.map(([h, l]) => [h, l]));
     // このページ（検査のページ）へのリンクだけ、今いるページの印（D3）
-    expect([...foot.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1])).toEqual(["/"]);
+    expect([...foot.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1])).toEqual(["/check"]);
   });
 
   it("最初の画面：概要（見出し 1 つ・具体例の 1 文・札 3 つ）と進み具合を、ヘッダーの外（2 列の上）に置く。送らないことの一文は置き場の中の 1 か所だけ", () => {

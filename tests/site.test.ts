@@ -119,7 +119,7 @@ describe("ページの HTML", () => {
       // 外を指すのは canonical と、GitHub へ移る <a> のリンクだけ
       expect(page.replace(/<link rel="canonical" href="[^"]+" \/>/, "").replace(/<a href="https:\/\/github\.com\/[^"]*"/g, "<a")).not.toMatch(/(src|href)="(https?:)?\/\//);
       // 検査のページ（/）へつながる
-      expect(page).toContain('href="/"');
+      expect(page).toContain('href="/check"');
     });
   }
 

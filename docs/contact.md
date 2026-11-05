@@ -27,7 +27,7 @@ contact-send.php：確かめる → 迷惑防止 → 運営者へのメール 1 
 | `contact-config.php` | 配信先の `public_html` の **1 つ上**（本人が置く） | 届け先・送信元・鍵 |
 | `contact-data/` | 同じく public_html の 1 つ上（PHP が作る） | 迷惑防止の記録 |
 
-- 検査のページ（`/`）と、そのほかのページの CSP は変えない。お問い合わせのページと `contact-send.php` だけ、CSP の `form-action` を `'self'` にし、参照元の決まり（`Referrer-Policy`）を `same-origin`、`Cache-Control` を `no-store` にする（`csp.ts` の `contactHeaders`。`.htaccess` の `<FilesMatch>` で上書きする）。`connect-src 'none'` などはそのまま。
+- 検査のページ（`/check`）と、そのほかのページの CSP は変えない。お問い合わせのページと `contact-send.php` だけ、CSP の `form-action` を `'self'` にし、参照元の決まり（`Referrer-Policy`）を `same-origin`、`Cache-Control` を `no-store` にする（`csp.ts` の `contactHeaders`。`.htaccess` の `<FilesMatch>` で上書きする）。`connect-src 'none'` などはそのまま。
 - **ヘッダーは `.htaccess` だけが付ける。** PHP の `header()` でも同じ名前を付けると、Apache の `Header always set` と重なって 2 つになるおそれがあるため。PHP が付けるのは `Content-Type` と、`Allow`・`Retry-After` だけ。`X-Powered-By` は外す。2 つになっていないことは `check-live` が確かめる（値が 1 つずつ同じであること）。
 - 参照元の決まりを `same-origin` にするのは、同じサイトへの送信に `Origin` を付けさせるため（`no-referrer` のままだと、フォームの送信の `Origin` が `null` になる）。ほかのサイトへは、これまでどおり何も送らない。
 - 動かすには PHP 8.0 以上と、`mbstring` が要る（Xserver のサーバーパネルの「PHP Ver.切替」で、`omamoripdf.com` の版を確かめる）。
