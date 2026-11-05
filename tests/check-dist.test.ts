@@ -185,6 +185,31 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     expect(bad.out).toContain("faq.html が外のサイトから読み込んでいます");
   });
 
+  it("スクリプトは、記事の一覧のページの検索のスクリプト1つだけを通す", () => {
+    const tag = '<script type="module" src="/assets/article-search-0123456789.js"></script>';
+    const good = withPages({ "articles/index.html": page(CSP_OK, tag) });
+    writeFileSync(path.join(good, "assets", "article-search-0123456789.js"), "export const x = 1;\n");
+    const r1 = run(good);
+    expect(r1.out).not.toContain("問題：");
+    expect(r1.code).toBe(0);
+    expect(r1.out).toContain("articles/index.html（検索のスクリプト assets/article-search-0123456789.js を読み込む");
+
+    const bad = withPages({
+      "articles/index.html": page(CSP_OK, `${tag}<script type="module" src="/assets/other-0123456789.js"></script>`),
+      "faq.html": page(CSP_OK, tag),
+    });
+    writeFileSync(path.join(bad, "assets", "article-search-0123456789.js"), "document.body.innerHTML = location.hash;\n");
+    const r2 = run(bad);
+    expect(r2.code).toBe(1);
+    expect(r2.out).toContain("articles/index.html にスクリプトがあります");
+    expect(r2.out).toContain("faq.html にスクリプトがあります");
+    expect(r2.out).toContain("字を HTML として解釈させる書き方か eval があります");
+
+    const missing = run(withPages({ "articles/index.html": page(CSP_OK, tag) }));
+    expect(missing.code).toBe(1);
+    expect(missing.out).toContain("assets/article-search-0123456789.js が、dist/ にありません");
+  });
+
   it("検索エンジンの確認のファイルは、決まった1行のときだけ通す", () => {
     const good = run(withPages({ "google0123abcd.html": "google-site-verification: google0123abcd.html\n" }));
     expect(good.code).toBe(0);

@@ -7,7 +7,7 @@
 // - 開発サーバー（npm run dev）でも、同じページを返す
 // - 検索エンジンの確認のコード（src/site/search-console.ts）があれば、トップページに <meta> を入れる
 //
-// ページにはスクリプトを入れない。通信を足さない（docs/no-network.md）。
+// ページにはスクリプトを入れない（例外は、記事の一覧のページの検索のスクリプト 1 つだけ。src/site/article-search.js）。通信を足さない（docs/no-network.md）。
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -17,7 +17,9 @@ import type { Plugin } from "vite";
 import { cspForMeta } from "./csp.ts";
 import { OFFICIAL_ORIGIN } from "./htaccess.ts";
 import { faviconHref, inlineMark } from "./logo.ts";
+import { buildFigures } from "./site-figures.ts";
 import { buildLicenses } from "./site-licenses.ts";
+import { renderIndexPages } from "./src/site/article-index.ts";
 import { GUIDE_PATHS, renderGuidePages } from "./src/site/pages.ts";
 import { renderSite, sitePaths } from "./src/site/render.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
@@ -68,10 +70,26 @@ export function renderRobots(origin = OFFICIAL_ORIGIN): string {
   return ["User-agent: *", "Allow: /", `Sitemap: ${origin}/sitemap.xml`, ""].join("\n");
 }
 
-/** dist/ に置くファイル（HTML・sitemap.xml・robots.txt・CSS）。鍵は dist/ の中の名前 */
+/**
+ * 記事の一覧のページでだけ読み込む、検索のスクリプト（src/site/article-search.js）。サイトのページで、ただ1つのスクリプト。
+ * 名前に中身のハッシュを付けて assets/ に置く（check-dist が、このファイルだけを例外として通す）
+ */
+export function searchScript(): { file: string; source: string } {
+  const source = readFileSync(path.join(ROOT, "src", "site", "article-search.js"), "utf8");
+  return { file: `assets/article-search-${createHash("sha256").update(source).digest("hex").slice(0, 10)}.js`, source };
+}
+
+/** dist/ に置く字でないファイル（記事の図）。鍵は dist/ の中の名前 */
+export function siteBinaryFiles(): Map<string, Uint8Array> {
+  return buildFigures().files;
+}
+
+/** dist/ に置くファイル（HTML・sitemap.xml・robots.txt・CSS・検索のスクリプト）。鍵は dist/ の中の名前 */
 export function siteFiles(): Map<string, string> {
   const css = siteCss();
   const cssFile = siteCssFile(css);
+  const figures = buildFigures();
+  const search = searchScript();
   const options = {
     origin: OFFICIAL_ORIGIN,
     csp: cspForMeta,
@@ -81,7 +99,10 @@ export function siteFiles(): Map<string, string> {
     favicon: faviconHref(),
     brandMark: inlineMark("mark-on-dark", "site-brand-mark"),
   };
-  const files = renderSite(options);
+  const files = renderSite({ ...options, figures: figures.assets });
+  // 記事の一覧（検索のスクリプトを読む）と、タグごとの一覧のページ
+  for (const [name, page] of renderIndexPages({ ...options, figures: figures.assets, searchScript: `/${search.file}` })) files.set(name, page);
+  files.set(search.file, search.source);
   const licenses = buildLicenses(ROOT);
   for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);
   for (const [name, text] of licenses.files) files.set(name, text);
@@ -103,6 +124,9 @@ const TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".xml": "application/xml; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
 };
 
 export function sitePages(): Plugin {
@@ -117,12 +141,14 @@ export function sitePages(): Plugin {
     },
     generateBundle() {
       for (const [fileName, source] of siteFiles()) this.emitFile({ type: "asset", fileName, source });
+      for (const [fileName, source] of siteBinaryFiles()) this.emitFile({ type: "asset", fileName, source });
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = (req.url ?? "/").split("?")[0] ?? "/";
         const name = url.endsWith("/") ? `${url}index.html` : url;
-        const body = name === "/index.html" ? undefined : siteFiles().get(name.replace(/^\//, ""));
+        const key = name.replace(/^\//, "");
+        const body = name === "/index.html" ? undefined : (siteFiles().get(key) ?? siteBinaryFiles().get(key));
         if (body === undefined) return next();
         res.setHeader("Content-Type", TYPES[path.extname(name)] ?? "application/octet-stream");
         res.end(body);
