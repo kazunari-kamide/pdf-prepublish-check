@@ -32,6 +32,7 @@ import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
 import { spreadBadges } from "./ui/badges";
+import { keepUnits } from "./ui/text";
 import { sampleFile, wantsSample, withoutSample } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
@@ -91,6 +92,7 @@ const ui = {
   cleanCount: el<HTMLParagraphElement>("clean-count"),
   cleanCandidates: el<HTMLParagraphElement>("clean-candidates"),
   backToList: el<HTMLButtonElement>("back-to-list"),
+  filePage: el<HTMLSpanElement>("file-page"),
   download: el<HTMLAnchorElement>("download"),
   downloadNote: el<HTMLParagraphElement>("download-note"),
   saveNote: el<HTMLParagraphElement>("save-note"),
@@ -213,7 +215,7 @@ const SCOPE_NOTE = "見つけられるのは、ここに並べた種類だけで
 
 function setStatus(text: string, tone: "neutral" | "ok" | "problem" = "neutral") {
   delete ui.status.dataset.quiet;
-  ui.status.textContent = text;
+  ui.status.textContent = keepUnits(text);
   ui.status.dataset.tone = tone;
 }
 
@@ -354,7 +356,7 @@ async function runCompress(preset?: CompressPreset): Promise<{ size: number; cha
     }
     const v = buildCompressView(out.kind === "done" ? { status: "ok", ...out } : { status: "blocked", ...out });
     ui.compressHeadline.textContent = v.headline;
-    ui.compressSizes.textContent = v.sizes;
+    ui.compressSizes.textContent = keepUnits(v.sizes);
     ui.compressLines.replaceChildren(...v.lines.map((t) => make("li", t)));
     if (out.kind !== "done" || !out.changed) {
       setStatus(v.headline, v.kind === "blocked" ? "problem" : "neutral");
@@ -478,6 +480,7 @@ function goHome() {
   ui.stepPickNote.textContent = "PDF を置く";
   ui.fileName.textContent = "";
   ui.fileFacts.textContent = "";
+  ui.filePage.textContent = "";
   ui.input.value = "";
   setStatus("まだ PDF を選んでいません。");
   ui.input.focus();
@@ -615,7 +618,7 @@ function renderGroups(s: Session) {
     const sure = g.rows.filter((r) => !r.check).length;
     const check = g.rows.length - sure;
     head.append(make("span", g.label, "group-name"));
-    head.append(make("span", [sure ? `${sure} 件` : "", check ? `確かめる ${check} 件` : ""].filter(Boolean).join("・"), "group-count"));
+    head.append(make("span", keepUnits([sure ? `${sure} 件` : "", check ? `確かめる ${check} 件` : ""].filter(Boolean).join("・")), "group-count"));
     body.append(head);
     // 黒塗りの候補（個人情報らしい字）：片付ける前だけ、選んだ所に加えるボタンを付ける（キーボードでも選べる）
     const candidates = s.phase === "before" && !ui.pickTools.hidden ? g.rows.filter(isCandidate) : [];
@@ -732,8 +735,11 @@ async function drawThumbImages(s: Session) {
 // ---------------------------------------------------------------- 真ん中：大きなページ
 
 function sheetWidth(): number {
+  // 絵の欄（.sheet-wrap）が出ていれば、その中の幅（スクロールバーの分を除いた幅）に合わせる。まだ隠れているときは、
+  // PDF の欄の幅から、内側の余白とスクロールバーの分を差し引いた目安（横にはみ出さないように。2026-11-05 夜のレビュー 15）
+  const wrap = ui.sheetWrap.hidden ? 0 : ui.sheetWrap.clientWidth;
   const stage = ui.sheetWrap.parentElement;
-  const w = (stage?.clientWidth ?? SHEET_MAX_WIDTH) - 32;
+  const w = wrap > 0 ? wrap - 4 : (stage?.clientWidth ?? SHEET_MAX_WIDTH) - 72;
   return Math.max(240, Math.min(SHEET_MAX_WIDTH, w));
 }
 
@@ -835,7 +841,16 @@ async function showPage(page: number, selectNo: number | null) {
   s.current = page;
   s.selected = selectNo;
   for (const t of ui.thumbs.querySelectorAll(".thumb")) t.removeAttribute("aria-current");
-  document.getElementById(`thumb-${page}`)?.setAttribute("aria-current", "page");
+  const thumb = document.getElementById(`thumb-${page}`);
+  thumb?.setAttribute("aria-current", "page");
+  // 縮小の列の中だけをスクロールして、今のページの縮小を見せる（ページ全体は動かさない）
+  if (thumb && ui.thumbs.scrollHeight > ui.thumbs.clientHeight) {
+    // 縮小の列は貼り付け（sticky）なので、縮小の offsetTop は列の中の位置
+    const top = thumb.offsetParent === ui.thumbs ? thumb.offsetTop : thumb.offsetTop - ui.thumbs.offsetTop;
+    if (top < ui.thumbs.scrollTop || top + thumb.offsetHeight > ui.thumbs.scrollTop + ui.thumbs.clientHeight) ui.thumbs.scrollTop = top - 8;
+  }
+  const total = s.summary.pages.length;
+  ui.filePage.textContent = total > 1 ? `ページ ${page} / ${total}` : "";
 
   const box = s.boxes.get(page);
   const size = box ? viewSize(box) : { width: 595, height: 842 };
@@ -1050,9 +1065,9 @@ function renderSummary(s: Session) {
   setStep(ui.stepCheck, "done");
   // 数は「見た目では分からない情報」だけ（見えている候補は入れない。見出しと同じ物差し）
   ui.stepCheckNote.textContent = v.hidden
-    ? `${v.hidden} か所 見つかりました`
+    ? keepUnits(`${v.hidden} か所 見つかりました`)
     : v.candidates
-    ? `候補 ${v.candidates} か所`
+    ? keepUnits(`候補 ${v.candidates} か所`)
     : v.clean
     ? "見つかりませんでした"
     : "調べられない所あり";
@@ -1127,14 +1142,14 @@ function makeSession(
 }
 
 function renderOutcome(outcome: InspectOutcome, base: Pick<Session, "generation" | "fileName" | "original" | "sha256" | "byteLength" | "pdf" | "pdfProblem">) {
-  const seconds = `${(outcome.elapsedMs / 1000).toFixed(1)} 秒`;
   if (outcome.kind === "timeout") return fail("時間がかかりすぎたため、検査を止めました。画面はそのまま使えます。");
   if (outcome.kind === "error") return fail(outcome.message);
   if (!outcome.precheck.ok) return fail(outcome.precheck.message);
   if (!outcome.summary) return fail("検査の結果を受け取れませんでした。");
   const summary = outcome.summary;
   const pages = summary.pagesUnreadable ? "ページの数 不明" : `${summary.pages.length} ページ`;
-  ui.fileFacts.textContent = `${pages}・${formatBytes(outcome.precheck.byteLength)}・${seconds}`;
+  // かかった秒は帯に出さない（利用者には要らない。帯を 1 行に収めるため。夜のレビュー 16）
+  ui.fileFacts.textContent = keepUnits(`${pages}・${formatBytes(outcome.precheck.byteLength)}`);
   session = makeSession(summary, { ...base, phase: "before" });
   renderSummary(session);
 }
@@ -1159,6 +1174,7 @@ async function handle(file: File) {
   ui.stepCheckNote.textContent = "確かめています";
   ui.fileName.textContent = file.name;
   ui.fileFacts.textContent = "";
+  ui.filePage.textContent = "";
   ui.filebar.hidden = false;
   setStatus("確かめています…");
   ui.progress.hidden = false;
@@ -1566,20 +1582,21 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
     ui.stepVerifyNote.textContent = "残り 0 件・保存できます";
   } else {
     setStep(ui.stepVerify, "now");
-    ui.stepVerifyNote.textContent = c.left === null ? "読み直せませんでした" : c.left > 0 ? `${c.left} か所 残っています` : "消えたと言い切れない所があります";
+    ui.stepVerifyNote.textContent = c.left === null ? "読み直せませんでした" : c.left > 0 ? keepUnits(`${c.left} か所 残っています`) : "消えたと言い切れない所があります";
   }
 
   ui.cleanCount.textContent =
     c.left === null ? `整える前 ${c.before} か所 → 読み直せませんでした` : `整える前 ${c.before} か所 → 読み直したあと ${c.left} か所`;
+  ui.cleanCount.textContent = keepUnits(ui.cleanCount.textContent ?? "");
   ui.cleanCount.dataset.verdict = c.verdict;
   // 見えている個人情報らしい字（候補）は、見えない情報とは別の行で、前と後を同じ物差しで（黒塗りにするかは本人が決める）
   ui.cleanCandidates.textContent = c.candidatesBefore
-    ? `見えている個人情報らしい字：${c.candidatesBefore} か所 → ${c.candidatesAfter === null ? "読み直せませんでした" : `${c.candidatesAfter} か所`}（黒塗りするかは、あなたが決めます）`
+    ? keepUnits(`見えている個人情報らしい字：${c.candidatesBefore} か所 → ${c.candidatesAfter === null ? "読み直せませんでした" : `${c.candidatesAfter} か所`}（黒塗りするかは、あなたが決めます）`)
     : "";
   ui.cleanCandidates.hidden = !c.candidatesBefore;
   ui.download.download = file.name;
   applySaveGate(saveGate(c));
-  ui.downloadNote.textContent = `${file.name}（${file.pages} ページ・${formatBytes(file.bytes)}・${file.seconds}）。元の PDF は変えていません。`;
+  ui.downloadNote.textContent = keepUnits(`${file.name}（${file.pages} ページ・${formatBytes(file.bytes)}・${file.seconds}）。元の PDF は変えていません。`);
 
   ui.notDoneList.replaceChildren(...c.notDone.map((t) => make("li", t)));
   ui.notDone.hidden = c.notDone.length === 0;
@@ -1625,7 +1642,7 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.verified.hidden = true;
   ui.resultTitle.textContent = "読み直した結果（種類ごと）";
   ui.fileName.textContent = file.name;
-  ui.fileFacts.textContent = `整えた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`;
+  ui.fileFacts.textContent = keepUnits(`整えた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`);
 }
 
 /** 型ごとの、片付ける前と読み直したあとの数（11/5 B の 6） */

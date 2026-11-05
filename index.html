@@ -81,8 +81,10 @@
         <div class="filebar" id="filebar" hidden>
           <span class="filebar-name" id="file-name"></span>
           <span class="filebar-facts" id="file-facts"></span>
-          <!-- 1 つにまとめた（2026-11-05 本人の画面のレビュー B7）。最初の画面に戻り、そこで置く・選ぶ・見本を試す -->
-          <button id="go-home" class="filebar-again btn-sub" type="button">別の PDF にする</button>
+          <span class="filebar-page" id="file-page"></span>
+          <!-- 1 つにまとめた（2026-11-05 本人の画面のレビュー B7）。最初の画面に戻り、そこで置く・選ぶ・見本を試す。
+               帯が 2 行にならないよう、字を短くした（夜のレビュー 16） -->
+          <button id="go-home" class="filebar-again btn-sub" type="button" aria-label="別の PDF にする（最初の画面に戻る）">別の PDF</button>
         </div>
 
         <figure class="sheet-wrap" id="sheet-wrap" hidden>
@@ -105,6 +107,11 @@
         <p id="status" role="status" aria-live="polite">まだ PDF を選んでいません。</p>
         <progress id="progress" max="1" value="0" aria-label="進み具合" hidden></progress>
 
+        <!-- 何も見つからないときの結論（緑の箱）。「念のため整える」より先に読めるよう、ボタンの上に置く（2026-11-05 夜のレビュー 7） -->
+        <div id="verified" class="verified" data-state="none" hidden>
+          <p id="verified-text"></p>
+          <p id="verified-scope" class="verified-scope"></p>
+        </div>
         <div id="actions" class="actions" hidden>
           <div id="consent" class="consent" hidden></div>
           <button id="sanitize" type="button" aria-describedby="sanitize-note tidy-summary">整える</button>
@@ -121,10 +128,6 @@
           </div>
         </div>
 
-        <div id="verified" class="verified" data-state="none" hidden>
-          <p id="verified-text"></p>
-          <p id="verified-scope" class="verified-scope"></p>
-        </div>
 
         <section id="clean" class="clean" aria-labelledby="clean-title" hidden>
           <h3 id="clean-title" tabindex="-1">整えた結果</h3>

@@ -49,6 +49,32 @@ body {
   container: page / inline-size;
 }
 
+/* 日本語の改行（2026-11-05 夜のレビュー 8）：見出しと短い札は、語のまとまりで折り、行の長さをそろえる。
+   本文は、最後の行が 1〜2 字だけにならないようにする。語のまとまりが行より長いときは、折ってはみ出さない */
+h2,
+h3,
+h4,
+#status,
+.clean-count,
+.clean-candidates,
+.step-name,
+.step-note,
+.group-head,
+.item-title,
+.save-note,
+.verified p {
+  word-break: auto-phrase;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.results p,
+.results li,
+.item-detail,
+.item-why {
+  text-wrap: pretty;
+}
+
 h1,
 h2,
 h3,
@@ -411,12 +437,34 @@ body:has(#workspace:not([data-state="empty"])) .hero {
   min-width: 0;
 }
 
-/* 結果を見ているとき：PDF の欄は中身の高さで止め、右をスクロールしてもページが見えるよう上に貼り付ける（D1） */
+/* 結果を見ているとき：PDF の欄は中身の高さで止め、右をスクロールしてもページが見えるよう上に貼り付ける（D1）。
+   角の丸みは外の箱が持ち（overflow: hidden）、スクロールするのは中の絵の欄だけにする（スクロールバーで角が四角くならない・
+   ファイルの帯は上に残る。2026-11-05 夜のレビュー 15） */
 .workspace[data-state="result"] .stage {
   align-self: start;
   position: sticky;
-  top: var(--space-4);
-  max-height: calc(100dvh - 2 * var(--space-4));
+  top: var(--sp-4);
+  max-height: calc(100dvh - 2 * var(--sp-4));
+  overflow: hidden;
+}
+
+.workspace[data-state="result"] .sheet-wrap {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* 縮小したページの列も上に貼り付け、列の中だけをスクロールする（今のページの縮小が画面の外へ流れないように） */
+.workspace[data-state="result"] .thumbs {
+  align-self: start;
+  position: sticky;
+  top: var(--sp-4);
+  max-height: calc(100dvh - 2 * var(--sp-4));
   overflow-y: auto;
 }
 
@@ -689,7 +737,7 @@ body:has(.terms-dialog[open]) {
 
 .filebar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2) var(--space-4);
   width: 100%;
@@ -704,9 +752,26 @@ body:has(.terms-dialog[open]) {
   overflow-wrap: anywhere;
 }
 
+/* 大きさなどは 1 行に。入りきらないときは「…」で切る（ボタンが 2 行目に落ちないように。2026-11-05 夜のレビュー 16） */
 .filebar-facts {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-small);
   color: var(--color-muted);
+}
+
+/* 今のページ（2 ページ以上のときだけ）。絵の下ではなく帯に出す（絵が長いと画面の外になるため） */
+.filebar-page {
+  font-size: var(--text-small);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.filebar-page:empty {
+  display: none;
 }
 
 .filebar-again {
@@ -825,7 +890,8 @@ body:has(.terms-dialog[open]) {
   border-left-width: var(--bw-accent);
   border-radius: var(--radius-m);
   background: var(--info-bg);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   font-size: var(--text-small);
 }
 
@@ -905,7 +971,8 @@ progress {
   border: var(--bw-1) solid var(--info);
   border-left-width: var(--bw-accent);
   border-radius: var(--radius-m);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   background: var(--info-bg);
 }
 
@@ -946,7 +1013,13 @@ progress {
 
 .group-body {
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--pad-box-y) var(--pad-box-x);
+}
+
+/* 左の辺が太い囲みは、太い分を差し引いて、字の左端をほかの箱とそろえる */
+.group[data-status="found"] > .group-body,
+.group[data-status="candidate"] > .group-body {
+  padding-left: var(--pad-box-x-accent);
 }
 
 .group-head {
@@ -1069,13 +1142,13 @@ progress {
 
 .props summary {
   min-height: var(--target-min);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--pad-box-x);
   font-weight: 700;
   cursor: pointer;
 }
 
 .props-body {
-  padding: 0 var(--space-4) var(--space-3);
+  padding: 0 var(--pad-box-x) var(--pad-box-y);
   font-size: var(--text-small);
 }
 
@@ -1479,8 +1552,8 @@ progress {
   margin: var(--space-3) 0;
   padding: var(--space-4);
   background: var(--ok-bg);
-  border: var(--bw-1) solid var(--ok-line);
-  border-top-width: var(--bw-accent);
+  /* 4 辺とも同じ太さ（上だけ太くすると、角でくさびの形になる。sheet.md「枠」。2026-11-05 夜のレビュー 12） */
+  border: var(--bw-2) solid var(--ok-line);
   border-radius: var(--radius-l);
 }
 
@@ -1646,7 +1719,8 @@ progress {
 
 .not-done {
   margin: var(--space-3) 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   background: var(--danger-bg);
   border: var(--bw-1) solid var(--danger-line);
   border-left-width: var(--bw-accent);
@@ -1678,24 +1752,7 @@ progress {
 
 .sanitize-more summary,
 .clean-more summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: var(--target-min);
   font-weight: 700;
-  cursor: pointer;
-}
-
-/* 開け閉めの印（「見た所・見なかった所」と同じ形） */
-.sanitize-more summary::before,
-.clean-more summary::before {
-  content: "▶";
-  font-size: 0.8em;
-}
-
-.sanitize-more[open] summary::before,
-.clean-more[open] summary::before {
-  content: "▼";
 }
 
 .sanitize-list {
@@ -1733,7 +1790,8 @@ progress {
   border-left-width: var(--bw-accent);
   border-radius: var(--radius-m);
   background: var(--ok-bg);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   color: var(--color-ok);
   font-weight: 700;
 }
@@ -1756,7 +1814,8 @@ progress {
 
 .scope-note {
   margin: var(--space-4) 0 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--pad-box-y) var(--pad-box-x);
+  padding-left: var(--pad-box-x-accent);
   border: var(--bw-1) solid var(--info);
   border-left-width: var(--bw-accent);
   border-radius: var(--radius-m);
@@ -1834,20 +1893,48 @@ progress {
     padding: var(--space-3);
   }
   /* 狭いときは縦に積むので、PDF の欄を上に貼り付けない（D1） */
-  .workspace[data-state="result"] .stage {
+  .workspace[data-state="result"] .stage,
+  .workspace[data-state="result"] .thumbs {
     position: static;
     max-height: none;
     overflow: visible;
   }
-  .group-body {
-    padding: var(--space-3);
+  .workspace[data-state="result"] .sheet-wrap {
+    overflow: visible;
+  }
+  /* 20：狭い画面の手順は 1 行に。名前と一言は今の段だけ、ほかの段は番号の丸（済んだ段は ✓）だけにする（名前は読み上げに残す） */
+  .steps {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--sp-1);
+  }
+  .steps li {
+    flex: none;
+    padding: var(--sp-1);
+  }
+  .steps li[data-state="now"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: var(--sp-3);
+  }
+  .steps li:not([data-state="now"]) .step-name,
+  .steps #step-verify[data-state="todo"] .step-note {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .steps li:not([data-state="now"]) {
+    column-gap: 0;
   }
 }
 
 /* 黒塗りの候補（個人情報らしい字）を、選んだ所に加えるボタン（押した状態は、印と字でも示す。色だけにしない） */
 
 .pick-all {
-  margin: 0 0 var(--space-2);
+  margin: var(--sp-2) 0;
 }
 
 .pick-candidate {
@@ -1976,9 +2063,11 @@ progress {
   content: "▲ ";
 }
 
-/* プロパティの一覧の見出しの下の一言（閉じていても読める） */
+/* プロパティの一覧の見出しの下の一言（閉じていても読める）。開け閉めの印の右の字と、左をそろえる */
 .props summary .props-warn {
   display: block;
+  flex-basis: 100%;
+  padding-left: calc(0.8em + var(--sp-1));
   margin-top: var(--space-1);
   font-size: var(--text-small);
   font-weight: 400;
@@ -2149,6 +2238,35 @@ progress {
 
 .verified[data-state="clean"] p:first-child::before {
   content: "✓ ";
+}
+
+/* 開け閉めの印を 1 つの形に（結果の欄の中。ブラウザの既定の大きな ▶ は出さない）。2 行になっても、印は 1 行目の字の高さにそろえる。
+   「見た所・見なかった所」は、見出しの前に同じ形の印を付ける（.coverage-summary .group-head::before）。2026-11-05 夜のレビュー 13 */
+.results summary {
+  list-style: none;
+}
+
+.results summary::-webkit-details-marker {
+  display: none;
+}
+
+.results summary:not(.coverage-summary) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: first baseline;
+  gap: 0 var(--sp-1);
+  min-height: var(--target-min);
+  padding-block: var(--sp-2);
+}
+
+.results summary:not(.coverage-summary)::before {
+  content: "▶";
+  flex: none;
+  font-size: 0.8em;
+}
+
+.results details[open] > summary:not(.coverage-summary)::before {
+  content: "▼";
 }
 
 /* 押せる所のカーソル：チェックボックス・ラジオボタンとその字・開け閉めの見出しも指の形。押せないものは ⊘ */
