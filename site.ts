@@ -37,14 +37,34 @@ export function ogImage(): Buffer {
   return readFileSync(path.join(ROOT, "src", "site", "og-image.png"));
 }
 
-/** サイトのページの CSS。tokens.css・sheet.css の後に site.css、その後に動きの CSS（src/site/motion.css と、記事ごとの名前。motion.ts）をつなぐ */
+/**
+ * 同梱の書体（design/fonts.css の @font-face）を、サイトのページでも読めるようにする（2026-11-05 夜。案 C で見出しを丸ゴシックにしたため）。
+ * - 書体のファイルは、名前に中身のハッシュを付けて assets/fonts/ に置く（.htaccess で 1 年キャッシュさせるため）
+ * - @font-face の url() を、その場所に書き換えた CSS を返す（検査のページは Vite が同じファイルを読む）
+ */
+export function siteFonts(): { css: string; files: Map<string, Uint8Array> } {
+  const source = readFileSync(path.join(ROOT, "design", "fonts.css"), "utf8");
+  const files = new Map<string, Uint8Array>();
+  const css = source.replace(/url\("(\.\.\/src\/assets\/fonts\/[\w./-]+\.woff2)"\)/g, (_m, rel: string) => {
+    const buf = readFileSync(path.join(ROOT, "design", rel));
+    const base = path.basename(rel, ".woff2");
+    const file = `assets/fonts/${base}-${createHash("sha256").update(buf).digest("hex").slice(0, 10)}.woff2`;
+    files.set(file, buf);
+    return `url("/${file}")`;
+  });
+  if (/url\("\.\./.test(css)) throw new Error("design/fonts.css に、書き換えられない書体の場所があります");
+  return { css, files };
+}
+
+/** サイトのページの CSS。書体・tokens.css・sheet.css の後に site.css、その後に動きの CSS（src/site/motion.css と、記事ごとの名前。motion.ts）をつなぐ */
 export function siteCss(): string {
+  const fonts = siteFonts().css;
   const tokens = readFileSync(path.join(ROOT, "design", "tokens.css"), "utf8");
   // デザインシート（design/sheet.md）の役の名前。検査の画面（src/style.css の @import）と同じファイルを読む
   const sheet = readFileSync(path.join(ROOT, "design", "sheet.css"), "utf8");
   const site = readFileSync(path.join(ROOT, "src", "site", "site.css"), "utf8");
   const motion = readFileSync(path.join(ROOT, "src", "site", "motion.css"), "utf8");
-  return `${tokens}\n${sheet}\n${site}\n${motion}\n${articleTransitionNames()}`;
+  return `${fonts}\n${tokens}\n${sheet}\n${site}\n${motion}\n${articleTransitionNames()}`;
 }
 
 /** サービスの紹介のページ（/about）だけで、サイトの CSS の後に読む CSS（src/site/about.css）。名前に中身のハッシュを付ける */
@@ -139,9 +159,11 @@ export async function buildHeroScene(entry = heroScripts().scene.entry): Promise
   return chunk.code;
 }
 
-/** dist/ に置く字でないファイル（記事の図）。鍵は dist/ の中の名前 */
+/** dist/ に置く字でないファイル（記事の図・書体）。鍵は dist/ の中の名前 */
 export function siteBinaryFiles(): Map<string, Uint8Array> {
-  return buildFigures().files;
+  const files = new Map(buildFigures().files);
+  for (const [name, buf] of siteFonts().files) files.set(name, buf);
+  return files;
 }
 
 /** PHP の一重引用符の文字列にする（\ と ' だけを逃がす。ほかの字はそのまま） */
@@ -236,6 +258,7 @@ const TYPES: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".woff2": "font/woff2",
 };
 
 function isFile(p: string): boolean {

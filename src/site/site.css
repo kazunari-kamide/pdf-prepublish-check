@@ -41,11 +41,17 @@ body.site {
   overflow-wrap: anywhere; /* 字を大きくしても、長い英数字で横にはみ出さない */
 }
 
+/* 見出しは丸ゴシック（Zen Maru Gothic。見出しで使う字だけを同梱。一覧にない字は本文の書体で出る。design/sheet.md「案 C」の字） */
 .site h1,
 .site h2,
 .site h3 {
-  font-family: var(--font-head);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-sub);
   line-height: var(--lh-head);
+}
+
+.site h1 {
+  font-weight: var(--fw-display);
 }
 
 /* 日本語の改行（design/sheet.md「日本語の改行」）：見出しと札の題は文節の切れ目で折り、行の長さをそろえる。
@@ -76,6 +82,23 @@ body.site {
   text-decoration-thickness: 2px;
 }
 
+/* 本文の中のリンク：太字＋黄のマーカー（字の下半分の淡い帯）。下線は引かない（色だけに頼らない。design/sheet.md「案 C」の強調・リンク） */
+.site-main :is(p, dd) a:not([class]),
+.site-section li > a:not([class]) {
+  font-weight: var(--fw-strong);
+  text-decoration: none;
+  padding-inline: 0.08em;
+  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.site-main :is(p, dd) a:not([class]):hover,
+.site-section li > a:not([class]):hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
 .site :focus-visible {
   /* 1 色の線（黄と黒の 2 重にしない。2026-11-05 本人）。色・太さ・離し方は design/sheet.css（B の #107：墨 900・3px・3px） */
   outline: var(--bw-focus, 3px) solid var(--focus-ring);
@@ -102,19 +125,18 @@ body.site {
   white-space: nowrap;
 }
 
-/* ---- 上の帯：白の地。下に墨の線を引いて本文と区切る（墨の地の帯にはしない） */
-/* 並び：ロゴ・案内・右端に「PDF を確かめる」。狭い画面では、1 行目にロゴとボタン、2 行目に案内を 1 行で（横に動かせる）。
- * メニューを開け閉めする形（ハンバーガー）にはしない。この形が正（検査のページ・紹介のページも同じ） */
+/* ---- 上の帯（案 C。design/sheet.md「案 C」の上の帯）：白の地。下の線は引かず、余白で本文と区切る
+ * 並び：ロゴ・案内（ピル）・右端に「PDF を確かめる」（紅のピル）。今いるページは墨の地に白の字のピル。
+ * 狭い画面（40rem 以下）は、ロゴと data-narrow の付いたリンク 2 つまでを 1 行に。メニューの丸（開け閉めのメニュー）は作らない（2026-11-05 夜 本人） */
 .site-band {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas: "brand nav cta";
-  align-items: center; /* ロゴマークと名前・案内を、帯の高さの真ん中でそろえる */
-  gap: var(--sp-2) var(--sp-6);
-  padding: var(--sp-3) var(--site-inline);
+  align-items: center;
+  gap: var(--sp-2) var(--sp-5);
+  padding: var(--sp-4) var(--site-inline);
   background: var(--surface-page);
   color: var(--text-strong);
-  border-bottom: var(--bw-2) solid var(--line-strong);
 }
 
 .site-brand {
@@ -122,9 +144,11 @@ body.site {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  font-family: var(--font-head);
-  font-size: var(--text-h2); /* 検査のページの上の帯（src/style.css の .brand）と同じ大きさ */
-  font-weight: var(--fw-strong);
+  min-height: var(--target-min);
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: var(--fw-display-sub);
+  letter-spacing: 0.04em;
   text-decoration: none;
 }
 
@@ -143,19 +167,32 @@ body.site {
   grid-area: nav;
   display: flex;
   flex-wrap: wrap;
-  gap: 0 var(--sp-5);
+  justify-content: flex-end;
+  gap: var(--sp-1);
 }
 
-.site-nav a {
+.site .site-nav a {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--target-min);
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius-pill);
   font-weight: var(--fw-strong);
+  text-decoration: none;
   word-break: keep-all;
 }
 
-/* 今いるページ：下線を太く紅に（色だけでなく、線の太さでも分ける。読み上げには aria-current="page"） */
-.site-nav a[aria-current="page"],
+.site .site-nav a:hover {
+  background: var(--face-kinari);
+}
+
+/* 今いるページ：墨の地に白の字のピル（色だけでなく、地の形でも分かる。読み上げには aria-current="page"） */
+.site .site-nav a[aria-current="page"] {
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
+}
+
+/* 下の帯の今いるページ：下線を太く紅に（下の帯は前の決まりのまま） */
 .site-foot-links a[aria-current="page"] {
   text-decoration-color: var(--danger);
   text-decoration-thickness: var(--bw-accent);
@@ -167,17 +204,22 @@ body.site {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 0 var(--sp-4);
-  border-radius: var(--radius-m);
-  background: linear-gradient(var(--beni-700), var(--beni-800));
+  min-height: var(--target-min);
+  padding: 0 var(--sp-5);
+  border-radius: var(--radius-pill);
+  background: var(--danger);
   color: var(--text-on-strong);
   font-weight: var(--fw-strong);
   text-decoration: none;
   text-align: center;
   word-break: keep-all; /* 語の途中では折らない（字を大きくして入りきらない時だけ、語の切れ目で折る） */
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%), var(--shadow-rest);
-  transition: transform var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+  transition: background-color var(--dur-hover) var(--ease-out);
+}
+
+/* 本文の中の大きなつなぎ（記事の最後の「検査のページで確かめる」など）は、主なボタンの高さと角 */
+.site .site-cta-link {
+  min-height: var(--button-height-large);
+  border-radius: var(--radius-control);
 }
 
 .site .site-band-cta {
@@ -186,30 +228,22 @@ body.site {
 
 .site .site-band-cta:hover,
 .site .site-cta-link:hover {
-  background: linear-gradient(var(--beni-800), var(--beni-900));
-  transform: translateY(var(--lift-pill));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%), var(--shadow-lift);
+  background: var(--beni-800);
 }
 
-.site .site-band-cta:active,
-.site .site-cta-link:active {
-  transform: translateY(1px);
-  box-shadow: var(--shadow-press);
-}
-
-@media (max-width: 52rem) {
-  /* 1 行目にロゴとボタン（入りきらない時は、ボタンが次の行へ回る）、最後の行に案内 */
+@media (max-width: 40rem) {
+  /* ロゴと、data-narrow の付いたリンク（記事の一覧・PDF を確かめる）だけを 1 行に。ほかの行き先は下の帯にある */
   .site-band {
     display: flex;
     flex-wrap: wrap;
-    justify-content: space-between;
-    gap: var(--sp-1) var(--sp-3);
-    padding-bottom: 0;
+    align-items: center;
+    gap: var(--sp-1) var(--sp-2);
+    padding-block: var(--sp-3);
   }
 
-  /* ロゴとボタンを 1 行に収める（幅 360 の画面でも） */
   .site-brand {
     min-width: 0;
+    margin-right: auto;
     font-size: var(--fs-h3);
   }
 
@@ -218,33 +252,25 @@ body.site {
     height: 2rem;
   }
 
+  .site-nav {
+    display: contents;
+  }
+
+  .site .site-nav a:not([data-narrow]) {
+    display: none;
+  }
+
+  .site .site-nav a,
   .site .site-band-cta {
-    order: 1;
-    max-width: 100%;
     padding: 0 var(--sp-3);
     font-size: var(--fs-small);
   }
+}
 
-  .site-nav {
-    order: 2;
-    flex-basis: 100%;
-    min-width: 0;
-  }
-
-  /* 案内は 1 行に並べ、入りきらない分は横に動かす（帯を 2 段・3 段に積まない） */
-  .site-nav {
-    flex-wrap: nowrap;
-    gap: 0 var(--sp-4);
-    overflow-x: auto;
-    scrollbar-width: none;
-    /* フォーカスの線が切れないよう、内側に余白をとる */
-    margin-inline: calc(-1 * var(--sp-2));
-    padding: var(--sp-1) var(--sp-2);
-  }
-
-  .site-nav a {
-    flex: none;
-    white-space: nowrap;
+/* とても狭い画面（26rem 以下。幅 390 の電話など）：ロゴと「PDF を確かめる」の 1 本だけにして、帯を 1 行に収める（リンクは 1〜2 本。2026-11-05 夜 本人） */
+@media (max-width: 26rem) {
+  .site .site-nav a[data-narrow] {
+    display: none;
   }
 }
 
@@ -257,20 +283,16 @@ body.site {
   margin-inline: auto;
 }
 
-/* ページの題：下に紅の短い線（ロゴの袋の紅）。1 ページに 1 つ */
+/* ページの題：丸ゴシックの 900（案 C）。下の紅の短い線はやめた（design/sheet.md「案 C」の見出しの段）。1 ページに 1 つ */
 .site-main h1 {
-  font-size: var(--fs-h1);
+  font-size: var(--text-page);
   margin: 0 0 var(--sp-4);
 }
 
-.site-main h1::after {
-  content: "";
-  display: block;
-  width: 3rem;
-  height: var(--bw-accent);
-  margin-top: var(--sp-3);
-  background: var(--danger);
-  border-radius: 2px;
+@media (max-width: 40rem) {
+  .site-main h1 {
+    font-size: var(--text-page-narrow);
+  }
 }
 
 .site-kicker {
@@ -291,12 +313,10 @@ body.site {
   margin: 0 0 var(--sp-6);
 }
 
-/* 節の見出し：左に墨の線（中見出し）。見出しの上は下より広くとる */
+/* 節の見出し：丸ゴシックの 700。左の墨の線はやめた（案 C）。見出しの上は下より広くとる */
 .site-section h2 {
   font-size: var(--fs-h2);
-  margin: var(--sp-6) 0 var(--sp-3);
-  padding-left: var(--sp-3);
-  border-left: var(--bw-accent) solid var(--line-strong);
+  margin: var(--sp-7) 0 var(--sp-3);
 }
 
 .site-section:first-child h2,
@@ -845,35 +865,9 @@ html:has(.site-cards) {
 
 /* ================================================================ 立体感（2026-11-05 本人の頼み「もっとリッチに」）
  * 影は墨を薄くして何層か重ね（--shadow-*）、ホバーで少し浮き、押すと沈む。値は design/sheet.css。
- * 動きを減らす設定の人には、浮く・傾く・ゆっくり浮く・にじみの動きを出さない（この節のいちばん下の @media）。 */
+ * 動きを減らす設定の人には、浮く・傾く・ゆっくり浮くの動きを出さない（この節のいちばん下の @media）。 */
 
-/* ---- ページの地のごく薄い色のにじみ（紅・緑・墨を 4〜5% に薄めたもの）。ゆっくり動く（2026-11-05 本人の頼み） */
-body.site {
-  position: relative;
-  isolation: isolate;
-}
-
-body.site::before {
-  content: "";
-  position: fixed;
-  inset: -20%;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(38% 32% at 18% 12%, rgb(163 32 27 / 5%), transparent 70%),
-    radial-gradient(34% 38% at 86% 28%, rgb(47 111 94 / 5%), transparent 70%),
-    radial-gradient(46% 36% at 55% 96%, rgb(43 42 40 / 4%), transparent 70%);
-  animation: site-drift 48s ease-in-out infinite alternate;
-}
-
-@keyframes site-drift {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(3%, -2%, 0);
-  }
-}
+/* ---- ページの地のにじみは、やめた（2026-11-05 夜 本人が決定。案 C の色の面とぶつかるため。design/sheet.md「案 C」の絵・動き） */
 
 /* ---- タグ・型の番号：角の丸い札（ピル）。白からごく薄い墨へのふくらみと、やわらかい影 */
 .site-tag {
@@ -1067,9 +1061,8 @@ body.site::before {
   }
 }
 
-/* 動きを減らす設定の人には、動き（浮く・傾く・ゆっくり浮く・にじみの動き）を出さない。影と形だけ残す */
+/* 動きを減らす設定の人には、動き（浮く・傾く・ゆっくり浮く）を出さない。影と形だけ残す */
 @media (prefers-reduced-motion: reduce) {
-  body.site::before,
   .site-stack {
     animation: none;
   }
@@ -1150,7 +1143,6 @@ body.site::before {
     box-shadow: none;
   }
 
-  body.site::before,
   .site-hero-3d {
     display: none;
   }
