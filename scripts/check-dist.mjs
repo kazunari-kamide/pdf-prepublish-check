@@ -6,7 +6,7 @@
 // - HTML の中に、直接書いたスクリプトや style がないか（CSP で止まるため。入っていたら作りの誤り）
 // - 外のサイトから読み込んでいないか
 // - サイトのページ（記事・プライバシー。site.ts が作る）も含め、すべての HTML に同じ CSP の <meta> があり、
-//   直接書いたスクリプト・style がなく、外から読み込んでいないか（公式の URL を指す canonical のリンクだけは許す）
+//   直接書いたスクリプト・style がなく、外から読み込んでいないか（公式の URL を指す canonical のリンクと、GitHub を指す <a> のリンクだけは許す）
 // - 検索エンジンの確認のファイル（public/ の googleXXXX.html）は、中身が決まった1行のときだけ通す（src/site/search-console.ts）
 // - JavaScript（.js・.mjs）に、外と通信する仕組みが入っていないか（ライブラリが持ち込むこともあるため、ビルドのあとでも見る）
 //
@@ -79,6 +79,9 @@ if (htaccess !== null) {
 const indexCsp = meta ? decode(meta[1]) : null;
 // 公式の URL を指す canonical のリンクは、読み込みではないので許す（写したサイトでも、本物を指すように）
 const canonical = new RegExp(`<link rel="canonical" href="${OFFICIAL_ORIGIN.replace(/\./g, "\\.")}/[^"]*"`, "g");
+// 押して移るリンク（<a>）で GitHub を指すもの（ソースの場所・Issues・部品の出典）も、読み込みではないので許す。
+// <a> 以外（img・script・link など）が GitHub を指すのは許さない
+const githubLink = /<a href="https:\/\/github\.com\/[^"]*"/g;
 for (const f of files.filter((x) => x.endsWith(".html"))) {
   const rel = path.relative(DIST, f).replace(/\\/g, "/");
   const text = readFileSync(f, "utf8");
@@ -97,7 +100,7 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
   const inlineScript = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/\bsrc=/.test(m[1]) || m[2].trim() !== "");
   if (inlineScript.length) problems.push(`${rel} に直接書いたスクリプトが ${inlineScript.length} か所あります`);
   if (/<style\b/.test(text) || /\sstyle="/.test(text)) problems.push(`${rel} に直接書いた style があります`);
-  if (/(src|href)="(https?:)?\/\//.test(text.replace(canonical, ""))) problems.push(`${rel} が外のサイトから読み込んでいます`);
+  if (/(src|href)="(https?:)?\/\//.test(text.replace(canonical, "").replace(githubLink, "<a"))) problems.push(`${rel} が外のサイトから読み込んでいます`);
 }
 
 // ---- PDF.js の写しを見分ける：pdfjs-dist のファイルの SHA-256 と、版を、package-lock.json と照らす
