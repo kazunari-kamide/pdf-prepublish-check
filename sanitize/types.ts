@@ -33,6 +33,9 @@ export type RemovedKind =
   | "field_value" // P11：見えない欄（見た目のない欄・隠した見た目の欄）の値
   | "hidden_image" // P7：ページの外・切り抜きの外に隠れた画像（描く命令を外す、隠れた所の画素を白く塗る）
   | "unused_xobject" // P5：資源にあるが描かれない部品・画像
+  // 0.8.0 から
+  | "font_glyphs" // P7：書体の中の、どこにも描かれていない字形（TrueType の字形の中身、Type3 の字の描き方）
+  | "pattern_repainted" // P6：中に字のある模様で塗った覆いを、黒一色で塗り直した
   // 自分で黒塗りする（redact.ts）。pattern は P6（墨消し）にそろえる
   | "redacted_text" // 選んだ所の字
   | "redacted_pixels" // 選んだ所の画像の画素
@@ -68,7 +71,9 @@ export type NotDoneReason =
   | "accessibility_text" // 読み上げ用の説明（/Alt・/E・/TU）。読み上げに使うので消さない
   | "field_visible" // 見えている欄の値。提出のための記入かもしれないので消さない
   | "overdrawn_text" // 同じ所に違う字が重ねて描かれている。どちらが隠れた字か決められない
-  | "annotation_text"; // 注釈（スタンプなど）の見た目の中だけにある字。ページに見えているので消さない
+  | "annotation_text" // 注釈（スタンプなど）の見た目の中だけにある字。ページに見えているので消さない
+  // 0.8.0 から
+  | "font_not_pruned"; // 書体の中の描かれていない字形を外せなかった（CFF・Type1 の形、使う字を数えきれなかった）
 
 export type NotDoneItem = {
   pattern: SanitizePattern;
