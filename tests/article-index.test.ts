@@ -3,6 +3,8 @@
 // 記事の一覧・タグの絞り込み・検索・記事の図（src/site/article-index.ts・tags.ts・article-search.js、site-figures.ts）を確かめる。
 // - タグの絞り込みは、タグごとのページなので、スクリプトなしで使える
 // - 検索は、記事の一覧のページだけで、ページの中の題・説明・タグだけを探す。動かないときは欄が隠れたまま
+// - 記事の一覧のページでは、タグを押すとその場で絞り込み、アドレスを #slug にする。スクリプトなしでは、タグのページへ移る
+// - ページの移り変わりの動き（motion.css・motion.ts）は、動きを減らす設定の人には出さない
 // - 図は SVG と PNG だけで、大きさを書く。図がない記事には、図の場所を出さない
 
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -11,11 +13,12 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { OFFICIAL_ORIGIN } from "../htaccess.ts";
 import { buildFigures, pngSize, svgSize } from "../site-figures.ts";
-import { searchScript, siteFiles } from "../site.ts";
+import { searchScript, siteCss, siteFiles } from "../site.ts";
 import { renderIndexPages, searchText, usedTags } from "../src/site/article-index.ts";
 // @ts-expect-error 型のない JavaScript のファイル（ブラウザでそのまま読む）
-import { init, matches, normalize } from "../src/site/article-search.js";
+import { countText, hasTag, init, matches, normalize, tagFromHash } from "../src/site/article-search.js";
 import { ARTICLES } from "../src/site/articles.ts";
+import { articleTransitionNames } from "../src/site/motion.ts";
 import { figureHtml, fileFor, renderArticle } from "../src/site/render.ts";
 import { TAGS, articleTags, tagPath } from "../src/site/tags.ts";
 import type { Article } from "../src/site/types.ts";
@@ -86,8 +89,10 @@ describe("タグ", () => {
 
 describe("記事の一覧のページ", () => {
   it("すべての記事をカードで並べ、それぞれに検索の字（題・説明・型の番号・タグ）を持つ", () => {
-    const cards = [...index.matchAll(/<li class="card" data-search="([^"]*)">/g)];
+    const cards = [...index.matchAll(/<li class="card" data-article="([a-z0-9-]+)" data-tags="([a-z0-9 -]+)" data-search="([^"]*)">/g)];
     expect(cards).toHaveLength(ARTICLES.length);
+    // data-tags は、その記事のタグの slug（その場の絞り込みに使う）
+    for (const [, slug, tags] of cards) expect(tags!.split(" ")).toEqual(articleTags(ARTICLES.find((a) => a.slug === slug)!).map((t) => t.slug));
     expect(searchText(ARTICLES[0]!)).toContain(ARTICLES[0]!.title);
   });
 
@@ -98,8 +103,13 @@ describe("記事の一覧のページ", () => {
     expect(searchScript().file).toMatch(/^assets\/article-search-[0-9a-f]{10}\.js$/);
   });
 
-  it("タグで絞り込むリンクがあり、スクリプトなしで使える（タグのページへのふつうのリンク）", () => {
-    for (const t of usedTags()) expect(index).toContain(`<a class="tag site-tag" href="${tagPath(t)}">`);
+  it("タグで絞り込むリンクがあり、スクリプトなしで使える（タグのページへのふつうのリンク。その場で絞り込むための data-tag も持つ）", () => {
+    for (const t of usedTags()) expect(index).toContain(`<a class="tag site-tag" href="${tagPath(t)}" data-tag="${t.slug}" data-tag-label="${t.label}">`);
+    expect(index).toMatch(/<a href="\/articles\/" data-tag="" aria-current="page">すべての記事（\d+）<\/a>/);
+  });
+
+  it("タグのページのリンクには data-tag を付けない（スクリプトのないページ）", () => {
+    for (const t of usedTags()) expect(files.get(fileFor(tagPath(t)))).not.toContain("data-tag=");
   });
 
   it("検索のスクリプトがないときは、検索の欄も script も出さない", () => {
@@ -134,7 +144,7 @@ describe("検索のスクリプト", () => {
     const sec = { hidden: false, querySelector: () => items.find((x) => !x.hidden) ?? null };
     const doc = {
       getElementById: (id: string) => ({ "article-search": box, "article-search-input": input, "article-search-count": count })[id] ?? null,
-      querySelectorAll: (sel: string) => (sel === "[data-search]" ? items : [sec]),
+      querySelectorAll: (sel: string) => (sel === "[data-search]" ? items : sel === "[data-search-section]" ? [sec] : []),
     };
     init(doc);
     expect(box.hidden).toBe(false);
@@ -147,6 +157,154 @@ describe("検索のスクリプト", () => {
     listeners.forEach((f) => f());
     expect(sec.hidden).toBe(true);
     expect(count.textContent).toBe("当てはまる記事はありませんでした");
+  });
+});
+
+describe("タグの絞り込み（記事の一覧のページの中）", () => {
+  it("札のタグで絞り込む。タグが空なら、すべて当たる", () => {
+    expect(hasTag("patterns redaction", "redaction")).toBe(true);
+    expect(hasTag("patterns redaction", "red")).toBe(false);
+    expect(hasTag("patterns", "")).toBe(true);
+    expect(hasTag(null, "patterns")).toBe(false);
+  });
+
+  it("アドレスの #… から、知っているタグだけを取る（slug でも、タグの名前でもよい）", () => {
+    const labels = new Map([
+      ["redaction", "黒塗り"],
+      ["photos", "写真の情報"],
+    ]);
+    expect(tagFromHash("#redaction", labels)).toBe("redaction");
+    expect(tagFromHash(`#${encodeURIComponent("黒塗り")}`, labels)).toBe("redaction");
+    expect(tagFromHash("#unknown", labels)).toBe("");
+    expect(tagFromHash("", labels)).toBe("");
+    expect(tagFromHash("#%E0%A4%A", labels)).toBe("");
+  });
+
+  it("件数の字は、タグと検索の語に合わせて変わる", () => {
+    expect(countText({ total: 32, inTag: 32, shown: 32, query: "", label: "" })).toBe("32 本の記事");
+    expect(countText({ total: 32, inTag: 5, shown: 5, query: "", label: "黒塗り" })).toBe("「黒塗り」の記事 5 本（32 本のうち）");
+    expect(countText({ total: 32, inTag: 5, shown: 2, query: "p6", label: "黒塗り" })).toBe("「黒塗り」の記事 5 本のうち 2 本");
+    expect(countText({ total: 32, inTag: 5, shown: 0, query: "zzz", label: "黒塗り" })).toBe("「黒塗り」の記事に、当てはまる記事はありませんでした");
+  });
+
+  const fakeEl = (attrs: Record<string, string> = {}, on: (type: string, f: (ev?: unknown) => void) => void = () => {}) => ({
+    hidden: false,
+    textContent: "",
+    value: "",
+    attrs,
+    getAttribute: (k: string) => attrs[k] ?? null,
+    setAttribute: (k: string, v: string) => void (attrs[k] = v),
+    removeAttribute: (k: string) => void delete attrs[k],
+    addEventListener: on,
+  });
+
+  it("タグを押すと、その場で絞り込み、アドレスを #slug にし、選んだタグに aria-current を付ける（動きを減らす設定では、動かさない）", () => {
+    const handlers: Record<string, Array<(ev?: unknown) => void>> = {};
+    const on = (key: string) => (type: string, f: (ev?: unknown) => void) => void (handlers[`${key}:${type}`] ??= []).push(f);
+    const box = fakeEl();
+    const input = fakeEl({}, on("input"));
+    const count = fakeEl();
+    const items = [fakeEl({ "data-search": "見せかけの黒塗り", "data-tags": "patterns redaction" }), fakeEl({ "data-search": "写真の撮影場所", "data-tags": "patterns photos" })];
+    const all = fakeEl({ "data-tag": "", "aria-current": "page" }, on("all"));
+    const red = fakeEl({ "data-tag": "redaction", "data-tag-label": "黒塗り" }, on("red"));
+    const sec = { hidden: false, querySelector: () => items.find((x) => !x.hidden) ?? null };
+    const pushed: string[] = [];
+    let transitions = 0;
+    const win = {
+      location: { pathname: "/articles/", search: "", hash: "#photos" },
+      history: { pushState: (_s: unknown, _t: string, url: string) => void pushed.push(url) },
+      matchMedia: () => ({ matches: false }),
+      addEventListener: on("win"),
+    };
+    const doc = {
+      getElementById: (id: string) => ({ "article-search": box, "article-search-input": input, "article-search-count": count })[id] ?? null,
+      querySelectorAll: (sel: string) => (sel === "[data-search]" ? items : sel === "[data-search-section]" ? [sec] : sel === "a[data-tag]" ? [all, red] : []),
+      querySelector: () => null,
+      // 本物と同じく、呼んだ後で（非同期に）書き換え、飛ばされたときの ready は失敗で返す
+      pending: [] as Array<() => void>,
+      startViewTransition(f: () => void) {
+        transitions++;
+        this.pending.push(f);
+        return { ready: Promise.reject(new Error("AbortError")), finished: Promise.resolve() };
+      },
+      flush() {
+        for (const f of this.pending.splice(0)) f();
+      },
+    };
+    // #photos は、ページにタグのリンクがないので知らないタグ：絞り込まない
+    init(doc, win);
+    expect(items.map((x) => x.hidden)).toEqual([false, false]);
+    expect(all.attrs["aria-current"]).toBe("page");
+    let prevented = false;
+    const click = (key: string, extra: Record<string, unknown> = {}) => {
+      prevented = false;
+      for (const f of handlers[`${key}:click`] ?? []) f({ button: 0, defaultPrevented: false, preventDefault: () => (prevented = true), ...extra });
+    };
+    // Ctrl を押しながらのときは、ふつうのリンク（タグのページを新しいタブで開く）
+    click("red", { ctrlKey: true });
+    expect(prevented).toBe(false);
+    expect(items.map((x) => x.hidden)).toEqual([false, false]);
+    click("red");
+    expect(prevented).toBe(true);
+    expect(pushed).toEqual(["#redaction"]);
+    expect(transitions).toBe(1);
+    // 動きの途中にもう一度押しても、同じタグなら動きを重ねない
+    click("red");
+    expect(transitions).toBe(1);
+    doc.flush();
+    expect(items.map((x) => x.hidden)).toEqual([false, true]);
+    expect(red.attrs["aria-current"]).toBe("page");
+    expect(all.attrs["aria-current"]).toBeUndefined();
+    expect(count.textContent).toBe("「黒塗り」の記事 1 本（2 本のうち）");
+    // 戻る：popstate と hashchange が続けて来ても、動きは1回だけ。アドレスが元に戻ると、絞り込みも戻る
+    win.location.hash = "";
+    for (const f of [...(handlers["win:popstate"] ?? []), ...(handlers["win:hashchange"] ?? [])]) f();
+    expect(transitions).toBe(2);
+    doc.flush();
+    expect(items.map((x) => x.hidden)).toEqual([false, false]);
+    expect(count.textContent).toBe("2 本の記事");
+    // 動きを減らす設定なら、startViewTransition を使わず、すぐ書き換える
+    win.matchMedia = () => ({ matches: true });
+    win.location.hash = "#redaction";
+    for (const f of handlers["win:popstate"] ?? []) f();
+    expect(transitions).toBe(2);
+    expect(items.map((x) => x.hidden)).toEqual([false, true]);
+    // 「すべての記事」を押すと、# のないアドレスに戻す
+    click("all");
+    expect(pushed.at(-1)).toBe("/articles/");
+    expect(items.map((x) => x.hidden)).toEqual([false, false]);
+  });
+
+  it("#slug のアドレスで開くと、はじめから同じ絞り込みになる", () => {
+    const items = [fakeEl({ "data-search": "a", "data-tags": "patterns redaction" }), fakeEl({ "data-search": "b", "data-tags": "guides" })];
+    const count = fakeEl();
+    const links = [fakeEl({ "data-tag": "redaction", "data-tag-label": "黒塗り" }), fakeEl({ "data-tag": "guides", "data-tag-label": "手順" })];
+    const doc = {
+      getElementById: (id: string) => ({ "article-search": fakeEl(), "article-search-input": fakeEl(), "article-search-count": count })[id] ?? null,
+      querySelectorAll: (sel: string) => (sel === "[data-search]" ? items : sel === "a[data-tag]" ? links : []),
+      querySelector: () => null,
+    };
+    init(doc, { location: { pathname: "/articles/", search: "", hash: "#guides" }, history: { pushState: () => {} }, addEventListener: () => {} });
+    expect(items.map((x) => x.hidden)).toEqual([true, false]);
+    expect(count.textContent).toBe("「手順」の記事 1 本（2 本のうち）");
+  });
+});
+
+describe("ページの移り変わりの動き", () => {
+  it("サイトの CSS に、動きを減らす設定のときだけ外れる @view-transition と、記事ごとの名前（一覧の札と記事のページで同じ）が入る", () => {
+    const css = siteCss();
+    expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\) \{\s*@view-transition \{\s*navigation: auto;/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none !important/);
+    for (const a of ARTICLES) {
+      expect(css).toContain(`.card[data-article="${a.slug}"] { view-transition-name: card-${a.slug}; }`);
+      expect(css).toContain(`.site-article[data-article="${a.slug}"] h1 { view-transition-name: title-${a.slug}; }`);
+    }
+    // 記事のページにも、名前を当てる印がある
+    expect(files.get(`articles/${ARTICLES[0]!.slug}.html`)).toContain(`<article class="site-article" data-article="${ARTICLES[0]!.slug}">`);
+  });
+
+  it("名前に使えない slug は止める（CSS に字を混ぜない）", () => {
+    expect(() => articleTransitionNames(['x"]{}'])).toThrow(/使えません/);
   });
 });
 

@@ -7,7 +7,7 @@
 // - 開発サーバー（npm run dev）でも、同じページを返す
 // - 検索エンジンの確認のコード（src/site/search-console.ts）があれば、トップページに <meta> を入れる
 //
-// ページにはスクリプトを入れない（例外は、記事の一覧のページの検索のスクリプト 1 つだけ。src/site/article-search.js）。通信を足さない（docs/no-network.md）。
+// ページにはスクリプトを入れない（例外は、記事の一覧のページの検索とタグの絞り込みのスクリプト 1 つだけ。src/site/article-search.js）。通信を足さない（docs/no-network.md）。
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -23,6 +23,7 @@ import { renderIndexPages, usedTags } from "./src/site/article-index.ts";
 import { tagPath } from "./src/site/tags.ts";
 import { GUIDE_PATHS, renderGuidePages } from "./src/site/pages.ts";
 import { escapeHtml, renderSite, sitePaths } from "./src/site/render.ts";
+import { articleTransitionNames } from "./src/site/motion.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
 import { INSPECTOR_HEAD, OG_IMAGE_PATH, headLines, type HeadInfo } from "./src/site/seo.ts";
 
@@ -35,13 +36,14 @@ export function ogImage(): Buffer {
   return readFileSync(path.join(ROOT, "src", "site", "og-image.png"));
 }
 
-/** サイトのページの CSS。tokens.css・sheet.css の後に site.css をつなぐ */
+/** サイトのページの CSS。tokens.css・sheet.css の後に site.css、その後に動きの CSS（src/site/motion.css と、記事ごとの名前。motion.ts）をつなぐ */
 export function siteCss(): string {
   const tokens = readFileSync(path.join(ROOT, "design", "tokens.css"), "utf8");
   // デザインシート（design/sheet.md）の役の名前。検査の画面（src/style.css の @import）と同じファイルを読む
   const sheet = readFileSync(path.join(ROOT, "design", "sheet.css"), "utf8");
   const site = readFileSync(path.join(ROOT, "src", "site", "site.css"), "utf8");
-  return `${tokens}\n${sheet}\n${site}`;
+  const motion = readFileSync(path.join(ROOT, "src", "site", "motion.css"), "utf8");
+  return `${tokens}\n${sheet}\n${site}\n${motion}\n${articleTransitionNames()}`;
 }
 
 export function siteCssFile(css = siteCss()): string {
