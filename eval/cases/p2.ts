@@ -101,4 +101,18 @@ export const CASES: Case[] = [
     leaks: [],
     build: one(SOFTWARE_ONLY, '<xmpMM:DerivedFrom stRef:filePath="Links/photo.jpg"/>', true),
   },
+  {
+    id: "p2-l06",
+    kind: "leak",
+    description: "作成者が、名前と社員番号のような数字の組み（Taro KAKUU-0123）。数字があっても、名前の語があれば数える（p2-parts 1.1.0）",
+    leaks: ["person:dc:creator"],
+    build: one(SOFTWARE_ONLY, "<dc:creator><rdf:Seq><rdf:li>Taro KAKUU-0123</rdf:li></rdf:Seq></dc:creator>", true),
+  },
+  {
+    id: "p2-c05",
+    kind: "control",
+    description: "数字の入った1語のアカウントと端末の名前（user01・PC-1234）は数えない",
+    leaks: [],
+    build: one(`${SOFTWARE_ONLY} pdf:Author="PC-1234"`, "<dc:creator><rdf:Seq><rdf:li>user01</rdf:li></rdf:Seq></dc:creator>", false),
+  },
 ];

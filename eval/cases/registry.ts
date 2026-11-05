@@ -24,6 +24,10 @@ import * as ext from "./extras.ts";
 import { detectExtras } from "../../rules/extras/index.ts";
 import * as fg from "./font-glyphs.ts";
 import { detectFontGlyphs } from "../../rules/font-glyphs/index.ts";
+import * as p3 from "./p3.ts";
+import { detectP3Orgs } from "../../rules/p3-orgs/index.ts";
+import * as pp from "./p2-parts.ts";
+import { detectP2Parts } from "../../rules/p2-parts/index.ts";
 
 export type TypeCases = {
   /** 型の番号と、画面の名前 */
@@ -46,6 +50,8 @@ export const TYPES: TypeCases[] = [
   { pattern: "P7", label: "しおりの題・代わりの文字", ruleId: "alt-text", cases: alt.CASES, keys: async (b) => alt.keysOf(await detectAltText(b)) },
   { pattern: "P5", label: "ページの縮小画像・XFA・C2PA", ruleId: "extras", cases: ext.CASES, keys: async (b) => ext.keysOf(await detectExtras(b)) },
   { pattern: "P7", label: "書体に残った字形", ruleId: "font-glyphs", cases: fg.CASES, keys: async (b) => fg.keysOf(await detectFontGlyphs(b)) },
+  { pattern: "P3", label: "他組織名の混入", ruleId: "p3-orgs", cases: p3.CASES, keys: async (b) => p3.keysOf(await detectP3Orgs(b)) },
+  { pattern: "P2", label: "部品の XMP・アプリのデータ", ruleId: "p2-parts", cases: pp.CASES, keys: async (b) => pp.keysOf(await detectP2Parts(b)) },
 ];
 
 export type Score = {

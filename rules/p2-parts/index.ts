@@ -10,6 +10,8 @@
 //   部品ごとに付いた /Metadata（XMP）。どこからも指されていない XMP のストリームも見る。
 //   文書全体の XMP は、このルールでは見ない（P2 の別の検出ルールの範囲）。
 // - ページなどの /PieceInfo /Illustrator /Private（Illustrator で「編集機能を保持」のまま書き出したときの元データ）。
+// - 1.1.0 から：Illustrator 以外のアプリの /PieceInfo /<アプリ> /Private も、中身があれば「アプリの私的データ」として返す（中身は読まない）。
+//   文書（カタログ）の /PieceInfo も見る。/Private が空、または /LastModified だけのものは数えない。
 //   先頭が %AI12_CompressedData なら zlib を展開し（ブラウザと Node の標準の DecompressionStream。ライブラリは足していない）、
 //   %%For（作ったパソコンの利用者名）と %%DocumentFiles（使ったファイルのパス）を探す。
 //   先頭が %AI24_ZStandard_Data（zstd）なら展開しない。「残っているが中身は調べていない」として返す（2026-11-04 人の決定）。
@@ -23,7 +25,7 @@ import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { loadPdf } from "../shared/load.ts";
 
 export const RULE_ID = "p2-parts";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 /** 1つの XMP・編集用データとして読む大きさの上限（バイト）。超えた分は読まない【仮の値】 */
 export const MAX_STREAM_BYTES = 16 * 1024 * 1024;
@@ -32,12 +34,12 @@ export const MAX_INFLATED_BYTES = 64 * 1024 * 1024;
 /** 見るオブジェクトの数の上限【仮の値】 */
 export const MAX_OBJECTS = 1_000_000;
 
-export type PartOwner = "image" | "form" | "properties" | "page" | "other" | "unreferenced";
+export type PartOwner = "image" | "form" | "properties" | "page" | "document" | "other" | "unreferenced";
 
 export type P2PartsFinding = {
   pattern: "P2" | "P4" | "P10";
   kind: "person" | "path" | "gps" | "private_data";
-  source: "xmp" | "illustrator";
+  source: "xmp" | "illustrator" | "app";
   /** 欄の名前（dc:creator、stRef:filePath、%%For など） */
   field: string;
   /** どこに付いていたか（同じ値が何か所にもあれば、最初に見つけた所） */
@@ -131,7 +133,14 @@ export function classifyName(value: string): Classified {
   const v = value.trim();
   if (GENERIC_NAMES.has(v.toLowerCase())) return { counted: false, reason: "generic" };
   if (SOFTWARE.test(v) || /^(uuid|xmp\.(did|iid))[:.]/i.test(v)) return { counted: false, reason: "software" };
-  if (/[0-9０-９]/.test(v)) return { counted: false, reason: "account" };
+  // 数字の入った1語（user01・PC-1234 など）は、端末やアカウントの名前として数えない。
+  // 空白で区切った語が2つ以上あり、そのうち1つが数字を含まない字だけの語（小文字か、漢字・かななどを含む。PC・ID のような大文字だけの略語は除く）なら、
+  // 名前（＋社員番号など）として数える（1.1.0）
+  if (/[0-9０-９]/.test(v)) {
+    const words = v.split(/[\s　]+/).filter(Boolean);
+    const plainWord = words.some((w) => /^[\p{L}\p{M}'’.-]{2,}$/u.test(w) && /\p{Ll}|[^\x00-\x7F]/u.test(w));
+    if (words.length < 2 || !plainWord) return { counted: false, reason: "account" };
+  }
   return { counted: true, chars: [...v].length };
 }
 
@@ -232,6 +241,16 @@ function decodeText(bytes: Uint8Array): string {
   return new TextDecoder("utf-8").decode(bytes);
 }
 
+/** /Private に中身があるか（空の辞書・空のストリーム・空の字は「無い」） */
+function hasPrivateData(ctx: PDFContext, raw: PDFObject | undefined): boolean {
+  const v = raw === undefined ? undefined : ctx.lookup(raw);
+  if (v === undefined || v instanceof PDFName) return false;
+  if (v instanceof PDFStream) return (v instanceof PDFRawStream ? v.contents.length : v.getContents().length) > 0;
+  if (v instanceof PDFDict) return v.keys().length > 0;
+  const t = v.toString();
+  return t !== "()" && t !== "<>" && t !== "null";
+}
+
 function ownerOf(dict: PDFDict): PartOwner {
   const type = dict.lookup(PDFName.of("Type"));
   const sub = dict.lookup(PDFName.of("Subtype"));
@@ -271,7 +290,7 @@ export async function detectP2Parts(bytes: Uint8Array, options: DetectOptions = 
 
   // 部品の XMP と、その持ち主。編集用データ（/PieceInfo）を持つ辞書
   const xmpOwners = new Map<PDFRef, PartOwner>();
-  const pieceInfos: PDFDict[] = [];
+  const pieceInfos: Array<{ pi: PDFDict; owner: PartOwner }> = [];
   const metadataStreams: PDFRef[] = [];
   let count = 0;
   for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
@@ -283,11 +302,12 @@ export async function detectP2Parts(bytes: Uint8Array, options: DetectOptions = 
     if (!dict) continue;
     const type = dict.lookup(PDFName.of("Type"));
     if (obj instanceof PDFStream && type instanceof PDFName && type.decodeText() === "Metadata") metadataStreams.push(ref);
-    if (type instanceof PDFName && type.decodeText() === "Catalog") continue;
+    const isCatalog = type instanceof PDFName && type.decodeText() === "Catalog";
+    const pi = dict.lookup(PDFName.of("PieceInfo"));
+    if (pi instanceof PDFDict) pieceInfos.push({ pi, owner: isCatalog ? "document" : ownerOf(dict) });
+    if (isCatalog) continue;
     const meta = dict.get(PDFName.of("Metadata"));
     if (meta instanceof PDFRef && meta !== skipRef && !xmpOwners.has(meta)) xmpOwners.set(meta, ownerOf(dict));
-    const pi = dict.lookup(PDFName.of("PieceInfo"));
-    if (pi instanceof PDFDict) pieceInfos.push(pi);
   }
   for (const ref of metadataStreams) if (ref !== skipRef && !xmpOwners.has(ref)) xmpOwners.set(ref, "unreferenced");
 
@@ -333,8 +353,19 @@ export async function detectP2Parts(bytes: Uint8Array, options: DetectOptions = 
     if (gps.length) add("P10", "gps", "xmp", "exif:GPSLatitude/exif:GPSLongitude", owner, gps.join(" "), 0);
   }
 
+  // ---- Illustrator 以外のアプリの私的データ（中身は読まない。あるかどうかだけ）
+  for (const { pi, owner } of pieceInfos) {
+    for (const [k, v] of pi.entries()) {
+      const app = k.decodeText();
+      if (app === "Illustrator") continue;
+      const d = ctx.lookup(v);
+      if (!(d instanceof PDFDict)) continue;
+      if (hasPrivateData(ctx, d.get(PDFName.of("Private")))) add("P2", "private_data", "app", "PieceInfo/Private", owner, `app:${app}`, 0, { checked: false });
+    }
+  }
+
   // ---- Illustrator の編集用データ
-  for (const pi of pieceInfos) {
+  for (const { pi } of pieceInfos) {
     const ai = pi.lookup(PDFName.of("Illustrator"));
     if (!(ai instanceof PDFDict)) continue;
     const priv = ai.lookup(PDFName.of("Private"));

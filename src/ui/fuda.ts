@@ -22,6 +22,8 @@ const SHORT: Record<string, string> = {
   ページの縮小画像: "縮小画像",
   書体に残った字形: "字形",
   個人情報らしい字: "個人情報", // P13【仮】
+  他組織名の混入: "他団体", // 11/5 D（P3 p3-orgs）
+  "部品の XMP・アプリのデータ": "部品", // 11/5 D（P2 p2-parts）
 };
 
 export const FUDA_MAX = 4;

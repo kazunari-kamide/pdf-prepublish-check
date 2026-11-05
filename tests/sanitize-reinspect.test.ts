@@ -26,10 +26,14 @@ const NEEDS_PASSWORD = new Set(["p5/p5-25-encrypted-user-password.pdf"]);
  * 片付けがまだ消さない、分かっている残り（2026-11-05 に測った値）。
  * P11 フォームの値（rules/p11-forms）を画面の一覧に入れたので、ウィジェットの無い欄の値が、片付けたあとにも「残り」として出る。
  * 片付け（sanitize/）がフォームの値を消すようになったら、ここから外す（11/5 D の PR の「ほかの持ち場に頼みたいこと」）。
+ * P12 1.1.0 から、押して開くウェブのリンクを「確認してほしい所」（低）として出す。片付けはリンクを消さないので、残りとして出る
+ * （消すか・片付けの結果で数えないかは、C・B に決めてもらう。11/5 D の 2 つめの PR）。
  */
-const KNOWN_LEFT: Record<string, number> = {
-  "p5/p5-07-form-value-changed.pdf": 1,
-  "p5/p5-20-two-fields-changed.pdf": 2,
+const KNOWN_LEFT: Record<string, { left: number; pattern: string }> = {
+  "p5/p5-07-form-value-changed.pdf": { left: 1, pattern: "P11" },
+  "p5/p5-20-two-fields-changed.pdf": { left: 2, pattern: "P11" },
+  "p9/p9-03-annotation.pdf": { left: 1, pattern: "P12" },
+  "p9/p9-n02-links.pdf": { left: 1, pattern: "P12" },
 };
 
 describe("片付けてから読み直す（合成 PDF の全部）", () => {
@@ -51,8 +55,8 @@ describe("片付けてから読み直す（合成 PDF の全部）", () => {
     const c = buildCleanView({ before, after, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted });
     const known = KNOWN_LEFT[rel];
     if (known !== undefined) {
-      expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: known, notDone: 0, verdict: "left" });
-      expect(after.rows.every((row) => row.patternLabel.endsWith("（P11）"))).toBe(true);
+      expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: known.left, notDone: 0, verdict: "left" });
+      expect(after.rows.every((row) => row.patternLabel.endsWith(`（${known.pattern}）`))).toBe(true);
       return;
     }
     expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: 0, notDone: 0, verdict: "clean" });

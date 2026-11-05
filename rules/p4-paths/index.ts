@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P4（ファイルパス・内部ホスト名）1.0.0。
-// 文書情報・XMP・注釈・リンク先・ファイル指定の中の、パソコンや庁内のサーバーの場所を示す字を見分けて数える。
+// 検出ルール P4（ファイルパス・内部ホスト名）1.1.0。
+// 文書情報・XMP・注釈・リンク先・ファイル指定・ページの字（1.1.0 から）の中の、パソコンや庁内のサーバーの場所を示す字を見分けて数える。
 // 値そのものは返さない（種類・場所・字数だけ）。
 //
 // 種類（kind）：
@@ -10,17 +10,19 @@
 //   drive_path：ドライブ名から始まるパス（D:\広報\…）で、ユーザーのフォルダを含まないもの。chars はパス全体の字数
 // file:// の URL は、中のパスとして見る。
 // 場所（where）：info（文書情報）・xmp（文書全体と部品の XMP）・annotation（注釈の内容・作成者・件名）・link（リンクや動作の行き先の URL とファイル）・filespec（添付などのファイル指定の名前）
+//   ・body（ページの字。1.1.0 から。ユーザーのフォルダと共有フォルダ・内向きのサーバーだけを数え、ドライブ名のパスは数えない。本文に手順として書くことがあるため）
 // 数えないもの：ふつうの URL（点のあるホスト名）、相対パス（../別紙.pdf）、ドライブ名の無いファイル名。
 
 import { PDFDict, PDFHexString, PDFStream, PDFString, type PDFContext, type PDFObject } from "pdf-lib";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { dictOf, lookup, N, nameOf, openPdf, streamData, textOf, type RuleError } from "../common/index.ts";
+import { readPageTexts } from "../common/page-text.ts";
 
 export const RULE_ID = "p4-paths";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 export type P4Kind = "user_path" | "server" | "drive_path";
-export type P4Where = "info" | "xmp" | "annotation" | "link" | "filespec";
+export type P4Where = "info" | "xmp" | "annotation" | "link" | "filespec" | "body";
 
 export type P4Finding = {
   pattern: "P4";
@@ -30,6 +32,8 @@ export type P4Finding = {
   places: number;
   /** user_path はユーザーの名前、server はサーバー名、drive_path はパス全体の字数 */
   chars: number;
+  /** body のとき：最初に見つけたページ（1 から）。ほかは null */
+  page: number | null;
   /** includeValues のときだけ。見つけた字（パス・URL の全体）。記録やログには使わない */
   value?: string;
 };
@@ -39,7 +43,9 @@ export type P4Report = {
   status: "ok" | "error";
   error?: RuleError;
   findings: P4Finding[];
-  limits: Array<"too_many_objects">;
+  limits: Array<"too_many_objects" | "skipped_pages">;
+  /** 字を読めなかった・重くて省いたページ（body を見ていない） */
+  skippedPages: number[];
   decrypted?: EncryptionSummary & { failedObjects: number };
 };
 
@@ -113,17 +119,18 @@ export function findPaths(text: string): PathHit[] {
 }
 
 export async function detectP4Paths(bytes: Uint8Array, options: DetectOptions = {}): Promise<P4Report> {
-  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], limits: [] };
+  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], limits: [], skippedPages: [] };
   const opened = await openPdf(bytes);
   if (!opened.ok) return { ...base, status: "error", error: opened.error };
   const { ctx } = opened;
-  const report: P4Report = { ...base, status: "ok", findings: [], limits: [] };
+  const report: P4Report = { ...base, status: "ok", findings: [], limits: [], skippedPages: [] };
   if (opened.decrypted) report.decrypted = opened.decrypted;
 
   const groups = new Map<string, P4Finding & { v: string }>();
-  const scan = (text: string | null, where: P4Where) => {
+  const scan = (text: string | null, where: P4Where, page: number | null = null) => {
     if (!text) return;
     for (const h of findPaths(text)) {
+      if (where === "body" && h.kind === "drive_path") continue;
       // 同じ値は1件にまとめる（場所は最初に見つけた所。リンクの行き先のファイル指定を、filespec と link で二重に数えない）
       const key = [h.kind, h.value].join("\u0000");
       const g = groups.get(key);
@@ -131,7 +138,7 @@ export async function detectP4Paths(bytes: Uint8Array, options: DetectOptions = 
         g.places++;
         if (g.where === "filespec" && where === "link") g.where = "link"; // リンクの行き先のファイル指定は、link とする
       }
-      else groups.set(key, { pattern: "P4", kind: h.kind, where, places: 1, chars: h.chars, v: h.value });
+      else groups.set(key, { pattern: "P4", kind: h.kind, where, places: 1, chars: h.chars, page, v: h.value });
     }
   };
   const str = (o: PDFObject | undefined) => textOf(ctx, o);
@@ -165,6 +172,14 @@ export async function detectP4Paths(bytes: Uint8Array, options: DetectOptions = 
     }
     if (type === "Filespec" || obj.has(N("EF"))) for (const k of ["F", "UF", "DOS", "Mac", "Unix"]) scan(str(obj.get(N(k))), "filespec");
     if (obj.has(N("S")) && (obj.has(N("URI")) || obj.has(N("F")))) visitAction(ctx, obj, scan);
+  }
+
+  // ページの字
+  const texts = readPageTexts(opened.doc);
+  for (const t of texts.pages) scan(t.text, "body", t.page);
+  if (texts.skipped.length) {
+    report.skippedPages = texts.skipped;
+    report.limits.push("skipped_pages");
   }
 
   for (const g of groups.values()) {

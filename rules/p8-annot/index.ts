@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P8（注釈・コメント）1.1.0：注釈に残った作成者欄（/T）と、内容（/Contents・/Subj・/RC）を見つける。
+// 検出ルール P8（注釈・コメント）1.2.0：注釈に残った作成者欄（/T）と、内容（/Contents・/Subj・/RC）を見つける。
 // Acrobat などで注釈を付けると、作成者欄に付けた人のログイン名（姓のローマ字など）が入る。
 // 文書情報（P1 の /Info）を消しても、注釈の作成者欄は残る。
 //
@@ -11,7 +11,9 @@
 // 1.1.0：隠しの印（/F の Hidden・NoView）のある注釈は、hidden: true として別の件にする（画面に見えないため、より危ない）。
 // 隠しの印のある注釈は、見た目のストリーム（/AP の /N）の中に描かれた字も数える（field: "AP"）。
 // スタンプ注釈などで、字が /Contents になく、見た目の中だけにある型（隠したまま残ると、取り出せる）。
-// 隠しでない注釈の見た目は、画面に見えている字なので数えない。読み取り専用・ロックの印は隠しではない。
+// 隠しでない注釈の見た目は、画面に見えている字なので、ふつうは数えない。読み取り専用・ロックの印は隠しではない。
+// 1.2.0：隠しでない注釈でも、/Contents が無く（空で）、字が見た目の中だけにあるもの（スタンプなど）は、field: "AP"・hidden: false で数える。
+// 注釈の一覧には何も出ないのに、注釈を消さないかぎり字が残り、取り出せるため（低い「確認してほしい所」）。リンクは見ない。
 import { PDFArray, PDFDict, PDFHexString, PDFName, PDFRawStream, PDFStream, PDFString, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { loadPdf } from "../shared/load.ts";
@@ -19,7 +21,7 @@ import { decodeTextBytes } from "../p1-info/index.ts";
 import { appearanceStreams, countShownGlyphs, dictOf, hiddenFlagOf, streamData } from "../common/index.ts";
 
 export const RULE_ID = "p8-annot";
-export const RULE_VERSION = "1.1.0";
+export const RULE_VERSION = "1.2.0";
 
 export const FIELDS = ["T", "Contents", "Subj", "RC", "AP"] as const;
 export type P8Field = (typeof FIELDS)[number];
@@ -38,7 +40,7 @@ export const GENERIC_AUTHORS = ["author", "user", "administrator", "admin", "ユ
 export type P8Finding = {
   pattern: "P8";
   field: P8Field;
-  /** 隠しの印（Hidden・NoView）のある注釈か。AP は隠しの注釈だけで数えるので、いつも true */
+  /** 隠しの印（Hidden・NoView）のある注釈か。AP が false のときは、/Contents の無い注釈の見た目の字 */
   hidden: boolean;
   /** 値の字数（前後の空白を除く。AP は描かれる字の数） */
   chars: number;
@@ -178,7 +180,12 @@ export async function detectP8Annot(bytes: Uint8Array, options: DetectOptions = 
         const hidden = hiddenFlagOf(ctx, annot) !== null;
         if (hidden) report.hiddenAnnotations++;
         for (const field of FIELDS) {
-          const value = field === "AP" ? (hidden ? appearanceText(ctx, annot) : null) : fieldText(ctx, field, annot.get(PDFName.of(field)));
+          const value =
+            field === "AP"
+              ? hidden || (subtype !== "Link" && !fieldText(ctx, "Contents", annot.get(PDFName.of("Contents")))?.trim())
+                ? appearanceText(ctx, annot)
+                : null
+              : fieldText(ctx, field, annot.get(PDFName.of(field)));
           if (value === null) continue;
           const reason = genericReason(field, value);
           if (reason) {

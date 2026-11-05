@@ -116,13 +116,25 @@ export const CASES: Case[] = [
     },
   },
   {
+    id: "p12-l09",
+    kind: "leak",
+    description: "押したときに外のウェブのページを開くリンクと、フォームのボタンの URL（1.1.0 から、行き先を確かめてもらう低い件として数える）",
+    leaks: ["uri:annotation", "uri:field"],
+    async build() {
+      const { doc, ctx, pages } = await newDoc();
+      addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "URI", URI: lit("https://example.invalid/") } });
+      const w = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Btn", Ff: 65536, T: lit("web"), A: { S: "URI", URI: lit("https://example.invalid/") } });
+      doc.catalog.set(PDFName.of("AcroForm"), ctx.obj({ Fields: [w] } as never));
+      return save(doc);
+    },
+  },
+  {
     id: "p12-c02",
     kind: "control",
-    description: "ふつうのリンク（URL・同じ文書の中のページ・名前つきの動作「次のページ」）",
+    description: "同じ文書の中のページへ移るリンクと、名前つきの動作「次のページ」",
     leaks: [],
     async build() {
       const { doc, ctx, pages } = await newDoc(2);
-      addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "URI", URI: lit("https://example.invalid/") } });
       addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "GoTo", D: [pages[1]!.ref, PDFName.of("Fit")] } });
       addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "Named", N: "NextPage" } });
       return save(doc);
@@ -131,14 +143,12 @@ export const CASES: Case[] = [
   {
     id: "p12-c04",
     kind: "control",
-    description: "押したときだけ動く、別のファイルへのリンク（GoToR）とファイルを開くリンク（Launch）。フォームのボタンの URL",
+    description: "押したときだけ動く、別のファイルへのリンク（GoToR）とファイルを開くリンク（Launch）",
     leaks: [],
     async build() {
       const { doc, ctx, pages } = await newDoc();
       addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "GoToR", F: lit("appendix.pdf"), D: [0, PDFName.of("Fit")] } });
       addAnnot(ctx, pages[0]!, { Subtype: "Link", A: { S: "Launch", F: lit("appendix.xlsx") } });
-      const w = addAnnot(ctx, pages[0]!, { Subtype: "Widget", FT: "Btn", Ff: 65536, T: lit("web"), A: { S: "URI", URI: lit("https://example.invalid/") } });
-      doc.catalog.set(PDFName.of("AcroForm"), ctx.obj({ Fields: [w] } as never));
       return save(doc);
     },
   },

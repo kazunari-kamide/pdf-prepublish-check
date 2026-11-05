@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDict, PDFDocument, PDFName, rgb } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName, rgb, type PDFRef } from "pdf-lib";
 import type { FontGlyphReport } from "../../rules/font-glyphs/index.ts";
 import { save, type Case } from "./pdf.ts";
 
@@ -76,4 +76,52 @@ export const CASES: Case[] = [
     leaks: [],
     build: () => build("お知らせ", "山田太郎様", { tag: false }),
   },
+  {
+    id: "fg-l03",
+    kind: "leak",
+    description: "Type3 の書体（1.1.0）：ページに描くのは A・B だけで、書体には描かれていない C〜F の字形も残っている",
+    leaks: ["leftover"],
+    build: () => buildType3("AB", "ABCDEF"),
+  },
+  {
+    id: "fg-c04",
+    kind: "control",
+    description: "Type3 の書体：字形の A・B・C を、全部ページに描いている。形の無い字形（空白）は余っても数えない",
+    leaks: [],
+    build: () => buildType3("ABC", "ABC", true),
+  },
 ];
+
+/** Type3 の書体を作る。glyphs の字ごとに四角を描く字形を入れ、shown をページに描く。space なら、形の無い字形 space も入れる */
+async function buildType3(shown: string, glyphs: string, space = false): Promise<Uint8Array> {
+  const doc = await PDFDocument.create({ updateMetadata: false });
+  const ctx = doc.context;
+  const page = doc.addPage([300, 200]);
+  const procs: Record<string, PDFRef> = {};
+  const diffs: Array<number | PDFName> = [65];
+  for (const ch of glyphs) {
+    procs[ch] = ctx.register(ctx.stream(`600 0 0 0 600 700 d1 0 0 ${100 + ch.charCodeAt(0)} 700 re f`));
+    diffs.push(PDFName.of(ch));
+  }
+  if (space) {
+    procs["space"] = ctx.register(ctx.stream("300 0 d0"));
+    diffs.push(32, PDFName.of("space"));
+  }
+  const font = ctx.register(
+    ctx.obj({
+      Type: "Font",
+      Subtype: "Type3",
+      FontBBox: [0, 0, 700, 700],
+      FontMatrix: [0.001, 0, 0, 0.001, 0, 0],
+      CharProcs: ctx.obj(procs as never),
+      Encoding: ctx.obj({ Type: "Encoding", Differences: diffs } as never),
+      FirstChar: 32,
+      LastChar: 90,
+      Widths: Array.from({ length: 59 }, () => 600),
+      Resources: ctx.obj({}),
+    } as never),
+  );
+  page.node.set(PDFName.of("Resources"), ctx.obj({ Font: ctx.obj({ T3: font } as never) } as never));
+  page.node.set(PDFName.of("Contents"), ctx.register(ctx.stream(`BT /T3 12 Tf 20 100 Td (${shown}${space ? " " : ""}) Tj ET`)));
+  return save(doc);
+}
