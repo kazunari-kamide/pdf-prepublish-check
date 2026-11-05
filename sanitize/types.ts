@@ -35,7 +35,8 @@ export type RemovedKind =
   | "unused_xobject" // P5：資源にあるが描かれない部品・画像
   // 0.8.0 から
   | "font_glyphs" // P7：書体の中の、どこにも描かれていない字形（TrueType の字形の中身、Type3 の字の描き方）
-  | "pattern_repainted" // P6：中に字のある模様で塗った覆いを、黒一色で塗り直した
+  | "pattern_repainted" // P6：中に字のある模様で塗った覆いや、覆いの下の字の入った模様を、黒一色で塗り直した
+  | "unused_unicode" // P7：書体の字の対応表（/ToUnicode）の、どこにも描かれていない字の行
   // 自分で黒塗りする（redact.ts）。pattern は P6（墨消し）にそろえる
   | "redacted_text" // 選んだ所の字
   | "redacted_pixels" // 選んだ所の画像の画素
@@ -161,7 +162,7 @@ export type RedactArea = { page: number; rect: Rect };
 export type RedactLeftover = {
   /** どの確かめで見つかったか。area＝選んだ場所の確かめ、rules＝作品の検査（全部のルール）、verifier＝検証器、not_done＝片付けられなかった所 */
   check: "area" | "rules" | "verifier" | "not_done";
-  kind: "text" | "pixels" | "unchecked_image" | "inline_image" | "annotation" | "unreadable_page" | "rule_item" | "rule_error" | "verifier_item" | "verifier_error" | "not_done";
+  kind: "text" | "pixels" | "unchecked_image" | "inline_image" | "pattern_text" | "annotation" | "unreadable_page" | "rule_item" | "rule_error" | "verifier_item" | "verifier_error" | "not_done";
   /** 画面にそのまま出せる文 */
   label: string;
   count: number;

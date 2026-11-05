@@ -100,7 +100,8 @@ describe("字の上", () => {
     const bytes = await buildPdf(() => ({ pages: [{ content: NAME_LINE() }] }));
     const r = await run(bytes, [NAME_AREA]);
     ok(r);
-    expect(countOf(r, "font_unicode")).toBeGreaterThanOrEqual(4);
+    // 0.8.0 から、片付けが「どこにも描かれていない字の行」（unused_unicode）として先に外すことがある。中身は下で確かめる
+    expect(countOf(r, "font_unicode") + countOf(r, "unused_unicode")).toBeGreaterThanOrEqual(4);
     const doc = await PDFDocument.load(r.bytes);
     const page = doc.getPages()[0]!;
     const fonts = page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict);

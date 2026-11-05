@@ -53,7 +53,7 @@ function utf16Hex(text: string): string {
 }
 
 /** コード → 字 の表から、対応表（CMap）を作る */
-function buildCMap(map: Array<[number, string]>, twoByte: boolean): string {
+export function buildCMap(map: Array<[number, string]>, twoByte: boolean): string {
   const w = twoByte ? 4 : 2;
   const code = (c: number) => `<${c.toString(16).padStart(w, "0").toUpperCase()}>`;
   const lines = [

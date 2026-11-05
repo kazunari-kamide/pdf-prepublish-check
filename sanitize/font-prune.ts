@@ -14,7 +14,7 @@
 import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRef, PDFStream, type PDFContext, type PDFDocument, type PDFObject } from "pdf-lib";
 import type { FontInfo } from "../rules/shared/fonts.ts";
 import { streamData } from "./content.ts";
-import { fontUsage } from "./redact-fonts.ts";
+import { buildCMap, cmapCodes, fontUsage } from "./redact-fonts.ts";
 import type { NotDoneItem, RemovedItem } from "./types.ts";
 
 const N = (s: string) => PDFName.of(s);
@@ -88,6 +88,52 @@ export function glyphBox(s: Sfnt, gid: number): [number, number, number, number]
   if (b - a < 10) return null;
   const o = s.tables.get("glyf")!.off + a;
   return [i16(s.data, o + 2), i16(s.data, o + 4), i16(s.data, o + 6), i16(s.data, o + 8)];
+}
+
+/** 字形が、縦横の四角 1 つ（輪郭 1 つ・点 4 つ・どの点も外枠の角）か */
+export function isRectGlyph(s: Sfnt, gid: number): boolean {
+  if (gid < 0 || gid >= s.numGlyphs) return false;
+  const a = s.loca[gid]!;
+  const b = s.loca[gid + 1]!;
+  if (b - a < 12) return false;
+  const g = s.tables.get("glyf")!.off + a;
+  const end = g + (b - a);
+  if (i16(s.data, g) !== 1) return false;
+  const box = [i16(s.data, g + 2), i16(s.data, g + 4), i16(s.data, g + 6), i16(s.data, g + 8)] as const;
+  if (box[2] - box[0] <= 0 || box[3] - box[1] <= 0) return false;
+  if (u16(s.data, g + 10) !== 3) return false; // 最後の点の番号 3 ＝ 点が 4 つ
+  const insLen = u16(s.data, g + 12);
+  let o = g + 14 + insLen;
+  // 点の印（繰り返しを広げる）
+  const flags: number[] = [];
+  while (flags.length < 4 && o < end) {
+    const f = s.data[o++]!;
+    flags.push(f);
+    if (f & 8) {
+      const r = s.data[o++]!;
+      for (let k = 0; k < r && flags.length < 4; k++) flags.push(f);
+    }
+  }
+  if (flags.length < 4 || flags.some((f) => !(f & 1))) return false; // 曲線の点があれば四角ではない
+  const read = (short: number, same: number) => {
+    const out: number[] = [];
+    let v = 0;
+    for (const f of flags) {
+      if (f & short) {
+        const d = s.data[o++]!;
+        v += f & same ? d : -d;
+      } else if (!(f & same)) {
+        v += i16(s.data, o);
+        o += 2;
+      }
+      out.push(v);
+    }
+    return out;
+  };
+  const xs = read(2, 16);
+  const ys = read(4, 32);
+  if (o > end) return false;
+  return xs.every((x, i) => (x === box[0] || x === box[2]) && (ys[i] === box[1] || ys[i] === box[3])) && new Set(xs.map((x, i) => `${x},${ys[i]}`)).size === 4;
 }
 
 /** 組み合わせの字形が使う部品の字形 */
@@ -352,6 +398,7 @@ export function pruneFonts(doc: PDFDocument, maxOps: number): { removed: Removed
   const byFile = new Map<PDFStream, { desc: PDFDict; gids: Set<number>; unsafe: boolean }>();
   let cffType1 = 0;
   let type3Removed = 0;
+  let unicodeRemoved = 0;
   const seenFonts = new Set<PDFDict>();
   for (const res of usage.scannedRes) {
     for (const key of fontsIn(res)) {
@@ -362,6 +409,8 @@ export function pruneFonts(doc: PDFDocument, maxOps: number): { removed: Removed
       const u = usage.usage.get(key) ?? (key instanceof PDFRef ? undefined : usage.usage.get(font));
       const codes = u?.codes ?? new Set<number>();
       const subtype = nameOf(ctx, font.get(N("Subtype")));
+      // 字の対応表（/ToUnicode）の、どこにも描かれていない字の行を外す（消した字の読みが、対応表に残らないように）
+      if (!banned) unicodeRemoved += shrinkUnicode(ctx, font, codes, u?.info);
       if (subtype === "Type3") {
         if (!banned) type3Removed += pruneType3(ctx, font, codes);
         continue;
@@ -413,11 +462,40 @@ export function pruneFonts(doc: PDFDocument, maxOps: number): { removed: Removed
     fonts++;
   }
   if (glyphs) removed.push({ pattern: "P7", kind: "font_glyphs", count: glyphs, label: `書体（${fonts} 個）の中の、どこにも描かれていない字形（${glyphs} 個）を消しました` });
+  if (unicodeRemoved) removed.push({ pattern: "P7", kind: "unused_unicode", count: unicodeRemoved, label: `書体の字の対応表の、どこにも描かれていない字の行（${unicodeRemoved} 字分）を消しました` });
   if (type3Removed) removed.push({ pattern: "P7", kind: "font_glyphs", count: type3Removed, label: `Type3 の書体の中の、どこにも描かれていない字の描き方（${type3Removed} 個）を消しました` });
   if (cffType1) {
     notDone.push({ pattern: "P7", reason: "font_not_pruned", label: `書体（${cffType1} 個。CFF・Type1 の形）の中の、描かれていない字形は外していません。消した字の形が書体の中に残っていることがあります` });
   }
   return { removed, notDone };
+}
+
+/**
+ * 字の対応表（/ToUnicode）から、使っていないコードの行を外す。残す行の字が読めないとき（作り直すと行が消える）は触らない。外した行の数を返す
+ */
+function shrinkUnicode(ctx: PDFContext, font: PDFDict, used: Set<number>, info: FontInfo | undefined): number {
+  const tu = ctx.lookup(font.get(N("ToUnicode")));
+  if (!(tu instanceof PDFStream)) return 0;
+  let old: Set<number> | null;
+  try {
+    old = cmapCodes(streamData(tu));
+  } catch {
+    old = null;
+  }
+  if (!old) return 0;
+  const drop = [...old].filter((c) => !used.has(c));
+  if (!drop.length) return 0;
+  if (!info && [...old].some((c) => used.has(c))) return 0;
+  const twoByte = info?.twoByte ?? nameOf(ctx, font.get(N("Subtype"))) === "Type0";
+  const kept: Array<[number, string]> = [];
+  for (const c of [...old].filter((x) => used.has(x)).sort((a, b) => a - b)) {
+    const bytes = twoByte ? Uint8Array.of(c >> 8, c & 0xff) : Uint8Array.of(c & 0xff);
+    const text = info!.decode(bytes)[0]?.text ?? "";
+    if (!text) return 0;
+    kept.push([c, text]);
+  }
+  font.set(N("ToUnicode"), ctx.register(ctx.flateStream(buildCMap(kept, twoByte), {})));
+  return drop.length;
 }
 
 /** 埋め込んだ書体（字形のファイル・Type3 の字の描き方）があるか */

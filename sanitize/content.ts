@@ -53,7 +53,7 @@ import { luminanceOf } from "../rules/p6-text/page.ts";
 import { RectIndex, coveredFraction, type SanCover } from "./geometry.ts";
 import { decodeLuma, sampleLuma } from "./image-sample.ts";
 import { convertPageInlineImages } from "./inline-images.ts";
-import { glyphBox, parseSfnt, trueTypeOf, type Sfnt } from "./font-prune.ts";
+import { glyphBox, isRectGlyph, parseSfnt, trueTypeOf, type Sfnt } from "./font-prune.ts";
 import { burnImage, type BurnFailure, type BurnLimits } from "./images.ts";
 import { serializeOps } from "./serialize.ts";
 import type { ImageCodec, NotDoneItem, NotDoneReason, RemovedItem, SanitizeTraceEvent } from "./types.ts";
@@ -106,6 +106,32 @@ export class TooManyOperations extends Error {}
  * Multiply・Darken などでは、白を重ねても下がそのまま見えるので、塗ると見た目が変わる（覆いにしない。片付けられなかった所にする）
  */
 const LIGHT_HIDING_BLENDS = new Set(["Normal", "Compatible", "Screen", "Lighten", "ColorDodge", "HardLight", "Luminosity"]);
+
+/** Type3 の字の描き方が「（d0・d1 のあと）四角 1 つを塗るだけ」なら、その四角を FontMatrix で字の空間に写したもの */
+function rectProc(data: Uint8Array, m: Matrix): Rect | null {
+  let rect: Rect | null = null;
+  let painted = false;
+  for (const { op, args } of operations(data)) {
+    if (op === "d0" || op === "d1") continue;
+    if (op === "re" && !rect) {
+      const a = nums(args);
+      if (a.length < 4) return null;
+      rect = [Math.min(a[0]!, a[0]! + a[2]!), Math.min(a[1]!, a[1]! + a[3]!), Math.max(a[0]!, a[0]! + a[2]!), Math.max(a[1]!, a[1]! + a[3]!)];
+      continue;
+    }
+    if ((op === "f" || op === "F" || op === "f*") && rect && !painted) {
+      painted = true;
+      continue;
+    }
+    if (op === "q" || op === "Q" || op === "g" || op === "rg" || op === "k") continue;
+    return null;
+  }
+  if (!rect || !painted) return null;
+  return boundsOf([apply(m, rect[0], rect[1]), apply(m, rect[2], rect[1]), apply(m, rect[0], rect[3]), apply(m, rect[2], rect[3])]);
+}
+
+/** 字形の形で黒い四角と見分けるときの、幅と高さの下限（字の大きさ 1 に対して） */
+const BLOCK_MIN_EM = 0.3;
 
 /** 覆いとして使う、黒い四角の形の字（全面・7/8・大小の黒い四角・縦長の黒い四角） */
 const BLOCK_CHARS = new Set(["█", "▉", "▇", "■", "◼", "▮", "⬛"]);
@@ -422,6 +448,8 @@ class Walker {
   /** 注釈の見た目を読むときも、字を集めるか（0.8.0 から。あとの注釈の濃い覆いの下の字を消すため） */
   collectAp = false;
   private readonly patternCache = new Map<PDFObject, { opaque: boolean; hasText: boolean }>();
+  /** 字の入った模様で塗った所（0.8.0 から） */
+  readonly patternFills: Array<{ seq: number; rect: Rect; node: CNode; op: number; ctm: Matrix; name: string; stroke: boolean }> = [];
 
   /**
    * 模様が下を隠すか・中に字があるか。下を隠すとみなすのは：
@@ -504,10 +532,57 @@ class Walker {
       const b = gid !== undefined ? glyphBox(tt.s, gid) : null;
       if (!b) return null;
       const u = tt.s.unitsPerEm;
+      // 字の対応表で黒い四角と分からない字は、字形が四角 1 つで、幅も高さも字の大きさの 3 割以上のときだけ覆いにする（I・ハイフン・下線などは覆いにしない）
+      if (!BLOCK_CHARS.has(gl.text) && !(gid !== undefined && isRectGlyph(tt.s, gid) && b[2] - b[0] >= BLOCK_MIN_EM * u && b[3] - b[1] >= BLOCK_MIN_EM * u)) return null;
       const pts: Point[] = [apply(trm, x0 + b[0] / u, y0 + b[1] / u), apply(trm, x0 + b[2] / u, y0 + b[1] / u), apply(trm, x0 + b[0] / u, y0 + b[3] / u), apply(trm, x0 + b[2] / u, y0 + b[3] / u)];
       return boundsOf(pts);
     }
+    // Type3 の書体：字の描き方が四角 1 つの塗りなら、その四角を覆いにする
+    if (ref) {
+      const r3 = this.type3Rect(ref, gl.code);
+      if (r3 && r3[2] - r3[0] >= BLOCK_MIN_EM && r3[3] - r3[1] >= BLOCK_MIN_EM) {
+        const pts: Point[] = [apply(trm, r3[0], r3[1]), apply(trm, r3[2], r3[1]), apply(trm, r3[0], r3[3]), apply(trm, r3[2], r3[3])];
+        return boundsOf(pts);
+      }
+    }
     return gl.text === "█" && area(rect) > 0 ? rect : null;
+  }
+
+  private readonly t3Cache = new Map<PDFObject, Map<number, Rect | null> | null>();
+
+  /** Type3 の書体で、コードの字の描き方が「四角 1 つを塗るだけ」なら、その四角（字の空間。FontMatrix をかけたもの） */
+  type3Rect(ref: PDFObject, code: number): Rect | null {
+    const ctx = this.ctx;
+    if (!this.t3Cache.has(ref)) {
+      let table: Map<number, Rect | null> | null = null;
+      try {
+        const fd = dictOf(ctx, ref);
+        if (fd && nameOf(ctx, fd.get(PDFName.of("Subtype"))) === "Type3") {
+          const fm = numsOf(ctx, fd.get(PDFName.of("FontMatrix")));
+          const m: Matrix = fm && fm.length === 6 ? (fm as Matrix) : [0.001, 0, 0, 0.001, 0, 0];
+          const procs = dictOf(ctx, fd.get(PDFName.of("CharProcs")));
+          const enc = dictOf(ctx, fd.get(PDFName.of("Encoding")));
+          const diffs = enc ? ctx.lookup(enc.get(PDFName.of("Differences"))) : undefined;
+          table = new Map();
+          if (procs && diffs instanceof PDFArray) {
+            let c = 0;
+            for (const o of diffs.asArray()) {
+              const v = ctx.lookup(o);
+              if (v instanceof PDFNumber) c = v.asNumber();
+              else if (v instanceof PDFName) {
+                const st = ctx.lookup(procs.get(v));
+                table.set(c, st instanceof PDFStream ? rectProc(streamData(st), m) : null);
+                c++;
+              }
+            }
+          }
+        }
+      } catch {
+        table = null;
+      }
+      this.t3Cache.set(ref, table);
+    }
+    return this.t3Cache.get(ref)?.get(code) ?? null;
   }
   private readonly vertCache = new Map<PDFObject, Vertical | null>();
   private readonly ctx: PDFContext;
@@ -580,6 +655,11 @@ class Walker {
       const box = boundsOf(polys.flatMap((p) => p.pts));
       if (doFill) {
         const parts = polys.map((p) => p.pts);
+        // 字の入った模様で塗った所（0.8.0 から）：あとの濃い覆い・選んだ場所の下にあれば、黒一色で塗り直して模様の中の字を消す
+        if (g.fill === null && g.fillPattern && !annotation) {
+          const pinfo = this.patternInfo(g.fillPattern.obj);
+          if (pinfo.hasText) this.patternFills.push({ seq, rect: box, node, op: opIndex, ctm: g.ctm, name: g.fillPattern.name, stroke: doStroke });
+        }
         if (!annotation) {
           const filled = parts.reduce((sum, p) => sum + Math.abs(signedPolygonArea(p)), 0);
           this.fills.push({
@@ -685,7 +765,7 @@ class Walker {
           this.glyphs.push(glyph);
           // 黒い四角の形の字（記号の書体を詰めて並べたもの）は、濃い覆いにする（0.8.0 から）
           const fillMode = g.mode === 0 || g.mode === 2 || g.mode === 4 || g.mode === 6;
-          if (fillMode && g.fill !== null && g.fill <= s.darkLuminanceMax && g.ca >= s.opacityMin && g.normal && !isHidden() && BLOCK_CHARS.has(gl.text)) {
+          if (fillMode && g.fill !== null && g.fill <= s.darkLuminanceMax && g.ca >= s.opacityMin && g.normal && !isHidden()) {
             const box = this.blockBox(g.fontRef, f, gl, trm, x0, y0, glyph.rect);
             if (box) {
               this.covers.push({ seq, rect: box, kind: annotation ? "annotation" : "glyph" });
@@ -1223,6 +1303,39 @@ function judgeP7(gl: Glyph, view: Rect, fills: Fill[], images: Array<{ seq: numb
   return Math.abs(gl.lum - under.lum) < s.sameColorDeltaBelow ? "same_color" : null;
 }
 
+/**
+ * いくつかの覆いを合わせて、箱 r のどれだけが隠れるか（0〜1）。箱の中に 12 × 8 の点を置き、どれかの覆いに入る点の割合で測る。
+ * 形のある覆いは、形の中の点だけを数える
+ */
+function unionCovered(covers: SanCover[], r: Rect): number {
+  const nx = 12;
+  const ny = 8;
+  let inside = 0;
+  for (let i = 0; i < nx; i++) {
+    for (let j = 0; j < ny; j++) {
+      const x = r[0] + ((i + 0.5) / nx) * (r[2] - r[0]);
+      const y = r[1] + ((j + 0.5) / ny) * (r[3] - r[1]);
+      if (covers.some((c) => inRect(c.rect, x, y) && (!c.shape || (c.shape.rule === "evenodd" ? inShapeEvenOdd(c.shape.parts, x, y) : inShapeNonzero(c.shape.parts, x, y))))) inside++;
+    }
+  }
+  return inside / (nx * ny);
+}
+
+/** 点が形の中か（nonzero の決まり） */
+function inShapeNonzero(polys: Point[][], x: number, y: number): boolean {
+  let wn = 0;
+  for (const poly of polys) {
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i]!;
+      const [xj, yj] = poly[j]!;
+      if (yj <= y) {
+        if (yi > y && (xi - xj) * (y - yj) - (x - xj) * (yi - yj) > 0) wn++;
+      } else if (yi <= y && (xi - xj) * (y - yj) - (x - xj) * (yi - yj) < 0) wn--;
+    }
+  }
+  return wn !== 0;
+}
+
 /** 見える描き方の字か（描き方 3・7 と、ほとんど透明な字は、ほかの決まりで見る） */
 const drawnVisibly = (gl: Glyph, s: ContentSettings) => gl.mode !== 3 && gl.mode !== 7 && gl.alpha >= s.invisibleAlphaBelow && !gl.hidden;
 
@@ -1299,25 +1412,22 @@ function findOverdrawn(w: Walker, s: ContentSettings): { count: number; rect: Re
 }
 
 /**
- * ページの資源（/XObject）のうち、ページの中身から描かれない部品・画像を外す（0.7.0 から。描かれない部品の中の字・画像が、取り出せてしまうため）。
- * 資源を持たない部品（ページの資源を使う部品）の中で描くものも、使っているとみなす。
- * 字の書体に、資源を持たない Type3 の書体があるページは、書体の中で描くかもしれないので外さない。
- * ページの資源の辞書は、ほかのページと共有かもしれないので、写してから外す。外した数を返す
+ * 中身（data）と、その資源（res）のうち、中身から描かれない部品・画像の名前。外せないとき（資源を持たない Type3 の書体があるなど）は null。
+ * 資源を持たない部品（この資源を使う部品）の中で描くものも、使っているとみなす
  */
-function removeUnusedXObjects(ctx: PDFContext, page: PDFPage, s: ContentSettings): number {
-  const res = dictOf(ctx, page.node.get(PDFName.of("Resources"))) ?? page.node.Resources();
-  const xo = res ? dictOf(ctx, res.get(PDFName.of("XObject"))) : undefined;
-  if (!res || !xo || xo.entries().length === 0) return 0;
+function unusedXObjectNames(ctx: PDFContext, data: Uint8Array, res: PDFDict, s: ContentSettings): PDFName[] | null {
+  const xo = dictOf(ctx, res.get(PDFName.of("XObject")));
+  if (!xo || xo.entries().length === 0) return null;
   const fonts = dictOf(ctx, res.get(PDFName.of("Font")));
   if (fonts) for (const [, f] of fonts.entries()) {
     const fd = dictOf(ctx, f);
-    if (fd && nameOf(ctx, fd.get(PDFName.of("Subtype"))) === "Type3" && !fd.has(PDFName.of("Resources"))) return 0;
+    if (fd && nameOf(ctx, fd.get(PDFName.of("Subtype"))) === "Type3" && !fd.has(PDFName.of("Resources"))) return null;
   }
   const used = new Set<string>();
   const seen = new Set<PDFObject>();
-  const scan = (data: Uint8Array, depth: number) => {
+  const scan = (d: Uint8Array, depth: number) => {
     let n = 0;
-    for (const { op, args } of operations(data)) {
+    for (const { op, args } of operations(d)) {
       if (++n > s.maxOperationsPerPage) throw new TooManyOperations();
       if (op !== "Do" || args[0]?.t !== "name") continue;
       const name = args[0].v;
@@ -1333,15 +1443,65 @@ function removeUnusedXObjects(ctx: PDFContext, page: PDFPage, s: ContentSettings
       }
     }
   };
-  scan(contentData(ctx, page.node.get(PDFName.of("Contents"))), 0);
-  const unused = xo.entries().map(([k]) => k).filter((k) => !used.has(k.decodeText()));
-  if (!unused.length) return 0;
+  scan(data, 0);
+  return xo.entries().map(([k]) => k).filter((k) => !used.has(k.decodeText()));
+}
+
+/** 資源の辞書を写し、名前を /XObject から外したものを返す（元の辞書は、ほかの所と共有かもしれないので変えない） */
+function withoutXObjects(ctx: PDFContext, res: PDFDict, names: PDFName[]): PDFDict {
   const newRes = res.clone(ctx);
-  const newXo = xo.clone(ctx);
-  for (const k of unused) newXo.delete(k);
+  const newXo = (dictOf(ctx, res.get(PDFName.of("XObject"))) as PDFDict).clone(ctx);
+  for (const k of names) newXo.delete(k);
   newRes.set(PDFName.of("XObject"), newXo);
-  page.node.set(PDFName.of("Resources"), newRes);
-  return unused.length;
+  return newRes;
+}
+
+/**
+ * ページの資源（/XObject）のうち、ページの中身から描かれない部品・画像を外す（0.7.0 から。描かれない部品の中の字・画像が、取り出せてしまうため）。
+ * ページから描く部品（自分の資源を持つもの）の資源も、その部品の中身から描かれない部品・画像を外す（0.8.0 から）。
+ * 部品の中身はどこで描いても同じなので、部品の中で描かれない名前は、どこでも描かれない。部品の資源の辞書は写してから差し替える。
+ * 字の書体に、資源を持たない Type3 の書体がある所は、書体の中で描くかもしれないので外さない。外した数を返す
+ */
+function removeUnusedXObjects(ctx: PDFContext, page: PDFPage, s: ContentSettings): number {
+  const res = dictOf(ctx, page.node.get(PDFName.of("Resources"))) ?? page.node.Resources();
+  if (!res) return 0;
+  let count = 0;
+  const pageUnused = unusedXObjectNames(ctx, contentData(ctx, page.node.get(PDFName.of("Contents"))), res, s);
+  let pageRes = res;
+  if (pageUnused?.length) {
+    pageRes = withoutXObjects(ctx, res, pageUnused);
+    page.node.set(PDFName.of("Resources"), pageRes);
+    count += pageUnused.length;
+  }
+  // 描く部品の中の資源（部品の中の部品も、たどる）
+  const seen = new Set<PDFStream>();
+  const visit = (r: PDFDict, depth: number) => {
+    const xo = dictOf(ctx, r.get(PDFName.of("XObject")));
+    if (!xo || depth > s.maxFormDepth) return;
+    for (const [, v] of xo.entries()) {
+      const f = ctx.lookup(v);
+      if (!(f instanceof PDFStream) || seen.has(f) || nameOf(ctx, f.dict.get(PDFName.of("Subtype"))) !== "Form") continue;
+      seen.add(f);
+      const fr = dictOf(ctx, f.dict.get(PDFName.of("Resources")));
+      if (!fr) continue; // ページの資源を使う部品は、ページの側で数えた
+      let data: Uint8Array;
+      try {
+        data = streamData(f);
+      } catch {
+        continue;
+      }
+      const names = unusedXObjectNames(ctx, data, fr, s);
+      let next = fr;
+      if (names?.length) {
+        next = withoutXObjects(ctx, fr, names);
+        f.dict.set(PDFName.of("Resources"), next);
+        count += names.length;
+      }
+      visit(next, depth + 1);
+    }
+  };
+  visit(pageRes, 0);
+  return count;
 }
 
 /** 画像の箱のうち、見える所（v）の外の部分を、縦横の四角（最大 4 つ）で返す */
@@ -1631,6 +1791,12 @@ export async function sanitizePageContent(
 
   const bySeq = (a: { seq: number }, b: { seq: number }) => a.seq - b.seq;
   const coverIndex = new RectIndex(w.covers);
+  for (const pf of w.patternFills) {
+    if (pf.stroke || area(pf.rect) <= 0) continue;
+    const picked = userCovers.some((c) => intersectionArea(c.rect, pf.rect) > 0);
+    const hidden = coverIndex.query(pf.rect, bySeq).some((c) => c.seq > pf.seq && coveredFraction(c, pf.rect) >= s.coveredFractionMin);
+    if (picked || hidden) (pf.node.repaints ??= new Map()).set(pf.op, { rect: pf.rect, ctm: pf.ctm, name: pf.name });
+  }
   const fillIndex = new RectIndex(w.fills.map((f) => ({ rect: f.box, seq: f.seq, f })));
   // P6：字
   for (const gl of w.glyphs) {
@@ -1641,15 +1807,19 @@ export async function sanitizePageContent(
       gl.remove = { pattern: "P6", cover: user };
       continue;
     }
+    const later: SanCover[] = [];
     for (const c of coverIndex.query(gl.rect, bySeq)) {
       if (c.seq <= gl.seq || intersectionArea(gl.rect, c.rect) <= 0) continue;
       // 黒い四角の字どうしは消さない（並べた黒い四角の帯が欠けて、見た目が変わるため）
       if (gl.isCover && c.kind === "glyph") continue;
+      later.push(c);
       if (coveredFraction(c, gl.rect) >= s.coveredFractionMin) {
         gl.remove = { pattern: "P6", cover: c };
         break;
       }
     }
+    // 隣り合う覆いにまたがる字（どの覆いも 1 つでは半分に届かない）：あとの覆いを合わせて隠れた割合を測る（0.8.0 から）
+    if (!gl.remove && later.length >= 2 && unionCovered(later, gl.rect) >= s.coveredFractionMin) gl.remove = { pattern: "P6", cover: later[0]! };
   }
   // P7（塗りは、字の箱に重なりうるものだけを、描いた順に渡す。地の色は字の中心で見るので、これで足りる）
   for (const gl of w.glyphs) {
@@ -1911,6 +2081,8 @@ export type PageForCheck = {
   glyphs: Array<{ rect: Rect; isSpace: boolean }>;
   images: Array<{ box: Rect; ctm: Matrix; stream: PDFStream; res: PDFDict | undefined }>;
   inlineImages: Rect[];
+  /** 字の入った模様で塗った所（0.8.0 から） */
+  patternText: Rect[];
 };
 
 export function readPageForCheck(ctx: PDFContext, page: PDFPage, visible: Visibility, s: ContentSettings): PageForCheck {
@@ -1925,6 +2097,7 @@ export function readPageForCheck(ctx: PDFContext, page: PDFPage, visible: Visibi
     glyphs: w.glyphs.map((g) => ({ rect: g.rect, isSpace: g.isSpace })),
     images: w.imageUses.map((u) => ({ box: u.box, ctm: u.ctm, stream: u.stream, res: u.res })),
     inlineImages: w.inlineImages.map((i) => i.box),
+    patternText: w.patternFills.map((f) => f.rect),
   };
 }
 

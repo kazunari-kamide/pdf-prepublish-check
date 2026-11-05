@@ -12,9 +12,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import fontkit from "@pdf-lib/fontkit";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { PDFDict, PDFDocument, PDFName, PDFRawStream, StandardFonts, decodePDFRawStream, rgb, type PDFContext } from "pdf-lib";
+import { PDFArray as PDFArrayType, PDFDict, PDFDocument, PDFName, PDFRawStream, StandardFonts, decodePDFRawStream, rgb, type PDFContext } from "pdf-lib";
 import { detectFontGlyphs } from "../rules/font-glyphs/index.ts";
-import { parseSfnt, glyphBox } from "../sanitize/font-prune.ts";
+import { parseSfnt, glyphBox, rebuildSfnt } from "../sanitize/font-prune.ts";
 import { redact, sanitizePdf, type SanitizeResult } from "../sanitize/index.ts";
 import { createNodeImageCodec } from "../sanitize/node/image-codec.ts";
 import { inspectAll } from "../src/inspect/inspect";
@@ -267,3 +267,122 @@ describe("描かれていない字形を書体から外す", () => {
   });
 });
 
+
+describe("攻撃する人の目の形（11/5 の確かめで残ったもの）", () => {
+  /** 字の入った模様で塗った四角を、黒い覆いの下に置いた PDF */
+  async function patternUnderCover(): Promise<Uint8Array> {
+    return withResources(await buildPdf(() => ({
+      pages: [{ content: "q /Pattern cs /P1 scn 36 195 170 20 re f Q\n" + "0 g 36 195 170 20 re f\n" + latinAt(40, 100, "SHOWN-OUTSIDE") }],
+    })), (ctx, res) => {
+      const font = ctx.obj({ Type: "Font", Subtype: "Type1", BaseFont: "Helvetica" });
+      const cell = ctx.register(ctx.stream("BT /F9 4 Tf 1 3 Td (KAKUSHI-IN-PATTERN) Tj ET", { PatternType: 1, PaintType: 1, TilingType: 1, BBox: [0, 0, 60, 10], XStep: 60, YStep: 10, Resources: { Font: { F9: font } } }));
+      res.set(PDFName.of("Pattern"), ctx.obj({ P1: cell }));
+    });
+  }
+
+  it("(1) 覆いの下の、字の入った模様：片付けで黒一色に塗り直し、模様の中の字を消す", { timeout: HEAVY_TIMEOUT }, async () => {
+    const r = await clean(await patternUnderCover());
+    expect(r.removed.some((x) => x.kind === "pattern_repainted")).toBe(true);
+    await expectGone(r.bytes, "KAKUSHI");
+    expect(await textOf(r.bytes)).toContain("SHOWN-OUTSIDE");
+  });
+
+  it("(1) 自分で黒塗り：選んだ所の、字の入った模様も消してから保存する", { timeout: HEAVY_TIMEOUT }, async () => {
+    const bytes = await withResources(await buildPdf(() => ({
+      pages: [{ content: "q /Pattern cs /P1 scn 36 195 170 20 re f Q\n" + latinAt(40, 100, "SHOWN-OUTSIDE") }],
+    })), (ctx, res) => {
+      const font = ctx.obj({ Type: "Font", Subtype: "Type1", BaseFont: "Helvetica" });
+      const cell = ctx.register(ctx.stream("BT /F9 4 Tf 1 3 Td (KAKUSHI-IN-PATTERN) Tj ET", { PatternType: 1, PaintType: 1, TilingType: 1, BBox: [0, 0, 60, 10], XStep: 60, YStep: 10, Resources: { Font: { F9: font } } }));
+      res.set(PDFName.of("Pattern"), ctx.obj({ P1: cell }));
+    });
+    const { checkAreas } = await import("../sanitize/redact-check.ts");
+    // 消す前の PDF では、選んだ所の確かめが「字の入った模様」を数える（確かめが空振りしていない）
+    expect((await checkAreas(bytes, [{ page: 1, rect: [36, 195, 206, 215] }])).some((l) => l.kind === "pattern_text")).toBe(true);
+    const r = await redact(bytes, [{ page: 1, rect: [36, 195, 206, 215] }], { codec });
+    expect(r.status).toBe("ok");
+    if (r.status !== "ok") return;
+    await expectGone(r.bytes, "KAKUSHI");
+    expect(await textOf(r.bytes)).toContain("SHOWN-OUTSIDE");
+  });
+
+  /** 秘密の字（埋め込んだ書体。字の対応表あり）の上に、黒い四角の形の字を並べた PDF。cover：Type3 の n か、対応表を外した TrueType の ■ */
+  async function blockOver(cover: "type3" | "truetype", y: number): Promise<Uint8Array> {
+    const doc = await PDFDocument.create({ updateMetadata: false });
+    doc.registerFontkit(fontkit);
+    const font = await doc.embedFont(readFileSync(FONT), { subset: true });
+    const page = doc.addPage([400, 300]);
+    page.drawText("KAKUSHI-SECRET", { x: 40, y: 200, size: 10, font, color: rgb(0, 0, 0) });
+    page.drawText("SHOWN", { x: 40, y: 100, size: 10, font, color: rgb(0, 0, 0) });
+    if (cover === "truetype") {
+      // @pdf-lib/fontkit 1.1.1 は、奇数バイトの字形があると、絞った書体の位置の表がずれる（fixtures/p6/build.mjs の注）。
+      // 埋め込む前に、字形を 4 バイトにそろえた書体にする（字の形は変わらない）
+      const src = parseSfnt(new Uint8Array(readFileSync(FONT)))!;
+      const padded = rebuildSfnt(src, new Set(Array.from({ length: src.numGlyphs }, (_, i) => i))).data;
+      const sym = await doc.embedFont(padded, { subset: true });
+      // BIZ UDゴシックの ■ は字の幅より小さく、並べると間にすきまが空く。半字ずらしてもう 1 列重ね、すきまなく覆う
+      page.drawText("■■■■■■", { x: 36, y, size: 20, font: sym, color: rgb(0, 0, 0) });
+      page.drawText("■■■■■■", { x: 46, y, size: 20, font: sym, color: rgb(0, 0, 0) });
+      const saved = await doc.save({ useObjectStreams: false });
+      // 黒い四角の書体の字の対応表を外す（字の対応表では黒い四角と分からない形）
+      const again = await PDFDocument.load(saved, { updateMetadata: false });
+      const fonts = again.getPage(0).node.Resources()!.lookup(PDFName.of("Font"), PDFDict);
+      const keys = fonts.keys();
+      (again.context.lookup(fonts.get(keys[keys.length - 1]!)) as PDFDict).delete(PDFName.of("ToUnicode"));
+      return new Uint8Array(await again.save({ useObjectStreams: false }));
+    }
+    const ctx = doc.context;
+    const proc = ctx.register(ctx.stream("1000 0 0 0 1000 1000 d1 0 0 1000 1000 re f"));
+    const t3 = ctx.register(ctx.obj({
+      Type: "Font", Subtype: "Type3", FontBBox: [0, 0, 1000, 1000], FontMatrix: [0.001, 0, 0, 0.001, 0, 0],
+      CharProcs: { n: proc }, Encoding: { Type: "Encoding", Differences: [110, "n"] }, FirstChar: 110, LastChar: 110, Widths: [1000], Resources: {},
+    }));
+    page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict).set(PDFName.of("T3"), t3);
+    const extra = ctx.register(ctx.stream(`BT /T3 14 Tf 0 g 36 ${y} Td (nnnnnnnnnnn) Tj ET`));
+    const contents = page.node.Contents();
+    page.node.set(PDFName.of("Contents"), ctx.obj([...(contents instanceof PDFArrayType ? contents.asArray() : [page.node.get(PDFName.of("Contents"))!]), extra]));
+    return new Uint8Array(await doc.save({ useObjectStreams: false }));
+  }
+
+  for (const cover of ["type3", "truetype"] as const) {
+    it(`(2) 黒い四角の形の字（${cover === "type3" ? "Type3 の n" : "字の対応表のない ■"}）で覆った字を消す。字の対応表からも消える`, { timeout: HEAVY_TIMEOUT }, async () => {
+      const r = await clean(await blockOver(cover, 196));
+      expect(r.removed.some((x) => x.kind === "covered_text")).toBe(true);
+      await expectGone(r.bytes, "KAKUSHI");
+      expect(await textOf(r.bytes)).toContain("SHOWN");
+      // 秘密の字だけで使っていた字（K・I・E・C・R・T）の読みが、字の対応表に残らない
+      const doc = await PDFDocument.load(r.bytes);
+      let cmaps = "";
+      for (const [, o] of doc.context.enumerateIndirectObjects()) {
+        if (o instanceof PDFDict && o.has(PDFName.of("ToUnicode"))) cmaps += Buffer.from(decodePDFRawStream(doc.context.lookup(o.get(PDFName.of("ToUnicode"))) as PDFRawStream).decode()).toString("latin1");
+      }
+      for (const ch of "KICRT") expect(cmaps, ch).not.toMatch(new RegExp(`<00${ch.charCodeAt(0).toString(16).toUpperCase()}>`));
+    });
+
+    it(`(2) 対照：離れた所の黒い四角の形の字（${cover}）は、ほかの字を消さない`, { timeout: HEAVY_TIMEOUT }, async () => {
+      const r = await clean(await blockOver(cover, 20));
+      expect(await textOf(r.bytes)).toContain("KAKUSHI-SECRET");
+    });
+  }
+});
+
+describe("部品の中の資源に残る、描かれない画像", () => {
+  it("描く部品の資源の中の、描かれない画像を外す。部品の中で描く画像（と、部品の中の部品で描く画像）は残す", { timeout: HEAVY_TIMEOUT }, async () => {
+    const bytes = await withResources(await buildPdf(() => ({ pages: [{ content: latinAt(40, 250, "Body") + "q /Fm1 Do Q\n" }] })), (ctx, res) => {
+      // 画像の中身に目印の字を入れる（8 × 2 の灰色。そのままのバイト列）
+      const img = (s: string) => ctx.register(ctx.stream(s.padEnd(16, "_").slice(0, 16), { Type: "XObject", Subtype: "Image", Width: 8, Height: 2, ColorSpace: "DeviceGray", BitsPerComponent: 8 }));
+      const inner = ctx.register(ctx.stream("q 50 0 0 20 40 40 cm /ImIn Do Q", { Type: "XObject", Subtype: "Form", BBox: [0, 0, 400, 300], Resources: { XObject: { ImIn: img("SHOWN-INNER-IMG") } } }));
+      const form = ctx.register(ctx.stream("q 50 0 0 20 40 100 cm /Im1 Do Q /Fm2 Do", {
+        Type: "XObject", Subtype: "Form", BBox: [0, 0, 400, 300],
+        Resources: { XObject: { Im1: img("SHOWN-FORM-IMG"), Im2: img("KAKUSHI-OLD-IMG"), Fm2: inner } },
+      }));
+      res.set(PDFName.of("XObject"), ctx.obj({ Fm1: form }));
+    });
+    // 片付ける前は、描かれない画像がファイルにある（確かめが空振りしていない）
+    expect(await inFile(bytes, "KAKUSHI-OLD")).toBe(true);
+    const r = await clean(bytes);
+    expect(r.removed.find((x) => x.kind === "unused_xobject")?.count).toBe(1);
+    expect(await inFile(r.bytes, "KAKUSHI")).toBe(false);
+    expect(await inFile(r.bytes, "SHOWN-FORM")).toBe(true);
+    expect(await inFile(r.bytes, "SHOWN-INNER")).toBe(true);
+  });
+});
