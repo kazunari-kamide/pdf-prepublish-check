@@ -82,8 +82,10 @@
         <progress id="progress" max="1" value="0" aria-label="進み具合" hidden></progress>
 
         <div id="actions" class="actions" hidden>
-          <button id="sanitize" type="button" aria-describedby="sanitize-note">整える</button>
+          <div id="consent" class="consent" hidden></div>
+          <button id="sanitize" type="button" aria-describedby="sanitize-note tidy-summary">整える</button>
           <p id="sanitize-note"></p>
+          <p id="tidy-summary" class="tidy-summary"></p>
           <div id="redact-left" class="not-done" hidden>
             <h3>▲ 読み直しで残っていた所</h3>
             <ul id="redact-left-list"></ul>

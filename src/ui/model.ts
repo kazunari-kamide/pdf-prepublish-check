@@ -26,6 +26,8 @@ export type Row = {
   check: boolean;
   /** 見つけた字の中身（あるときだけ）。画面の中だけで使い、伏せて出す（src/ui/reveal.ts） */
   content?: string;
+  /** 文書情報・XMP の欄の値のとき、その欄の名前（Title・dc:title など） */
+  field?: string;
 };
 
 /** 型（ルール）ごとのまとまり。見つからなかった型も並べる */
@@ -100,6 +102,7 @@ export function buildView(summary: InspectSummary): ViewModel {
     why: it.why,
     detail: it.detail,
     ...(it.content ? { content: it.content } : {}),
+    ...(it.field ? { field: it.field } : {}),
     check: it.confidence === "check",
   }));
 

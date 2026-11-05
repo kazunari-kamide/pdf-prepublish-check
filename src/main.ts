@@ -16,7 +16,10 @@ import { inspectInWorker } from "./inspect/run";
 import { fromFraction, toFraction, viewSize } from "./inspect/view";
 import { PdfView, RenderTimeout } from "./render/pdf-view";
 import { MAX_REDACT_AREAS } from "./sanitize/areas";
-import { compressInWorker, sanitizeInWorker } from "./sanitize/run";
+import { compressInWorker, preflightInWorker, sanitizeInWorker } from "./sanitize/run";
+import type { TidyChoices } from "./sanitize/protocol";
+import type { PropertyKey, TidyPreflight } from "../sanitize/types.ts";
+import { buildEdits, CONSENT_TEXT, DATE_HINT, MODE_LABEL, PROPERTY_FIELDS, type PropertyChoice, type PropertyMode } from "./ui/tidy-model";
 import type { NotDoneItem } from "../sanitize/types.ts";
 import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET } from "./ui/compress-model";
 import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
@@ -45,6 +48,8 @@ function make<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, clas
 }
 
 const ui = {
+  /** プロパティの選び方の欄（プロパティの一覧を作るたびに作り直す） */
+  tidyProps: document.createElement("div"),
   input: el<HTMLInputElement>("file"),
   drop: el<HTMLLabelElement>("drop"),
   workspace: el<HTMLElement>("workspace"),
@@ -104,6 +109,8 @@ const ui = {
   pickToggle: el<HTMLButtonElement>("pick-toggle"),
   pickHelp: el<HTMLParagraphElement>("pick-help"),
   pickHelpCandidates: el<HTMLParagraphElement>("pick-help-candidates"),
+  tidySummary: el<HTMLParagraphElement>("tidy-summary"),
+  consent: el<HTMLDivElement>("consent"),
   cleanTitle: el<HTMLHeadingElement>("clean-title"),
   compress: el<HTMLElement>("compress"),
   compressTitle: el<HTMLHeadingElement>("compress-title"),
@@ -160,6 +167,10 @@ let downloadUrl: string | null = null;
 /** 片付けた PDF（保存する中身）。保存のリンクは、読み直しが通ったあとでだけ、ここから作る */
 let cleanedBlob: Blob | null = null;
 let reportUrl: string | null = null;
+/** 整える前の問い合わせ（プロパティの今の値・PDF/A の印・電子署名）。片付けの Worker の preflightTidy */
+let tidyPre: Extract<TidyPreflight, { status: "ok" }> | null = null;
+/** 本人が選んだプロパティの書き直し（既定はすべて「消す」） */
+let propChoices: Partial<Record<PropertyKey, PropertyChoice>> = {};
 /** 報告書の中身（中身を入れるかを選び直したときに、作り直すため）。見つけた字の中身は contents に分けて持つ */
 let reportInput: { base: ProcessReportInput; contents: NonNullable<ProcessReportInput["contents"]> } | null = null;
 
@@ -370,6 +381,9 @@ function reset() {
   releaseDownload();
   for (const part of [ui.notDoneList, ui.removedGroups, ui.cleanNotes, ui.redactLeftList]) part.replaceChildren();
   ui.redactLeft.hidden = true;
+  ui.consent.replaceChildren();
+  ui.consent.hidden = true;
+  ui.tidySummary.textContent = "";
   ui.clean.hidden = true;
   ui.filebar.hidden = true;
   ui.progress.hidden = true;
@@ -824,7 +838,10 @@ function renderProperties(s: Session) {
     });
     body.append(go, make("p", "「整える」を押すと、文書情報と XMP の欄を、まとめて消した PDF を新しく作ります（元の PDF は変えません）。", "props-note"));
   }
+  ui.tidyProps = make("div", undefined, "tidy-props");
+  if (s.phase === "before") body.prepend(ui.tidyProps);
   ui.props.append(body);
+  if (s.phase === "before") renderTidyEditor();
   // 最初は閉じた形で出す（値をそのまま出す所なので、開くのは利用者が決める）
   ui.props.open = false;
   ui.props.hidden = false;
@@ -883,6 +900,7 @@ function renderSummary(s: Session) {
   // 片付けは、検査ができた PDF ならいつでも押せる（見つからなくても、XMP・注釈のコメント・JavaScript なども外す）
   ui.actions.hidden = false;
   ui.sanitize.disabled = s.original === null || s.pdfProblem === "password";
+  renderTidySummary();
   ui.sanitizeNote.textContent = s.pdfProblem === "password"
     ? "パスワードが要る PDF は、整えられません。"
     : v.rows.length
@@ -984,6 +1002,9 @@ async function handle(file: File) {
       return;
     }
     ui.workspace.dataset.state = "result";
+    tidyPre = null;
+    propChoices = {};
+    const forPreflight = original.slice();
     renderOutcome(outcome, {
       generation: gen,
       fileName: file.name,
@@ -993,6 +1014,8 @@ async function handle(file: File) {
       pdf: opened.ok ? opened.view : null,
       pdfProblem: opened.ok ? null : opened.reason,
     });
+    const cur = session as Session | null; // renderOutcome の中で作り直すので、型の絞り込みを外す
+    if (cur && cur.phase === "before" && cur.pdfProblem !== "password") void loadPreflight(gen, forPreflight);
   } catch {
     ui.progress.hidden = true;
     fail("ファイルを読めませんでした。");
@@ -1000,6 +1023,147 @@ async function handle(file: File) {
     busy = false;
     ui.input.value = "";
   }
+}
+
+// ---------------------------------------------------------------- 整えるときに本人が選ぶこと（プロパティ・PDF/A・電子署名）
+
+async function loadPreflight(gen: number, bytes: Uint8Array) {
+  const r = await preflightInWorker(bytes.buffer as ArrayBuffer).catch(() => null);
+  if (gen !== generation || !session || session.phase !== "before") return;
+  tidyPre = r && r.status === "ok" ? r : null;
+  renderTidyEditor();
+  renderConsent();
+}
+
+/** プロパティの一覧の上に、8 つの項目ごとの「消す／そのまま／書き直す」を出す（既定は消す） */
+function renderTidyEditor() {
+  ui.tidyProps.replaceChildren();
+  ui.tidyProps.hidden = !tidyPre;
+  if (!tidyPre) return;
+  const pre = tidyPre;
+  ui.tidyProps.append(
+    make("h4", "整えるときのプロパティ"),
+    make("p", "8 つの項目は、文書情報と XMP の両方に同じ値で書きます。選ばなければ消します。ほかの欄（独自の欄・履歴など）は、いつも消します。", "props-note"),
+  );
+  const list = make("div", undefined, "tidy-list");
+  for (const f of PROPERTY_FIELDS) {
+    const now = pre.properties.find((x) => x.key === f.key);
+    const value = now?.info ?? now?.xmp ?? "";
+    const row = make("fieldset", undefined, "tidy-row");
+    row.append(make("legend", `${f.label}（${f.info}）`));
+    row.append(value ? revealBox(value, f.label) : make("p", "今は空です。", "props-note"));
+    const choice = propChoices[f.key] ?? { mode: "remove" as PropertyMode, value: "" };
+    const modes = make("div", undefined, "tidy-modes");
+    const input = make("input", undefined, "tidy-input");
+    input.type = "text";
+    input.value = choice.value;
+    input.setAttribute("aria-label", `${f.label}の新しい値`);
+    if (f.date) input.placeholder = "2026-11-05";
+    const hint = make("p", f.date ? DATE_HINT : "書き直す値を入れてください。", "props-note");
+    const sync = () => {
+      const c = propChoices[f.key] ?? { mode: "remove" as PropertyMode, value: "" };
+      input.hidden = c.mode !== "set";
+      hint.hidden = c.mode !== "set";
+      renderTidySummary();
+    };
+    for (const m of ["remove", "keep", "set"] as PropertyMode[]) {
+      if (m === "keep" && !value) continue;
+      const label = make("label", undefined, "tidy-mode");
+      const radio = make("input");
+      radio.type = "radio";
+      radio.name = `tidy-${f.key}`;
+      radio.value = m;
+      radio.checked = choice.mode === m;
+      radio.addEventListener("change", () => {
+        propChoices[f.key] = { mode: m, value: input.value };
+        sync();
+        if (m === "set") input.focus();
+      });
+      label.append(radio, make("span", MODE_LABEL[m]));
+      modes.append(label);
+    }
+    input.addEventListener("input", () => {
+      propChoices[f.key] = { mode: "set", value: input.value };
+      renderTidySummary();
+    });
+    row.append(modes, input, hint);
+    list.append(row);
+    sync();
+  }
+  ui.tidyProps.append(list);
+}
+
+/** 「整える」の近くに、プロパティをどうするかの一言を出す */
+function renderTidySummary() {
+  const chosen = PROPERTY_FIELDS.filter((f) => (propChoices[f.key]?.mode ?? "remove") !== "remove");
+  ui.tidySummary.textContent = !tidyPre
+    ? ""
+    : chosen.length
+      ? `プロパティ：${chosen.map((f) => `${f.label}を${MODE_LABEL[propChoices[f.key]!.mode]}`).join("・")}。ほかは消します（プロパティの一覧で変えられます）。`
+      : "プロパティは、すべて消します（プロパティの一覧で「そのまま」「書き直す」を選べます）。";
+}
+
+/** PDF/A の印・電子署名があれば、整える前に問いかけて同意を取る（既定は外す）。同意の印を付けるまで「整える」は押せない */
+function renderConsent() {
+  ui.consent.replaceChildren();
+  const pre = tidyPre;
+  const need = !!pre && (pre.pdfa !== null || pre.signatures > 0);
+  ui.consent.hidden = !need;
+  if (!pre || !need) {
+    syncSanitizeEnabled();
+    return;
+  }
+  const ask = (name: string, text: string, keepLabel: string) => {
+    const box = make("fieldset", undefined, "consent-item");
+    box.append(make("legend", text));
+    for (const [v, label] of [["remove", "外す（おすすめ）"], ["keep", keepLabel]] as const) {
+      const l = make("label", undefined, "tidy-mode");
+      const r = make("input");
+      r.type = "radio";
+      r.name = name;
+      r.value = v;
+      r.checked = v === "remove";
+      l.append(r, make("span", label));
+      box.append(l);
+    }
+    ui.consent.append(box);
+  };
+  if (pre.pdfa) ask("consent-pdfa", CONSENT_TEXT.pdfa, "印を残す（形式の決まりを満たさないことがあります）");
+  if (pre.signatures > 0) ask("consent-sig", CONSENT_TEXT.signatures(pre.signatures), "署名を残す（無効のまま残ります）");
+  const agree = make("label", undefined, "save-confirm");
+  const box = make("input");
+  box.type = "checkbox";
+  box.id = "consent-agree";
+  box.addEventListener("change", syncSanitizeEnabled);
+  agree.append(box, make("span", CONSENT_TEXT.agree));
+  ui.consent.append(agree);
+  syncSanitizeEnabled();
+}
+
+function consentGiven(): boolean {
+  if (ui.consent.hidden) return true;
+  return (document.getElementById("consent-agree") as HTMLInputElement | null)?.checked === true;
+}
+
+/** 「整える」を押せるか（同意が要るときは、印を付けるまで押せない） */
+function syncSanitizeEnabled() {
+  const s = session;
+  if (!s || s.phase !== "before") return;
+  ui.sanitize.disabled = s.original === null || s.pdfProblem === "password" || !consentGiven();
+}
+
+/** 本人が選んだことを集める。日付の形が違う項目があれば、その名前を返す */
+function collectTidy(): { tidy: TidyChoices; bad: string[] } {
+  const { edits, bad } = buildEdits(propChoices);
+  const pick = (name: string) => ((document.querySelector(`input[name="${name}"]:checked`) as HTMLInputElement | null)?.value === "keep" ? "keep" : "remove");
+  return {
+    tidy: {
+      ...(tidyPre ? { properties: edits } : {}),
+      ...(tidyPre?.pdfa ? { pdfaMark: pick("consent-pdfa") } : {}),
+      ...(tidyPre && tidyPre.signatures > 0 ? { signatures: pick("consent-sig") } : {}),
+    },
+    bad,
+  };
 }
 
 // ---------------------------------------------------------------- 自分で黒塗りする所を選ぶ（11/5 B の 9）
@@ -1238,8 +1402,9 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   );
   ui.removed.hidden = total === 0;
 
-  ui.cleanNotes.replaceChildren(...c.notes.map((t) => make("li", t)));
-  ui.cleanNotes.hidden = c.notes.length === 0;
+  const notes = [...c.notes, ...c.propertyLines.map((t) => `プロパティ：${t}`)];
+  ui.cleanNotes.replaceChildren(...notes.map((t) => make("li", t)));
+  ui.cleanNotes.hidden = notes.length === 0;
   ui.cleanScope.textContent = c.scope;
   ui.clean.hidden = false;
 
@@ -1282,12 +1447,22 @@ async function runSanitize() {
   ui.progress.removeAttribute("value"); // どこまで進んだか分からないので、動いていることだけを示す
   ui.progress.hidden = false;
   try {
+    const { tidy, bad } = collectTidy();
+    if (bad.length) {
+      s.original = original;
+      ui.sanitize.disabled = false;
+      ui.progress.hidden = true;
+      setStep(ui.stepClean, "now");
+      ui.stepCleanNote.textContent = "「整える」を押します";
+      setStatus(`${bad.join("・")}の日付の書き方が違います。${DATE_HINT}`, "problem");
+      return;
+    }
     const areas = toAreas(picks);
     // 自分で黒塗りした PDF が読み直しで止められたら、選び直してもう一度片付けられるよう、元の写しを持っておく
     const retry = areas.length ? original.slice() : null;
     setPicking(false);
     ui.pickTools.hidden = true;
-    const out = await sanitizeInWorker(original.buffer as ArrayBuffer, undefined, areas);
+    const out = await sanitizeInWorker(original.buffer as ArrayBuffer, undefined, areas, tidy);
     if (gen !== generation) return;
     if (out.kind === "timeout") return cleanFailed("時間がかかりすぎたため、整えるのを止めました。画面はそのまま使えます。");
     if (out.kind === "blocked") return redactBlocked(s, retry, out.leftovers, out.notDone);
@@ -1326,6 +1501,7 @@ async function runSanitize() {
       removed: out.removed,
       notDone: out.notDone,
       decrypted: out.decrypted,
+      ...(out.properties ? { properties: out.properties } : {}),
     });
     const file = { name, bytes: byteLength, pages: out.pages, seconds: `${((out.elapsedMs + re.elapsedMs) / 1000).toFixed(1)} 秒` };
     if (afterSummary) {
@@ -1355,6 +1531,7 @@ async function runSanitize() {
         after: { sha256: afterSha, bytes: byteLength, pages: out.pages, coverage: afterView?.coverage ?? null },
         removed: out.removed,
         notDone: out.notDone,
+        properties: clean.propertyLines,
         verdict: clean.headline,
         rules: (afterSummary ?? s.summary).rules.filter((r) => r.ruleVersion).map((r) => `${r.ruleId}@${r.ruleVersion}`),
       };
