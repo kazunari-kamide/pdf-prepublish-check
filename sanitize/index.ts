@@ -55,7 +55,7 @@ export type SanitizeCore =
 /** 片付けの本体（sanitizePdf と redact が使う） */
 export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions = {}, hooks: SanitizeHooks = {}): Promise<SanitizeCore> {
   if (bytes.length === 0) return { status: "error", code: "empty", message: "ファイルが空です。" };
-  if (bytes.length > MAX_INPUT_BYTES) return { status: "error", code: "too_large", message: "ファイルが大きすぎるため、片付けられません。" };
+  if (bytes.length > MAX_INPUT_BYTES) return { status: "error", code: "too_large", message: "ファイルが大きすぎるため、整えられません。" };
   const edits = options.properties !== undefined ? checkEdits(options.properties) : null;
   if (edits && !edits.ok) return { status: "error", code: "bad_properties", message: edits.message };
   const settings = {
@@ -70,7 +70,7 @@ export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions =
     if (loaded.code === "encrypted") {
       return {
         status: "error", code: "encrypted",
-        message: loaded.reason === "password_required" ? "パスワードが要る PDF は、片付けられません。" : "この形の暗号化は、いまは片付けられません。",
+        message: loaded.reason === "password_required" ? "パスワードが要る PDF は、整えられません。" : "この形の暗号化は、いまは整えられません。",
       };
     }
     return { status: "error", code: "unreadable", message: "PDF として読めませんでした。" };
@@ -113,8 +113,8 @@ export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions =
             ? "このページは図形が多すぎるため、選んだ所を消せませんでした"
             : "このページの中身を読めなかったため、選んだ所を消せませんでした"
           : heavy
-            ? "このページは図形が多すぎるため、黒い四角の下の字・見えない字の片付けを省きました"
-            : "このページの中身を読めなかったため、黒い四角の下の字・見えない字の片付けを省きました",
+            ? "このページは図形が多すぎるため、黒い四角の下の字・見えない字を整えるのを省きました"
+            : "このページの中身を読めなかったため、黒い四角の下の字・見えない字を整えるのを省きました",
       });
     }
   }
@@ -158,7 +158,7 @@ export async function sanitizeCore(bytes: Uint8Array, options: SanitizeOptions =
     // updateFieldAppearances：フォームの見た目を作り直さない（書体を足さない）。useObjectStreams：古い読み手でも読める形にする
     out = await doc.save({ useObjectStreams: false, updateFieldAppearances: false, addDefaultPage: false });
   } catch {
-    return { status: "error", code: "unreadable", message: "片付けた PDF を書き出せませんでした。" };
+    return { status: "error", code: "unreadable", message: "整えた PDF を書き出せませんでした。" };
   }
   if (edits) {
     // 書き直した・消したプロパティの古い値が、書き出したバイト列に残っていないか、読み直して確かめる
