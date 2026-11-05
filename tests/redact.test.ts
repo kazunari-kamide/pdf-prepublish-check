@@ -100,7 +100,8 @@ describe("字の上", () => {
     const bytes = await buildPdf(() => ({ pages: [{ content: NAME_LINE() }] }));
     const r = await run(bytes, [NAME_AREA]);
     ok(r);
-    expect(countOf(r, "font_unicode")).toBeGreaterThanOrEqual(4);
+    // 0.8.0 から、片付けが「どこにも描かれていない字の行」（unused_unicode）として先に外すことがある。中身は下で確かめる
+    expect(countOf(r, "font_unicode") + countOf(r, "unused_unicode")).toBeGreaterThanOrEqual(4);
     const doc = await PDFDocument.load(r.bytes);
     const page = doc.getPages()[0]!;
     const fonts = page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict);
@@ -187,13 +188,14 @@ describe("スキャンの画像の上", () => {
     expect(px[50 * 200 + 101]).toBe(255);
   });
 
-  it("ページに直接埋め込んだ画像の上：書き直せないので保存させない", async () => {
+  it("ページに直接埋め込んだ画像の上：画像の部品に移し替えて塗り、字も消す（0.8.0 から。読み直しの残りは 0 件）", async () => {
     const inline = "q 100 0 0 50 100 100 cm BI /W 2 /H 2 /CS /G /BPC 8 ID \x00\xff\xff\x00 EI Q\n";
     const bytes = await buildPdf(() => ({ pages: [{ content: inline + textAt(100, 120, "見本") }] }));
     const r = await run(bytes, [{ page: 1, rect: [100, 100, 200, 150] }]);
-    expect(r.status).toBe("blocked");
-    if (r.status !== "blocked") return;
-    expect(r.leftovers.some((l) => l.check === "area" && l.kind === "inline_image")).toBe(true);
+    ok(r);
+    expect(countOf(r, "redacted_pixels")).toBe(4);
+    expect(countOf(r, "redacted_text")).toBe(2);
+    expect(Buffer.from(r.bytes).toString("latin1")).not.toMatch(/\bBI\b/);
   });
 });
 

@@ -22,15 +22,16 @@ import type { Rect } from "../rules/p6-text/geometry.ts";
 import { SETTINGS, TooManyOperations, makeVisibility, sanitizePageContent } from "./content.ts";
 import { cleanAnnotations, countRevisions, dropUnreachable, removeAttachments, removeDocInfo, removeStructureExtras, removeJavaScript, removeXmp } from "./structure.ts";
 import { cleanLeftovers } from "./leftovers.ts";
+import { pruneFonts } from "./font-prune.ts";
 import type { NotDoneItem, RemovedItem, SanitizeOptions, SanitizeResult } from "./types.ts";
 
 export type * from "./types.ts";
 export { redact } from "./redact.ts";
 export { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "./compress.ts";
 
-// 0.7.1：解くと大きすぎる中身（圧縮の爆弾）のページは stream_too_large として片付けられなかった所にし、
+// 0.8.1：解くと大きすぎる中身（圧縮の爆弾）のページは stream_too_large として片付けられなかった所にし、
 //        ページの外で止まったとき（読み込み・文書全体）は、片付けた PDF を作らない（rules/shared/inflate-limit.ts）
-export const SANITIZER_VERSION = "0.7.1";
+export const SANITIZER_VERSION = "0.8.1";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 export const MAX_INPUT_BYTES = 512 * 1024 * 1024;
@@ -153,6 +154,10 @@ async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: 
   const left = cleanLeftovers(doc);
   removed.push(...left.removed);
   notDone.push(...left.notDone);
+  // 描かれていない字形を書体から外す（0.8.0 から。ページの片付けのあとの中身で数える）
+  const pruned = pruneFonts(doc, settings.maxOperationsPerPage * Math.max(1, pages.length));
+  removed.push(...pruned.removed);
+  notDone.push(...pruned.notDone);
   if (hooks.beforeDrop) removed.push(...hooks.beforeDrop(doc));
 
   // 4. 1つの版にまとめる

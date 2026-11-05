@@ -37,7 +37,7 @@
   --font-head: var(--font-body);
   /* 同梱の Noto Sans JP（字を絞ったもの。src/style.css の @font-face）を先に。ない字は端末の書体で出す */
   --font-body: "Noto Sans JP Omamori", "BIZ UDPGothic", "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
-  --text-base: 18px; /* 本文。役所の職員が読むので大きめ */
+  --text-base: 112.5%; /* 本文。役所の職員が読むので大きめ（ブラウザの既定 16px のとき 18px）。px で決めず、ブラウザの字の大きさの設定に従う（2026-11-05） */
   --text-small: 0.9rem;
   --text-h1: 1.6rem;
   --text-h2: 1.15rem;
