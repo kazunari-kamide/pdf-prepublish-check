@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { withFormActionSelf } from "../csp.ts";
-import { CONTACT_PAGE_FILE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { CONTACT_PAGE_FILE, CONTACT_REWRITE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 // 調べるフォルダは、テストのときだけ DIST_DIR で変えられる（tests/check-dist.test.ts）
@@ -157,6 +157,9 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
     const src = readFileSync(path.join(DIST, CONTACT_SEND_FILE), "utf8");
     if (/@@(PAGES|HEADERS)@@/.test(src)) problems.push(`${CONTACT_SEND_FILE} に、結果のページかヘッダーが差し込まれていません`);
     if (!src.includes("<!--CONTACT_MESSAGE-->")) problems.push(`${CONTACT_SEND_FILE} の送れなかったときのページに、理由を入れる印がありません`);
+    // フォームのページ（開いた時刻の印の欄・理由を入れる印）が入っていること。本番では .htaccess が contact.html をここへ回す
+    if (!src.includes(`name="t" value=""`) || !src.includes("<!--CONTACT_ERRORS-->")) problems.push(`${CONTACT_SEND_FILE} に、フォームのページ（開いた時刻の印の欄）が差し込まれていません`);
+    if (htaccess !== null && !htaccess.includes(`RewriteRule ${CONTACT_REWRITE}`)) problems.push(`.htaccess に、お問い合わせのページを ${CONTACT_SEND_FILE} へ回す書き換えがありません`);
     const mail = src.match(/[\w.+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+/g)?.filter((m) => !/^[\w.+-]+@(example\.(invalid|com|org))$/.test(m)) ?? [];
     if (mail.length) problems.push(`${CONTACT_SEND_FILE} にメールアドレスらしい字があります（${mail.length} 件。届け先は public_html の外の設定に書く）`);
     if (!/^<\?php\n/.test(src) || /\?>\s*$/.test(src)) problems.push(`${CONTACT_SEND_FILE} が <?php で始まっていないか、?> で終わっています（前後に字が出るのを防ぐため）`);

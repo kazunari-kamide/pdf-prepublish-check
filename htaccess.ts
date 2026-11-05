@@ -39,6 +39,9 @@ export const NOT_FOUND_PAGE = "/404.html";
 export const CONTACT_PAGE_FILE = "contact.html";
 export const CONTACT_SEND_FILE = "contact-send.php";
 
+/** お問い合わせのページ（contact.html・contact）を、中で PHP に回す書き換え（.htaccess の RewriteRule の引数） */
+export const CONTACT_REWRITE = `^contact(\\.html)?$ ${CONTACT_SEND_FILE} [L]`;
+
 export function buildHtaccess(): string {
   const quoted = (k: string, v: string) => {
     if (v.includes('"')) throw new Error(`${k} の値に " が入っています（.htaccess に書けません）`);
@@ -87,6 +90,9 @@ export function buildHtaccess(): string {
     `  RewriteRule ^ https://${OFFICIAL_HOST}%{REQUEST_URI} [R=301,L]`,
     "  RewriteCond %{HTTPS} !on",
     `  RewriteRule ^ https://${OFFICIAL_HOST}%{REQUEST_URI} [R=301,L]`,
+    "  # お問い合わせのページは、PHP が返す（フォームに、開いた時刻の署名を入れるため。docs/contact.md）。",
+    "  # アドレスは変えない（中で回すだけ）。.html を付けない形で来ても同じ",
+    `  RewriteRule ${CONTACT_REWRITE}`,
     "</IfModule>",
     "",
   ].join("\n");

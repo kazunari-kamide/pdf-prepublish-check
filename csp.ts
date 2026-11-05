@@ -67,9 +67,13 @@ export const securityHeaders: Record<string, string> = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
 };
 
-/** お問い合わせのページと送り先で返すヘッダー（CSP と参照元の決まりだけが、ほかのページと違う） */
+/**
+ * お問い合わせのページと送り先で返すヘッダー。ほかのページと違うのは、CSP・参照元の決まりと、
+ * 書き置かせない（no-store）こと（フォームに、開いた時刻の印と、書いた中身が入るため）
+ */
 export const contactHeaders: Record<string, string> = {
   ...securityHeaders,
   "Content-Security-Policy": cspForContactHeader,
   "Referrer-Policy": CONTACT_REFERRER,
+  "Cache-Control": "no-store",
 };

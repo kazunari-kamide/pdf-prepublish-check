@@ -8,6 +8,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { CONTACT_REWRITE } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts", "check-dist.mjs");
@@ -17,7 +18,7 @@ const CSP_OPEN = "default-src &#39;self&#39;; script-src &#39;self&#39;; form-ac
 /** お問い合わせのページの CSP（form-action だけ 'self'） */
 const contactCsp = (csp: string) => csp.replace("form-action &#39;none&#39;", "form-action &#39;self&#39;");
 /** お問い合わせの送り先の PHP の作りもの（check-dist が見る形だけ） */
-const FAKE_PHP = "<?php\n$PAGES = ['error' => '<!--CONTACT_MESSAGE-->'];\n";
+const FAKE_PHP = `<?php\n$PAGES = ['form' => '<!--CONTACT_ERRORS--><input type="hidden" name="t" value="" />', 'error' => '<!--CONTACT_MESSAGE-->'];\n`;
 
 let dirs: string[] = [];
 afterEach(() => {
@@ -40,6 +41,9 @@ ErrorDocument 404 /404.html
     Header always set Content-Security-Policy "${headerCsp.replace("form-action 'none'", "form-action 'self'")}"
   </IfModule>
 </FilesMatch>
+<IfModule mod_rewrite.c>
+  RewriteRule ${CONTACT_REWRITE}
+</IfModule>
 `;
 }
 
@@ -284,5 +288,22 @@ describe("check-dist のお問い合わせ（docs/contact.md）", () => {
     const gone = withContact(contactCsp(CSP_OK));
     rmSync(path.join(gone, "contact-send.php"));
     expect(run(gone).out).toContain("dist/ に contact-send.php がありません");
+  });
+});
+
+describe("check-dist のお問い合わせのフォームのページ（開いた時刻の印）", () => {
+  it(".htaccess に、お問い合わせのページを PHP へ回す書き換えがなければ止める", () => {
+    const dir = fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace(`  RewriteRule ${CONTACT_REWRITE}\n`, ""));
+    const r = run(dir);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("お問い合わせのページを contact-send.php へ回す書き換えがありません");
+  });
+
+  it("PHP にフォームのページ（印の欄）が入っていなければ止める", () => {
+    const dir = fakeDist(CSP_OK, {});
+    writeFileSync(path.join(dir, "contact-send.php"), "<?php\n$PAGES = ['error' => '<!--CONTACT_MESSAGE-->'];\n");
+    const r = run(dir);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("フォームのページ（開いた時刻の印の欄）が差し込まれていません");
   });
 });

@@ -193,8 +193,23 @@ export const CONTACT_KINDS: ReadonlyArray<{ value: string; label: string; note?:
   { value: "security", label: "セキュリティの弱点", note: "弱点の詳しい中身は書かず、連絡先だけ書いてください。こちらから連絡します。" },
   { value: "other", label: "その他" },
 ];
+/** 入力の決まり。server/contact-send.php の BODY_MIN_CHARS・BODY_MAX_CHARS・EMAIL_MAX_CHARS・URL_MAX と同じ（tests/contact-php.test.ts で照らす） */
+export const CONTACT_BODY_MIN = 10;
 export const CONTACT_BODY_MAX = 4000;
 export const CONTACT_EMAIL_MAX = 254;
+export const CONTACT_URL_MAX = 2;
+/**
+ * 人には見えない欄の名前（ボットだけが埋める）。server/contact-send.php の TRAP_FIELD と同じ。
+ * website などの意味のある名前にすると、ブラウザの自動入力が埋めて、正しい送信が黙って捨てられるため、意味のない名前にする
+ */
+export const CONTACT_TRAP_FIELD = "hp_x7q";
+/**
+ * PHP がフォームのページを返すときに、中身を入れる印（server/contact-send.php の ERRORS_MARK・ERRORS_TOP_MARK・TOKEN_FIELD）。
+ * 静かな contact.html では、何も入らない（印はコメントと空の値のまま）
+ */
+export const CONTACT_ERRORS_MARK = "<!--CONTACT_ERRORS-->";
+export const CONTACT_ERRORS_TOP_MARK = "<!--CONTACT_ERRORS_TOP-->";
+export const CONTACT_TOKEN_FIELD = 'name="t" value=""';
 /** フォームのすぐ上に置く注意 */
 export const CONTACT_WARNING = "PDF や個人情報、見つかった字の中身は書かないでください。";
 
@@ -236,7 +251,10 @@ function contactForm(): string {
     `      <section class="site-section" aria-labelledby="contact-form-head">`,
     `        <h2 id="contact-form-head">フォーム</h2>`,
     `        <p class="site-form-warn"><span aria-hidden="true">▲ </span>${e(CONTACT_WARNING)}</p>`,
+    `        ${CONTACT_ERRORS_MARK}`,
     `        <form class="site-form" method="post" action="${CONTACT_SEND_PATH}" accept-charset="UTF-8">`,
+    // ページを開いた時刻の印（サーバーの秘密の値で署名したもの）。本番では、PHP がフォームを返すときに入れる
+    `          <input type="hidden" ${CONTACT_TOKEN_FIELD} />`,
     `          <fieldset class="site-form-field">`,
     `            <legend>種類<span class="site-form-need">（必ず選ぶ）</span></legend>`,
     `            <ul class="site-form-choices">`,
@@ -244,8 +262,9 @@ function contactForm(): string {
     `            </ul>`,
     `          </fieldset>`,
     `          <div class="site-form-field">`,
-    `            <label for="contact-body">本文<span class="site-form-need">（必ず書く。${CONTACT_BODY_MAX} 字まで）</span></label>`,
-    `            <textarea id="contact-body" name="body" rows="8" maxlength="${CONTACT_BODY_MAX}" required></textarea>`,
+    `            <label for="contact-body">本文<span class="site-form-need">（必ず書く。${CONTACT_BODY_MIN}〜${CONTACT_BODY_MAX} 字）</span></label>`,
+    `            <textarea id="contact-body" name="body" rows="8" minlength="${CONTACT_BODY_MIN}" maxlength="${CONTACT_BODY_MAX}" required aria-describedby="contact-body-hint"></textarea>`,
+    `            <p class="site-form-hint" id="contact-body-hint">URL は ${CONTACT_URL_MAX} つまで。同じ本文は、続けて送れません。</p>`,
     `          </div>`,
     `          <div class="site-form-field">`,
     `            <label for="contact-email">メールアドレス<span class="site-form-need">（返事がほしいときだけ）</span></label>`,
@@ -254,8 +273,8 @@ function contactForm(): string {
     `          </div>`,
     // 人には見えない欄（ボットだけが埋める）。読み上げにも出さず、Tab でも止まらない
     `          <div class="site-form-trap" aria-hidden="true">`,
-    `            <label for="contact-website">この欄は空のままにしてください</label>`,
-    `            <input id="contact-website" name="website" type="text" tabindex="-1" autocomplete="off" />`,
+    `            <label for="contact-${CONTACT_TRAP_FIELD}">この欄は空のままにしてください</label>`,
+    `            <input id="contact-${CONTACT_TRAP_FIELD}" name="${CONTACT_TRAP_FIELD}" type="text" tabindex="-1" autocomplete="off" />`,
     `          </div>`,
     `          <p><button type="submit" class="site-form-submit">送る</button></p>`,
     `        </form>`,
@@ -264,12 +283,15 @@ function contactForm(): string {
   ].join("\n");
 }
 
-function renderContact(o: RenderOptions): string {
+/** お問い合わせのページ（静かな contact.html と、PHP が返すフォームのページの、もとの HTML） */
+export function renderContact(o: RenderOptions): string {
   // このページだけ、同じサイトへのフォームの送信を許す CSP と、同じサイトへだけ送り元を付ける参照元の決まりにする
   const co: RenderOptions = { ...o, csp: withFormActionSelf(o.csp), referrer: CONTACT_REFERRER };
   const body = [
     `      <div class="site-page">`,
     `      <h1>${e(CONTACT_META.title)}</h1>`,
+    // 送れなかったときに、PHP がここへ「直す所は下にある」の一言を入れる（ページの上で気づけるように）
+    `      ${CONTACT_ERRORS_TOP_MARK}`,
     `      <p class="site-lead">${e(CONTACT_META.description)}</p>`,
     ...CONTACT_BLOCKS.map((b) => renderBlock(b, co)),
     contactForm(),

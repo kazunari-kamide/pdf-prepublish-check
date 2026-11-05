@@ -12,7 +12,8 @@
 // - https の応答に Strict-Transport-Security が付き、Cache-Control が HTML は no-cache・assets/ は 1 年（htaccess.ts）
 // - 見つからない場所は、404 で自前の 404 のページ（dist/404.html と同じ中身）を、同じヘッダーをつけて返す。assets/ を開いてもファイルの一覧は出ない
 // - .mjs が text/javascript、.wasm が application/wasm で返る（dist/ に .wasm がなければ、省いたと表示する）
-// - お問い合わせのページと送り先（contact-send.php）だけ、form-action 'self' の CSP（csp.ts の contactHeaders）。送り先は GET に 405 を返し、PHP のソースを出さない
+// - お問い合わせのページと送り先（contact-send.php）だけ、form-action 'self' の CSP（csp.ts の contactHeaders）。どちらも PHP がフォームを返し、
+//   中身は dist/contact.html と開いた時刻の印だけが違う。PHP のソースを出さない（印がないときは、設定がまだないと表示する）
 // - dist/ のファイルが、本番のものと1バイトも違わない（.htaccess は外から読めないこと。送り先の PHP は、サーバーが動かすので照らさない）
 // - http:// で来たら https:// へ 301
 // - www つきで来たら、www なしへ 301（www の名前が引けないときは「確かめられなかった」と表示し、失敗にはしない）
@@ -97,8 +98,9 @@ for (const page of ["articles/", "privacy.html", files.find((f) => /^articles\/(
 }
 
 // ---- お問い合わせのページと送り先（docs/contact.md）：この 2 つだけ、form-action 'self' の CSP と same-origin の参照元の決まり。
-// 送り先は GET では送らない（405）。PHP のソースが、そのまま返らない（PHP が動いている）
-for (const [page, status] of [[CONTACT_PAGE_FILE, 200], [CONTACT_SEND_FILE, 405]]) {
+// どちらも、PHP がフォームのページを返す（.htaccess が contact.html を contact-send.php へ中で回す）。
+// 中身は dist/contact.html と、開いた時刻の印（隠れた欄 t の値）だけが違う。PHP のソースが、そのまま返らない（PHP が動いている）
+for (const page of [CONTACT_PAGE_FILE, CONTACT_SEND_FILE]) {
   if (!files.includes(page)) {
     problems.push(`dist/ に ${page} がありません`);
     continue;
@@ -107,10 +109,14 @@ for (const [page, status] of [[CONTACT_PAGE_FILE, 200], [CONTACT_SEND_FILE, 405]
     const r = await get(new URL(page, base));
     const text = await r.text();
     const bad = Object.entries(contactHeaders).filter(([name, want]) => r.headers.get(name) !== want).map(([name]) => name);
-    if (r.status !== status) problems.push(`${page} が ${r.status} を返しました（${status} のはず）`);
+    const token = text.match(/name="t" value="([^"]*)"/)?.[1];
+    const want = readFileSync(path.join(DIST, CONTACT_PAGE_FILE), "utf8");
+    if (r.status !== 200) problems.push(`${page} が ${r.status} を返しました（200 のはず）`);
     else if (bad.length) problems.push(`${page} のヘッダーが、お問い合わせの決まり（csp.ts の contactHeaders）と違います（${bad.join("・")}）`);
     else if (/<\?php|contact_handle/.test(text)) problems.push(`${page} で PHP のソースが返りました（PHP が動いていません）`);
-    else ok.push(`${page}（${status}）のヘッダーが、お問い合わせの決まりと同じ`);
+    else if (token === undefined || text.replace(`name="t" value="${token}"`, 'name="t" value=""') !== want) problems.push(`${page} が、dist/${CONTACT_PAGE_FILE} と、開いた時刻の印のほかでも違います（.htaccess の書き換えが効いていないか、古い版）`);
+    else if (!/^\d+\.[0-9a-f]{32}$/.test(token)) notes.push(`${page}：開いた時刻の印が入っていません。サーバーに contact-config.php がまだないか、形が違います（docs/contact.md）。この間は送れません`);
+    else ok.push(`${page}：PHP がフォームを返し、開いた時刻の印が入っている。ヘッダーはお問い合わせの決まりと同じ`);
   } catch (e) {
     problems.push(`${page} を確かめられませんでした（${e?.message ?? e}）`);
   }
@@ -203,7 +209,8 @@ for (const f of files) {
   try {
     const r = await get(new URL(f, base));
     // お問い合わせの送り先（PHP）は、サーバーが動かすので中身を照らせない。上で、GET の答えとヘッダーを確かめた
-    if (f === CONTACT_SEND_FILE) continue;
+    // お問い合わせのページも、本番では PHP が返す（開いた時刻の印が毎回違う）。上で、印のほかが同じことを確かめた
+    if (f === CONTACT_SEND_FILE || f === CONTACT_PAGE_FILE) continue;
     if (f === ".htaccess") {
       if (r.status === 200) problems.push(".htaccess が外から読めます（403 か 404 のはず）");
       else ok.push(`.htaccess は外から読めない（${r.status}）`);

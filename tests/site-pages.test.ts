@@ -165,13 +165,21 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     const radios = c.match(/<input type="radio" name="kind" value="(\w+)" required \/>/g) ?? [];
     expect(radios).toHaveLength(4);
     for (const label of ["質問", "不具合", "セキュリティの弱点", "その他"]) expect(c).toContain(`<span>${label}`);
-    expect(c).toMatch(/<textarea id="contact-body" name="body" rows="8" maxlength="4000" required><\/textarea>/);
+    // 画面でも、サーバーと同じ決まり（10〜4000 字・URL は 2 つまで）を出す
+    expect(c).toMatch(/<textarea id="contact-body" name="body" rows="8" minlength="10" maxlength="4000" required aria-describedby="contact-body-hint"><\/textarea>/);
+    expect(c).toContain("（必ず書く。10〜4000 字）");
+    expect(c).toContain("URL は 2 つまで。同じ本文は、続けて送れません。");
+    // ページを開いた時刻の印の欄（静かなページでは空。本番は PHP が入れる）と、送れなかったときの理由を入れる印
+    expect(c).toContain('<input type="hidden" name="t" value="" />');
+    expect(c).toContain("<!--CONTACT_ERRORS-->");
     expect(c).toMatch(/<input id="contact-email" name="email" type="email" maxlength="254"/);
     expect(c).not.toMatch(/name="email"[^>]*required/);
     expect(c).not.toMatch(/name="(name|namae|full_?name)"/);
     expect(c).toContain("（返事がほしいときだけ）");
     // 人には見えない欄：読み上げから外し、Tab でも止まらない
-    expect(c).toMatch(/<div class="site-form-trap" aria-hidden="true">[\s\S]*<input id="contact-website" name="website" type="text" tabindex="-1" autocomplete="off" \/>/);
+    // 名前は意味のないもの（website などにすると、自動入力が埋めて、正しい送信が捨てられる）
+    expect(c).toMatch(/<div class="site-form-trap" aria-hidden="true">[\s\S]*<input id="contact-hp_x7q" name="hp_x7q" type="text" tabindex="-1" autocomplete="off" \/>/);
+    expect(c).not.toMatch(/name="website"/);
     expect(siteCss()).toMatch(/\.site-form-trap \{[^}]*left: -10000px/);
   });
 
