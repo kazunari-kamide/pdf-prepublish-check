@@ -54,8 +54,9 @@ import { RectIndex, coveredFraction, type SanCover } from "./geometry.ts";
 import { decodeLuma, sampleLuma } from "./image-sample.ts";
 import { convertPageInlineImages } from "./inline-images.ts";
 import { glyphBox, isRectGlyph, parseSfnt, trueTypeOf, type Sfnt } from "./font-prune.ts";
-import { burnImage, type BurnFailure, type BurnLimits } from "./images.ts";
+import { burnImage, cropImage, type BurnFailure, type BurnLimits } from "./images.ts";
 import { serializeOps } from "./serialize.ts";
+import { clipFillOutside, clipPolylineOutside } from "./vector-clip.ts";
 import type { ImageCodec, NotDoneItem, NotDoneReason, RemovedItem, SanitizeTraceEvent } from "./types.ts";
 
 export const SETTINGS = {
@@ -90,8 +91,16 @@ export const SETTINGS = {
   rectangularFillMin: 0.9,
   /** 横の伸縮（Tz ÷ 100）がこれ未満なら、横につぶれて見えない字（rules/p7-hidden の squashedScaleBelow と同じ。0.7.0 から） */
   squashedScaleBelow: 0.1,
-  /** 見える所（ページと切り抜きの重なり）が、画像の箱のこの割合未満なら、隠れた所の画素を白く塗る（0.7.0 から。字の outsideFraction と同じ 0.5） */
+  /**
+   * 見える所（ページと切り抜きの重なり）が、画像の箱のこの割合以下なら、隠れた所の画素を白く塗り、見える所だけに切り詰める
+   * （0.7.0 から塗る。字の outsideFraction と同じ 0.5。0.10.0 から「未満」を「以下」にし、切り詰めも足した。検出ルール P7 の imageVisibleFractionMax と同じ線）
+   */
   hiddenImageVisibleBelow: 0.5,
+  /**
+   * 見える所がこの割合以下の画像を切り詰められなかったときは、片付けられなかった所にする（0.10.0 から）。
+   * 隠れた所を白く塗れていても、画像はページの外にはみ出したまま残り、検出ルール P7 は画素を見ずに出すため（P7 の imageUniformCheckAbove と同じ 0.25）
+   */
+  hiddenImageCropRequiredBelow: 0.25,
   /** 違う字の重ね描きとみなす、2つの字の箱の重なりの割合の下限（どちらの箱から見ても。0.7.0 から） */
   overdrawnOverlapMin: 0.8,
   /** 地の色を読むために解く画像の画素の数の上限（0.7.0 から） */
@@ -224,6 +233,31 @@ type CNode = {
   actualText: Set<number>;
   /** 黒一色で塗り直す、模様で塗った覆い：命令の番号 → 覆いの箱（ページの座標）・その時の行列・模様の名前（0.8.0 から） */
   repaints?: Map<number, { rect: Rect; ctm: Matrix; name: string }>;
+  /**
+   * 白い不透明な注釈の下の道を消す・切り詰める書き直し（0.10.0 から）：drop の命令は書かず、replace の命令は中身を差し替える
+   */
+  pathEdits?: { drop: Set<number>; replace: Map<number, Op[]> };
+};
+
+/** 道の部分道1つ（ページの座標の点）。startOp〜endOp は、その部分道を作った命令の番号 */
+type SubPath = { pts: Point[]; closed: boolean; curved: boolean; startOp: number; endOp: number };
+
+/** 塗り・線を描いた命令1つ（0.10.0 から。白い不透明な注釈の下の道を消すため。ページの中身だけ） */
+type PathPaint = {
+  seq: number;
+  node: CNode;
+  /** 道を作り始めた命令の番号と、描く命令（f・S・B など）の番号 */
+  firstOp: number;
+  paintOp: number;
+  paintName: string;
+  subs: SubPath[];
+  box: Rect;
+  ctm: Matrix;
+  doFill: boolean;
+  doStroke: boolean;
+  rule: "nonzero" | "evenodd";
+  /** 破線の線か */
+  dashed: boolean;
 };
 
 type GlyphSlot = { g: Glyph; bytes: Uint8Array | null; adj: number | null };
@@ -278,6 +312,8 @@ type GState = {
   /** 重ね方（ExtGState の /BM の最初の名前。既定は Normal） */
   blend: string;
   lw: number;
+  /** 破線（d の配列が空でない。0.10.0 から） */
+  dashed: boolean;
   font: FontInfo | null;
   /** 書体の辞書への参照（黒い四角の字の形を読むため） */
   fontRef: PDFObject | null;
@@ -492,6 +528,9 @@ class Walker {
   /** 注釈の見た目を読むときも、字を集めるか（0.8.0 から。あとの注釈の濃い覆いの下の字を消すため） */
   collectAp = false;
   private readonly patternCache = new Map<PDFObject, { opaque: boolean; hasText: boolean }>();
+  /** 白い不透明な注釈の下の道を消すために、ページの中身の塗り・線を集めるか（注釈のあるページだけ。0.10.0 から） */
+  recordPaths = false;
+  readonly paths: PathPaint[] = [];
   /** 字の入った模様で塗った所（0.8.0 から） */
   readonly patternFills: Array<{ seq: number; rect: Rect; node: CNode; op: number; ctm: Matrix; name: string; stroke: boolean }> = [];
 
@@ -654,7 +693,7 @@ class Walker {
 
   initial(ctm: Matrix): GState {
     return {
-      ctm, clip: INF_RECT, fillN: 1, strokeN: 1, fill: 0, stroke: 0, ca: 1, CA: 1, normal: true, blend: "Normal", lw: 1,
+      ctm, clip: INF_RECT, fillN: 1, strokeN: 1, fill: 0, stroke: 0, ca: 1, CA: 1, normal: true, blend: "Normal", lw: 1, dashed: false,
       font: null, fontRef: null, fillPattern: null, vert: null, size: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, mode: 0,
     };
   }
@@ -668,8 +707,8 @@ class Walker {
     const stack: GState[] = [];
     const marks: boolean[] = [];
     const isHidden = () => hidden || marks.some(Boolean);
-    let path: Array<{ pts: Point[]; closed: boolean; curved: boolean }> = [];
-    let cur: { pts: Point[]; closed: boolean; curved: boolean } | null = null;
+    let path: SubPath[] = [];
+    let cur: SubPath | null = null;
     let pendingClip = false;
     let tm: Matrix = IDENTITY;
     let tlm: Matrix = IDENTITY;
@@ -681,12 +720,15 @@ class Walker {
     };
     const pt = (x: number, y: number): Point => apply(g.ctm, x, y);
     const startSub = (p: Point) => {
-      cur = { pts: [p], closed: false, curved: false };
+      cur = { pts: [p], closed: false, curved: false, startOp: opIndex, endOp: opIndex };
       path.push(cur);
     };
     const lineTo = (p: Point) => {
       if (!cur) startSub(p);
-      else cur.pts.push(p);
+      else {
+        cur.pts.push(p);
+        cur.endOp = opIndex;
+      }
     };
     const endPath = () => {
       path = [];
@@ -703,6 +745,12 @@ class Walker {
       }
       const seq = ++this.seq;
       const box = boundsOf(polys.flatMap((p) => p.pts));
+      if (this.recordPaths && !annotation && !pendingClip && (doFill || doStroke)) {
+        this.paths.push({
+          seq, node, firstOp: path[0]!.startOp, paintOp: opIndex, paintName: currentOp, subs: path, box, ctm: g.ctm,
+          doFill, doStroke, rule, dashed: g.dashed,
+        });
+      }
       if (doFill) {
         const parts = polys.map((p) => p.pts);
         // 字の入った模様で塗った所（0.8.0 から）：あとの濃い覆い・選んだ場所の下にあれば、黒一色で塗り直して模様の中の字を消す
@@ -834,8 +882,10 @@ class Walker {
       if (textOp) textOp.elems.set(elem, slots);
     };
 
+    let currentOp = "";
     for (const { op, args } of operations(node.data)) {
       opIndex++;
+      currentOp = op;
       if (++this.ops > s.maxOperationsPerPage) throw new TooManyOperations();
       const a = nums(args);
       switch (op) {
@@ -852,6 +902,9 @@ class Walker {
         case "w":
           if (a.length >= 1) g.lw = Math.abs(a[0]!);
           break;
+        case "d":
+          g.dashed = args[0]?.t === "arr" && args[0].v.some((x) => x.t === "num" && x.v !== 0);
+          break;
         case "gs": {
           const egs = dictOf(ctx, resOf("ExtGState", args[0]?.t === "name" ? args[0].v : ""));
           if (egs) {
@@ -861,6 +914,11 @@ class Walker {
             if (ca instanceof PDFNumber) g.ca = ca.asNumber();
             if (CA instanceof PDFNumber) g.CA = CA.asNumber();
             if (lw instanceof PDFNumber) g.lw = Math.abs(lw.asNumber());
+            const dash = egs.lookup(PDFName.of("D"));
+            if (dash instanceof PDFArray) {
+              const arr = ctx.lookup(dash.get(0));
+              g.dashed = arr instanceof PDFArray && arr.asArray().some((x) => { const v = ctx.lookup(x); return v instanceof PDFNumber && v.asNumber() !== 0; });
+            }
             const bm = egs.get(PDFName.of("BM"));
             if (bm) {
               const arr = ctx.lookup(bm);
@@ -919,17 +977,21 @@ class Walker {
           const p2 = op === "c" ? pt(a[2]!, a[3]!) : op === "v" ? pt(a[0]!, a[1]!) : p3;
           sub.curved = true;
           sub.pts.push(...flattenCubic(p0, p1, p2, p3, 8));
+          (sub as SubPath).endOp = opIndex;
           break;
         }
         case "re": {
           if (a.length < 4) break;
           const [x, y, w, h] = a as [number, number, number, number];
-          path.push({ pts: [pt(x, y), pt(x + w, y), pt(x + w, y + h), pt(x, y + h)], closed: true, curved: false });
+          path.push({ pts: [pt(x, y), pt(x + w, y), pt(x + w, y + h), pt(x, y + h)], closed: true, curved: false, startOp: opIndex, endOp: opIndex });
           cur = null;
           break;
         }
         case "h":
-          if (cur) (cur as { closed: boolean }).closed = true;
+          if (cur) {
+            (cur as SubPath).closed = true;
+            (cur as SubPath).endOp = opIndex;
+          }
           cur = null;
           break;
         case "W":
@@ -1633,8 +1695,11 @@ function rewriteTextOp(op: Op, info: TextOp): Op[] {
 
 type Rewritten = { data: Uint8Array; res: PDFDict | undefined } | null;
 
-/** 画像ごとの書き直し：塗った画像（新しい参照）か、描く命令を外す（"drop"。ページの外に置いた画像） */
-type ImageEdits = Map<ImageUse, PDFRef | "drop">;
+/**
+ * 画像ごとの書き直し：塗った画像（新しい参照）か、描く命令を外す（"drop"。ページの外に置いた画像）か、
+ * 切り詰めた画像（新しい参照と、描く前にかける行列 place。0.10.0 から）
+ */
+type ImageEdits = Map<ImageUse, PDFRef | "drop" | { ref: PDFRef; place: Matrix }>;
 
 function needsRewrite(node: CNode, burned: ImageEdits, memo: Map<CNode, boolean>): boolean {
   const m = memo.get(node);
@@ -1644,6 +1709,7 @@ function needsRewrite(node: CNode, burned: ImageEdits, memo: Map<CNode, boolean>
   for (const u of node.images.values()) if (burned.has(u)) v = true;
   if (node.actualText.size) v = true;
   if (node.repaints?.size) v = true;
+  if (node.pathEdits && (node.pathEdits.drop.size || node.pathEdits.replace.size)) v = true;
   for (const f of node.forms.values()) if (needsRewrite(f.node, burned, memo)) v = true;
   memo.set(node, v);
   return v;
@@ -1680,10 +1746,15 @@ function rewriteNode(ctx: PDFContext, node: CNode, burned: ImageEdits, memo: Map
     renames.set(opNo, ctx.register(ns));
   }
   const drops = new Set<number>();
+  const places = new Map<number, Matrix>();
   for (const [opNo, u] of node.images) {
     const ref = burned.get(u);
     if (ref === "drop") drops.add(opNo);
-    else if (ref) renames.set(opNo, ref);
+    else if (ref instanceof PDFRef) renames.set(opNo, ref);
+    else if (ref) {
+      renames.set(opNo, ref.ref);
+      places.set(opNo, ref.place);
+    }
   }
 
   let res = node.res;
@@ -1699,8 +1770,18 @@ function rewriteNode(ctx: PDFContext, node: CNode, burned: ImageEdits, memo: Map
   const ops: Op[] = [];
   const replacedNames = new Set<string>();
   let i = -1;
+  const pe = node.pathEdits;
   for (const o of operations(node.data)) {
     i++;
+    if (pe) {
+      // 白い不透明な注釈の下の道（0.10.0 から）：消す命令は書かず、切り詰めた道は差し替える
+      const rp = pe.replace.get(i);
+      if (rp) {
+        ops.push(...rp);
+        continue;
+      }
+      if (pe.drop.has(i)) continue;
+    }
     if (drops.has(i)) {
       if (o.args[0]?.t === "name") replacedNames.add(o.args[0].v);
       continue;
@@ -1720,7 +1801,12 @@ function rewriteNode(ctx: PDFContext, node: CNode, burned: ImageEdits, memo: Map
       const name = freshName(xobjects, "San");
       xobjects.set(name, rn);
       if (o.args[0]?.t === "name") replacedNames.add(o.args[0].v);
-      ops.push({ op: "Do", args: [{ t: "name", v: name.decodeText() }] });
+      const place = places.get(i);
+      if (place) {
+        // 切り詰めた画像：元の画像の単位の正方形の中の、残した所に置き直す
+        const nm = (v: number): Tok => ({ t: "num", v });
+        ops.push({ op: "q", args: [] }, { op: "cm", args: place.map(nm) }, { op: "Do", args: [{ t: "name", v: name.decodeText() }] }, { op: "Q", args: [] });
+      } else ops.push({ op: "Do", args: [{ t: "name", v: name.decodeText() }] });
       continue;
     }
     if (node.actualText.has(i) && o.args[1]?.t === "dict") {
@@ -1811,6 +1897,108 @@ function notBurnedLabel(reason: BurnFailure, light: boolean): string {
   return `${what}を読めなかったため、塗りつぶせませんでした。画像の中身が残っているかもしれません`;
 }
 
+// ---------------------------------------------------------------- 白い不透明な注釈の下の道（0.10.0 から）
+
+/** 箱を少し広げる幅（ポイント）。箱のふちちょうどの道も、箱の中として消す（読み直しで「箱の下」に数えられないように） */
+const VECTOR_BOX_PAD = 0.01;
+
+const padBox = (r: Rect, d: number): Rect => [r[0] - d, r[1] - d, r[2] + d, r[3] + d];
+const boxInside = (b: Rect, t: Rect) => b[0] >= t[0] && b[1] >= t[1] && b[2] <= t[2] && b[3] <= t[3];
+/** ふちが触れるだけでも重なりとする（面積のない縦横の線も見るため） */
+const boxTouches = (b: Rect, t: Rect) => b[0] <= t[2] && b[2] >= t[0] && b[1] <= t[3] && b[3] >= t[1];
+
+const CLOSING_PAINT: Record<string, string> = { s: "S", b: "B", "b*": "B*" };
+
+type VectorPlan = {
+  /** 消した・切り詰めた道（描く命令）の数と、その道のある部品 */
+  changed: Array<{ node: CNode; rect: Rect }>;
+  /** 切り詰められなかった道（箱にまたがる曲線・破線、逆にできない行列） */
+  partial: Array<{ rect: Rect; why: "curve" | "dash" | "matrix" }>;
+};
+
+/**
+ * 白い不透明な注釈の箱（ページの座標）の下にある、ページの中身の道を消す・切り詰める書き直しを、部品（CNode）に書き込む。
+ * - 部分道が箱の中だけにある：消す。箱の外だけにある：そのまま。
+ * - 箱にまたがる部分道：直線だけなら、箱の外の部分だけに切り詰める（塗りは帯に切り分け、線は箱の境で切る）。
+ *   曲線・破線の線は、切ると見えている所の形が変わるので切らず、partial に入れる（片付けられなかった所にする）
+ * 道の色・不透明さは問わない（不透明な白い注釈の下は見えないので、何を消しても見た目は変わらない）
+ */
+function planVectorEdits(paths: PathPaint[], boxesIn: Rect[]): VectorPlan {
+  const plan: VectorPlan = { changed: [], partial: [] };
+  if (!boxesIn.length) return plan;
+  const boxes = boxesIn.map((b) => padBox(b, VECTOR_BOX_PAD));
+  const nm = (v: number): Tok => ({ t: "num", v: Math.round(v * 10000) / 10000 });
+  for (const p of paths) {
+    const near = boxes.filter((b) => boxTouches(p.box, b));
+    if (!near.length) continue;
+    const real = p.subs.filter((sp) => sp.pts.length >= 2);
+    const removed = new Set<SubPath>();
+    const crossing: SubPath[] = [];
+    for (const sp of real) {
+      const bb = boundsOf(sp.pts);
+      if (near.some((b) => boxInside(bb, b))) removed.add(sp);
+      else if (near.some((b) => boxTouches(bb, b))) crossing.push(sp);
+    }
+    if (!removed.size && !crossing.length) continue;
+    const rect = near.map((b) => intersect(b, p.box)).reduce(union);
+    const edits = (p.node.pathEdits ??= { drop: new Set(), replace: new Map() });
+    if (!crossing.length) {
+      if (removed.size === real.length) {
+        // 道がまるごと箱の中：道を作る命令から描く命令まで、すべて書かない
+        for (let i = p.firstOp; i <= p.paintOp; i++) edits.drop.add(i);
+      } else {
+        for (const sp of removed) for (let i = sp.startOp; i <= sp.endOp; i++) edits.drop.add(i);
+        // 最後の部分道を閉じて描く命令（s・b・b*）で、最後の部分道を消したときは、閉じない命令にする（残した部分道を閉じないため）
+        const last = p.subs[p.subs.length - 1];
+        const plain = CLOSING_PAINT[p.paintName];
+        if (plain && last && removed.has(last)) edits.replace.set(p.paintOp, [{ op: plain, args: [] }]);
+      }
+      plan.changed.push({ node: p.node, rect });
+      continue;
+    }
+    // 箱にまたがる部分道がある：残す部分道もすべて、点から書き直す
+    const kept = real.filter((sp) => !removed.has(sp));
+    const inv = invertMatrix(p.ctm);
+    const why = kept.some((sp) => sp.curved) ? "curve" : p.doStroke && p.dashed ? "dash" : !inv ? "matrix" : null;
+    if (why || !inv) {
+      // 切らずに残す（書き直しを入れない）。消すだけの部分道も残す（道の一部だけを消すと、穴の向きが変わることがあるため）
+      plan.partial.push({ rect, why: why ?? "matrix" });
+      continue;
+    }
+    const toUser = (q: Point): Point => apply(inv, q[0], q[1]);
+    const out: Op[] = [];
+    const pathOps = (pts: Point[], close: boolean) => {
+      pts.forEach((q, k) => {
+        const [x, y] = toUser(q);
+        out.push({ op: k === 0 ? "m" : "l", args: [nm(x), nm(y)] });
+      });
+      if (close) out.push({ op: "h", args: [] });
+    };
+    if (p.doFill) {
+      let groups: Point[][][] = [kept.map((sp) => sp.pts)];
+      for (const b of near) groups = groups.flatMap((gp) => (boxTouches(boundsOf(gp.flat()), b) ? clipFillOutside(gp, b) : [gp]));
+      for (const gp of groups) {
+        for (const poly of gp) pathOps(poly, true);
+        out.push({ op: p.rule === "evenodd" ? "f*" : "f", args: [] });
+      }
+    }
+    if (p.doStroke) {
+      const closesLast = p.paintName in CLOSING_PAINT;
+      let lines: Point[][] = kept.map((sp) => (sp.closed || (closesLast && sp === p.subs[p.subs.length - 1]) ? [...sp.pts, sp.pts[0]!] : sp.pts));
+      for (const b of near) lines = lines.flatMap((ln) => (boxTouches(boundsOf(ln), b) ? clipPolylineOutside(ln, b) : [ln]));
+      // 切った所ごとに描く命令を分ける（切った道どうしをまとめると、その外枠が箱にまたがって見えるため）
+      for (const ln of lines) {
+        pathOps(ln, false);
+        out.push({ op: "S", args: [] });
+      }
+    }
+    for (let i = p.firstOp; i < p.paintOp; i++) edits.drop.add(i);
+    edits.replace.set(p.paintOp, out.length ? out : [{ op: "n", args: [] }]);
+    plan.changed.push({ node: p.node, rect });
+  }
+  return plan;
+}
+
 export type PageOutcome = { removed: RemovedItem[]; notDone: NotDoneItem[]; redactAnnots: PDFObject[] };
 
 const RECT_ROUND = (r: Rect): Rect => r.map((v) => Math.round(v * 100) / 100) as Rect;
@@ -1834,8 +2022,12 @@ export async function sanitizePageContent(
     hasInline: false, forms: new Map(), textOps: new Map(), images: new Map(), actualText: new Set(),
   };
   const w = new Walker(ctx, visible, s, pageNo);
+  const annotsObj = ctx.lookup(page.node.get(PDFName.of("Annots")));
+  w.recordPaths = annotsObj instanceof PDFArray && annotsObj.size() > 0;
   w.run(root, w.initial(IDENTITY), false, 0, new Set(), false);
   const { redactRects, redactAnnots, apTextRects, apNodes } = scanAnnotations(ctx, page, w, visible, s);
+  // P6（0.10.0 から）：白い不透明な注釈の下の道（パスで描いた字など）を、注釈の箱の中だけ消す
+  const vectorPlan = planVectorEdits(w.paths, w.lightCovers.filter((c) => c.kind === "annotation").map((c) => c.rect));
   // 利用者が選んだ場所（redact.ts）：ページのいちばん上に描いた濃い覆いとして入れる（下の字・画素を消し、最後に黒い四角を描く）
   const userCovers: SanCover[] = userAreas.map((rect) => ({ seq: ++w.seq, rect, kind: "user" }));
   w.covers.push(...userCovers);
@@ -1905,8 +2097,12 @@ export async function sanitizePageContent(
   }
   // P6：画像の画素（黒い覆いと、白などの明るい覆い）
   const burned: ImageEdits = new Map();
-  const burnedReport: Array<{ rect: Rect; pixels: number; tone: "dark" | "light"; user: boolean; hidden: boolean }> = [];
+  const burnedReport: Array<{ rect: Rect; pixels: number; tone: "dark" | "light"; user: boolean; hidden: boolean; use: ImageUse }> = [];
   let droppedImages = 0;
+  /** 切り詰める画像と、その見える所（0.10.0 から） */
+  const cropWanted = new Map<ImageUse, Rect>();
+  /** 塗れなかった画像（片付けられなかった所に入れた。切り詰めも試さない） */
+  const burnFailed = new Set<ImageUse>();
   const lightIndex = new RectIndex(w.lightCovers);
   const limits: BurnLimits = { maxBytes: s.maxImageBytes, maxPixels: s.maxImagePixels, jpegQuality: s.jpegQuality, ...(codec ? { codec } : {}) };
   for (const u of w.imageUses) {
@@ -1921,7 +2117,8 @@ export async function sanitizePageContent(
       droppedImages++;
       continue;
     }
-    const hiddenCovers: SanCover[] = measurable && visA / boxA < s.hiddenImageVisibleBelow
+    if (measurable && visA / boxA <= s.hiddenImageVisibleBelow) cropWanted.set(u, vis);
+    const hiddenCovers: SanCover[] = measurable && visA / boxA <= s.hiddenImageVisibleBelow
       ? outsideParts(u.box, vis).map((rect) => ({ seq: ++w.seq, rect, kind: "hidden" as const, tone: "light" as const }))
       : [];
     const after = (c: SanCover) => c.seq > u.seq && intersectionArea(c.rect, u.box) > 0;
@@ -1948,6 +2145,7 @@ export async function sanitizePageContent(
     if (!r.ok) {
       // 塗れない：覆いごとに「片付けられなかった所」にする（注釈は外さない。画面で「全部消えた」と言わせない）
       const reason: NotDoneReason = r.reason === "too_large" ? "image_too_large" : "unsupported_image";
+      burnFailed.add(u);
       for (const c of over) {
         const hidden = c.kind === "hidden";
         notDone.push({
@@ -1981,7 +2179,42 @@ export async function sanitizePageContent(
     // 覆いが複数あるときに全部を1つの箱にまとめると、画像全体の箱に近くなり、塗っていない所まで枠に入るため
     over.forEach((c, k) => {
       const n = r.perCover[k] ?? 0;
-      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n, tone: c.tone === "light" ? "light" : "dark", user: c.kind === "user", hidden: c.kind === "hidden" });
+      if (n > 0) burnedReport.push({ rect: RECT_ROUND(intersect(c.rect, u.box)), pixels: n, tone: c.tone === "light" ? "light" : "dark", user: c.kind === "user", hidden: c.kind === "hidden", use: u });
+    });
+  }
+  // P7（0.10.0 から）：ページの外・切り抜きの外にはみ出した画像を、見える所だけに切り詰める（隠れた所を白く塗っても、
+  // 画像がはみ出したまま残るため）。塗った画像があれば、塗ったあとの画像を切る
+  let croppedImages = 0;
+  let croppedPixels = 0;
+  let croppedRect: Rect | null = null;
+  const cropped = new Set<ImageUse>();
+  for (const [u, vis] of cropWanted) {
+    if (burnFailed.has(u)) continue;
+    const prev = burned.get(u);
+    const prevRef = prev && prev !== "drop" ? (prev instanceof PDFRef ? prev : prev.ref) : null;
+    const prevObj = prevRef ? ctx.lookup(prevRef) : null;
+    const src = prevObj instanceof PDFStream ? prevObj : u.stream;
+    const c = await cropImage(ctx, src, dictOf(ctx, u.res?.get(PDFName.of("ColorSpace"))), u.ctm, vis, limits);
+    trace?.({ type: "crop", page: pageNo, imageSeq: u.seq, ok: c.ok === true, ...(c.ok === false ? { reason: c.reason } : {}) });
+    if (c.ok === true) {
+      burned.set(u, { ref: ctx.register(c.stream), place: c.place });
+      cropped.add(u);
+      croppedImages++;
+      croppedPixels += c.pixels;
+      croppedRect = croppedRect ? union(croppedRect, u.box) : u.box;
+      continue;
+    }
+    if (c.ok === false && area(vis) / area(u.box) <= s.hiddenImageCropRequiredBelow) {
+      notDone.push({
+        pattern: "P7", reason: "hidden_image_kept", page: pageNo, rect: RECT_ROUND(u.box),
+        label: "ページの外にはみ出した画像を、見える所だけに切り詰められませんでした（画像を読めない・大きすぎる）。はみ出した所を白く塗れていても、画像はページの外に残っています",
+      });
+    }
+  }
+  if (croppedImages && croppedRect) {
+    removed.push({
+      pattern: "P7", kind: "hidden_image", page: pageNo, rect: RECT_ROUND(croppedRect), count: croppedPixels,
+      label: `ページの外・切り抜きの外にはみ出した画像（${croppedImages} か所）を、見える所だけに切り詰めました（${croppedPixels} 画素を外しました。見た目は変わりません）`,
     });
   }
   // 画像の上の明るい不透明な塗りのうち、覆いにしなかったもの：塗らないが、黙って残さない（片付けられなかった所にする）
@@ -2082,6 +2315,8 @@ export async function sanitizePageContent(
   }
   for (const b of burnedReport) {
     if (b.hidden) {
+      // 切り詰めた画像の、隠れた所の白い塗りは、切り詰めの報告にまとめる（同じ所を2度出さない）
+      if (cropped.has(b.use)) continue;
       removed.push({ pattern: "P7", kind: "hidden_image", page: pageNo, rect: b.rect, count: b.pixels, label: `ページの外・切り抜きの外に隠れていた画像の部分（${b.pixels} 画素を白く塗りました。見た目は変わりません）` });
       continue;
     }
@@ -2111,6 +2346,24 @@ export async function sanitizePageContent(
   }
   if (droppedImages) {
     removed.push({ pattern: "P7", kind: "hidden_image", page: pageNo, count: droppedImages, label: `ページの外・切り抜きの外に置いて見えない画像（${droppedImages} か所）を、描かないようにしました` });
+  }
+  // P6（0.10.0 から）：白い不透明な注釈の下の道
+  const vecDone = vectorPlan.changed.filter((c) => !isBlocked(c.node));
+  const vecBlocked = vectorPlan.changed.length - vecDone.length;
+  if (vecDone.length) {
+    removed.push({
+      pattern: "P6", kind: "covered_vector", page: pageNo, rect: RECT_ROUND(vecDone.map((c) => c.rect).reduce(union)), count: vecDone.length,
+      label: `白い四角の注釈の下に残っていた図形（${vecDone.length} 本の道）を、注釈の箱の中だけ消しました（見た目は変わりません）`,
+    });
+  }
+  if (vecBlocked) {
+    notDone.push({ pattern: "P6", reason: "inline_image", page: pageNo, label: `ページに直接埋め込んだ画像があるため、白い四角の注釈の下の図形（${vecBlocked} 本の道）を消せませんでした` });
+  }
+  if (vectorPlan.partial.length) {
+    notDone.push({
+      pattern: "P6", reason: "vector_partial", page: pageNo, rect: RECT_ROUND(vectorPlan.partial.map((x) => x.rect).reduce(union)),
+      label: `白い四角の注釈にまたがる図形（${vectorPlan.partial.length} 本の道。曲線・破線など）は、切ると見えている所の形が変わるため、消していません。注釈の下に図形が残っています`,
+    });
   }
   // P5（0.7.0 から）：資源にあるが描かれない部品・画像
   const unused = removeUnusedXObjects(ctx, page, s);

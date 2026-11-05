@@ -32,7 +32,8 @@ export { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "./compress.ts";
 
 // 0.9.1：解くと大きすぎる中身（圧縮の爆弾）のページは stream_too_large として片付けられなかった所にし、
 //        ページの外で止まったとき（読み込み・文書全体）は、片付けた PDF を作らない（rules/shared/inflate-limit.ts）
-export const SANITIZER_VERSION = "0.9.1";
+// 0.10.0：白い四角の注釈の下の図形を箱の中だけ消し、ページの外にはみ出した画像を見える所だけに切り詰める
+export const SANITIZER_VERSION = "0.10.0";
 
 /** 入力の大きさの上限（バイト）。画面の上限とは別に、ここでも止める */
 export const MAX_INPUT_BYTES = 512 * 1024 * 1024;
