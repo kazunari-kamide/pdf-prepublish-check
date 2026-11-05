@@ -240,10 +240,13 @@ function scanEmail(ctx: Ctx) {
   const re = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
   for (const m of ctx.norm.matchAll(re)) {
     const [local, domain] = m[0].toLowerCase().split("@") as [string, string];
-    if (/^example\.(com|net|org|jp)$|\.example$/.test(domain) || /^(sample|test|xxx+|aaa+|user|taro|hanako)$/.test(local)) {
+    if (/^(sample|test|xxx+|aaa+|user|taro|hanako)$/.test(local)) {
       exclude(ctx, "email", "sample");
       continue;
     }
+    // 例示用のドメイン（RFC 2606 の example.com・example.jp など）だけでは、記入例と決めない（0.1.1）。
+    // 架空の人の資料も例示用のドメインで作るため。「記入例」などの行は add() で除く。強い手がかりにはせず「確認」にとどめる
+    const exampleDomain = /^example\.(com|net|org|jp|co\.jp|ne\.jp|or\.jp)$|\.example$/.test(domain);
     if (/^(info|contact|webmaster|postmaster|admin|support|office|inquiry|toiawase|otoiawase|koho|kouhou|press|master|noreply|no-reply|soumu|jimukyoku|madoguchi)$/.test(local.replace(/[-_.]?\d*$/, ""))) {
       exclude(ctx, "email", "office_contact");
       continue;
@@ -252,7 +255,7 @@ function scanEmail(ctx: Ctx) {
       exclude(ctx, "email", "office_contact");
       continue;
     }
-    const label = /個人|本人|自宅|私用/.test(before(ctx, m.index!, 20));
+    const label = !exampleDomain && /個人|本人|自宅|私用/.test(before(ctx, m.index!, 20));
     add(ctx, { type: "email", start: m.index!, end: m.index! + m[0].length, confidence: label ? "high" : "check", basis: label ? "label" : "pattern" });
   }
 }

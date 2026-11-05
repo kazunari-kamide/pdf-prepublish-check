@@ -26,7 +26,7 @@ import { detectInfoXmpDiff, type DiffReport } from "../../rules/props/index.ts";
 import { detectExtras, type ExtrasReport } from "../../rules/extras/index.ts";
 import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
-import type { Item, Notice, Pattern, RuleResult } from "./report";
+import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
 
 /** ルールに渡す道具。imageDecoder＝pdf-lib で解けない画像（JPEG など）を解く道具（Worker が PDF.js で作る） */
 export type RunContext = { imageDecoder?: ExternalImageDecoder };

@@ -26,7 +26,7 @@ import {
 import { TooManyOperations, extractText, pageContent, type ExtractSettings, type Glyph, type Rect } from "./text.ts";
 
 export const RULE_ID = "pii";
-export const RULE_VERSION = "0.1.0";
+export const RULE_VERSION = "0.1.1";
 
 export { PII_TYPES, type PiiType, type Confidence, type Basis, type ExcludeReason };
 export type { Rect };
