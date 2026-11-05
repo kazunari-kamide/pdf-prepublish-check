@@ -17,6 +17,7 @@ import { PDFDict, PDFStream, type PDFContext, type PDFObject, type PDFPage } fro
 import { operations, type Tok } from "../shared/content-lexer.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { readFont, type FontInfo } from "../shared/fonts.ts";
+import { rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import { decodeTextBytes } from "../p1-info/index.ts";
 import { arrayItems, catalogOf, dictOf, lookup, N, nameOf, openPdf, streamData, textOf, visibleText, type RuleError } from "../common/index.ts";
 
@@ -162,7 +163,8 @@ export async function detectAltText(bytes: Uint8Array): Promise<AltReport> {
           diff.pages.add(pageNo);
         }
       }, () => limit("too_many_ops"), (t) => bodyParts.push(t));
-    } catch {
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       limit("unreadable_page");
     }
   });

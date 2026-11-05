@@ -6,9 +6,10 @@
 //   「覆いの下に、画像の中身が残っている」とする（image-layer.ts）。
 // 報告の checkedLayers に、調べた層を入れる（1.4.0 から）。
 
+import { isInflateLimitError } from "../shared/inflate-limit.ts";
 import { loadPdf } from "../shared/load.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
-import { scanAnnotations } from "./annotations.ts";
+import { scanAnnotations, whiteSquareAnnots } from "./annotations.ts";
 import { contentBytes, coverageOf, createPageScanner, TooManyCovers, TooManyOperations, type Cover, type CoverKind, type GlyphBox, type UncheckedImage } from "./page.ts";
 import { createPixelSource, findCoveredImages, TooManyImageCovers } from "./image-layer.ts";
 import { darkFractionOf } from "./images.ts";
@@ -19,17 +20,21 @@ import { indexGlyphsByText, isGlyphSizedImage, normalizeGlyphText, isGlyphSizedS
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.12.0";
+// 1.13.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
+export const RULE_VERSION = "1.13.1";
 
-/** P6 の層。text＝黒い四角の下に字が残っている型、image＝スキャン画像の画素が残っている型 */
-export type P6Layer = "text" | "image";
+/**
+ * P6 の層。text＝黒い四角の下に字が残っている型、image＝スキャン画像の画素が残っている型、
+ * vector＝白い四角の注釈の下に、パスで描いた字（図形）が残っているかもしれない型（1.13.0 から）
+ */
+export type P6Layer = "text" | "image" | "vector";
 
 /**
  * この版の検出ルールが調べる層（1.4.0 から報告の checkedLayers に入れる）。
  * 画面は、ここに "image" がない間、「画像の下の中身は、読み直しではまだ調べていません」と添える。
  * 画像の層を見るようにしたら、ここに "image" を足す（画面の一言は、この値で外れる）。
  */
-export const CHECKED_LAYERS: readonly P6Layer[] = ["text", "image"];
+export const CHECKED_LAYERS: readonly P6Layer[] = ["text", "image", "vector"];
 
 /** 文字の層の1件：黒い四角などの下に、字が残っている */
 export type P6TextFinding = {
@@ -112,7 +117,25 @@ export type P6ImageFinding = {
   metrics?: { ringLight: number | null; underLight: number | null; colored: number | null; laterPaintPoints: number };
 };
 
-export type P6Finding = P6TextFinding | P6ImageFinding;
+/**
+ * 図形の層の1件（1.13.0 から）：白い不透明な四角の注釈（/Square）の下に、ページの中身の道（塗り・線）が多くある。
+ * パスで描いた字（アウトライン化した字）の上に白い四角を重ねただけなら、注釈を外すと字が見える。
+ * 道が字か罫線・図かはルールでは分けきれないので、いつも check（確かめてください）
+ */
+export type P6VectorFinding = {
+  pattern: "P6";
+  layer: "vector";
+  cover: "annotation";
+  page: number;
+  /** 注釈の箱（文字の層と同じ座標） */
+  rect: Rect;
+  /** 注釈の箱の下にある道の数と、線分の数の合計 */
+  paths: number;
+  segments: number;
+  confidence: "check";
+};
+
+export type P6Finding = P6TextFinding | P6ImageFinding | P6VectorFinding;
 
 export type P6TextReport = {
   rule: { id: string; version: string };
@@ -126,7 +149,7 @@ export type P6TextReport = {
   pages: number | null;
   /** 見つけた所。文字の層（layer: "text"）と画像の層（layer: "image"。1.5.0 から） */
   findings: P6Finding[];
-  skippedPages: Array<{ page: number; reason: "too_many_operations" | "too_many_covers" | "unreadable_page" }>;
+  skippedPages: Array<{ page: number; reason: "too_many_operations" | "too_many_covers" | "unreadable_page" | "stream_too_large" }>;
   /**
    * 画素を読めなかった画像。覆いとしても、画像の層の下地としても、調べていない。「問題なし」ではない。
    * JPEG・CCITT・JBIG2 などは、imageDecoder（PDF.js）を渡せば読む（1.5.0 から）。渡さなければ、ここに入る
@@ -296,7 +319,9 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
       const node = page.node;
       const view = pageView(page);
       const data = contentBytes(doc.context, node.Contents());
-      const scanner = createPageScanner(doc.context, settings);
+      // 図形の層（1.13.0 から）：白い四角の注釈の箱を先に集め、ページの中身を読みながら、その下の道を数える
+      const vectorTargets = whiteSquareAnnots(doc.context, node.Annots(), settings);
+      const scanner = createPageScanner(doc.context, settings, vectorTargets);
       scanner.run(data, node.Resources(), IDENTITY, "fill");
       scanAnnotations(doc.context, node.Annots(), scanner, settings); // 注釈は、ページの中身のあとに重なる
       const scan = scanner.result();
@@ -372,6 +397,20 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
         }
         pageFindings.push(f);
       }
+      // 図形の層（1.13.0 から）。同じ注釈で、文字の層の報告がすでにあるときは出さない（同じ所を2度出さない）
+      scan.vectorCounts.forEach((c, i) => {
+        if (c.paths < settings.vectorMinPaths && c.segments < settings.vectorMinSegments) {
+          if (c.paths > 0) exclude("vector", "few_paths");
+          return;
+        }
+        const rect = vectorTargets[i]!;
+        const same = pageFindings.some((f) => f.layer === "text" && f.cover === "annotation" && intersectionArea(f.rect, rect) >= 0.5 * area(rect));
+        if (same) {
+          exclude("vector", "text_layer_found");
+          return;
+        }
+        pageFindings.push({ pattern: "P6", layer: "vector", cover: "annotation", page: pageNo, rect, paths: c.paths, segments: c.segments, confidence: "check" });
+      });
       report.findings.push(...pageFindings);
       // 調べられなかった画像（1.9.0 から、要るときに解いた結果で決める）
       // - pdf-lib で解けない圧縮の画像：PDF.js で解けたものは外す。解けなかったものは、その理由にする。
@@ -396,7 +435,13 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
     } catch (e) {
       report.skippedPages.push({
         page: pageNo,
-        reason: e instanceof TooManyOperations ? "too_many_operations" : e instanceof TooManyCovers || e instanceof TooManyImageCovers ? "too_many_covers" : "unreadable_page",
+        reason: e instanceof TooManyOperations
+          ? "too_many_operations"
+          : e instanceof TooManyCovers || e instanceof TooManyImageCovers
+            ? "too_many_covers"
+            : isInflateLimitError(e)
+              ? "stream_too_large"
+              : "unreadable_page",
       });
     }
   }

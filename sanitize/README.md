@@ -65,6 +65,31 @@ if (r.status === "ok") {
 | P6 注釈の見た目の中の字 | 注釈の見た目の中の字も集め、あとの注釈（`/Annots` の後ろのもの）の濃い覆いに半分以上隠れた字を消す。見た目は新しいストリームに書き直し、写した `/AP` に差し替える | 変わらない |
 | P7 書体の字形 | 片付け・黒塗りのあと、どこにも描かれていない字形を書体から外し、字の対応表（`/ToUnicode`）の、どこにも描かれていない字の行も外す（`font-prune.ts`）。TrueType（`/FontFile2`。CID の書体と、ふつうの TrueType の書体）は字形の中身を空にして作り直し、Type3 は使っていない字の描き方を外す。字形 0 と、組み合わせの字形の部品は残す。部分埋め込みの印のない書体も外す。フォームの既定の書体（`/DR`）と、読み切れない所から使う書体は触らない。CFF・Type1 の書体は外さず `notDone`（`font_not_pruned`） | 変わらない |
 
+**0.9.0 から足したもの**（整える：プロパティを書き直す・整える前に知らせる。2026-11-05 人が決めた。`properties.ts`）：
+
+```ts
+import { preflightTidy, sanitizePdf } from "../sanitize/index.ts";
+const p = await preflightTidy(bytes);   // p.properties（今の値。「そのまま」の欄に見せる）、p.pdfa（PDF/A の印 or null）、p.signatures（署名の数）
+// p.pdfa・p.signatures があれば、整える前に同意を取る
+const r = await sanitizePdf(bytes, {
+  properties: { title: "keep", author: { set: "総務課" }, created: { set: "2026-11-05" } },  // 指定しなかった項目は "remove"
+  pdfaMark: "remove",     // 既定 "remove"。"keep" なら notDone に pdfa_mark_kept
+  signatures: "remove",   // 既定 "remove"。"keep" なら notDone に signature_kept
+});
+r.properties;  // [{ key, action: "kept" | "set" | "removed" | "absent", before: { info, xmp }, differed }]（値は入れない）
+```
+
+| 型 | 整え方 | 見た目 |
+|---|---|---|
+| P1・P2 プロパティの書き直し | 題（`Title`／`dc:title`）・作成者（`Author`／`dc:creator`）・サブタイトル（`Subject`／`dc:description`）・キーワード（`Keywords`／`pdf:Keywords`）・作成したアプリ（`Creator`／`xmp:CreatorTool`）・PDF を作ったアプリ（`Producer`／`pdf:Producer`）・作成日（`CreationDate`／`xmp:CreateDate`）・更新日（`ModDate`／`xmp:ModifyDate`）を、文書情報と XMP の両方に同じ値で書く。「そのまま」は文書情報の値を優先し、無ければ XMP の値（食い違いは `differed`）。文書情報の字は、ASCII なら PDFDocEncoding、それ以外は UTF-16BE（BOM つき）。XMP は選んだ項目だけで作り直す（編集の履歴・文書の番号・ほかのアプリの独自の項目は残らない）。8 項目のほかの文書情報の欄（独自の欄・`Trapped`）は消す | — |
+| 古い値の読み直し | 書き出したあと、書き直した・消した欄の古い値（元の文書情報と XMP のすべての欄の値。残した値・書いた値に含まれるものは除く）を、pdf-lib を使わずにバイト列から探す。探す所は、ストリームの外の字（`< >`・`( )` を解いたもの）、XMP の中身、オブジェクトストリームの中の字（Flate は解く）。UTF-8・UTF-16BE・PDFDocEncoding・XML の言い換えの形で探す。見つかったら `properties_left` で止め、バイト列は返さない | — |
+| P2 PDF/A の印 | 既定は外す（`pdfa_mark`）。残すを選ぶと、新しい XMP に `pdfaid:part`・`conformance`・`rev` を書き、`notDone` に `pdfa_mark_kept`（形式の決まりを満たさない恐れ） | — |
+| P11 電子署名 | 整えると中身が変わるので、どちらを選んでも署名は無効になる。既定は外す（`signature`。署名の値 `/V`・`/Lock`・`/SV`、署名の欄の見た目 `/AP`、`/Perms`・`/DSS`・`/SigFlags`）。残すを選ぶと、そのままにして `notDone` に `signature_kept` | 外すと、署名の欄の見た目（名前・印影）が消える |
+
+- 0.8.0 までは、電子署名には何もしていなかった（署名の辞書は残したまま 1 つの版に書き出すので、何も言わずに署名が無効になっていた）。PDF/A の印も、XMP と一緒に何も言わずに外れていた。
+- `properties` を渡さないときは、今までどおり文書情報も XMP も全部消す。古い値の読み直しもしない。
+- 限界：古い値と同じ字が、片付けで外れない辞書の字（見えているフォームの欄の値など）にあると、止めることがある（安全側）。ページの中身・書体・画像のストリームの中は探さない（見えている字と同じなのは当たり前のため）。
+
 - パスワードなしで開ける暗号化は外して書き出す（`rules/shared/load.ts` で読む）。パスワードが要るものは `encrypted` を返し、片付けない。
 - 圧縮の設定・パスワードをかける機能は、まだ入れていない（本人が決めてから）。
 
@@ -177,7 +202,7 @@ const r = await compress(cleanedBytes, {
 | `image_too_large` | 覆いの下の画像が大きすぎる（画素の数が 7,200 万を超える。Flate 以外の圧縮で、展開して 64MB を超える） | 同上 |
 | `inline_image` | ページに直接埋め込んだ画像があり、ページの命令を書き直せない（黒い覆い・白い覆いのどちらでも）。0.8.0 からは、画像の部品に移し替えられなかったもの（資源のない部品の中、注釈の見た目の中、区切りの読めないもの）だけ | 同上 |
 | `uncertain_cover` | 画像の上の白い塗りが、下が見えたままの重ね方（Multiply など）・半透明・表示しないレイヤーの中にあり、塗らなかった。画像の上の注釈の見た目を読めなかった | 同上（「見えている内容を確かめてください」） |
-| `too_many_operations` | 命令が 300 万を超える重いページ（CLAUDE.md §5） | 「このページは図形が多すぎるため、片付けを省きました」＋ページ |
+| `too_many_operations` | 命令が 300 万を超える重いページ（CLAUDE.md §5） | 「このページは図形が多すぎるため、整えるのを省きました」＋ページ |
 | `unreadable_page` | ページの中身を読めない | 同上 |
 | `field_shared` | 自分で黒塗りしたフォームの欄が、ほかの所にも見た目を持っていて、欄ごとは外せない | 同上（「ほかの所の欄も選んでください」） |
 | `accessibility_text` | 読み上げ用の説明（構造ツリーの `/Alt`・`/E`、フォームの欄の `/TU`）がある（0.7.0 から。読み上げに使うので消さない。文書ごとに 1 件、数つき） | `label` をそのまま（「名前などが入っていないか確かめてください」） |
@@ -185,6 +210,8 @@ const r = await compress(cleanedBytes, {
 | `overdrawn_text` | 同じ所に違う字が重ねて描かれている（0.7.0 から。どちらが隠れた字か決められない。ページごとに 1 件） | `label`＋ページ・場所 |
 | `annotation_text` | 注釈（スタンプなど）の見た目の中だけに字があり、コメントがない（0.7.0 から。ページに見えている字なので消さない。ページごとに 1 件） | `label`＋ページ・場所 |
 | `font_not_pruned` | 埋め込んだ書体のうち、描かれていない字形を外せなかったものがある（0.8.0 から。CFF・Type1 の形、使う字を数えきれなかったとき。文書ごとに 1 件） | `label` をそのまま |
+| `pdfa_mark_kept` | 本人が PDF/A の印を残すと選んだ（0.9.0 から。文書ごとに 1 件） | `label` をそのまま（「形式の決まりを満たさない恐れ」） |
+| `signature_kept` | 本人が電子署名を残すと選んだ（0.9.0 から。文書ごとに 1 件。署名は無効になっている） | `label` をそのまま |
 
 `label` は画面にそのまま出せる文。`page`・`rect`（ページの既定の座標）は、ページの絵に枠を描くのに使える。
 

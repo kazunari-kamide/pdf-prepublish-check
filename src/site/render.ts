@@ -8,9 +8,10 @@
 
 import { ARTICLES } from "./articles.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS, PRIVACY_TITLE } from "./privacy.ts";
+import { SITE_NAME, headFor, headLines } from "./seo.ts";
 import type { Article, PageMeta, Section } from "./types.ts";
 
-export const SITE_NAME = "お守りPDF";
+export { SITE_NAME };
 export const ARTICLES_PATH = "/articles/";
 export const PRIVACY_PATH = "/privacy.html";
 // サイトの案内のページ（中身は pages.ts）
@@ -25,6 +26,7 @@ export const OFFICIAL_NOTE = "公式のサイトは omamoripdf.com だけです�
 
 /** どのページの下にも置く、サイトの案内のリンク（検査のページ index.html の下の帯も、同じ並び。tests/site-pages.test.ts） */
 export const FOOT_LINKS: ReadonlyArray<readonly [string, string]> = [
+  ["/", "検査のページ"],
   [ARTICLES_PATH, "記事の一覧"],
   [CHECKLIST_PATH, "公開前の自己点検"],
   [FAQ_PATH, "よくある質問"],
@@ -63,7 +65,6 @@ export function fileFor(path: string): string {
 /** どのページにも共通の枠（CSP・題・説明・canonical・上の帯・下の帯）。中身の HTML は body */
 export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
   const e = escapeHtml;
-  const title = meta.path === "/" ? SITE_NAME : `${meta.title}｜${SITE_NAME}`;
   return `<!doctype html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <html lang="ja">
@@ -72,9 +73,7 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions): string {
     <meta http-equiv="Content-Security-Policy" content="${e(o.csp)}" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
-    <title>${e(title)}</title>
-    <meta name="description" content="${e(meta.description)}" />
-    <link rel="canonical" href="${e(o.origin + meta.path)}" />
+    ${headLines(headFor(meta), o.origin, e)}
     <link rel="icon" href="${e(o.favicon ?? "data:,")}" />
     <link rel="stylesheet" href="${e(o.cssHref)}" />
   </head>

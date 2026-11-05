@@ -44,7 +44,11 @@ export type RemovedKind =
   | "redacted_annotation" // 選んだ所に掛かる注釈
   | "redacted_field" // 選んだ所に掛かるフォームの欄（値ごと）
   | "font_unicode" // 消した字だけで使っていた、字の対応表（/ToUnicode）の行
-  | "redaction_box"; // 選んだ所に描いた黒い四角
+  | "redaction_box" // 選んだ所に描いた黒い四角
+  // 0.9.0 から（プロパティを書き直す・整える前に知らせるもの）
+  | "property_rewritten" // P1：本人が書き直したプロパティの欄（文書情報と XMP にそろえて書いた）
+  | "pdfa_mark" // P2：長期保存用の形式（PDF/A）の印
+  | "signature"; // P11：電子署名（署名の辞書・署名の見た目・署名の決まり）
 
 export type RemovedItem = {
   pattern: SanitizePattern;
@@ -68,6 +72,7 @@ export type NotDoneReason =
   | "uncertain_cover" // 画像の上の白い塗りが、下を隠さない重ね方（Multiply など）・半透明・表示しないレイヤーの中にあり、塗らなかった
   | "too_many_operations" // 命令が多すぎるページ（重いページ）
   | "unreadable_page" // ページの中身を読めない
+  | "stream_too_large" // 解くと大きすぎる中身（圧縮の爆弾など）があり、ページを書き換えられない（0.7.1 から）
   | "field_shared" // 選んだ所のフォームの欄が、ほかの所にも見た目を持っていて、欄ごとは外せない（redact.ts）
   // 0.7.0 から
   | "accessibility_text" // 読み上げ用の説明（/Alt・/E・/TU）。読み上げに使うので消さない
@@ -75,7 +80,10 @@ export type NotDoneReason =
   | "overdrawn_text" // 同じ所に違う字が重ねて描かれている。どちらが隠れた字か決められない
   | "annotation_text" // 注釈（スタンプなど）の見た目の中だけにある字。ページに見えているので消さない
   // 0.8.0 から
-  | "font_not_pruned"; // 書体の中の描かれていない字形を外せなかった（CFF・Type1 の形、使う字を数えきれなかった）
+  | "font_not_pruned" // 書体の中の描かれていない字形を外せなかった（CFF・Type1 の形、使う字を数えきれなかった）
+  // 0.9.0 から
+  | "pdfa_mark_kept" // 本人が PDF/A の印を残すと選んだ。整えたあとの PDF は、形式の決まりを満たさない恐れがある
+  | "signature_kept"; // 本人が電子署名を残すと選んだ。整えると署名は無効になる
 
 export type NotDoneItem = {
   pattern: SanitizePattern;
@@ -95,6 +103,55 @@ export type SanitizeResult =
       notDone: NotDoneItem[];
       /** パスワードなしで開ける暗号化を外して書き出したか */
       decrypted: boolean;
+      /**
+       * プロパティを書き直したとき（options.properties を渡したとき）だけ。項目ごとに何をどうしたか（値そのものは入れない）。
+       * "kept"・"set" は本人が選んだ値なので、画面では「残り」に数えず「残した（本人が選んだ）」として分けて出す
+       */
+      properties?: PropertyChange[];
+    }
+  | {
+      status: "error";
+      /** properties_left：書き直した・消したプロパティの古い値が、書き出した PDF に残っていた（バイト列は返さない） */
+      code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_properties" | "properties_left";
+      message: string;
+    };
+
+// ---------------------------------------------------------------- プロパティを書き直す（properties.ts。0.9.0 から）
+
+/** 書き直せるプロパティ。文書情報（Info）と XMP の欄の組みは properties.ts の FIELDS */
+export type PropertyKey = "title" | "author" | "subject" | "keywords" | "creator" | "producer" | "created" | "modified";
+
+/**
+ * 項目ごとの指定。"keep"＝元の値のまま（文書情報の値を優先し、無ければ XMP の値）、"remove"＝消す、{ set }＝書き直す。
+ * 日付（created・modified）の set は Date か、"2026-11-05"・"2026-11-05T10:30"・"2026-11-05T10:30:00+09:00" の形の字。
+ * 時差のない字と Date は、その環境の時差で書く。空の字の set は "remove" と同じ
+ */
+export type PropertyEdit = "keep" | "remove" | { set: string | Date };
+
+/** 指定しなかった項目は "remove"。文書情報の 8 項目以外の欄（独自の欄・Trapped）と、XMP のほかの項目（履歴・文書の番号・ほかのアプリの項目）は、いつも消す */
+export type PropertyEdits = Partial<Record<PropertyKey, PropertyEdit>>;
+
+export type PropertyChange = {
+  key: PropertyKey;
+  /** kept＝元の値のまま書いた、set＝書き直した、removed＝元の値を消した、absent＝元から無く、何も書かなかった */
+  action: "kept" | "set" | "removed" | "absent";
+  /** 整える前に、文書情報・XMP のどちらに値があったか */
+  before: { info: boolean; xmp: boolean };
+  /** 整える前に、文書情報と XMP の値が食い違っていたか（"keep" では文書情報の値にそろえた） */
+  differed: boolean;
+};
+
+/** 整える前に知らせること（preflightTidy の結果） */
+export type TidyPreflight =
+  | {
+      status: "ok";
+      /** 今の値（画面の「そのまま」の欄に見せる。Worker の中だけで使い、外へは出さない。長すぎる値は切る） */
+      properties: Array<{ key: PropertyKey; info: string | null; xmp: string | null; truncated: boolean }>;
+      /** 長期保存用の形式（PDF/A）の印。無ければ null */
+      pdfa: { part: string; conformance: string | null } | null;
+      /** 署名した電子署名の欄の数（0 でなければ、整える前に同意を取る） */
+      signatures: number;
+      decrypted: boolean;
     }
   | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large"; message: string };
 
@@ -111,6 +168,21 @@ export type SanitizeOptions = {
    */
   codec?: ImageCodec;
   /**
+   * プロパティを書き直す（0.9.0 から）。渡さないときは、今までどおり文書情報も XMP も全部消す。
+   * 渡すと、文書情報と XMP の両方に同じ値を書き、書き出したあとに古い値が残っていないかを読み直して確かめる
+   */
+  properties?: PropertyEdits;
+  /**
+   * PDF/A の印をどうするか（0.9.0 から。既定 "remove"）。画面は preflightTidy の pdfa を見て、整える前に同意を取る。
+   * "keep" のときは、印を新しい XMP に書き、notDone に pdfa_mark_kept（形式の決まりを満たさない恐れ）を出す
+   */
+  pdfaMark?: "remove" | "keep";
+  /**
+   * 電子署名をどうするか（0.9.0 から。既定 "remove"）。整えると、どちらを選んでも署名は無効になる。
+   * "remove"：署名の値・署名の見た目・署名の決まり（/Perms・/DSS）を外す。"keep"：残し、notDone に signature_kept を出す
+   */
+  signatures?: "remove" | "keep";
+  /**
    * 確かめの道具（2026-11-04 から。画面では使わない）。ページごとに、画像・黒でない塗り・塗った結果を、数と名前だけで渡す。
    * 字・名前・画素などの中身は入れない。実物で「なぜ塗らなかったか」を、中身を見ずに調べるため
    */
@@ -122,7 +194,7 @@ type TraceRect = [number, number, number, number];
 /** 確かめの道具に渡す記録（数と名前だけ） */
 export type SanitizeTraceEvent =
   | { type: "page"; page: number; operations: number; images: number; inlineImages: number; darkCovers: number; lightCovers: number; lightSkipped: number; fillLog: number }
-  | { type: "page_error"; page: number; error: "too_many_operations" | "unreadable_page" }
+  | { type: "page_error"; page: number; error: "too_many_operations" | "unreadable_page" | "stream_too_large" }
   | {
       type: "image"; page: number; seq: number; box: TraceRect; ctm: number[];
       width: number | null; height: number | null; bpc: number | null; filter: string | null; inForm: boolean;
@@ -209,7 +281,7 @@ export type RedactResult =
       decrypted: boolean;
       checked: string[];
     }
-  | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_areas"; message: string };
+  | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_areas" | "bad_properties" | "properties_left"; message: string };
 
 // ---------------------------------------------------------------- ファイルを小さくする（compress.ts）
 

@@ -40,8 +40,12 @@ export type Item = {
 /** 知らせること（漏れではないが、利用者に伝えること） */
 /** info＝漏れとは言い切れず、知らせるだけのもの（XFA のフォーム・C2PA の来歴など。11/5 D） */
 export type NoticeKind = "decrypted" | "unchecked_images" | "skipped_pages" | "partial" | "info";
-/** reason は省いたページのときだけ。heavy＝図形が多すぎる（ページの絵も描かない）、unreadable＝読めなかった */
-export type Notice = { kind: NoticeKind; message: string; pages: number[]; reason?: "heavy" | "unreadable" };
+/**
+ * reason は、省いたページ（skipped_pages）と調べなかった画像（unchecked_images）のときだけ。
+ * heavy＝図形が多すぎる（ページの絵も描かない）、unreadable＝読めなかった、
+ * too_large＝解くと大きすぎる中身がある（圧縮の爆弾など）。省いたページなら、ページの絵も描かない。画像なら、大きすぎる画像
+ */
+export type Notice = { kind: NoticeKind; message: string; pages: number[]; reason?: "heavy" | "unreadable" | "too_large" };
 
 /** 検出ルール1つの結果 */
 export type RuleResult = {

@@ -12,7 +12,8 @@
 // - 見た目のない蛍光ペンの注釈（/Highlight）：色（/C）が濃いときだけ覆いとする（1.11.0 から。乗算で重なるので、濃くない色は透ける）
 // - 1.11.0 から、白・灰・色の不透明な注釈も、字の層の覆い（濃くない覆い）にする（覆いの下の字は、色によらず P6）
 
-import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFStream, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { decodeStream } from "../shared/inflate-limit.ts";
 import { apply, boundsOf, isFiniteMatrix, multiply, type Matrix, type Point, type Rect } from "./geometry.ts";
 import { luminanceOf, type PageScanner } from "./page.ts";
 import type { P6TextSettings } from "./settings.ts";
@@ -74,7 +75,7 @@ function appearanceMatrix(ctx: PDFContext, ap: PDFStream, rect: Rect): Matrix | 
 }
 
 function streamBytes(s: PDFStream): Uint8Array {
-  return s instanceof PDFRawStream ? decodePDFRawStream(s).decode() : s.getContents();
+  return decodeStream(s);
 }
 
 /** ページの注釈を、覆いとして scanner に渡す。ページの命令の列を読んだあとに呼ぶ */
@@ -141,4 +142,33 @@ export function scanAnnotations(ctx: PDFContext, annots: PDFArray | undefined, s
       if (lum !== null) scanner.addCover(rect, "annotation", "fill", lum);
     }
   }
+}
+
+/**
+ * 図形の層（1.13.0 から）：白い不透明な四角の注釈（/Square）の箱。見つける段の3回目で、パスで描いた字を覆っていた形。
+ * 中の色（/IC）が白っぽい（明るさが lightLuminanceMin 以上）もの。隠した注釈・半透明の注釈・中の色のない注釈は入れない。
+ * 見た目（/AP）の有無は問わない（見た目があっても、中の色で決める）
+ */
+export function whiteSquareAnnots(ctx: PDFContext, annots: PDFArray | undefined, settings: P6TextSettings): Rect[] {
+  if (!annots) return [];
+  const out: Rect[] = [];
+  for (const ref of annots.asArray()) {
+    const annot = ctx.lookup(ref);
+    if (!(annot instanceof PDFDict)) continue;
+    const subtypeObj = annot.lookup(PDFName.of("Subtype"));
+    if (!(subtypeObj instanceof PDFName) || subtypeObj.decodeText() !== "Square") continue;
+    const rect = rectOf(numbers(ctx, annot.get(PDFName.of("Rect"))));
+    if (!rect || !((rect[2] - rect[0]) * (rect[3] - rect[1]) > 0)) continue;
+    const flagsObj = annot.lookup(PDFName.of("F"));
+    const flags = flagsObj instanceof PDFNumber ? flagsObj.asNumber() : 0;
+    if (flags & (FLAG_HIDDEN | FLAG_NOVIEW)) continue;
+    const caObj = annot.lookup(PDFName.of("CA"));
+    const ca = caObj instanceof PDFNumber ? caObj.asNumber() : 1;
+    if (ca < settings.opacityMin) continue;
+    const ic = numbers(ctx, annot.get(PDFName.of("IC")));
+    const lum = ic && ic.length > 0 ? luminanceOf(ic, ic.length) : null;
+    if (lum === null || lum < settings.lightLuminanceMin) continue;
+    out.push(rect);
+  }
+  return out;
 }
