@@ -24,7 +24,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { contactHeaders, securityHeaders } from "../csp.ts";
-import { CACHE_ASSETS, CACHE_DEFAULT, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, HSTS, NOT_FOUND_PAGE, OFFICIAL_HOST } from "../htaccess.ts";
+import { CACHE_ASSETS, CACHE_DEFAULT, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, HSTS, LICENSE_TEXTS_DIR, NOT_FOUND_PAGE, OFFICIAL_HOST, OLD_LICENSE_TEXTS_DIR } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(ROOT, "dist");
@@ -102,6 +102,23 @@ for (const f of [...new Set(["privacy.html", CONTACT_PAGE_FILE, articleFile, tag
     else ok.push(`${f} → 301 → ${pageUrlFor(f)}`);
   } catch (e) {
     problems.push(`${f} の移し先を確かめられませんでした（${e?.message ?? e}）`);
+  }
+}
+
+// ---- ライセンスの全文の前の場所（/licenses/*.txt・/licenses/）は、新しい場所へ 301（htaccess.ts の LICENSE_TEXTS_RULES）
+{
+  const text = files.find((f) => f.startsWith(`${LICENSE_TEXTS_DIR}/`) && f.endsWith(".txt"));
+  const moves = [[`${OLD_LICENSE_TEXTS_DIR}/`, OLD_LICENSE_TEXTS_DIR], ...(text ? [[`${OLD_LICENSE_TEXTS_DIR}/${text.slice(LICENSE_TEXTS_DIR.length + 1)}`, text]] : [])];
+  for (const [from, to] of moves) {
+    try {
+      const r = await get(new URL(from, base), "HEAD");
+      const loc = r.headers.get("location");
+      const want = new URL(to, base).href;
+      if (r.status !== 301 || !loc || new URL(loc, base).href !== want) problems.push(`${from} が ${r.status}（行き先 ${loc ?? "なし"}）を返しました（301 で ${want} のはず）`);
+      else ok.push(`${from} → 301 → ${to}`);
+    } catch (e) {
+      problems.push(`${from} の移し先を確かめられませんでした（${e?.message ?? e}）`);
+    }
   }
 }
 

@@ -98,6 +98,7 @@ export function buildHtaccess(): string {
     "  # お問い合わせのページ（/contact）は、PHP が返す（フォームに、開いた時刻の署名を入れるため。docs/contact.md）。",
     "  # アドレスは変えない（中で回すだけ）。下の .html なしの書き換えより前に置く",
     `  RewriteRule ${CONTACT_REWRITE}`,
+    ...LICENSE_TEXTS_RULES.map((l) => `  ${l}`),
     ...CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)),
     "</IfModule>",
     "",
@@ -112,11 +113,25 @@ export function buildHtaccess(): string {
  *   返すときの中の要求では動かさない（動くと、見つからない .html が 404 でなく 301 になり、書き換えと輪になる）。
  *   %1 は、すぐ上の RewriteCond（THE_REQUEST）の組なので、THE_REQUEST の条件を最後に置く。
  * - 2つ目：.html なしで来た要求を、同じ名前の .html のファイルがあれば、そのファイルで返す（中だけの書き換え。アドレスは変わらない）。
- *   同じ名前のフォルダがあっても、.html を返す（/licenses：licenses.html と、ライセンスの全文を置く licenses/ がある。
- *   フォルダを先に見ると、Apache が /licenses/ へ 301 で移し、フォルダの一覧を止めているので 403 になる。2026-11-05 の本番で起きた）。
  *   末尾が / の場所（フォルダ）は書き換えない。
+ * - ページと同じ名前のフォルダを dist/ に置かない（scripts/check-dist.mjs が止める）。同じ名前のフォルダがあると、
+ *   本番の Apache は mod_dir の DirectorySlash が、この書き換えより先に効き、/x を /x/ へ 301 で移す（フォルダの一覧は
+ *   止めているので 403 になる）。2026-11-05 に /licenses で起き、条件から !-d を外しても直らなかった（#119・run 42009017981）。
+ *   DirectorySlash Off は、配信先で許されていないとサイト全体が 500 になるおそれがあるので書かない。
  * 手元の vite preview では、site.ts の cleanUrlMiddleware が同じ動きをする（tests/clean-urls.test.ts で、同じ表の場所を確かめる）。
  */
+/** ライセンスの全文を置くフォルダ（site-licenses.ts）。ページ（/licenses）と同じ名前にしない（上の注） */
+export const LICENSE_TEXTS_DIR = "license-texts";
+/** 前の全文のフォルダ。外からリンクされていることがあるので、新しい場所へ 301 で移す */
+export const OLD_LICENSE_TEXTS_DIR = "licenses";
+
+/** 前の全文の場所（/licenses/*.txt・/licenses/）を、新しい場所へ 301 で移す（2026-11-05）。.html なしの書き換えより前に置く */
+export const LICENSE_TEXTS_RULES: readonly string[] = [
+  `# ライセンスの全文の前の場所（/${OLD_LICENSE_TEXTS_DIR}/*.txt）は、新しい場所（/${LICENSE_TEXTS_DIR}/）へ 301。/${OLD_LICENSE_TEXTS_DIR}/ はライセンスのページへ`,
+  `RewriteRule ^${OLD_LICENSE_TEXTS_DIR}/([^/]+\\.txt)$ /${LICENSE_TEXTS_DIR}/$1 [R=301,L]`,
+  `RewriteRule ^${OLD_LICENSE_TEXTS_DIR}/$ /${OLD_LICENSE_TEXTS_DIR} [R=301,L]`,
+];
+
 export const CLEAN_URL_RULES: readonly string[] = [
   "# サイトのページは .html なしの場所で開く。.html 付きで来たら、.html なしへ 301（ファイルがあるときだけ）",
   "RewriteCond %{ENV:REDIRECT_STATUS} ^$",

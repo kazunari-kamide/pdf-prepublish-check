@@ -10,7 +10,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CONTACT_REFERRER, cspForContactMeta, cspForMeta } from "../csp.ts";
-import { NOT_FOUND_PAGE, OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { LICENSE_TEXTS_DIR, NOT_FOUND_PAGE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 import { SHIPPED_FONT_DIR, SHIPPED_ROOTS, buildLicenses, copyrightLines, githubRepo, tableUnder } from "../site-licenses.ts";
 import { renderSitemap, repoUrl, siteCss, siteFiles } from "../site.ts";
 import {
@@ -240,8 +240,8 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
     }
     // 全文のファイルも、並べた部品・書体と当サービスの分だけ
     const listed = [...d.shipped, ...d.fonts].map((r) => r.textHref!.slice(1));
-    expect([...licenses.files.keys()].sort()).toEqual([...listed, "licenses/AGPL-3.0.txt"].sort());
-    expect([...files.keys()].filter((k) => k.startsWith("licenses/")).sort()).toEqual([...licenses.files.keys()].sort());
+    expect([...licenses.files.keys()].sort()).toEqual([...listed, `${LICENSE_TEXTS_DIR}/AGPL-3.0.txt`].sort());
+    expect([...files.keys()].filter((k) => k.startsWith(`${LICENSE_TEXTS_DIR}/`)).sort()).toEqual([...licenses.files.keys()].sort());
   });
 
   it("書体は、docs/licenses.md で置き場所が src/assets/ のもの（画面の書体）だけ", () => {
@@ -264,9 +264,9 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
       const name = r.textHref!.slice(1);
       expect(files.get(name), name).toBe(licenses.files.get(name));
     }
-    expect(files.get("licenses/pdf-lib-1.17.1.txt")).toBe(read("node_modules/pdf-lib/LICENSE.md"));
-    expect(files.get("licenses/Noto-Sans-JP-OFL.txt")).toBe(read("src/assets/fonts/OFL.txt"));
-    expect(files.get("licenses/AGPL-3.0.txt")).toBe(read("LICENSE"));
+    expect(files.get(`${LICENSE_TEXTS_DIR}/pdf-lib-1.17.1.txt`)).toBe(read("node_modules/pdf-lib/LICENSE.md"));
+    expect(files.get(`${LICENSE_TEXTS_DIR}/Noto-Sans-JP-OFL.txt`)).toBe(read("src/assets/fonts/OFL.txt"));
+    expect(files.get(`${LICENSE_TEXTS_DIR}/AGPL-3.0.txt`)).toBe(read("LICENSE"));
   });
 
   it("著作権の表示は、ライセンスの文にある行だけ（作らない）", () => {
@@ -292,9 +292,9 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
   it("ページに、当サービスの AGPL-3.0・ソースの場所・部品の表が出る", () => {
     const l = pages.get("licenses.html")!;
     expect(l).toContain("AGPL-3.0-only");
-    expect(l).toContain('href="/licenses/AGPL-3.0.txt"');
+    expect(l).toContain(`href="/${LICENSE_TEXTS_DIR}/AGPL-3.0.txt"`);
     expect(l).toContain(`href="${REPO}"`);
-    expect(l).toContain('href="/licenses/Noto-Sans-JP-OFL.txt"');
+    expect(l).toContain(`href="/${LICENSE_TEXTS_DIR}/Noto-Sans-JP-OFL.txt"`);
     expect(l).toContain(escapeHtml("Copyright 2014-2021 Adobe"));
     expect(l).toContain("開発・テスト・配信にだけ使う道具は、このサイトのファイルに入らないので並べていません");
   });
