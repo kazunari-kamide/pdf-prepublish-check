@@ -7,7 +7,7 @@
 // - 開発サーバー（npm run dev）でも、同じページを返す
 // - 検索エンジンの確認のコード（src/site/search-console.ts）があれば、トップページに <meta> を入れる
 //
-// ページにはスクリプトを入れない（例外は、記事の一覧のページの検索のスクリプト 1 つだけ。src/site/article-search.js）。通信を足さない（docs/no-network.md）。
+// ページにはスクリプトを入れない（例外は、記事の一覧のページの検索とタグの絞り込みのスクリプト 1 つだけ。src/site/article-search.js）。通信を足さない（docs/no-network.md）。
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -21,8 +21,9 @@ import { buildFigures } from "./site-figures.ts";
 import { buildLicenses } from "./site-licenses.ts";
 import { renderIndexPages, usedTags } from "./src/site/article-index.ts";
 import { tagPath } from "./src/site/tags.ts";
-import { CONTACT_MESSAGE_MARK, GUIDE_PATHS, renderContactResults, renderGuidePages } from "./src/site/pages.ts";
+import { CONTACT_MESSAGE_MARK, GUIDE_PATHS, TERMS_DIALOG_MARKER, renderContactResults, renderGuidePages, renderTermsDialog } from "./src/site/pages.ts";
 import { escapeHtml, renderSite, sitePaths } from "./src/site/render.ts";
+import { articleTransitionNames } from "./src/site/motion.ts";
 import { GOOGLE_SITE_VERIFICATION, VERIFICATION_PATTERN } from "./src/site/search-console.ts";
 import { INSPECTOR_HEAD, OG_IMAGE_PATH, headLines, type HeadInfo } from "./src/site/seo.ts";
 
@@ -35,13 +36,14 @@ export function ogImage(): Buffer {
   return readFileSync(path.join(ROOT, "src", "site", "og-image.png"));
 }
 
-/** サイトのページの CSS。tokens.css・sheet.css の後に site.css をつなぐ */
+/** サイトのページの CSS。tokens.css・sheet.css の後に site.css、その後に動きの CSS（src/site/motion.css と、記事ごとの名前。motion.ts）をつなぐ */
 export function siteCss(): string {
   const tokens = readFileSync(path.join(ROOT, "design", "tokens.css"), "utf8");
   // デザインシート（design/sheet.md）の役の名前。検査の画面（src/style.css の @import）と同じファイルを読む
   const sheet = readFileSync(path.join(ROOT, "design", "sheet.css"), "utf8");
   const site = readFileSync(path.join(ROOT, "src", "site", "site.css"), "utf8");
-  return `${tokens}\n${sheet}\n${site}`;
+  const motion = readFileSync(path.join(ROOT, "src", "site", "motion.css"), "utf8");
+  return `${tokens}\n${sheet}\n${site}\n${motion}\n${articleTransitionNames()}`;
 }
 
 export function siteCssFile(css = siteCss()): string {
@@ -157,6 +159,16 @@ export function verificationMeta(code = GOOGLE_SITE_VERIFICATION): { name: strin
   return { name: "google-site-verification", content: code };
 }
 
+/**
+ * 検査のページの目印（TERMS_DIALOG_MARKER）を、利用規約のダイアログに置き換える。
+ * 文は利用規約のページと同じ元（src/site/pages.ts）から作る。目印がないか 2 つ以上あれば、ビルドを止める
+ */
+export function withTermsDialog(html: string, repo: string | null = repoUrl()): string {
+  const count = html.split(TERMS_DIALOG_MARKER).length - 1;
+  if (count !== 1) throw new Error(`index.html に利用規約のダイアログの目印 ${TERMS_DIALOG_MARKER} が 1 つではありません（${count} 個）`);
+  return html.replace(TERMS_DIALOG_MARKER, () => renderTermsDialog({ repoUrl: repo }));
+}
+
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -177,7 +189,7 @@ export function sitePages(): Plugin {
         // 検査のページの題・説明・canonical・OGP・X のカード（中身は src/site/seo.ts）
         const head = headLines(INSPECTOR_HEAD_INFO, OFFICIAL_ORIGIN, escapeHtml);
         if (!/<title>[^<]*<\/title>/.test(html)) throw new Error("index.html に <title> がありません（題・説明を入れる場所）");
-        return { html: html.replace(/<title>[^<]*<\/title>/, head), tags: meta ? [{ tag: "meta", attrs: meta, injectTo: "head" }] : [] };
+        return { html: withTermsDialog(html).replace(/<title>[^<]*<\/title>/, head), tags: meta ? [{ tag: "meta", attrs: meta, injectTo: "head" }] : [] };
       },
     },
     generateBundle() {

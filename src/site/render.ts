@@ -110,9 +110,15 @@ ${FOOT_LINKS.map(([href, label]) => `        <a href="${href}">${e(label)}</a>`)
 `;
 }
 
+/** 節の HTML（見出しは h2）。.map(renderSection) で呼ぶ所があるので、引数は節 1 つだけにする */
 export function renderSection(s: Section): string {
+  return renderSectionAt(s, 2);
+}
+
+/** 節の HTML。検査のページの利用規約のダイアログでは、ダイアログの題（h2）の下なので見出しを h3 にする */
+export function renderSectionAt(s: Section, level: 2 | 3): string {
   const e = escapeHtml;
-  const out = [`      <section class="site-section">`, `        <h2>${e(s.heading)}</h2>`];
+  const out = [`      <section class="site-section">`, `        <h${level}>${e(s.heading)}</h${level}>`];
   for (const p of s.paragraphs ?? []) out.push(`        <p>${e(p)}</p>`);
   if (s.list?.length) out.push(`        <ul>`, ...s.list.map((li) => `          <li>${e(li)}</li>`), `        </ul>`);
   if (s.steps?.length) out.push(`        <ol class="site-steps">`, ...s.steps.map((li) => `          <li>${e(li)}</li>`), `        </ol>`);
@@ -165,7 +171,8 @@ export function renderArticle(a: Article, o: RenderOptions): string {
   const e = escapeHtml;
   const kicker = a.pattern ? `型の解説・${a.pattern}` : "正しいやり方の手順";
   const body = [
-    `      <article class="site-article">`,
+    // data-article は、記事の一覧の札から移るときの動き（motion.ts の view-transition-name）を当てるための印
+    `      <article class="site-article" data-article="${e(a.slug)}">`,
     `      <p class="site-kicker">${e(kicker)}</p>`,
     `      <h1>${e(a.title)}</h1>`,
     `      <p class="site-lead">${e(a.description)}</p>`,

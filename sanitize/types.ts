@@ -249,6 +249,8 @@ export type RedactLeftover = {
   rect?: Rect;
   /** ルール・検証器の型の番号（P6 など） */
   pattern?: string;
+  /** 文書情報・XMP の欄の値のとき、その欄の名前（Title・dc:title など。中身は入れない）。本人が選んだ値を見分けるために使う */
+  field?: string;
 };
 
 /** 読み直しの確かめを1つ足す（作品の検査・検証器など。片付けた PDF のバイト列だけを受け取る） */
@@ -276,6 +278,13 @@ export type RedactResult =
       decrypted: boolean;
       /** 読み直しで行った確かめ（"area" と、渡した checks の name） */
       checked: string[];
+      /** プロパティを書き直したとき（options.properties を渡したとき）だけ。整えるほうの報告（SanitizeResult の properties）と同じ形 */
+      properties?: PropertyChange[];
+      /**
+       * options.properties を渡したときだけ。読み直しで見つかったうち、本人が「そのまま」「書き直す」を選んだ欄の値（P1・P2・P3 で欄の名前があるもの）として、
+       * 残りに数えなかった数。それ以外の残りは、今までどおり保存させない
+       */
+      chosen?: number;
     }
   | {
       /** 残りがあるので、保存させない（バイト列は返さない） */
@@ -286,6 +295,8 @@ export type RedactResult =
       leftovers: RedactLeftover[];
       decrypted: boolean;
       checked: string[];
+      properties?: PropertyChange[];
+      chosen?: number;
     }
   | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_areas" | "bad_properties" | "properties_left"; message: string };
 

@@ -32,6 +32,20 @@ export const FIELDS: ReadonlyArray<{ key: PropertyKey; info: string; xmp: string
 ];
 const KEYS = new Set<string>(FIELDS.map((f) => f.key));
 
+/** 本人が選んだ値として「残り」に数えない型（文書情報・XMP・他の団体の名前。欄の名前があるもの。画面の src/ui/clean-model.ts の CHOSEN_PATTERNS と同じ） */
+export const CHOSEN_PATTERNS: readonly string[] = ["P1", "P2", "P3"];
+
+/** 「そのまま」（kept）「書き直す」（set）になった欄の名前（文書情報と XMP の両方）。画面の src/ui/tidy-model.ts の chosenFields と同じ決まり */
+export function chosenFieldNames(changes: readonly PropertyChange[] | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const c of changes ?? []) {
+    if (c.action !== "kept" && c.action !== "set") continue;
+    const f = FIELDS.find((x) => x.key === c.key);
+    if (f) out.add(f.info).add(f.xmp);
+  }
+  return out;
+}
+
 /** 書き直す値の長さの上限（字） */
 export const MAX_PROPERTY_CHARS = 1000;
 /** preflightTidy で返す今の値の長さの上限（字） */
