@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P12（JavaScript・開いたときの動作）1.0.0。
+// 検出ルール P12（JavaScript・開いたときの動作）1.1.0。
 // 文書の JavaScript と、開いた・閉じた・印刷したときなどに自動で動く動作を、有る・無いと場所で返す。深刻度は「注意」。
 // JavaScript の中身は返さない（字数だけ）。実行もしない。
 //
@@ -18,6 +18,8 @@
 //     launch（ほかのプログラムやファイルを開く）・remote_goto（別のファイルへ移る）・uri（ウェブのページを開く）・そのほか（other_action）
 // 押したときだけ動く所（注釈の /A・/AA、フォームのボタンの /A）の launch・remote_goto・uri は、ふつうのリンク
 // （「別紙.pdf を開く」など）なので数えず、notCounted.link に数える（合成 PDF の P9 の対照で、別のファイルへのリンクを誤検知したため）。
+// 1.1.0：押したときに外のウェブのページを開くリンク（uri）は、押したときだけ動く所でも数える（低い「確認してほしい所」）。
+// 行き先が公開してよい場所か（庁内の場所・作業中の場所でないか）を確かめてもらうため。launch・remote_goto は、いままでどおり数えない。
 // 数えない動作：同じ文書の中のページへ移る（GoTo・行き先の配列）・名前つきの動作（Named。次のページなど）。
 
 import { PDFDict, PDFRef, PDFStream, type PDFContext, type PDFObject, type PDFPage } from "pdf-lib";
@@ -25,7 +27,7 @@ import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { arrayItems, catalogOf, dictOf, lookup, N, nameOf, nameTreeEntries, openPdf, streamData, textOf, type RuleError } from "../common/index.ts";
 
 export const RULE_ID = "p12-actions";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 export type P12Where = "names" | "open_action" | "document_aa" | "page_aa" | "annotation" | "field" | "other";
 export type P12Kind = "javascript" | "launch" | "submit_form" | "import_data" | "remote_goto" | "uri" | "other_action";
@@ -118,7 +120,7 @@ export async function detectP12Actions(bytes: Uint8Array): Promise<P12Report> {
     const clicked = where === "annotation" || (where === "field" && trigger === null);
     if (s === "GoTo" || s === undefined) report.notCounted.goto++;
     else if (s === "Named") report.notCounted.named++;
-    else if (kind && (ALWAYS.has(kind) || !clicked)) add(kind, where, trigger, page, kind === "javascript" ? jsChars(ctx, v.get(N("JS"))) : 0);
+    else if (kind && (ALWAYS.has(kind) || !clicked || kind === "uri")) add(kind, where, trigger, page, kind === "javascript" ? jsChars(ctx, v.get(N("JS"))) : 0);
     else if (!kind && !clicked) add("other_action", where, trigger, page, 0);
     else report.notCounted.link++;
     // 続きの動作（/Next。1つか配列）

@@ -71,12 +71,12 @@ describe("黒い四角の下の字", () => {
     expect((await detectP6Text(pdf)).findings).toHaveLength(0);
   });
 
-  it("薄い色のマーカーは、隠していないので見つけない", async () => {
+  it("不透明な薄い色の四角も、下の字を隠すので見つける（1.11.0 から。濃くない覆いとして）", async () => {
     const pdf = await makePdf((page, font) => {
       page.drawText("Taro Yamada", { x: 20, y: 100, size: 12, font });
       page.drawRectangle({ x: 15, y: 95, width: 120, height: 20, color: grayscale(0.9) });
     });
-    expect((await detectP6Text(pdf)).findings).toHaveLength(0);
+    expect((await detectP6Text(pdf)).findings).toMatchObject([{ layer: "text", cover: "fill", coverTone: "opaque", chars: 10 }]);
   });
 
   it("半透明の黒は、隠していないので見つけない", async () => {

@@ -9,6 +9,8 @@
 // - 未適用の墨消しの注釈（/Redact）：見た目や色にかかわらず、黒塗りのつもりの所として覆いとする
 //   （適用すれば消える所だが、いまは下の字が残っている）
 // - 隠した注釈（/F の Hidden・NoView）は、見えないので覆いにしない（墨消しの注釈は除く）
+// - 見た目のない蛍光ペンの注釈（/Highlight）：色（/C）が濃いときだけ覆いとする（1.11.0 から。乗算で重なるので、濃くない色は透ける）
+// - 1.11.0 から、白・灰・色の不透明な注釈も、字の層の覆い（濃くない覆い）にする（覆いの下の字は、色によらず P6）
 
 import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFStream, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
 import { apply, boundsOf, isFiniteMatrix, multiply, type Matrix, type Point, type Rect } from "./geometry.ts";
@@ -118,6 +120,21 @@ export function scanAnnotations(ctx: PDFContext, annots: PDFArray | undefined, s
     // 見た目のない四角・多角形の注釈は、中の色（/IC）で見る。濃い色は字の層と画像の層、
     // 白っぽい色は画像の層だけの覆いになる（1.5.0 から。addCover が色の向きで分ける）。
     // 多角形は、注釈の箱（/Rect）で近似する（1.5.0 から）
+    // 見た目のない蛍光ペンの注釈（/Highlight）は、色（/C）が濃いときだけ、QuadPoints（なければ Rect）を覆いにする（1.11.0 から）。
+    // 蛍光ペンは乗算で重ねて表示されるので、濃くない色では下の字が透けて見える（覆いにしない）
+    if (subtype === "Highlight") {
+      const c = numbers(ctx, annot.get(PDFName.of("C")));
+      const lum = c && c.length > 0 ? luminanceOf(c, c.length) : null;
+      if (lum === null || lum > settings.darkLuminanceMax) continue;
+      const q = numbers(ctx, annot.get(PDFName.of("QuadPoints")));
+      if (q && q.length >= 8) {
+        for (let i = 0; i + 8 <= q.length; i += 8) {
+          const pts: Point[] = [[q[i]!, q[i + 1]!], [q[i + 2]!, q[i + 3]!], [q[i + 4]!, q[i + 5]!], [q[i + 6]!, q[i + 7]!]];
+          scanner.addCover(boundsOf(pts), "annotation", "fill", lum);
+        }
+      } else scanner.addCover(rect, "annotation", "fill", lum);
+      continue;
+    }
     if (subtype === "Square" || subtype === "Polygon") {
       const ic = numbers(ctx, annot.get(PDFName.of("IC")));
       const lum = ic && ic.length > 0 ? luminanceOf(ic, ic.length) : null;

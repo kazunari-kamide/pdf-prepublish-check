@@ -190,3 +190,62 @@ export type RedactResult =
       checked: string[];
     }
   | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_areas"; message: string };
+
+// ---------------------------------------------------------------- ファイルを小さくする（compress.ts）
+
+export type CompressOptions = {
+  /** 画像を解く・JPEG に書く道具（片付けと同じもの）。無いと小さくできない */
+  codec: ImageCodec;
+  /** 画像の細かさの上限（dpi。50〜600、既定 150）。いちばん大きく描かれた所でこれを超える画像だけを縮める */
+  maxDpi?: number;
+  /** JPEG の質（0.3〜0.95、既定 0.75） */
+  jpegQuality?: number;
+  /** 解く画像の画素の数の上限（既定は片付けと同じ） */
+  maxImagePixels?: number;
+  /**
+   * 小さくする前と後の両方にかける確かめ。種類ごとの残りが増えたら保存させない（blocked）。
+   * 画面：rulesCheck((b) => inspectAll(b))。Node（テスト・採点）：さらに検証器（P6）
+   */
+  checks?: RedactCheck[];
+};
+
+/** 書き直さなかった画像の理由 */
+export type CompressSkip = {
+  reason: "within_dpi" | "not_smaller" | "bitonal" | "mask" | "used_elsewhere" | "not_placed" | "too_large" | "unreadable";
+  count: number;
+  /** 画面にそのまま出せる短い文 */
+  label: string;
+};
+
+export type CompressImages = {
+  /** 縮めて JPEG に書き直した画像の数 */
+  changed: number;
+  /** 画像で減ったバイト数 */
+  savedBytes: number;
+  skipped: CompressSkip[];
+};
+
+/** 小さくしたあとの読み直しで増えた残り（中身は入れない。種類と数だけ） */
+export type CompressIncrease = {
+  check: RedactLeftover["check"];
+  kind: RedactLeftover["kind"];
+  pattern?: string;
+  label: string;
+  before: number;
+  after: number;
+};
+
+export type CompressResult =
+  | {
+      status: "ok";
+      /** 小さくした PDF。小さくならなかったときは、入れたバイト列のまま（changed: false） */
+      bytes: Uint8Array;
+      sizeBefore: number;
+      sizeAfter: number;
+      changed: boolean;
+      images: CompressImages;
+      /** 読み直しにかけた確かめの名前（changed: false のときは空） */
+      checked: string[];
+    }
+  | { status: "blocked"; sizeBefore: number; sizeAfter: number; increased: CompressIncrease[]; checked: string[] }
+  | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large" | "bad_options" | "no_codec"; message: string };

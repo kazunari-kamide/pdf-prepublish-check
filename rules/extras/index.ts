@@ -4,19 +4,21 @@
 //
 // thumbnails（26 項目の 24）：ページに縮小画像（/Thumb）が付いているページ。型は P5（旧版の残存）の仲間として扱う【仮】。
 //   縮小画像は、ページを差し替えたり黒塗りしたりしても、作り直されずに前の見た目のまま残ることがある。
-//   いまのページの見た目と同じかどうかは、まだ比べていない（ページを描いて比べる必要があるため）。有る・無いと大きさだけを返す。
+//   1.1.0 から、いまのページの見た目とおおまかに比べる（thumb-compare.ts。ページの画像を縮めて描き、字や図形の所は比べない）。
+//   same（ほぼ同じ）・differs（違う）・unknown（比べられなかった）を返す。
 // notices（26 項目の 26）：漏れとは言い切れないので「お知らせ」として出すもの。
 //   xfa：XFA のフォーム（XML のフォーム）。中の値（datasets）の字数も数える（値は返さない）
 //   c2pa：C2PA（画像の来歴の情報）。JPEG の APP11 の JUMBF、来歴の添付（/AFRelationship /C2PA_Manifest・種類 application/c2pa）
 
 import { PDFArray, PDFDict, PDFRawStream, PDFStream, type PDFContext } from "pdf-lib";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
+import { compareThumbnail, type ThumbCompare } from "./thumb-compare.ts";
 import { arrayItems, catalogOf, dictOf, lookup, N, nameOf, numOf, openPdf, streamData, type RuleError } from "../common/index.ts";
 
 export const RULE_ID = "extras";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
-export type Thumbnail = { pattern: "P5"; page: number; width: number | null; height: number | null; bytes: number | null };
+export type Thumbnail = { pattern: "P5"; page: number; width: number | null; height: number | null; bytes: number | null; compare: ThumbCompare };
 export type ExtraNotice = { kind: "xfa"; dataChars: number; checked: boolean } | { kind: "c2pa"; places: number };
 
 export type ExtrasReport = {
@@ -100,7 +102,17 @@ export async function detectExtras(bytes: Uint8Array): Promise<ExtrasReport> {
     doc.getPages().forEach((p, i) => {
       const t = lookup(ctx, p.node.get(N("Thumb")));
       if (!(t instanceof PDFStream)) return;
+      let compare: ThumbCompare = "unknown";
+      try {
+        const mb = p.getMediaBox();
+        const cb = p.getCropBox();
+        const box: [number, number, number, number] = [Math.max(mb.x, cb.x), Math.max(mb.y, cb.y), Math.min(mb.x + mb.width, cb.x + cb.width), Math.min(mb.y + mb.height, cb.y + cb.height)];
+        compare = compareThumbnail(ctx, t, p.node, p.node.Resources(), box);
+      } catch {
+        compare = "unknown";
+      }
       report.thumbnails.push({
+        compare,
         pattern: "P5",
         page: i + 1,
         width: numOf(ctx, t.dict.get(N("Width"))) ?? null,

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P2（文書全体の XMP メタデータ）1.0.0。カタログの /Metadata の XMP を読む。圧縮あり・なしの両方。
+// 検出ルール P2（文書全体の XMP メタデータ）1.1.0。カタログの /Metadata の XMP を読む。圧縮あり・なしの両方。
 // 部品ごとの XMP（画像・フォーム XObject など）は rules/p2-parts の範囲で、ここでは見ない。
 //
 // 数えるもの（1件 ＝ 種類・欄・値の組み1つ。値そのものは返さず、字数だけ）：
@@ -11,19 +11,24 @@
 //   gps：GPS の緯度・経度（P10）
 // 数えないもの：ソフト名（xmp:CreatorTool・pdf:Producer）・文書 ID（xmpMM:DocumentID・InstanceID）・日付・形式（dc:format）。
 // 決まり文句・ソフト名・数字の入ったアカウント名は、p2-parts と同じく notCounted に回す。
+// 1.1.0：題・説明・キーワード（text）が、文書情報（/Info）の同じ欄と同じ値なら数えない（P1 と二重に出さない。notCounted の same_as_info）。
+//   人名の欄（person）は、同じ値でも数える（XMP にも名前があることを知らせるため）。
 
 import { PDFStream, type PDFContext } from "pdf-lib";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
-import { catalogOf, charCount, lookup, N, openPdf, streamData, type RuleError } from "../common/index.ts";
+import { catalogOf, charCount, dictOf, lookup, N, openPdf, streamData, textOf, type RuleError } from "../common/index.ts";
 import { classifyName, classifyPath, PATH_FIELDS, PERSON_FIELDS, xmpValues } from "../p2-parts/index.ts";
 
 export const RULE_ID = "p2-xmp";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 /** XMP として読む大きさの上限（バイト）【仮の値】 */
 export const MAX_XMP_BYTES = 16 * 1024 * 1024;
 
 export const TEXT_FIELDS = ["dc:title", "dc:description", "dc:subject", "pdf:Keywords"] as const;
+/** 文書情報の同じ欄（同じ値なら数えない） */
+const INFO_OF: Record<string, string> = { "dc:title": "Title", "dc:description": "Subject", "pdf:Keywords": "Keywords" };
+const sameText = (a: string, b: string) => a.normalize("NFKC").replace(/\s+/g, " ").trim() === b.normalize("NFKC").replace(/\s+/g, " ").trim();
 const GPS_FIELDS = ["exif:GPSLatitude", "exif:GPSLongitude"] as const;
 
 export type P2XmpKind = "person" | "text" | "path" | "history" | "gps";
@@ -48,7 +53,7 @@ export type P2XmpReport = {
   /** 文書全体の XMP があったか。compressed は圧縮されていたか */
   xmp: { present: boolean; compressed: boolean; bytes: number } | null;
   findings: P2XmpFinding[];
-  notCounted: Array<{ field: string; reason: "generic" | "account" | "software" | "no_user_folder"; count: number }>;
+  notCounted: Array<{ field: string; reason: "generic" | "account" | "software" | "no_user_folder" | "same_as_info"; count: number }>;
   limits: Array<"too_large" | "unreadable">;
   decrypted?: EncryptionSummary & { failedObjects: number };
 };
@@ -131,8 +136,14 @@ export async function detectP2Xmp(bytes: Uint8Array, options: DetectOptions = {}
       else skip(field, c.reason);
     }
   }
+  const info = dictOf(opened.ctx, opened.ctx.trailerInfo.Info);
   for (const field of TEXT_FIELDS) {
-    for (const v of new Set(xmpValues(xml, field))) add({ pattern: "P2", kind: "text", field, chars: charCount(v) }, v);
+    const key = INFO_OF[field];
+    const iv = key && info ? textOf(opened.ctx, info.get(N(key))) : null;
+    for (const v of new Set(xmpValues(xml, field))) {
+      if (iv && sameText(iv, v)) skip(field, "same_as_info");
+      else add({ pattern: "P2", kind: "text", field, chars: charCount(v) }, v);
+    }
   }
   for (const field of fieldsWithPrefix(xml, "pdfx")) {
     for (const v of new Set(xmpValues(xml, field))) add({ pattern: "P2", kind: "text", field, chars: charCount(v) }, v);

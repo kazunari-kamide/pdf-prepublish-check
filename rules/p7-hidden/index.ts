@@ -31,7 +31,7 @@ import { darkFractionOf, readImagePixels, type PixelRead } from "../p6-text/imag
 import { DEFAULT_SETTINGS as P6_SETTINGS } from "../p6-text/settings.ts";
 
 export const RULE_ID = "p7-hidden";
-export const RULE_VERSION = "1.1.0";
+export const RULE_VERSION = "1.2.0";
 
 export type P7Reason =
   | "hidden_layer"
@@ -46,7 +46,9 @@ export type P7Reason =
   | "covered_image"
   | "hidden_codepoint"
   | "remapped"
-  | "overdrawn";
+  | "overdrawn"
+  | "image_off_page"
+  | "image_clipped";
 
 /** 判定の値。rubric/p7.json の thresholds と同じ値（rubric は採点する側なので読まず、ここに持つ） */
 export const DEFAULT_SETTINGS = {
@@ -70,6 +72,13 @@ export const DEFAULT_SETTINGS = {
   sameColorImageFractionMin: 0.9,
   /** 1行にまとめる字の間のすき間の上限（字の高さに対する割合。1.1.0 から） */
   mergeGapMax: 1.0,
+  /**
+   * 見えない所に置いた画像（1.2.0 から）：見える範囲（ページの箱と切り抜き）に入る面積の割合がこれ以下なら「大部分を切り抜いた画像」。
+   * 0 ならページの外の画像。写真のふちを落とすだけの切り抜き（9 割ほど見える）は出さない【仮の値】
+   */
+  imageVisibleFractionMax: 0.25,
+  /** 見えない所に置いた画像として調べる、画像の画素の数の下限（小さな飾り・線の画像は見ない）【仮の値】 */
+  imageMinPixels: 1024,
 };
 export type P7Settings = typeof DEFAULT_SETTINGS;
 
@@ -237,6 +246,9 @@ type Img = {
   alpha: number;
   normal: boolean;
   fillLum: number | null;
+  /** 置いたときの切り抜きの箱と、表示しない層の中か（1.2.0 から。見えない所に置いた画像を見るため） */
+  clip?: Rect;
+  hidden?: boolean;
 };
 
 type GState = {
@@ -632,7 +644,7 @@ class PageScanner {
             const isMask = xo.dict.lookup(PDFName.of("ImageMask"));
             const masked = (isMask instanceof PDFBool && isMask.asBoolean()) || xo.dict.has(PDFName.of("SMask")) || xo.dict.has(PDFName.of("Mask"));
             const colorSpaces = resources ? (dictOf(ctx, resources.get(PDFName.of("ColorSpace"))) ?? undefined) : undefined;
-            this.images.push({ seq: this.seq++, box: boxOf([pt(0, 0), pt(1, 0), pt(0, 1), pt(1, 1)]), m: g.ctm, stream: xo, colorSpaces, masked, alpha: g.ca, normal: g.normal, fillLum: g.fill });
+            this.images.push({ seq: this.seq++, box: boxOf([pt(0, 0), pt(1, 0), pt(0, 1), pt(1, 1)]), m: g.ctm, stream: xo, colorSpaces, masked, alpha: g.ca, normal: g.normal, fillLum: g.fill, clip: g.clip, hidden: isHidden() });
           } else if (st === "Form" && xo instanceof PDFRawStream) {
             if (depth >= this.settings.maxFormDepth || forms.has(xo)) break;
             const fm = arrOf(ctx, xo.dict.get(PDFName.of("Matrix")));
@@ -752,6 +764,22 @@ class ImagePixels {
 // ---------------------------------------------------------------- 判定
 
 type Judged = { reason: P7Reason } | { excluded: "p6" | "ocr" } | null;
+
+/** 見えない所に置いた画像か（1.2.0 から）。表示しない層の中・型抜き・小さな画像・ふつうでない置き方は見ない */
+function hiddenImage(im: Img, view: Rect, s: P7Settings): "image_off_page" | "image_clipped" | null {
+  if (!im.stream || im.hidden || im.alpha < s.coverAlphaMin) return null;
+  const isMask = im.stream.dict.lookup(PDFName.of("ImageMask"));
+  if (isMask instanceof PDFBool && isMask.asBoolean()) return null;
+  const w = im.stream.dict.lookup(PDFName.of("Width"));
+  const h = im.stream.dict.lookup(PDFName.of("Height"));
+  if (!(w instanceof PDFNumber) || !(h instanceof PDFNumber) || w.asNumber() * h.asNumber() < s.imageMinPixels) return null;
+  const whole = area(im.box);
+  if (!(whole > 0) || !Number.isFinite(whole)) return null;
+  const vis = intersect(intersect(im.box, view), im.clip ?? im.box);
+  const frac = area(vis) / whole;
+  if (frac <= 0) return area(intersect(im.box, view)) <= 0 ? "image_off_page" : "image_clipped";
+  return frac <= s.imageVisibleFractionMax ? "image_clipped" : null;
+}
 
 function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], pixels: ImagePixels, s: P7Settings): Judged {
   const a = area(gl.rect);
@@ -1019,6 +1047,11 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
       });
       flush();
       if (ocrChars > 0) report.ocrLayerPages.push(pageNo);
+      // 見えない所に置いた画像（1.2.0 から）：ページの外、または切り抜きで大部分を隠した画像。字の模様などが残っていても、見た目では分からない
+      for (const im of scanner.images) {
+        const f = hiddenImage(im, view, settings);
+        if (f) report.findings.push({ pattern: "P7", page: pageNo, reason: f, rect: padRect(im.box), chars: 0 });
+      }
     } catch (e) {
       report.skippedPages.push({ page: pageNo, reason: e instanceof TooManyOperations ? "too_many_operations" : "unreadable_page" });
     }

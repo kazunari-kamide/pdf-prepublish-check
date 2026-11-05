@@ -4,7 +4,7 @@
 
 import { PDFName } from "pdf-lib";
 import type { P4Report } from "../../rules/p4-paths/index.ts";
-import { addAnnot, hex, lit, newDoc, save, setCatalogXmp, setInfo, xmpPacket, type Case } from "./pdf.ts";
+import { addAnnot, drawAscii, hex, lit, newDoc, save, setCatalogXmp, setInfo, xmpPacket, type Case } from "./pdf.ts";
 
 export const keysOf = (r: P4Report) => r.findings.map((f) => `${f.kind}:${f.where}`);
 
@@ -88,6 +88,28 @@ export const CASES: Case[] = [
     async build() {
       const { doc } = await newDoc();
       setCatalogXmp(doc, xmpPacket('xmp:CreatorTool="Microsoft Word"', "<dc:source>https://example.jp/</dc:source>"), false);
+      return save(doc);
+    },
+  },
+  {
+    id: "p4-l06",
+    kind: "leak",
+    description: "ページの字に、共有フォルダのパスと、ユーザーのフォルダのパス（1.1.0 から本文も見る）",
+    leaks: ["server:body", "user_path:body"],
+    async build() {
+      const { doc, pages } = await newDoc();
+      await drawAscii(doc, pages[0]!, ["Source: \\\\kakuu-fs01\\share\\budget.xlsx", "Draft: C:\\Users\\kakuu\\Desktop\\memo.docx"]);
+      return save(doc);
+    },
+  },
+  {
+    id: "p4-c03",
+    kind: "control",
+    description: "ページの字に、パスでない記号（A/B・C\\D・2026/11）と、ドライブ名のパス（本文では数えない）と、公開の https の場所",
+    leaks: [],
+    async build() {
+      const { doc, pages } = await newDoc();
+      await drawAscii(doc, pages[0]!, ["Options A/B and C\\D, 2026/11", "Save to D:\\work\\form.pdf", "See https://example.jp/docs/"]);
       return save(doc);
     },
   },

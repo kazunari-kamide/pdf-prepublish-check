@@ -35,3 +35,8 @@ const report2 = await detectP2Xmp(bytes, { includeValues: true }); // 値その�
 - `pdfx:` 以外の名前空間の独自の欄は見ない。
 - 前の版（増分更新の前）の XMP は見ない（P5 の範囲）。
 - XMP は 16 MB まで読む。超えたら `limits` に出す。
+
+## 1.1.0（2026-11-05）
+
+- 題・説明・キーワード（`text`）が、文書情報（`/Info`）の同じ欄（Title・Subject・Keywords）と同じ値なら数えない（`notCounted` の `same_as_info`）。P1 と同じ値を二重に出さないため。
+- 人名の欄（`person`）は、同じ値でも数える（XMP にも名前が残っていることを知らせるため）。

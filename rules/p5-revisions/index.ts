@@ -28,13 +28,15 @@ import {
   decodePDFRawStream,
 } from "pdf-lib";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
+import { unusedForms } from "./unused-forms.ts";
 import { decryptDefinitions, expandObjectStream, hasEncryptMarker, isMaskedObjStm, maskObjectStreams, unmaskObjectStream } from "./decrypt.ts";
 
 export const RULE_ID = "p5-revisions";
-export const RULE_VERSION = "1.2.1";
+export const RULE_VERSION = "1.3.0";
 
 export type P5Where = "superseded" | "free" | "unreferenced" | "orphan";
-export type P5Kind = "info" | "content" | "annotation" | "form_value" | "metadata" | "image" | "embedded_file" | "dict_text";
+/** unused_form（1.3.0 から）＝いまの版のページの資源にあるが、どこからも描かれない部品（Form XObject）で、字を描く命令を持つもの */
+export type P5Kind = "info" | "content" | "annotation" | "form_value" | "metadata" | "image" | "embedded_file" | "dict_text" | "unused_form";
 /** 字の中身を持たない構造の部品の種類（1.2.0）。font＝フォントの辞書・FontDescriptor、font_file＝フォントの本体（FontFile など）、
  *  cmap＝文字の対応表（CMap・ToUnicode）、color_profile＝色の設定（ICC）、other＝ページ・ページの木などそのほかの骨組み */
 export type P5Part = "font" | "font_file" | "cmap" | "color_profile" | "other";
@@ -457,10 +459,11 @@ function classify(
     return chars > 0 ? { counted: true, kind: "info", chars } : { counted: false, kind: "info", reason: "info_without_counted_keys" };
   }
   const part: P5Part = type === K.Font || type === K.FontDescriptor ? "font" : type === K.CMap ? "cmap" : "other";
-  // オブジェクトストリームの中の、どこからも指されていない辞書で、字の値を持つもの（1.2.0）。構造の部品は数えない
+  // オブジェクトストリームの中の、どこからも指されていない辞書で、字の値を持つもの（1.2.0）。構造の部品は数えない。
+  // 1.3.0 から：どの版の xref にも載らない辞書（orphan。%%EOF のあとに足したものなど）も、オブジェクトストリームの外でも数える
   const typeName = type instanceof PDFName ? type.decodeText() : null;
   const isolated = where === "unreferenced" || where === "orphan";
-  if (def.objstm !== null && isolated && part === "other" && (typeName === null || !STRUCTURE_TYPES.has(typeName))) {
+  if ((def.objstm !== null || where === "orphan") && isolated && part === "other" && (typeName === null || !STRUCTURE_TYPES.has(typeName))) {
     const chars = stringChars(o);
     if (chars > 0) return { counted: true, kind: "dict_text", chars };
   }
@@ -663,6 +666,24 @@ export async function detectP5Revisions(bytes: Uint8Array): Promise<P5Report> {
         report.cleanupOnly.parts[k.part ?? "other"]++;
       }
     }
+  }
+  // 資源にあるが描かれない部品（1.3.0 から。unused-forms.ts）。いまの版のページからたどる
+  const pages: PDFDict[] = [];
+  for (const n of reachable) {
+    const o = live.get(n)?.obj;
+    if (o instanceof PDFDict && o.get(K.Type) === N("Page")) pages.push(o);
+  }
+  for (const num of [...unusedForms(pages, resolve)].sort((a, b) => a - b)) {
+    const d = live.get(num);
+    if (!d || !(d.obj instanceof PDFRawStream) || d.obj.contents.length > LIMITS.streamBytes) continue;
+    let text: string;
+    try {
+      text = latin1.decode(decodePDFRawStream(d.obj).decode());
+    } catch {
+      continue;
+    }
+    if (!hasTextOperators(text)) continue;
+    report.findings.push({ pattern: "P5", object: d.num, gen: d.gen, kind: "unused_form", where: "unreferenced", revision: revisionOf(d) });
   }
   return report;
 }

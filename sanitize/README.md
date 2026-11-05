@@ -89,6 +89,57 @@ type RedactResponse =
 - 画面の「消しました」は、`removed` の `redacted_*` を場所ごとに並べる。「残っていません」は「選んだ所と、調べた項目（P1・P2・P5〜P9・P12 の範囲）について」と添える。
 - Worker の中で作品の検査を呼ぶので、検査の Worker と同じ時間の上限をかける。
 
+## ファイルを小さくする（`compress`。0.6.0 から）
+
+片付けのあとの PDF を、画像の細かさ（dpi）と JPEG の質を選んで小さくする。提出先の容量の上限に合わせるための入口。片付けの代わりにはならないので、**片付けた PDF に使う**。
+
+```ts
+import { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "../sanitize/index.ts";
+import { rulesCheck } from "../sanitize/redact-check.ts";
+const r = await compress(cleanedBytes, {
+  codec,                                          // 片付けと同じ画像の道具（無いと no_codec）
+  maxDpi: 150,                                    // 50〜600（COMPRESS_DPI）。既定 150
+  jpegQuality: 0.75,                              // 0.3〜0.95（COMPRESS_QUALITY）。既定 0.75
+  checks: [rulesCheck((b) => inspectAll(b))],     // 小さくする前と後に同じ確かめをかける
+});
+// r.status === "ok"      → r.bytes・r.sizeBefore・r.sizeAfter・r.changed・r.images（書き直した数・減ったバイト数・手を付けなかった理由と数）
+// r.status === "blocked" → r.increased（増えた残りの種類・前の数・後の数）。バイト列は返さない
+// r.status === "error"   → r.code（empty・unreadable・encrypted・too_large・bad_options・no_codec）・r.message
+```
+
+**小さくするもの**：ページ（と、その中の部品 Form）に描かれた画像のうち、いちばん大きく描かれた所でも `maxDpi` の 1.1 倍を超える細かさのもの。画素を平均して `maxDpi` まで縮め、JPEG（RGB）に書き直す。元より小さくなったときだけ置き換える。ほかのもの（字・図形・書体・透明の型）は変えない。
+
+**手を付けない画像**（`r.images.skipped` に理由と数。`label` は画面にそのまま出せる）：
+
+| reason | いつ |
+|---|---|
+| `within_dpi` | すでに選んだ細かさ以下 |
+| `not_smaller` | 書き直しても小さくならなかった |
+| `bitonal` | 白黒（1 ビット）の画像（JPEG にすると大きく、字がにじむ） |
+| `mask` | 型抜きの画像（`/ImageMask`・`/Mask`）、`/Matte` のある透明の型を持つ画像 |
+| `used_elsewhere` | 注釈の見た目・模様（パターン）など、ページと部品の中身の外からも使う画像（描かれる大きさが分からない） |
+| `not_placed` | どこにも描かれていない画像、重くて読めなかったページの画像 |
+| `too_large` | 画素の数が上限（片付けと同じ 7,200 万）を超える |
+| `unreadable` | 解けなかった画像 |
+
+**読み直し**：入れた PDF と出来上がった PDF の両方に `checks` をかけ、「確かめの名前・残りの種類・型（P1 など）」ごとの数を比べる。1 つでも増えたら `blocked`（場所は比べない。縮めると画像の境がずれるため）。出来上がった PDF を確かめられなかったとき・ページの数が変わったときも `blocked`。画像を1つも書き直さなかったときは、入れたバイト列をそのまま返し、確かめはかけない（`checked` は空）。
+
+**画面へのつなぎ方（B と合わせる案）**：
+
+```ts
+// 画面 → 片付けの Worker（「3 片付ける」が済んで、読み直しが緑のあと）
+{ type: "compress"; bytes: ArrayBuffer; maxDpi: number; jpegQuality: number }
+// 片付けの Worker → 画面
+{ type: "compressed"; bytes: ArrayBuffer; sizeBefore: number; sizeAfter: number; changed: boolean; images: CompressImages }
+{ type: "compress_blocked"; sizeBefore: number; sizeAfter: number; increased: CompressIncrease[] }
+{ type: "compress_error"; code: string; message: string }
+```
+
+- 選べる値は 3 つくらいに絞る案：「ふつう（150dpi・0.75）」「もっと小さく（100dpi・0.6）」「きれいに（200dpi・0.85）」。範囲は `COMPRESS_DPI`・`COMPRESS_QUALITY` から出す。
+- 結果は「前 ○ KB → 後 ○ KB」と、書き直した画像の数・手を付けなかった画像の理由と数を出す。`changed: false` のときは「小さくできる画像がありませんでした」。
+- `compress_blocked` のときは保存させず、`increased` の `label` と前後の数を出す。
+- 小さくした PDF は、検査の画面にもう一度入れて読み直せるようにする（片付けのあとと同じ）。
+
 ## 片付けられなかった所（`notDone`）
 
 | reason | いつ | 画面での出し方の例 |
@@ -171,6 +222,7 @@ npm test                                      # tests/sanitize.test.ts・tests/s
 - `redact.ts`：自分で黒塗りする入口。選んだ場所に掛かる注釈・フォームの欄を外し、保存の前に読み直す
 - `redact-check.ts`：読み直しの確かめ（選んだ場所の字・画素・注釈）と、作品の検査をつなぐ `rulesCheck`
 - `redact-fonts.ts`：字の対応表（`/ToUnicode`）から、消した字だけで使っていた行を消す
+- `compress.ts`：ファイルを小さくする入口。画像の描かれる大きさを `content.ts` の読み手で測り、縮めて JPEG に書き直し、前後に同じ確かめをかける
 - `content.ts`：ページの命令を追い、字（どの命令の何文字目か）・覆い・塗り・画像を描いた順に集め、消す字・塗る画素を決め、書き直す。書き換えた部品・画像は**新しいオブジェクト**にし、元は書き換えない（ほかのページで使われているかもしれないため）。使われなくなった元は掃除で消える
 - `images.ts`：画像の画素を塗る（Flate・LZW・ASCIIHex・ASCII85・RunLength。PNG・TIFF の予測も戻す。大きな Flate は流して塗る。JPEG・CCITT・JBIG2 は `image-codec.ts` の道具で解いて書き直す）
 - `image-codec.ts`：画像の道具を作る（PDF.js と、JPEG に書く関数を受け取る。ブラウザは OffscreenCanvas）。片付けのコードは PDF.js を読み込まない
@@ -193,6 +245,11 @@ npm test                                      # tests/sanitize.test.ts・tests/s
 - 黒い覆いは、表示しないレイヤーの中のものも覆いとして扱っている（前から。白い覆いは扱わない）。表示しないレイヤーの黒い四角の下の画像は、黒く塗られて見た目が変わる（2026-11-04 に合成 PDF で確かめた。直すかは人が決める）。
 - 字の区切りが分からない字の並び（2バイトの書体で、長さが合わないもの）は、並びごと消す（消しすぎの側）。
 - 縦書きは、書体が縦書き（`/WMode 1`）のときだけ縦の箱で見る（0.5.0 から）。縦の寸法は `/DW2` だけを読み、字ごとの `/W2` は読まない（`/W2` で字ごとに位置を変えた書体では、箱がずれることがある）。
+- **ファイルを小さくする（`compress`）の限界**：
+  - 小さくするのは画像だけ。字・図形・書体・透明の型（`/SMask`）は小さくしない。書き直した画像は RGB の JPEG になる（灰色の画像・ICC の色も RGB にする。色が少し変わることがある）。
+  - 縮めると、黒塗りした箱の縁の画素（縮めたあとの 1 画素ぶん）は、箱の中の黒と箱の外の紙の色が混ざる。箱の外は、もともと見えている所で、箱の中の中身は混ざらない（塗った画素は黒だけのため）。`redact` が描く黒い四角は、上にそのまま残る（2026-11-05 に合成 PDF で確かめた。縁を除いた内側の塗られていない画素は 0 個）。
+  - 注釈の見た目・模様の中の画像、どこに描くか分からない画像は小さくしない（大きく描かれる所で粗くならないように）。
+  - 読み直しは「種類ごとの数が増えないこと」を見る。場所が動いただけ（数が同じ）は見分けない。
 - **自分で黒塗りする（`redact`）の限界**：
   - 書体の中の字の形（字形）は消さない。字の対応表の行は消すが、字を絞った書体の中には、消した字の形が残る（書体を作り直す道具が要るため）。
   - 字の一部だけを残す切り方はしない（掛かった字は 1 字まるごと消す。消しすぎの側）。

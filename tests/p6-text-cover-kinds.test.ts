@@ -72,11 +72,11 @@ describe("濃い画像で覆った字（text/image）", () => {
     expect(r.findings).toHaveLength(0);
   });
 
-  it("濃い所と明るい所が混ざった写真のような画像は、覆いとみなさない", async () => {
-    // 16 画素のうち 4 画素が明るい（濃い画素は 75%）
+  it("濃い所と明るい所が混ざった写真のような画像は、濃い覆いではなく、濃くない覆いとして見つける（1.11.0 から）", async () => {
+    // 16 画素のうち 4 画素が明るい（濃い画素は 75%）。型抜きのない不透明な画像なので、下の字は見えない
     const px = [0, 0, 0, 255, 0, 0, 255, 0, 0, 255, 0, 0, 255, 0, 0, 0];
     const pdf = await makePdf((c) => placeImage(c, grayImage(c, px, 4, 4)));
-    expect((await detectP6Text(pdf)).findings).toHaveLength(0);
+    expect((await detectP6Text(pdf)).findings).toMatchObject([{ layer: "text", cover: "image", coverTone: "opaque" }]);
   });
 
   it("PNG の予測（Predictor 15）をかけた黒い画像も、見つける", async () => {
@@ -123,7 +123,7 @@ describe("濃い画像で覆った字（text/image）", () => {
     expect((await detectP6Text(pdf)).findings).toHaveLength(0);
   });
 
-  it("解けない圧縮（JPEG）の画像は、覆いとみなさず「調べられなかった画像」に数える", async () => {
+  it("解けない圧縮（JPEG）の画像は、「調べられなかった画像」に数え、濃くない覆いとして見つける（1.11.0 から）", async () => {
     const pdf = await makePdf((c) => {
       const ref = c.doc.context.register(
         c.doc.context.stream(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
@@ -139,7 +139,7 @@ describe("濃い画像で覆った字（text/image）", () => {
       placeImage(c, ref);
     });
     const r = await detectP6Text(pdf);
-    expect(r.findings).toHaveLength(0);
+    expect(r.findings).toMatchObject([{ layer: "text", cover: "image", coverTone: "opaque" }]);
     expect(r.uncheckedImages).toEqual([{ page: 1, reason: "unsupported_filter" }]);
   });
 });
@@ -166,9 +166,9 @@ describe("注釈で覆った字（text/annotation）", () => {
     expect(r.findings[0]!.rect).toEqual(RECT); // 見た目の座標を、注釈の箱に合わせて移す
   });
 
-  it("中が薄い色の四角の注釈は、見つけない", async () => {
+  it("中が薄い色の四角の注釈も、不透明なら見つける（1.11.0 から。濃くない覆いとして）", async () => {
     const pdf = await makePdf((c) => addAnnot(c, { Subtype: "Square", Rect: RECT, IC: [1, 1, 0], F: 4 }));
-    expect((await detectP6Text(pdf)).findings).toHaveLength(0);
+    expect((await detectP6Text(pdf)).findings).toMatchObject([{ layer: "text", cover: "annotation", coverTone: "opaque" }]);
   });
 
   it("隠した（Hidden）注釈は、見えないので見つけない", async () => {
