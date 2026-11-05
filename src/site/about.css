@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /*
  * サービスの紹介のページ（/about。src/site/about.ts）だけの見た目。サイトの CSS（tokens.css・sheet.css・site.css・motion.css）の後に読む。
- * - 値は design/tokens.css と design/sheet.css の変数を使う。新しく決めるのは、影の 2 段目（手に取った物）と、このページの幅だけ。
- * - 影は 2 段だけ：置いてある物（--shadow-1）と、手に取った物（--lp-shadow-lift ＋ 少し持ち上げる）。
+ * - 値は design/tokens.css と design/sheet.css の変数を使う。新しく決めるのは、このページの幅だけ。
+ * - 立体感は、サイトのページ（#108。design/sheet.md の「立体感」）にそろえる：置いてある物は --shadow-rest、
+ *   指を置くと --lift-* だけ浮いて --shadow-lift、押すと --shadow-press。札（ピル）は .site-tag と同じ形（--shadow-pill）。
+ *   動きを減らす設定では、浮く動きを出さない（影と形は残す）。
  * - 朱は「危ない所」と、検査のページへのボタンだけに使う。ほかは墨と白。
  * - 動きは CSS だけ（スクリプトなし）。動きを減らす設定（prefers-reduced-motion: reduce）では、動き・傾きを止め、最初から見える形にする。
  * - スクロールに合わせた動き（animation-timeline: view()）は、使えるブラウザだけ。使えないブラウザでは、最初から見える形のまま。
@@ -11,8 +13,6 @@
 
 .site-lp {
   --site-width: 72rem; /* このページは、帯と本文の欄を広くとる（帯の左右の余白も、この幅でそろう） */
-  --lp-shadow-lift: 0 10px 30px rgb(43 42 40 / 12%);
-  --lp-lift: translateY(-3px);
 }
 
 .site-lp .site-main {
@@ -146,22 +146,31 @@
   border-radius: var(--radius-m);
   font-weight: var(--fw-strong);
   text-decoration: none;
+  box-shadow: var(--shadow-rest);
   transition:
-    transform 160ms ease,
-    box-shadow 160ms ease,
-    background-color 160ms ease;
+    transform var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out),
+    background-color var(--dur-hover);
+}
+
+/* 指を置くと少し浮き、押すと沈む（サイトの主のボタン .site-cta-link と同じ動き） */
+.site .lp-button:hover {
+  transform: translateY(var(--lift-pill));
+  box-shadow: var(--shadow-lift);
+}
+
+.site .lp-button:active {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-press);
 }
 
 .site .lp-button-primary {
   background: var(--beni-700);
   color: var(--text-on-strong);
-  box-shadow: var(--shadow-1);
 }
 
 .site .lp-button-primary:hover {
   background: var(--beni-800);
-  box-shadow: var(--lp-shadow-lift);
-  transform: var(--lp-lift);
 }
 
 .site .lp-button-secondary {
@@ -210,15 +219,24 @@
   list-style: none;
 }
 
+/* 札（ピル）：サイトのタグ（.site-tag。#108）と同じ形。押せないので、浮く動きは付けない */
+.lp-chips li,
+.lp-card-no {
+  border: var(--bw-1) solid var(--ink-300);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(var(--surface-card), var(--ink-50));
+  box-shadow: var(--shadow-pill);
+  color: var(--text-strong);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
+  line-height: 1.6;
+}
+
 .lp-chips li {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
   padding: var(--sp-1) var(--sp-3);
-  border: var(--bw-1) solid var(--line-control);
-  border-radius: var(--radius-pill);
-  font-size: var(--fs-small);
-  font-weight: var(--fw-strong);
 }
 
 .lp-chips li::before {
@@ -252,7 +270,7 @@
   border: var(--bw-1) solid var(--line-default);
   border-radius: var(--radius-s);
   background: var(--surface-card);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-rest);
 }
 
 .lp-stack::before,
@@ -382,13 +400,13 @@
 .lp-card {
   position: relative;
   padding: var(--sp-5);
-  border: var(--bw-1) solid var(--line-default);
+  border: var(--bw-1) solid rgb(43 42 40 / 8%); /* 記事の札（.site-cards > li.card）と同じ、影に任せた薄い縁 */
   border-radius: var(--radius-l);
   background: var(--surface-card);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-rest);
   transition:
-    transform 180ms ease,
-    box-shadow 180ms ease;
+    transform var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out);
 }
 
 /* めくれた角：0 の大きさの箱の右と下の枠で、三角を 2 つ作る（右上は下地の色＝切れた所、左下は朱の薄い色＝めくれた紙の裏） */
@@ -402,13 +420,13 @@
   border-style: solid;
   border-width: 0;
   border-color: transparent var(--surface-page) var(--beni-100) transparent;
-  transition: border-width 180ms ease;
+  transition: border-width var(--dur-hover) var(--ease-out);
 }
 
 .lp-card:hover,
 .lp-card:focus-within {
-  box-shadow: var(--lp-shadow-lift);
-  transform: var(--lp-lift);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(var(--lift-card));
 }
 
 .lp-card:hover::after,
@@ -418,11 +436,9 @@
 
 .lp-card-no {
   display: inline-block;
+  min-width: 2.6em;
   padding: 0 var(--sp-2);
-  border: var(--bw-1) solid var(--line-control);
-  border-radius: var(--radius-pill);
-  font-size: var(--fs-small);
-  font-weight: var(--fw-strong);
+  text-align: center;
 }
 
 .lp-card h3 a {
@@ -563,7 +579,7 @@
   border: var(--bw-2) solid var(--ok-line);
   border-radius: var(--radius-l);
   background: var(--midori-100);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-rest);
 }
 
 .lp-diagram-name {
@@ -692,7 +708,7 @@
     border: var(--bw-1) solid var(--line-default);
     border-radius: var(--radius-m);
     background: var(--surface-raised);
-    box-shadow: var(--lp-shadow-lift);
+    box-shadow: var(--shadow-lift);
     opacity: 0;
     visibility: hidden;
     transition:
@@ -745,7 +761,7 @@
   border: var(--bw-1) solid var(--line-default);
   border-radius: var(--radius-l);
   background: var(--surface-card);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-rest);
 }
 
 /* 輪は 1 → 2 → 4 → 3 の順に回るので、並びを入れ替えて、時計回りにする（読む順は HTML のまま 1〜4） */
@@ -1127,7 +1143,8 @@
     transform: none;
   }
 
-  .site .lp-button-primary:hover,
+  .site .lp-button:hover,
+  .site .lp-button:active,
   .lp-card:hover,
   .lp-card:focus-within {
     transform: none;
