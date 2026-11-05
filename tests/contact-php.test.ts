@@ -191,6 +191,22 @@ describe.skipIf(!hasPhp)("contact-send.php を PHP で動かす", () => {
     expect(m.body).toContain("架空の不具合です。\n2 行目もあります。");
     expect(m.body).toMatch(/受け付けた時刻：\d{4}-\d\d-\d\d \d\d:\d\d:\d\d（日本の時刻）/);
     expect(m.body).not.toContain("192.0.2.10");
+    // 本文の区切り：前後の印が同じで、8 字の 16 進。本文はその間にある
+    const marks = [...m.body.matchAll(/^---- 本文(?:ここまで)?（印 ([^）]*)）----$/gm)].map((x) => x[1]);
+    expect(marks).toHaveLength(2);
+    expect(marks[0]).toMatch(/^[0-9a-f]{8}$/);
+    expect(marks[1]).toBe(marks[0]);
+    expect(m.body).toContain(`区切りの印（${marks[0]}）が違う行は`);
+    expect(m.body).toContain(`---- 本文（印 ${marks[0]}）----\n架空の不具合です。\n2 行目もあります。\n---- 本文ここまで（印 ${marks[0]}）----`);
+  });
+
+  it("本文の区切りの印は、送るたびに変わる", () => {
+    freshData();
+    const r = run([{}, { server: { REMOTE_ADDR: "192.0.2.11" } }]);
+    expect(r.sent).toHaveLength(2);
+    const mark = (b: string) => b.match(/---- 本文（印 ([0-9a-f]{8})）----/)?.[1];
+    expect(mark(r.sent[0]!.body)).toBeDefined();
+    expect(mark(r.sent[0]!.body)).not.toBe(mark(r.sent[1]!.body));
   });
 
   describe("攻撃の形ごと", () => {

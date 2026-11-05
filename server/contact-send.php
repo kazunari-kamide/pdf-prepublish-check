@@ -393,6 +393,8 @@ function contact_handle(array $server, array $post, ?array $config, int $now, ar
     $label = KINDS[$kind];
     $time = (new DateTimeImmutable('@' . $now))->setTimezone(new DateTimeZone('Asia/Tokyo'))->format('Y-m-d H:i:s') . '（日本の時刻）';
     $subject = '[お守りPDF] お問い合わせ（' . $label . '）';
+    // 本文の区切りの印。毎回でたらめにして、本文の中に偽の区切りを書かれても見分けられるようにする
+    $mark = bin2hex(random_bytes(4));
     $text = implode("\n", [
         'お守りPDF のお問い合わせのフォームから届きました。',
         '',
