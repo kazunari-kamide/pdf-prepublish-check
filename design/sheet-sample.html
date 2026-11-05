@@ -37,18 +37,19 @@ body { margin: 0; overflow-wrap: anywhere; } /* 字を大きくしたとき、�
 .band {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-5);
   padding: var(--sp-3) var(--sp-5);
-  background: var(--surface-strong); color: var(--text-on-strong);
+  background: var(--surface-page); color: var(--text-strong);
+  border-bottom: var(--bw-2) solid var(--line-strong); /* 白の帯。下の線で本文と区切る */
 }
 .band-brand { font-weight: var(--fw-strong); font-size: var(--fs-h2); }
 .band-tools { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-left: auto; }
 .band-tools fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
-.band-tools legend { float: left; margin-right: var(--sp-2); font-size: var(--fs-small); }
+.band-tools legend { float: left; margin-right: var(--sp-2); font-size: var(--fs-small); color: var(--text-muted); }
 .band-tools button {
   min-height: 44px; padding: 0 var(--sp-3); font: inherit; font-size: var(--fs-small);
-  border: var(--bw-2) solid currentColor; border-radius: var(--radius-pill);
-  background: transparent; color: inherit; cursor: pointer;
+  border: var(--bw-2) solid var(--line-control); border-radius: var(--radius-pill);
+  background: var(--surface-card); color: var(--text-strong); cursor: pointer;
 }
-.band-tools button[aria-pressed="true"] { background: var(--text-on-strong); color: var(--surface-strong); }
+.band-tools button[aria-pressed="true"] { background: var(--surface-strong); border-color: var(--surface-strong); color: var(--text-on-strong); }
 
 /* ---------- 全体の組み立て */
 .wrap { max-width: 72rem; padding: var(--sp-6) var(--sp-5) var(--sp-8); margin-left: max(0px, calc((100vw - 72rem) / 2)); }
@@ -228,9 +229,8 @@ td.n { text-align: right; }
   <div class="band-tools">
     <fieldset>
       <legend>色</legend>
-      <button type="button" data-theme-set="auto" aria-pressed="true">端末に合わせる</button>
-      <button type="button" data-theme-set="light" aria-pressed="false">明るい</button>
-      <button type="button" data-theme-set="dark" aria-pressed="false">暗い</button>
+      <button type="button" data-theme-set="light" aria-pressed="true">明るい</button>
+      <button type="button" data-theme-set="dark" aria-pressed="false">暗い（案。使わない）</button>
     </fieldset>
     <fieldset>
       <legend>字</legend>
@@ -272,7 +272,7 @@ td.n { text-align: right; }
     <h3 class="h3">緑・黄（状態の色）</h3>
     <ul class="scale">
       <li class="sw"><div class="sw-chip" style="background:#f2f7f5;color:#2f6f5e">緑 50</div><div class="sw-meta"><code>#F2F7F5</code><br>済のお知らせの地</div></li>
-      <li class="sw"><div class="sw-chip" style="background:#e7f0ed;color:#2f6f5e">緑 100</div><div class="sw-meta"><code>#E7F0ED</code><br>片付けた結果の欄</div></li>
+      <li class="sw"><div class="sw-chip" style="background:#e7f0ed;color:#2f6f5e">緑 100</div><div class="sw-meta"><code>#E7F0ED</code><br>整えた結果の欄</div></li>
       <li class="sw"><div class="sw-chip" style="background:#2f6f5e;color:#fff">緑 700</div><div class="sw-meta"><code>#2F6F5E</code><br>済・保存 5.91</div></li>
       <li class="sw"><div class="sw-chip" style="background:#245748;color:#fff">緑 800</div><div class="sw-meta"><code>#245748</code><br>押した緑 8.29</div></li>
       <li class="sw"><div class="sw-chip" style="background:#ffd43d;color:#2b2a28">黄 300</div><div class="sw-meta"><code>#FFD43D</code><br>フォーカスだけ</div></li>
@@ -334,7 +334,7 @@ td.n { text-align: right; }
     <h2 class="h1" id="s-notice">4. お知らせ（注意・合格・確かめる・知らせ）</h2>
     <p class="note">4 種類とも、左の太い線・印・題の字で分けます。色が見えなくても、印と線の形（実線・点線）で区別できます。</p>
     <div class="notice" data-kind="danger" role="note"><span class="notice-mark" aria-hidden="true"><span>▲</span></span><p class="notice-title">残っています：見せかけの黒塗り 1 件</p><p>黒い四角の下に、字がテキストとして残っています。選んで写すと読めてしまいます。</p></div>
-    <div class="notice" data-kind="ok" role="note"><span class="notice-mark" aria-hidden="true"><span>✓</span></span><p class="notice-title">読み直しました：残りは 0 件</p><p>片付けた PDF をはじめから読み直し、調べた型では何も見つかりませんでした。</p></div>
+    <div class="notice" data-kind="ok" role="note"><span class="notice-mark" aria-hidden="true"><span>✓</span></span><p class="notice-title">読み直しました：残りは 0 件</p><p>整えた PDF をはじめから読み直し、調べた型では何も見つかりませんでした。</p></div>
     <div class="notice" data-kind="check" role="note"><span class="notice-mark" aria-hidden="true"><span>？</span></span><p class="notice-title">確かめてください：残っているかもしれません</p><p>画像の中の黒い四角は、下に何があるかを言い切れません。元の書類と見比べてください。</p></div>
     <div class="notice" data-kind="info" role="note"><span class="notice-mark" aria-hidden="true"><span>ｉ</span></span><p class="notice-title">検査を省いたページがあります：3 ページ</p><p>図形が多すぎるため、このページは検査していません。結果の数にも含めていません。</p></div>
   </section>
@@ -345,7 +345,7 @@ td.n { text-align: right; }
 
     <h3 class="h2">ボタン</h3>
     <div class="buttons">
-      <button class="btn btn-primary btn-large" type="button">片付ける</button>
+      <button class="btn btn-primary btn-large" type="button">整える</button>
       <button class="btn btn-ok btn-large" type="button">保存する</button>
       <button class="btn btn-secondary" type="button">見本の PDF で試す</button>
       <button class="btn btn-quiet" type="button">報告書を保存</button>
@@ -373,7 +373,7 @@ td.n { text-align: right; }
     <div class="table-wrap">
       <table>
         <caption>型ごとの前後の数</caption>
-        <thead><tr><th scope="col">型</th><th scope="col">片付ける前</th><th scope="col">片付けたあと</th></tr></thead>
+        <thead><tr><th scope="col">型</th><th scope="col">整える前</th><th scope="col">整えたあと</th></tr></thead>
         <tbody>
           <tr><td>見せかけの黒塗り <span class="tag">P6</span></td><td class="n">2</td><td class="n"><span style="color:var(--text-ok);font-weight:700">✓ 0</span></td></tr>
           <tr><td>文書の情報 <span class="tag">P1</span></td><td class="n">1</td><td class="n"><span style="color:var(--text-ok);font-weight:700">✓ 0</span></td></tr>
@@ -428,7 +428,7 @@ td.n { text-align: right; }
   for (const b of document.querySelectorAll("[data-theme-set]")) {
     b.addEventListener("click", () => {
       const v = b.dataset.themeSet;
-      if (v === "auto") root.removeAttribute("data-theme"); else root.dataset.theme = v;
+      if (v === "light") root.removeAttribute("data-theme"); else root.dataset.theme = v; // 初めは明るい画面（端末の設定には合わせない）
       for (const o of document.querySelectorAll("[data-theme-set]")) o.setAttribute("aria-pressed", String(o === b));
     });
   }

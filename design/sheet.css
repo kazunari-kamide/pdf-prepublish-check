@@ -115,37 +115,10 @@
   --sp-8: 4rem; /* ページの上下 */
 }
 
-/* ================= 暗い色の画面（案。役の名前だけを差し替える） */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --surface-page: #1c1b1a;
-    --surface-card: #262523;
-    --surface-raised: #302e2b;
-    --surface-sunken: #161514;
-    --surface-subtle: #2c2a28;
-    --surface-strong: #ece8e1;
-    --text-strong: #ece8e1;
-    --text-muted: #b8b2a8;
-    --text-on-strong: #1c1b1a;
-    --text-danger: #f0928c;
-    --text-ok: #7cc2ac;
-    --line-hair: #3a3835;
-    --line-default: #45423e;
-    --line-control: #9a958c;
-    --line-strong: #ece8e1;
-    --danger: #f0928c;
-    --danger-bg: #3a2422;
-    --danger-line: #f0928c;
-    --ok: #7cc2ac;
-    --ok-bg: #1f2f2a;
-    --ok-line: #7cc2ac;
-    --check: #ece8e1;
-    --check-bg: #262523;
-    --info: #ece8e1;
-    --info-bg: #2c2a28;
-    --shadow-1: 0 1px 2px rgb(0 0 0 / 40%), 0 2px 8px rgb(0 0 0 / 30%);
-  }
-}
+/* ================= 暗い色の画面（案。いまは使わない）
+ * 2026-11-05 本人の答え：暗い色の設定の人にも、白をもとにした明るい画面で出す。
+ * そのため prefers-color-scheme: dark では切り替えない。下の値は、data-theme="dark" を付けたときだけ効く案として残す。
+ */
 :root[data-theme="dark"] {
   --surface-page: #1c1b1a;
   --surface-card: #262523;
