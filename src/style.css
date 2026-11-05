@@ -109,14 +109,14 @@ select {
   top: var(--space-2);
 }
 
-/* ---------------------------------------------------------------- 上：手順の帯 */
+/* ---------------------------------------------------------------- 上：ロゴとページへのリンクだけの軽い帯（2026-11-05 本人の画面のレビュー 1-1） */
 
 .band {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3) var(--space-5);
-  padding: var(--space-3) var(--space-5);
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-5);
   background: var(--surface-card);
   border-bottom: var(--bw-2) solid var(--line-strong);
 }
@@ -135,6 +135,26 @@ select {
   flex: none;
   width: var(--logo-header);
   height: var(--logo-header);
+}
+
+/* 一言の紹介と進み具合：左右 2 列の上（作業する場所のすぐ上）。紹介の 1 行は、選ぶ前だけ出す（1-2） */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) 0;
+}
+
+.hero {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: var(--text-h2);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+body:has(#workspace:not([data-state="empty"])) .hero {
+  display: none;
 }
 
 .steps {
@@ -200,6 +220,31 @@ select {
   color: var(--color-on-dark);
 }
 
+/* 説明は、今いる段にだけ出す（A4）。ほかの段は名前だけ。ただし「④ 通れば保存できます」は、まだのうちも出す。
+   隠した説明（「置きました」「3 か所 見つかりました」など）は、読み上げには残す */
+.steps li:not([data-state="now"]) .step-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 名前だけの段は、番号の丸と名前を 1 段にそろえる */
+.steps li:not([data-state="now"]):not(#step-verify[data-state="todo"]) .step-no {
+  grid-row: 1;
+}
+
+.steps #step-verify[data-state="todo"] .step-note {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+}
+
 .steps li[data-state="done"] .step-no {
   background: var(--color-ok);
   border-color: var(--color-ok);
@@ -216,35 +261,12 @@ select {
   color: var(--color-on-dark);
 }
 
-/* 帯の右端：送らないことの一文と、その下にサービス紹介のページへのリンク（右に寄せる。帯の幅が足りないとき、リンクだけが左の 2 行目に落ちないように） */
-.band-end {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-1);
-  margin-left: auto;
-}
-
-.zero-send {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-small);
-  color: var(--color-muted);
-}
-
-.zero-send::before {
-  content: "";
-  flex: none;
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: var(--radius-full);
-  border: 2px solid var(--color-ok);
-}
-
 /* サービス紹介のページへのリンク（上の帯の右端。目立たせない） */
 .about-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  margin-left: auto;
   font-size: var(--text-small);
   color: var(--color-muted);
 }
@@ -260,9 +282,22 @@ select {
   min-height: 0;
 }
 
-.workspace[data-state="empty"],
 .workspace[data-state="working"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--width-results));
+}
+
+/* 選ぶ前は、置き場だけ（A1・A6）。右の結果の欄は、PDF を置いてから出す。灰色の大きな台も出さない */
+.workspace[data-state="empty"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace[data-state="empty"] .results {
+  display: none;
+}
+
+.workspace[data-state="empty"] .stage {
+  background: none;
+  padding: 0;
 }
 
 .workspace[data-state="result"][data-thumbs="none"] {
@@ -392,12 +427,14 @@ select {
 }
 
 .drop {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  width: min(100%, 40rem);
-  margin-top: var(--space-6);
-  padding: var(--space-6) var(--space-5);
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  width: min(100%, 48rem);
+  margin-top: var(--space-4);
+  padding: var(--space-6);
   background: var(--color-surface);
   border: var(--border-strong) dashed var(--color-control-line);
   border-radius: var(--radius-panel);
@@ -411,26 +448,7 @@ select {
   outline-offset: var(--focus-gap);
 }
 
-.drop input:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
-/* 「ファイルを選択」：シートの枠だけのボタン（字はブラウザが決める） */
-.drop input::file-selector-button {
-  min-height: var(--target-min);
-  margin-right: var(--space-3);
-  padding: var(--space-1) var(--space-4);
-  border: var(--bw-1) solid var(--line-control);
-  border-radius: var(--radius-m);
-  background: var(--surface-card);
-  color: var(--text-strong);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.drop input::file-selector-button:hover {
+.drop:hover .drop-pick {
   background: var(--surface-subtle);
 }
 
@@ -446,14 +464,40 @@ select {
   font-weight: 700;
 }
 
+/* 「PDF を選ぶ」：見た目だけのボタン（押すのは枠全体。欄は .drop-input） */
+.drop-pick {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-5);
+  border-radius: var(--radius-m);
+  border: var(--bw-1) solid var(--line-strong);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 送らないことの一文（ファイルを渡すこの枠の中の 1 か所だけ。A2）。前の印は ✓（「○」は選んでいないラジオボタンに見えるため。A7） */
 .drop-note {
+  grid-column: 1 / -1;
   font-size: var(--text-small);
   color: var(--color-muted);
 }
 
-.drop input {
-  font-size: 1rem;
-  min-height: var(--target-min);
+.drop-note::before {
+  content: "✓ ";
+  color: var(--color-ok);
+  font-weight: 700;
+}
+
+/* ブラウザの「ファイルを選択／選択されていません」は見せない。欄は残し、Tab で届く（フォーカスの印は枠に出す） */
+.drop-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .workspace[data-state="result"] .drop,
@@ -465,6 +509,7 @@ select {
 
 /* 利用規約へのリンク（置き場の下に 1 行。同意のチェックは足さない。2026-11-05 本人が決めた） */
 .terms-note {
+  width: min(100%, 48rem);
   margin: var(--space-2) 0 0;
   font-size: var(--text-small);
   color: var(--color-muted);
@@ -563,49 +608,72 @@ body:has(.terms-dialog[open]) {
   font-size: var(--text-small);
 }
 
-/* 見本の PDF で試す：置き場の下に、枠だけのボタン */
+/* 見本の PDF で試す：枠のすぐ下に、文字のリンクくらいの目立たせ方（A5）。押せる高さは 44px を保つ */
 .sample {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin: var(--space-3) 0 0;
+  gap: 0 var(--space-1);
+  width: min(100%, 48rem);
+  margin: var(--space-2) 0 0;
   font-size: var(--text-small);
 }
 
 .sample-button {
   min-height: var(--target-min);
-  padding: var(--space-1) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--color-base);
+  font: inherit;
   font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
   cursor: pointer;
 }
 
 .sample-button:hover {
-  background: var(--color-chip);
+  text-decoration-thickness: 2px;
 }
 
 .sample-note {
   color: var(--color-muted);
 }
 
-/* 提出のために小さくする入口：見本のボタンの下に、上限を選ぶ欄（決まりの色・線・角の丸みだけを使う） */
+/* 提出先の容量に合わせて小さくする入口：見本のリンクのすぐ下に、開けて選ぶ形（見本と同じくらいの控えめさ） */
 .limit-entry {
+  width: min(100%, 48rem);
+  margin: 0;
+  font-size: var(--text-small);
+}
+
+.limit-entry summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.limit-body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
-  margin: var(--space-3) 0 0;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  padding: var(--space-2) 0 var(--space-1) var(--space-4);
+  border-left: var(--bw-2) solid var(--line-default);
+}
+
+/* 閉じているときは、中身をはっきり隠す（閉じた details の中身にも箱の大きさが残り、押せる所の重なりに数えられるため） */
+.limit-entry:not([open]) .limit-body {
+  display: none;
 }
 
 .limit-title {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
   font-weight: 700;
 }
 
@@ -622,7 +690,6 @@ body:has(.terms-dialog[open]) {
 .limit-note {
   flex-basis: 100%;
   margin: 0;
-  font-size: var(--text-small);
   color: var(--color-muted);
 }
 
@@ -1656,9 +1723,31 @@ progress {
   .steps li {
     border-radius: var(--radius);
   }
-  .band-end {
-    margin-left: 0;
-    align-items: flex-start;
+  .guide {
+    padding: var(--space-3) var(--space-3) 0;
+  }
+  /* 狭い窓：紹介・進み具合・置き場が、スクロールせずに入るように詰める（§7） */
+  .band {
+    flex-wrap: nowrap;
+    gap: var(--space-3);
+  }
+  .about-link {
+    min-width: 0;
+    text-align: right;
+  }
+  .hero {
+    font-size: 1rem;
+  }
+  .drop {
+    margin-top: var(--space-3);
+    gap: var(--space-2);
+  }
+  .drop {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-5) var(--space-4);
+  }
+  .drop-pick {
+    justify-self: start;
   }
   .workspace,
   .workspace[data-state="empty"],
@@ -1886,8 +1975,8 @@ progress {
   .steps .step-note {
     display: none;
   }
-  .zero-send {
-    font-size: var(--text-small);
+  .guide {
+    padding-top: var(--space-2);
   }
 }
 

@@ -58,7 +58,7 @@ const ui = {
   workspace: el<HTMLElement>("workspace"),
   sample: el<HTMLButtonElement>("sample"),
   sampleRow: el<HTMLParagraphElement>("sample-row"),
-  limitRow: el<HTMLDivElement>("limit-row"),
+  limitRow: el<HTMLDetailsElement>("limit-row"),
   sizeLimit: el<HTMLSelectElement>("size-limit"),
   compressLimit: el<HTMLParagraphElement>("compress-limit"),
   stepPick: el<HTMLLIElement>("step-pick"),

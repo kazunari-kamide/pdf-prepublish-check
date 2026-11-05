@@ -21,6 +21,12 @@
     <p id="unofficial" class="unofficial" role="alert" hidden></p>
     <header class="band">
       <h1 class="brand"><!--omamori:mark-->お守りPDF</h1>
+      <a class="about-link" href="/about">お守りPDF について</a>
+    </header>
+
+    <!-- 一言の紹介と進み具合（2026-11-05 本人の画面のレビュー 1-1・1-2）。左右 2 列の上に置き、読み込んだあとも進み具合は残す。紹介の 1 行は、選ぶ前だけ -->
+    <div class="guide" id="guide">
+      <p class="hero" id="hero">公開する前の PDF に、消したつもりの情報が残っていないか確かめます</p>
       <ol class="steps" aria-label="手順">
         <li id="step-pick" data-state="now" aria-current="step">
           <span class="step-no" aria-hidden="true">1</span><span class="step-name"><span class="visually-hidden">1 </span>選ぶ</span>
@@ -39,11 +45,7 @@
           <span class="step-note" id="step-verify-note">通れば保存できます</span>
         </li>
       </ol>
-      <div class="band-end">
-        <p class="zero-send">当サービスでは、選んだ PDF をどこにも送信しません。</p>
-        <a class="about-link" href="/about">お守りPDF について</a>
-      </div>
-    </header>
+    </div>
 
     <main class="workspace" id="workspace" data-state="empty">
       <nav class="thumbs" id="thumbs" aria-label="ページの一覧" hidden></nav>
@@ -51,23 +53,30 @@
       <section class="stage" aria-labelledby="stage-title">
         <h2 id="stage-title" class="visually-hidden">ページ</h2>
 
+        <!-- 枠全体を押せる。ブラウザの「ファイルを選択／選択されていません」は見せず（欄は残し、Tab で届く）、ボタンの見た目は「PDF を選ぶ」1 つ（A3）。
+             送らないことの一文は、ファイルを渡すこの枠の中の 1 か所だけ（A2） -->
         <label id="drop" class="drop" for="file">
-          <span class="drop-title">ここに PDF を置くか、クリックして選んでください。</span>
-          <span class="drop-note">PDF はこのパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
-          <input id="file" type="file" accept="application/pdf,.pdf" />
+          <span class="drop-title">ここに PDF を置く</span>
+          <span class="drop-pick" aria-hidden="true">PDF を選ぶ</span>
+          <span class="drop-note">このパソコンのブラウザの中だけで読みます。どこにも送りません。</span>
+          <input id="file" class="drop-input" type="file" accept="application/pdf,.pdf" />
         </label>
-        <p class="terms-note" id="terms-note">ご利用の前に、<a href="/terms">利用規約</a>をご覧ください。</p>
+        <!-- 枠のすぐ下に、控えめな入口を 2 つ（A5）。規約の 1 行は、その下に小さな字で -->
         <p class="sample" id="sample-row">
           <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
-          <span class="sample-note">架空の申請書です（黒い四角の下に、架空の名前が残っています）。</span>
+          <span class="sample-note">（架空の申請書）</span>
         </p>
-        <div class="limit-entry" id="limit-row">
-          <label class="limit-title" for="size-limit">提出のためにファイルを小さくする</label>
-          <select id="size-limit" aria-describedby="limit-note">
-            <option value="">上限を選ばない（ふつうの検査）</option>
-          </select>
-          <p class="limit-note" id="limit-note">提出先に容量の上限があるときは、先に上限を選んでから PDF を置いてください。いつもどおり確かめて整え、読み直したあとに、その大きさまで小さくします。</p>
-        </div>
+        <details class="limit-entry" id="limit-row">
+          <summary>提出先の容量に合わせて小さくしたいとき</summary>
+          <div class="limit-body">
+            <label class="limit-title" for="size-limit">容量の上限</label>
+            <select id="size-limit" aria-describedby="limit-note">
+              <option value="">上限を選ばない（ふつうの検査）</option>
+            </select>
+            <p class="limit-note" id="limit-note">上限を選んでから PDF を置くと、いつもどおり確かめて整え、読み直したあとに、その大きさまで小さくします。</p>
+          </div>
+        </details>
+        <p class="terms-note" id="terms-note">ご利用の前に、<a href="/terms">利用規約</a>をご覧ください。</p>
 
         <div class="filebar" id="filebar" hidden>
           <span class="filebar-name" id="file-name"></span>
@@ -205,7 +214,7 @@
 
     <!-- サイトの部分（持ち場 G）：サイトの案内のリンク。並びは src/site/render.ts の FOOT_LINKS と同じ（tests/site-pages.test.ts）。ページの中身は src/site/、ビルドは site.ts -->
     <footer class="site-links" aria-label="サイトの案内">
-      <a href="/">検査のページ</a>
+      <a href="/" aria-current="page">検査のページ</a>
       <a href="/articles/">記事の一覧</a>
       <a href="/checklist">公開前の自己点検</a>
       <a href="/faq">よくある質問</a>
