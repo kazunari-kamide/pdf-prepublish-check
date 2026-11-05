@@ -12,7 +12,7 @@
  */
 
 .site-lp {
-  --site-width: 72rem; /* このページは、帯と本文の欄を広くとる（帯の左右の余白も、この幅でそろう） */
+  --site-width: var(--site-frame); /* このページは、本文の欄も帯（72rem。どのページも同じ）と同じ幅にとる */
 }
 
 .site-lp .site-main {
@@ -30,37 +30,11 @@
   }
 }
 
-.site-lp .site-nav {
-  align-items: center;
-}
-
-/* 広い画面では、検査のページへのボタンを帯の右端に置く */
+/* ページの中の区画へ飛んだとき、上に留めた帯に見出しが隠れないように（上の帯の形は、サイトのどのページとも同じ。site.css） */
 @media (min-width: 60rem) {
-  .site-lp .site-nav {
-    flex: 1;
-  }
-
-  .site-lp .site-nav a.lp-nav-cta {
-    margin-left: auto;
-  }
-
-  /* ページの中の区画へ飛んだとき、上に留めた帯に見出しが隠れないように */
   .site-lp [id] {
     scroll-margin-top: 6rem;
   }
-}
-
-.site-lp .site-nav a.lp-nav-cta {
-  padding: 0 var(--sp-4);
-  border: var(--bw-2) solid var(--beni-700);
-  border-radius: var(--radius-m);
-  color: var(--beni-700);
-  text-decoration: none;
-}
-
-.site-lp .site-nav a.lp-nav-cta:hover {
-  background: var(--beni-700);
-  color: var(--text-on-strong);
 }
 
 /* ---- 区画の枠 */
@@ -400,7 +374,7 @@
 .lp-card {
   position: relative;
   padding: var(--sp-5);
-  border: var(--bw-1) solid rgb(43 42 40 / 8%); /* 記事の札（.site-cards > li.card）と同じ、影に任せた薄い縁 */
+  border: var(--bw-1) solid var(--line-default); /* 記事の札（.site-cards > li.card）と同じ縁 */
   border-radius: var(--radius-l);
   background: var(--surface-card);
   box-shadow: var(--shadow-rest);

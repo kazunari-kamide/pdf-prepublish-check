@@ -56,7 +56,7 @@ export const REMAINS: ReadonlyArray<{ pattern: string; title: string; text: stri
 
 /** 4 つの手順（検査のページの 4 段と同じ言葉） */
 export const STEPS: ReadonlyArray<{ name: string; text: string }> = [
-  { name: "置く", text: "PDF を選ぶか、画面に落とします。" },
+  { name: "選ぶ", text: "PDF を選びます。パソコンでは、画面に落としてもかまいません。" },
   { name: "確かめる", text: "残り方の型ごとに、どこに・何が残っているかを日本語で示します。見つけた字は頭の数文字だけを見せ、残りは伏せます。" },
   { name: "整える", text: "見つけたものを消した PDF を作ります。自分で黒塗りする所を選ぶこともできます。" },
   {
@@ -383,18 +383,7 @@ ${paperStack("closed")}
       </section>`;
 }
 
-/** 上の帯の案内（このページの区画へのリンクと、記事の一覧。右端に検査のページへのボタン） */
-function aboutNav(): string {
-  return [
-    `        <a href="#lp-how">仕組み</a>`,
-    `        <a href="#lp-scope">見つけるもの</a>`,
-    `        <a href="#lp-faq">よくある質問</a>`,
-    `        <a href="${ARTICLES_PATH}">記事</a>`,
-    `        <a class="lp-nav-cta" href="/">PDF を確かめる</a>`,
-  ].join("\n");
-}
-
 export function renderAbout(o: RenderOptions, cssHref: string): string {
   const body = [hero(), remains(), steps(), trust(), scope(), loop(o), scenes(), faq(), closing()].join("\n");
-  return layout(ABOUT_META, body, o, { bodyClass: "site-lp", extraCssHref: cssHref, navHtml: aboutNav() });
+  return layout(ABOUT_META, body, o, { bodyClass: "site-lp", extraCssHref: cssHref });
 }
