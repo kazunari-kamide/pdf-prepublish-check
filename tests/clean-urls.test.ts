@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { CLEAN_URL_RULES, NOT_FOUND_PAGE, OFFICIAL_ORIGIN, buildHtaccess } from "../htaccess.ts";
+import { CLEAN_URL_RULES, LICENSE_TEXTS_DIR, LICENSE_TEXTS_RULES, NOT_FOUND_PAGE, OFFICIAL_ORIGIN, OLD_LICENSE_TEXTS_DIR, buildHtaccess } from "../htaccess.ts";
 import { cleanUrlRoute, siteFiles } from "../site.ts";
 import { ABOUT_PATH, fileFor, pathForFile } from "../src/site/render.ts";
 
@@ -38,12 +38,23 @@ describe("場所の扱い（cleanUrlRoute。本番の .htaccess と同じ決ま�
     expect(cleanUrlRoute(ABOUT_PATH, withAbout)).toEqual({ kind: "rewrite", url: "/about.html" });
     expect(cleanUrlRoute("/about.html", withAbout)).toEqual({ kind: "redirect", location: "/about" });
   });
-  it("同じ名前のフォルダがあるページ（licenses.html と licenses/）も、.html なしの場所で .html を返す（2026-11-05 の本番で /licenses が /licenses/ へ移って 403 になった）", () => {
-    const withLicenses = (f: string) => f === "licenses.html" || f === "licenses/AGPL-3.0.txt" || exists(f);
+  it("ライセンスのページは /licenses。全文は /license-texts/（ページと名前をぶつけない）。前の /licenses/*.txt・/licenses/ は 301 で移す", () => {
+    // 2026-11-05 の本番：licenses.html と licenses/ が同じ名前で、/licenses が /licenses/ へ移って 403 になった（#119 では直らなかった）
+    expect(LICENSE_TEXTS_DIR).not.toBe(OLD_LICENSE_TEXTS_DIR);
+    const withLicenses = (f: string) => f === "licenses.html" || f === `${LICENSE_TEXTS_DIR}/AGPL-3.0.txt` || exists(f);
     expect(cleanUrlRoute("/licenses", withLicenses)).toEqual({ kind: "rewrite", url: "/licenses.html" });
     expect(cleanUrlRoute("/licenses.html", withLicenses)).toEqual({ kind: "redirect", location: "/licenses" });
-    expect(cleanUrlRoute("/licenses/AGPL-3.0.txt", withLicenses)).toBeNull();
-    expect(cleanUrlRoute("/licenses/", withLicenses)).toBeNull();
+    expect(cleanUrlRoute(`/${LICENSE_TEXTS_DIR}/AGPL-3.0.txt`, withLicenses)).toBeNull();
+    expect(cleanUrlRoute("/licenses/AGPL-3.0.txt", withLicenses)).toEqual({ kind: "redirect", location: `/${LICENSE_TEXTS_DIR}/AGPL-3.0.txt` });
+    expect(cleanUrlRoute("/licenses/pdf-lib-1.17.1.txt?x=1", withLicenses)).toEqual({ kind: "redirect", location: `/${LICENSE_TEXTS_DIR}/pdf-lib-1.17.1.txt?x=1` });
+    expect(cleanUrlRoute("/licenses/", withLicenses)).toEqual({ kind: "redirect", location: "/licenses" });
+  });
+  it(".htaccess の前の全文の場所を移す規則は、https の 301 のあと、.html なしの書き換えの前", () => {
+    const ht = buildHtaccess();
+    for (const l of LICENSE_TEXTS_RULES) expect(ht).toContain(`  ${l}`);
+    expect(ht).toContain(`RewriteRule ^${OLD_LICENSE_TEXTS_DIR}/([^/]+\\.txt)$ /${LICENSE_TEXTS_DIR}/$1 [R=301,L]`);
+    expect(ht.indexOf(LICENSE_TEXTS_RULES[1]!)).toBeGreaterThan(ht.indexOf("RewriteCond %{HTTPS} !on"));
+    expect(ht.indexOf(LICENSE_TEXTS_RULES[1]!)).toBeLessThan(ht.indexOf(CLEAN_URL_RULES[0]!));
   });
   it("ないページは、どちらの形でも書き換えも移しもしない（404 のページになる）", () => {
     for (const u of ["/no-such-page", "/no-such-page.html", "/articles/no-such", "/articles/no-such.html", "/%E0%A4%A"]) expect(cleanUrlRoute(u, exists), u).toBeNull();

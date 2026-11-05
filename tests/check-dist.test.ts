@@ -8,7 +8,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CLEAN_URL_RULES, CONTACT_REWRITE } from "../htaccess.ts";
+import { CLEAN_URL_RULES, CONTACT_REWRITE, LICENSE_TEXTS_RULES } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts", "check-dist.mjs");
@@ -44,6 +44,7 @@ ErrorDocument 404 /404.html
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ${CONTACT_REWRITE}
+${LICENSE_TEXTS_RULES.map((l) => `  ${l}`).join("\n")}
 ${CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)).join("\n")}
 </IfModule>
 `;
@@ -168,6 +169,14 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     const r = run(withPages({ "articles/a.html": page(CSP_OK, '<link rel="canonical" href="https://omamoripdf.com/articles/a.html"><a href="/privacy.html">') }));
     expect(r.out).toContain("articles/a.html に、.html 付きのサイトの場所が 2 か所あります");
     expect(r.code).toBe(1);
+  });
+
+  it("ページと同じ名前のフォルダは止める（本番で /x が /x/ へ移って 403 になる。2026-11-05 の /licenses）", () => {
+    const r = run(withPages({ "guide.html": page(CSP_OK, ""), "guide/a.txt": "x" }));
+    expect(r.out).toContain("ページと同じ名前のフォルダがあります（guide.html）");
+    expect(r.code).toBe(1);
+    const ok = run(withPages({ "guide.html": page(CSP_OK, ""), "guide-texts/a.txt": "x" }));
+    expect(ok.out).not.toContain("ページと同じ名前のフォルダ");
   });
 
   it("CSP の <meta> がないページは止める", () => {

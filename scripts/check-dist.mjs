@@ -27,7 +27,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { withFormActionSelf } from "../csp.ts";
-import { CLEAN_URL_RULES, CONTACT_PAGE_FILE, CONTACT_REWRITE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
+import { CLEAN_URL_RULES, LICENSE_TEXTS_RULES, CONTACT_PAGE_FILE, CONTACT_REWRITE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 // 調べるフォルダは、テストのときだけ DIST_DIR で変えられる（tests/check-dist.test.ts）
@@ -105,6 +105,16 @@ if (htaccess !== null) {
   else if (!existsSync(path.join(DIST, notFound[1]))) problems.push(`.htaccess の ErrorDocument 404 が指す ${notFound[1]} が、dist/ にありません`);
   // .html なしの場所で開く書き換え（htaccess.ts の CLEAN_URL_RULES）が、そのままの並びで入っている
   if (!htaccess.includes(CLEAN_URL_RULES.map((l) => (l === "" ? "" : `  ${l}`)).join("\n"))) problems.push(".htaccess に、.html なしの場所で開く書き換え（htaccess.ts の CLEAN_URL_RULES）がありません");
+  // ライセンスの全文の前の場所（/licenses/*.txt）を、新しい場所へ 301 で移す規則（htaccess.ts の LICENSE_TEXTS_RULES）
+  if (!LICENSE_TEXTS_RULES.every((l) => htaccess.includes(`  ${l}`))) problems.push(".htaccess に、ライセンスの全文の前の場所を移す規則（htaccess.ts の LICENSE_TEXTS_RULES）がありません");
+}
+
+// ---- ページ（x.html）と同じ名前のフォルダ（x/）を置かない。本番の Apache は /x を /x/ へ 301 で移し、403 になる
+// （mod_dir の DirectorySlash が .htaccess の書き換えより先に効く。2026-11-05 に /licenses で起きた。htaccess.ts の注）
+{
+  const rels = files.map((f) => path.relative(DIST, f).replace(/\\/g, "/"));
+  const clash = rels.filter((r) => r.endsWith(".html") && !r.endsWith("index.html") && rels.some((x) => x.startsWith(`${r.slice(0, -".html".length)}/`)));
+  if (clash.length) problems.push(`ページと同じ名前のフォルダがあります（${clash.join("、")}）。本番で .html なしの場所が開けなくなるので、フォルダの名前を変える`);
 }
 
 // ---- すべての HTML（index.html と、サイトのページ）
