@@ -103,19 +103,22 @@ export const NAV_LINKS: ReadonlyArray<readonly [string, string]> = [
   [ABOUT_PATH, "お守りPDF について"],
   [ARTICLES_PATH, "記事の一覧"],
   [FAQ_PATH, "よくある質問"],
-  [PRIVACY_PATH, "プライバシー"],
 ];
 
+/** 狭い画面（40rem 以下）でも上の帯に残すリンク（「PDF を確かめる」と合わせて 2 つまで。design/sheet.md「案 C」の上の帯）。
+ * メニューの丸（開け閉めのメニュー）は作らない。ほかの行き先は下の帯にある（2026-11-05 夜 本人が決定） */
+export const NARROW_NAV: ReadonlySet<string> = new Set([ARTICLES_PATH]);
+
 /** リンクの並び。今いるページ（current）へのリンクにだけ aria-current="page" を付ける（上の帯・下の帯） */
-function linksHtml(links: ReadonlyArray<readonly [string, string]>, current: string): string {
+function linksHtml(links: ReadonlyArray<readonly [string, string]>, current: string, narrow: ReadonlySet<string> = new Set()): string {
   return links
-    .map(([href, label]) => `        <a href="${escapeHtml(href)}"${href === current ? ' aria-current="page"' : ""}>${escapeHtml(label)}</a>`)
+    .map(([href, label]) => `        <a href="${escapeHtml(href)}"${href === current ? ' aria-current="page"' : ""}${narrow.has(href) ? " data-narrow" : ""}>${escapeHtml(label)}</a>`)
     .join("\n");
 }
 
 /** 上の帯の案内のリンク（今いるページの場所を渡すと、そのリンクに印を付ける） */
 export function siteNavLinks(current = ""): string {
-  return linksHtml(NAV_LINKS, current);
+  return linksHtml(NAV_LINKS, current, NARROW_NAV);
 }
 
 /** どのページにも共通の枠（CSP・題・説明・canonical・上の帯・下の帯）。中身の HTML は body */
@@ -140,7 +143,7 @@ export function layout(meta: PageMeta, body: string, o: RenderOptions, x: Layout
       <nav class="site-nav" aria-label="サイトの案内">
 ${siteNavLinks(meta.path)}
       </nav>
-      <a class="site-band-cta" href="${INSPECTOR_PATH}">PDF を確かめる</a>
+      <a class="site-band-cta" href="${INSPECTOR_PATH}" data-narrow>PDF を確かめる</a>
     </header>
     <main class="site-main">
 ${body}

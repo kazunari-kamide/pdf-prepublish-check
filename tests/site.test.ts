@@ -14,7 +14,7 @@ import { ARTICLES } from "../src/site/articles.ts";
 import { GUIDE_PATHS } from "../src/site/pages.ts";
 import { tagPath } from "../src/site/tags.ts";
 import { PRIVACY_DESCRIPTION, PRIVACY_SECTIONS } from "../src/site/privacy.ts";
-import { ABOUT_PATH, FOOT_LINKS, NAV_LINKS, escapeHtml, fileFor, pathForFile, renderArticle, sitePaths } from "../src/site/render.ts";
+import { ABOUT_PATH, ARTICLES_PATH, FOOT_LINKS, NAV_LINKS, escapeHtml, fileFor, pathForFile, renderArticle, sitePaths } from "../src/site/render.ts";
 import { FIGURES, figureSvg } from "../site-figures-draw.ts";
 import type { Section } from "../src/site/types.ts";
 
@@ -124,14 +124,17 @@ describe("ページの HTML", () => {
     });
   }
 
-  it("上の帯・下の帯は、どのページも同じ形：案内 4 つ・右端に検査のページへのボタン・下に紹介のページ。今いるページだけに aria-current", () => {
+  it("上の帯・下の帯は、どのページも同じ形：案内 3 つ・右端に検査のページへのボタン・下に紹介のページ。今いるページだけに aria-current", () => {
     for (const [name, page] of html) {
       const band = page.split('<header class="site-band">')[1]!.split("</header>")[0]!;
       const nav = band.split('<nav class="site-nav"')[1]!.split("</nav>")[0]!;
       expect([...nav.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), name).toEqual(NAV_LINKS.map(([h, l]) => [h, l]));
-      expect(band, name).toContain('<a class="site-band-cta" href="/check">PDF を確かめる</a>');
+      expect(band, name).toContain('<a class="site-band-cta" href="/check" data-narrow>PDF を確かめる</a>');
+      // 狭い画面に残すのは、ロゴと「記事の一覧」「PDF を確かめる」だけ（メニューの丸は作らない。design/sheet.md「案 C」）
+      expect([...band.matchAll(/<a [^>]*href="([^"]+)"[^>]*data-narrow/g)].map((m) => m[1]), name).toEqual([ARTICLES_PATH, "/check"]);
+      expect(band, name).not.toMatch(/<button|aria-expanded/);
       const here = pathForFile(name);
-      const current = [...page.matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1]);
+      const current = [...page.matchAll(/<a href="([^"]+)" aria-current="page"/g)].map((m) => m[1]);
       const expected = [...NAV_LINKS, ...FOOT_LINKS].filter(([h]) => h === here).map(([h]) => h);
       expect(current, name).toEqual(expected);
     }
