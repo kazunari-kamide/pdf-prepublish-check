@@ -165,6 +165,17 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     for (const s of ["CSP", "外への要求を数えて", "配信先のサーバーがふつうに残す記録", "そうとは言えません", "PDF 以外", "小さく"]) expect(f, s).toContain(s);
   });
 
+  it("今の検査の画面と食い違わない：「小さくする」はある機能として答え、画面の手順の名前（整える）を使う", () => {
+    const f = page("faq.html");
+    expect(f).not.toContain("小さくする機能はありません");
+    expect(f).toContain("「ファイルを小さくする」");
+    expect(read("index.html")).toContain("ファイルを小さくする（必要なときだけ）");
+    // 画面の手順は「整える」。サイトのページで「片付ける」と書くと、画面のどこを押すのか分からなくなる
+    expect(read("index.html")).toMatch(/<span class="step-name">[^<]*<span class="visually-hidden">3 <\/span>整える<\/span>/);
+    for (const [name, p] of pages) expect(p, name).not.toMatch(/片付け/);
+    expect(files.get("privacy.html")).not.toMatch(/片付け/);
+  });
+
   it("自己点検：作る時・書き出す時・出す前の3段で、P1〜P12 をすべて含み、印刷用の見た目がある", () => {
     expect(CHECKLIST_BLOCKS.map((b) => b.heading).slice(1)).toEqual(["1. 作る時（元のファイル）", "2. 書き出す時（PDF にする時）", "3. 出す前（できあがった PDF）"]);
     const text = CHECKLIST_BLOCKS.flatMap((b) => b.list ?? []).join("\n");
