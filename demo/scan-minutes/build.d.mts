@@ -3,7 +3,9 @@
 
 export declare const IMAGE: { width: number; height: number };
 export declare const PAGE: { width: number; height: number };
-export declare const OUT: { pdf: string; pdfMarked: string; image: string; imageMarked: string; boxes: string };
+export declare const OUT: { pdf: string; pdfMarked: string; image: string; imageMarked: string; boxes: string; large: string; largeMarked: string };
+export declare const LARGE: { scale: number; dpi: number; pages: number; quality: number };
+export declare const LARGE_MIN_BYTES: number;
 export declare const REDACTED: { name: string; address: string; reason: string };
 export interface PixelBox {
   key: string;
