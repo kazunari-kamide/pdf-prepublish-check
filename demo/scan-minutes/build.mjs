@@ -249,9 +249,10 @@ async function buildPdf(jpeg, boxes) {
   for (const b of boxes) {
     const rect = toPdfRect(b);
     const w = (rect[2] - rect[0]).toFixed(3), h = (rect[3] - rect[1]).toFixed(3);
-    // 見た目（AP）：黒で塗った四角。fixtures/p6/p6-i03 と同じ形
-    const ap = doc.context.register(doc.context.stream(`0 g 0 G 0 0 ${w} ${h} re B`, { Type: "XObject", Subtype: "Form", BBox: [0, 0, Number(w), Number(h)] }));
-    const annot = doc.context.register(doc.context.obj({ Type: "Annot", Subtype: "Square", Rect: rect, C: [0, 0, 0], IC: [0, 0, 0], F: 4, AP: { N: ap } }));
+    // 見た目（AP）：黒で塗った四角（fixtures/p6/p6-i03 と同じ型）。塗るだけで、線は引かない（枠の線 BS の太さも 0）。
+    // 線を引くと、四角の外へ半分はみ出した細い帯ができ、整えるときに帯ごとに「済」の印が付いて、画面がにぎやかになるため
+    const ap = doc.context.register(doc.context.stream(`0 g 0 0 ${w} ${h} re f`, { Type: "XObject", Subtype: "Form", BBox: [0, 0, Number(w), Number(h)] }));
+    const annot = doc.context.register(doc.context.obj({ Type: "Annot", Subtype: "Square", Rect: rect, C: [0, 0, 0], IC: [0, 0, 0], BS: { W: 0 }, F: 4, AP: { N: ap } }));
     page.node.addAnnot(annot);
   }
   if (!page.node.get(PDFName.of("Annots"))) throw new Error("注釈を付けられませんでした");

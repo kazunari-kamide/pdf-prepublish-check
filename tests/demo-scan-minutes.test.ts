@@ -11,7 +11,13 @@ import path from "node:path";
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, decodePDFRawStream } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { IMAGE, OUT, PAGE, REDACTED, toPdfRect } from "../demo/scan-minutes/build.mjs";
+import { sanitizePdf } from "../sanitize/index.ts";
+import { createNodeImageCodec } from "../sanitize/node/image-codec.ts";
+import { createNodeImageDecoder } from "../eval/image-decoder.ts";
 import { inspectAll } from "../src/inspect/inspect";
+import { RULES } from "../src/inspect/rules";
+import { buildCleanView } from "../src/ui/clean-model";
+import { buildView } from "../src/ui/model";
 
 const DIR = path.resolve(import.meta.dirname, "..", "demo", "scan-minutes");
 const read = (f: string) => new Uint8Array(readFileSync(path.join(DIR, f)));
@@ -71,6 +77,23 @@ describe.each([OUT.pdf, OUT.pdfMarked])("demo/scan-minutes/%s", (file) => {
       expect(f.page).toBe(1);
     }
     expect(found.filter((f) => f.pattern !== "P6")).toEqual([]);
+  }, 60_000);
+
+  it("整えると、黒い四角の下の画像を 3 か所だけ塗り（四角の外は塗らない）、読み直すと何も残らない", async () => {
+    const bytes = read(file);
+    // 画面の Worker と同じく、JPEG を解く道具を渡す（渡さないと、塗ったあとの画素を確かめられず「残っている」と数える）
+    const ctx = { imageDecoder: createNodeImageDecoder() };
+    const before = buildView(await inspectAll(bytes, () => {}, RULES, ctx));
+    const r = await sanitizePdf(bytes, { codec: createNodeImageCodec() });
+    expect(r.status).toBe("ok");
+    if (r.status !== "ok") return;
+    // 塗った所は 3 か所で、それぞれ黒い四角と同じ場所（四角の外にはみ出した帯を、別に塗っていない）
+    const painted = r.removed.filter((x) => x.kind === "covered_pixels");
+    expect(painted.map((x) => x.rect)).toEqual(boxes.boxes.map((b) => b.pdfRect.map((v) => Math.round(v * 100) / 100)));
+    // 画面の「4 読み直す」と同じ流れ（tests/sanitize-reinspect.test.ts）：最初から検査し直して、残りは 0、緑（clean）
+    const after = buildView(await inspectAll(r.bytes, () => {}, RULES, ctx));
+    const c = buildCleanView({ before, after, removed: r.removed, notDone: r.notDone, decrypted: r.decrypted });
+    expect({ left: c.left, notDone: c.notDone.length, verdict: c.verdict }).toEqual({ left: 0, notDone: 0, verdict: "clean" });
   }, 60_000);
 });
 
