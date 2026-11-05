@@ -13,10 +13,10 @@ import {
   PDFNumber,
   PDFRawStream,
   PDFStream,
-  decodePDFRawStream,
   type PDFContext,
   type PDFObject,
 } from "pdf-lib";
+import { decodeStream } from "../shared/inflate-limit.ts";
 import {
   IDENTITY,
   apply,
@@ -286,8 +286,7 @@ export function contentBytes(ctx: PDFContext, obj: PDFObject | undefined): Uint8
   const v = obj ? ctx.lookup(obj) : undefined;
   const one = (s: PDFObject | undefined): Uint8Array => {
     const x = s ? ctx.lookup(s) : undefined;
-    if (x instanceof PDFRawStream) return decodePDFRawStream(x).decode();
-    if (x instanceof PDFStream) return x.getContents();
+    if (x instanceof PDFStream) return decodeStream(x);
     return new Uint8Array(0);
   };
   if (v instanceof PDFArray) {
@@ -1050,7 +1049,7 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings, vec
             if (vals.every((v) => v instanceof PDFNumber)) m = vals.map((v) => (v as PDFNumber).asNumber()) as Matrix;
           }
           const subRes = obj.dict.lookupMaybe(PDFName.of("Resources"), PDFDict) ?? res;
-          const data2 = obj instanceof PDFRawStream ? decodePDFRawStream(obj).decode() : obj.getContents();
+          const data2 = decodeStream(obj);
           const inner = cloneState(gs);
           inner.ctm = multiply(m, gs.ctm);
           // 部品の BBox の外は描かれない（1.6.0 から。切り抜きとして扱う）

@@ -16,6 +16,7 @@
 // - 細工された画像の前提で扱う：解く前に、画素の数から大きさの上限を見る。PDF.js が失敗したら「調べられなかった」にする。
 
 import { PDFDocument, PDFName, PDFObjectCopier, PDFStream, type PDFContext } from "pdf-lib";
+import { isInflateLimitError, peelOuterFilters } from "./inflate-limit.ts";
 import type { PixelRead, PixelReader } from "../p6-text/images.ts";
 
 /** 呼ぶ側が渡す PDF.js（pdfjs-dist の、使う所だけの形） */
@@ -143,14 +144,15 @@ export function createPdfjsImageDecoder(pdfjs: PdfjsLike, options: { jbig2Url?: 
     let mini: Uint8Array;
     try {
       const doc = await PDFDocument.create();
-      const copied = PDFObjectCopier.for(ctx, doc.context).copy(stream);
+      // 外側の圧縮は、上限つきでこちらで解いてから渡す（PDF.js には解く大きさの上限を渡せないため。inflate-limit.ts）
+      const copied = PDFObjectCopier.for(ctx, doc.context).copy(peelOuterFilters(stream));
       const ref = doc.context.register(copied);
       const page = doc.addPage([1, 1]);
       page.node.setXObject(PDFName.of("Im0"), ref);
       page.node.set(PDFName.of("Contents"), doc.context.register(doc.context.stream("q 1 0 0 1 0 0 cm /Im0 Do Q")));
       mini = await doc.save({ useObjectStreams: false });
-    } catch {
-      return { kind: "unknown", reason: "broken" };
+    } catch (e) {
+      return { kind: "unknown", reason: isInflateLimitError(e) ? "too_large" : "broken" };
     }
 
     const task = pdfjs.getDocument({ data: mini, ...loadOptions });

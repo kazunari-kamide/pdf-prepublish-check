@@ -14,7 +14,8 @@
 // 隠しでない注釈の見た目は、画面に見えている字なので、ふつうは数えない。読み取り専用・ロックの印は隠しではない。
 // 1.2.0：隠しでない注釈でも、/Contents が無く（空で）、字が見た目の中だけにあるもの（スタンプなど）は、field: "AP"・hidden: false で数える。
 // 注釈の一覧には何も出ないのに、注釈を消さないかぎり字が残り、取り出せるため（低い「確認してほしい所」）。リンクは見ない。
-import { PDFArray, PDFDict, PDFHexString, PDFName, PDFRawStream, PDFStream, PDFString, decodePDFRawStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { PDFArray, PDFDict, PDFHexString, PDFName, PDFRawStream, PDFStream, PDFString, type PDFContext, type PDFObject } from "pdf-lib";
+import { decodeStream, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { loadPdf } from "../shared/load.ts";
 import { decodeTextBytes } from "../p1-info/index.ts";
@@ -100,9 +101,10 @@ function fieldText(ctx: PDFContext, field: P8Field, raw: PDFObject | undefined):
   if (v instanceof PDFString || v instanceof PDFHexString) text = decodeTextBytes(v.asBytes()).text;
   else if (field === "RC" && v instanceof PDFStream) {
     try {
-      const bytes = v instanceof PDFRawStream ? decodePDFRawStream(v).decode() : v.getContents();
+      const bytes = decodeStream(v);
       text = decodeTextBytes(bytes.subarray(0, MAX_VALUE_CHARS * 4)).text;
-    } catch {
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       return null;
     }
   }
@@ -202,7 +204,8 @@ export async function detectP8Annot(bytes: Uint8Array, options: DetectOptions = 
           groups.set(k, g);
         }
       }
-    } catch {
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       report.limits.push({ page: pageNo, reason: "unreadable_page" });
     }
   });

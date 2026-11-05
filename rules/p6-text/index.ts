@@ -6,6 +6,7 @@
 //   「覆いの下に、画像の中身が残っている」とする（image-layer.ts）。
 // 報告の checkedLayers に、調べた層を入れる（1.4.0 から）。
 
+import { isInflateLimitError } from "../shared/inflate-limit.ts";
 import { loadPdf } from "../shared/load.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { scanAnnotations, whiteSquareAnnots } from "./annotations.ts";
@@ -19,7 +20,8 @@ import { indexGlyphsByText, isGlyphSizedImage, normalizeGlyphText, isGlyphSizedS
 import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
-export const RULE_VERSION = "1.13.0";
+// 1.13.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
+export const RULE_VERSION = "1.13.1";
 
 /**
  * P6 の層。text＝黒い四角の下に字が残っている型、image＝スキャン画像の画素が残っている型、
@@ -147,7 +149,7 @@ export type P6TextReport = {
   pages: number | null;
   /** 見つけた所。文字の層（layer: "text"）と画像の層（layer: "image"。1.5.0 から） */
   findings: P6Finding[];
-  skippedPages: Array<{ page: number; reason: "too_many_operations" | "too_many_covers" | "unreadable_page" }>;
+  skippedPages: Array<{ page: number; reason: "too_many_operations" | "too_many_covers" | "unreadable_page" | "stream_too_large" }>;
   /**
    * 画素を読めなかった画像。覆いとしても、画像の層の下地としても、調べていない。「問題なし」ではない。
    * JPEG・CCITT・JBIG2 などは、imageDecoder（PDF.js）を渡せば読む（1.5.0 から）。渡さなければ、ここに入る
@@ -433,7 +435,13 @@ export async function detectP6Text(bytes: Uint8Array, options: DetectOptions = {
     } catch (e) {
       report.skippedPages.push({
         page: pageNo,
-        reason: e instanceof TooManyOperations ? "too_many_operations" : e instanceof TooManyCovers || e instanceof TooManyImageCovers ? "too_many_covers" : "unreadable_page",
+        reason: e instanceof TooManyOperations
+          ? "too_many_operations"
+          : e instanceof TooManyCovers || e instanceof TooManyImageCovers
+            ? "too_many_covers"
+            : isInflateLimitError(e)
+              ? "stream_too_large"
+              : "unreadable_page",
       });
     }
   }

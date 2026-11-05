@@ -15,10 +15,10 @@ import {
   PDFRawStream,
   PDFStream,
   PDFString,
-  decodePDFRawStream,
   type PDFContext,
   type PDFObject,
 } from "pdf-lib";
+import { decodeStream, isInflateLimitError } from "../shared/inflate-limit.ts";
 import { luminanceOf } from "./page.ts";
 
 export type ImageDarkness =
@@ -70,8 +70,7 @@ function spaceComponents(ctx: PDFContext, cs: PDFObject | undefined, colorSpaces
       if (!base || base.kind !== "direct" || !(hv instanceof PDFNumber)) return null;
       let lookup: Uint8Array | null = null;
       if (lk instanceof PDFString || lk instanceof PDFHexString) lookup = lk.asBytes();
-      else if (lk instanceof PDFRawStream) lookup = decodePDFRawStream(lk).decode();
-      else if (lk instanceof PDFStream) lookup = lk.getContents();
+      else if (lk instanceof PDFStream) lookup = decodeStream(lk);
       if (!lookup) return null;
       return { kind: "indexed", base: base.comps, hival: Math.max(0, Math.min(255, Math.floor(hv.asNumber()))), lookup };
     }
@@ -146,14 +145,15 @@ function numOf(dict: PDFDict, key: string, fallback: number): number {
 /** 画像の画素のバイト列（圧縮と予測を戻したもの）。解けなければ理由を返す */
 function pixelBytes(ctx: PDFContext, stream: PDFStream, comps: number, bpc: number, width: number):
   | { ok: true; data: Uint8Array }
-  | { ok: false; reason: "unsupported_filter" | "broken" } {
+  | { ok: false; reason: "unsupported_filter" | "too_large" | "broken" } {
   const filters = filterNames(ctx, stream.dict);
   if (filters.some((f) => !DECODABLE.has(f))) return { ok: false, reason: "unsupported_filter" };
   let data: Uint8Array;
   try {
-    data = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
-  } catch {
-    return { ok: false, reason: "broken" };
+    data = decodeStream(stream);
+  } catch (e) {
+    // 解くと大きすぎる（圧縮の爆弾など）：途中で止めた。「読み解けない形式」ではなく「大きすぎる」として数える
+    return { ok: false, reason: isInflateLimitError(e) ? "too_large" : "broken" };
   }
   const parms = decodeParms(ctx, stream.dict);
   if (parms) {

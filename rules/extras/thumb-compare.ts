@@ -10,7 +10,8 @@
 // - differs＝分かる所に、いまのページにない濃淡がある（前のページの見た目が残っている、など）
 // - unknown＝比べられなかった
 
-import { PDFDict, PDFName, PDFRawStream, PDFRef, PDFStream, decodePDFRawStream, type PDFContext } from "pdf-lib";
+import { PDFDict, PDFName, PDFRawStream, PDFRef, PDFStream, type PDFContext } from "pdf-lib";
+import { decodeStream, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import { operations, nameArg, numArg } from "../shared/content-lexer.ts";
 import { readImagePixels, type PixelReader } from "../p6-text/images.ts";
 
@@ -52,8 +53,9 @@ function contentBytes(ctx: PDFContext, contents: unknown): Uint8Array | null {
     const s = p instanceof PDFRef ? ctx.lookup(p) : p;
     if (!(s instanceof PDFStream)) continue;
     try {
-      chunks.push(s instanceof PDFRawStream ? decodePDFRawStream(s).decode() : s.getContents(), new Uint8Array([0x0a]));
-    } catch {
+      chunks.push(decodeStream(s), new Uint8Array([0x0a]));
+    } catch (e) {
+      rethrowIfInflateLimit(e);
       return null;
     }
   }
