@@ -151,6 +151,20 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     expect(r.out).toContain("articles/b.html が外のサイトから読み込んでいます");
   });
 
+  it("GitHub へ移る <a> のリンクは通し、GitHub から読み込む <img> などは止める", () => {
+    const good = run(withPages({ "contact.html": page(CSP_OK, '<a href="https://github.com/o/r/issues">Issues</a>') }));
+    expect(good.code).toBe(0);
+    const bad = run(
+      withPages({
+        "contact.html": page(CSP_OK, '<img src="https://github.com/o/r/x.png">'),
+        "faq.html": page(CSP_OK, '<a href="https://example.invalid/">x</a>'),
+      }),
+    );
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("contact.html が外のサイトから読み込んでいます");
+    expect(bad.out).toContain("faq.html が外のサイトから読み込んでいます");
+  });
+
   it("検索エンジンの確認のファイルは、決まった1行のときだけ通す", () => {
     const good = run(withPages({ "google0123abcd.html": "google-site-verification: google0123abcd.html\n" }));
     expect(good.code).toBe(0);
