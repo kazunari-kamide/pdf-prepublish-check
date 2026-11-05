@@ -1,0 +1,10 @@
+<!-- SPDX-License-Identifier: LicenseRef-OmamoriPDF-Logo -->
+<!-- お守りPDF のロゴマーク（小さいとき用・40px 未満とファビコン）。紙を塗りつぶし、行を省く。使い方と使える条件は design/logo/README.md -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <path d="M32 13 C28 3 18 8 26.5 14" fill="none" stroke="#2b2a28" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M32 13 C36 3 46 8 37.5 14" fill="none" stroke="#2b2a28" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M22 14 H42 L50 22 V55 C50 57.2 48.2 59 46 59 H18 C15.8 59 14 57.2 14 55 V22 Z" fill="#a3201b"/>
+  <circle cx="32" cy="14" r="4.2" fill="#2b2a28"/>
+  <path d="M22 25 H36 L42 31 V51 H22 Z" fill="#ffffff"/>
+  <path d="M36 25 V31 H42 Z" fill="#d69b98"/>
+</svg>

@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
     <title>お守りPDF</title>
-    <!-- アイコンを取りに行かせない（/favicon.ico への要求をなくす） -->
-    <link rel="icon" href="data:," />
+    <!-- アイコンは data: の形で差し込む（/favicon.ico への要求をなくす。logo.ts が design/logo/mark-small.svg から作る） -->
+    <link rel="icon" href="omamori:favicon" />
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="stylesheet" href="/src/site/links.css" />
   </head>
@@ -15,7 +15,7 @@
     <a class="skip" href="#results">結果へ移る</a>
     <p id="unofficial" class="unofficial" role="alert" hidden></p>
     <header class="band">
-      <h1 class="brand"><span class="seal" aria-hidden="true">守</span>お守りPDF</h1>
+      <h1 class="brand"><!--omamori:mark-->お守りPDF</h1>
       <ol class="steps" aria-label="手順">
         <li id="step-pick" data-state="now" aria-current="step">
           <span class="step-no" aria-hidden="true">1</span><span class="step-name"><span class="visually-hidden">1 </span>選ぶ</span>

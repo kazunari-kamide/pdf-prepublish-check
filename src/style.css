@@ -119,16 +119,11 @@ button {
   white-space: nowrap;
 }
 
-/* 「守」の印：お守りの袋の形（上を丸く） */
-.seal {
-  display: grid;
-  place-items: center;
-  width: 1.9rem;
-  height: 2.4rem;
-  border: var(--border-strong) solid var(--color-accent);
-  border-radius: 10px 10px 6px 6px;
-  color: var(--color-accent);
-  font-size: var(--text-small);
+/* ロゴマーク（design/logo/mark.svg を logo.ts が差し込む）。伸ばさない・色を変えない（design/logo/README.md） */
+.brand-mark {
+  flex: none;
+  width: var(--logo-header);
+  height: var(--logo-header);
 }
 
 .steps {

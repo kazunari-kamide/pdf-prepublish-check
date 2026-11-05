@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# お守りPDF
+# <img src="design/logo/mark.svg" alt="" width="48" height="48"> お守りPDF
 
 **公式の URL は `https://omamoripdf.com/` だけです。** この URL 以外で公開されているものは、改変されている可能性があります。
 
@@ -90,4 +90,5 @@ npm run dev       # 手元で検査のページを開く
 
 - コードのライセンスは [AGPL-3.0-only](LICENSE) です。
 - 「お守りPDF」の名前とロゴは、改変版には使えません。コードのライセンスは、名前とロゴの使用までは許していません。改変して公開するときは、別の名前にしてください。
+- ロゴの SVG（`design/logo/` と `design/proposals/2026-11-05-logo/` の `*.svg`）は、AGPL-3.0-only ではありません（`LicenseRef-OmamoriPDF-Logo`）。使える条件は [design/logo/README.md](design/logo/README.md) にあります。
 - 外部のライブラリのライセンスは [docs/licenses.md](docs/licenses.md) にあります。
