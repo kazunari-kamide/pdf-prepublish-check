@@ -7,7 +7,7 @@
 //
 // 確かめること（1つでも合わなければ失敗）：
 // - トップページが 200 で返り、csp.ts のヘッダー（CSP・nosniff・no-referrer など）が、同じ値で1つずつ付いている
-// - サイトのページ（記事の一覧・記事1つ・プライバシー）も 200 で返り、同じヘッダーが付いている
+// - サイトのページ（記事の一覧・記事1つ・タグのページ・プライバシー）も .html なしの場所で 200 で返り、同じヘッダーが付いている。.html 付きの場所は .html なしへ 301
 // - トップページが、外のサイトからスクリプトを読み込んでいない（アクセス解析のスクリプトは入れない。docs/no-network.md）
 // - https の応答に Strict-Transport-Security が付き、Cache-Control が HTML は no-cache・assets/ は 1 年（htaccess.ts）
 // - 見つからない場所は、404 で自前の 404 のページ（dist/404.html と同じ中身）を、同じヘッダーをつけて返す。assets/ を開いてもファイルの一覧は出ない
@@ -78,9 +78,32 @@ if (top) {
   }
 }
 
-// ---- サイトのページ（記事の一覧・プライバシー。site.ts が作る）にも、同じヘッダーが付いている
+// ---- サイトのページの場所は .html なし（2026-11-05。htaccess.ts の CLEAN_URL_RULES）
+// dist/ の HTML のファイルの名前から、本番で開く場所を作る（index.html と検索エンジンの確認のファイルは、そのまま）
+const pageUrlFor = (f) => {
+  if (f === "index.html" || /^google[0-9a-z]+\.html$/.test(f)) return f;
+  if (f.endsWith("/index.html")) return f.slice(0, -"index.html".length);
+  return f.endsWith(".html") ? f.slice(0, -".html".length) : f;
+};
+const articleFile = files.find((f) => /^articles\/(?!index\.html$|tags\/).+\.html$/.test(f));
+const tagFile = files.find((f) => /^articles\/tags\/.+\.html$/.test(f));
+
+// ---- .html 付きの場所は、.html なしへ 301（外からのリンクや検索の結果を切らさないため）
+for (const f of ["privacy.html", articleFile, tagFile].filter(Boolean)) {
+  try {
+    const r = await get(new URL(f, base), "HEAD");
+    const loc = r.headers.get("location");
+    const want = new URL(pageUrlFor(f), base).href;
+    if (r.status !== 301 || !loc || new URL(loc, base).href !== want) problems.push(`${f} が ${r.status}（行き先 ${loc ?? "なし"}）を返しました（301 で ${want} のはず）`);
+    else ok.push(`${f} → 301 → ${pageUrlFor(f)}`);
+  } catch (e) {
+    problems.push(`${f} の移し先を確かめられませんでした（${e?.message ?? e}）`);
+  }
+}
+
+// ---- サイトのページ（記事の一覧・プライバシー・記事1つ・タグのページ。site.ts が作る）が .html なしの場所で 200 を返し、同じヘッダーが付いている
 // 記事は1つだけ見る（どれも同じ .htaccess のもとで返るため）
-for (const page of ["articles/", "privacy.html", files.find((f) => /^articles\/(?!index\.html$).+\.html$/.test(f))].filter(Boolean)) {
+for (const page of ["articles/", "privacy", articleFile && pageUrlFor(articleFile), tagFile && pageUrlFor(tagFile)].filter(Boolean)) {
   try {
     const r = await get(new URL(page, base));
     if (r.status !== 200) {
@@ -123,8 +146,9 @@ if (top) {
 
 // ---- 見つからないとき：自前の 404 のページを、404 で、同じヘッダーをつけて返す。フォルダの中身の一覧は出さない
 try {
-  const missing = `this-page-does-not-exist-${Date.now()}.html`;
-  for (const where of [missing, `assets/${missing}`]) {
+  // .html なしの場所（今のサイトの形）と、.html 付きの場所（前の形。ファイルがないので 301 にせず 404）と、assets/ の中
+  const missing = `this-page-does-not-exist-${Date.now()}`;
+  for (const where of [missing, `${missing}.html`, `articles/${missing}`, `assets/${missing}.html`]) {
     const r = await get(new URL(where, base));
     const body = Buffer.from(await r.arrayBuffer());
     const want = readFileSync(path.join(DIST, NOT_FOUND_PAGE.slice(1)));
@@ -133,7 +157,7 @@ try {
     else if (sha256(body) !== sha256(want)) problems.push(`見つからない場所（${where}）で、自前の 404 のページ（${NOT_FOUND_PAGE}）が返りませんでした`);
     else if (bad.length) problems.push(`404 の応答のヘッダーが違います（${bad.join("・")}）`);
     else if (r.headers.get("cache-control") !== CACHE_DEFAULT) problems.push(`404 の応答（${where}）の Cache-Control が ${r.headers.get("cache-control") ?? "（なし）"} です（${CACHE_DEFAULT} のはず）`);
-    else ok.push(`見つからない場所（${where.startsWith("assets/") ? "assets/ の中" : "一番上"}）は、自前の 404 のページと同じヘッダー`);
+    else ok.push(`見つからない場所（${where.replace(/this-page-does-not-exist-[0-9]+/, "…")}）は、404 で自前の 404 のページと同じヘッダー`);
   }
   const dir = await get(new URL("assets/", base));
   const listing = dir.status === 200 && /Index of \/assets/i.test(await dir.text());
@@ -180,7 +204,8 @@ for (const [ext, want] of TYPES) {
 let same = 0;
 for (const f of files) {
   try {
-    const r = await get(new URL(f, base));
+    // HTML は、本番で開く場所（.html なし）で取る。.html 付きは 301 になるため
+    const r = await get(new URL(f.endsWith(".html") ? pageUrlFor(f) : f, base));
     if (f === ".htaccess") {
       if (r.status === 200) problems.push(".htaccess が外から読めます（403 か 404 のはず）");
       else ok.push(`.htaccess は外から読めない（${r.status}）`);

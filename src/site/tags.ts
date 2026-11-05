@@ -9,7 +9,7 @@ import type { Article } from "./types.ts";
 export interface Tag {
   /** 画面に出す名前 */
   label: string;
-  /** 一覧のページの名前（/articles/tags/<slug>.html）。英小文字・数字・- だけ */
+  /** 一覧のページの名前（/articles/tags/<slug>。ファイルは <slug>.html）。英小文字・数字・- だけ */
   slug: string;
   /** 種類か話題か（一覧で、分けて並べる） */
   group: "kind" | "topic";
@@ -76,4 +76,4 @@ export function articleTags(a: Article): Tag[] {
   return out;
 }
 
-export const tagPath = (t: Tag) => `/articles/tags/${t.slug}.html`;
+export const tagPath = (t: Tag) => `/articles/tags/${t.slug}`;

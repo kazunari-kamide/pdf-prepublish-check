@@ -13,17 +13,14 @@ import type { Article, FigureAsset, PageMeta, Section } from "./types.ts";
 
 export { SITE_NAME };
 export const ARTICLES_PATH = "/articles/";
-export const PRIVACY_PATH = "/privacy.html";
+export const PRIVACY_PATH = "/privacy";
 // サイトの案内のページ（中身は pages.ts）
-export const LICENSES_PATH = "/licenses.html";
-export const TERMS_PATH = "/terms.html";
-export const CONTACT_PATH = "/contact.html";
-export const FAQ_PATH = "/faq.html";
-export const CHECKLIST_PATH = "/checklist.html";
-/**
- * サービスの紹介のページ（LP。中身は about.ts。持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（index.html。tests/site-pages.test.ts）。
- * 場所は .html なし。ファイルは about.html（aboutFile。#106 で fileFor が .html を足すようになっても、同じ名前になる）
- */
+export const LICENSES_PATH = "/licenses";
+export const TERMS_PATH = "/terms";
+export const CONTACT_PATH = "/contact";
+export const FAQ_PATH = "/faq";
+export const CHECKLIST_PATH = "/checklist";
+/** サービスの紹介のページ（LP。中身は about.ts。持ち場 G）。検査のページの上の帯から、ここへ 1 つだけリンクする（index.html。tests/site-pages.test.ts）。ファイルは about.html（fileFor） */
 export const ABOUT_PATH = "/about";
 
 /** どのページの下にも置く、公式のサイトの場所の1文（検査のページ index.html の下の帯にも、同じ文を置く。CLAUDE.md §11-6） */
@@ -64,17 +61,22 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-export const articlePath = (a: Article) => `${ARTICLES_PATH}${a.slug}.html`;
+export const articlePath = (a: Article) => `${ARTICLES_PATH}${a.slug}`;
 
-/** dist/ の中のファイルの名前（先頭の / なし）。/articles/ は articles/index.html */
+/**
+ * dist/ の中のファイルの名前（先頭の / なし）。/articles/ は articles/index.html、/privacy は privacy.html。
+ * サイトのページの場所は .html なし（2026-11-05）。本番は .htaccess の書き換えで、.html のファイルを返す（htaccess.ts）
+ */
 export function fileFor(path: string): string {
-  return (path.endsWith("/") ? `${path}index.html` : path).replace(/^\//, "");
+  return (path.endsWith("/") ? `${path}index.html` : `${path}.html`).replace(/^\//, "");
 }
 
-/** サービスの紹介のページのファイルの名前（about.html）。場所（ABOUT_PATH）は .html なしなので、fileFor の後に .html がなければ足す */
-export function aboutFile(): string {
-  const f = fileFor(ABOUT_PATH);
-  return f.endsWith(".html") ? f : `${f}.html`;
+/** dist/ の中の HTML のファイルの名前から、サイトの場所（.html なし）を作る。fileFor の逆 */
+export function pathForFile(file: string): string {
+  const f = file.replace(/^\//, "");
+  if (f === "index.html") return "/";
+  if (f.endsWith("/index.html")) return `/${f.slice(0, -"index.html".length)}`;
+  return `/${f.replace(/\.html$/, "")}`;
 }
 
 /** layout に足せるもの（サービスの紹介のページ about.ts だけが使う） */
