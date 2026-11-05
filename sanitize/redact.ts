@@ -15,13 +15,16 @@
 //   - 字の対応表（/ToUnicode）：消した字だけで使っていた行を消す（redact-fonts.ts）
 // そのうえで、片付け（sanitizePdf）と同じ片付けを全部かけ、場所の上に黒い四角を描く。
 // 保存の前に、出来上がった PDF を最初から読み直す（redact-check.ts と、呼ぶ側が渡す checks）。
+// プロパティ（options.properties）で本人が「そのまま」「書き直す」を選んだ欄の値は、読み直しで見つかっても残りに数えない
+// （整えるほうと同じ決まり。11/5 本人）。数えなかった数は chosen、項目ごとの報告は properties（整えるほうと同じ形）で返す。
 
 import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRef, PDFStream, type PDFContext, type PDFDocument, type PDFObject } from "pdf-lib";
 import type { Rect } from "../rules/p6-text/geometry.ts";
 import { sanitizeCore } from "./index.ts";
+import { CHOSEN_PATTERNS, chosenFieldNames } from "./properties.ts";
 import { checkAreas, touches } from "./redact-check.ts";
 import { fontUsage, shrinkToUnicode, type FontUsage } from "./redact-fonts.ts";
-import type { NotDoneItem, RedactArea, RedactLeftover, RedactOptions, RedactResult, RemovedItem } from "./types.ts";
+import type { NotDoneItem, PropertyChange, RedactArea, RedactLeftover, RedactOptions, RedactResult, RemovedItem } from "./types.ts";
 
 /** 1回に選べる場所の数の上限（細工した入力で止まらないように） */
 const MAX_AREAS = 10_000;
@@ -238,8 +241,16 @@ export async function redact(bytes: Uint8Array, areas: RedactArea[], options: Re
       leftovers.push({ check: c.name, kind: c.name === "rules" ? "rule_error" : "verifier_error", count: 1, label: "読み直しの確かめが途中で止まったため、残りがないと確かめられませんでした" });
     }
   }
-  if (leftovers.length) return { status: "blocked", pages: core.pages, removed, notDone, leftovers, decrypted: core.decrypted, checked };
-  return { status: "ok", bytes: core.bytes, pages: core.pages, removed, notDone, decrypted: core.decrypted, checked };
+  // 本人が選んだ値（そのまま・書き直した値）の欄は、残りに数えない。欄の名前が無いもの・ほかの型・調べられなかったものは、今までどおり残り
+  let props: { properties?: PropertyChange[]; chosen?: number } = {};
+  let counted = leftovers;
+  if (core.properties) {
+    const chosen = chosenFieldNames(core.properties);
+    counted = leftovers.filter((l) => !(l.field !== undefined && l.pattern !== undefined && CHOSEN_PATTERNS.includes(l.pattern) && chosen.has(l.field)));
+    props = { properties: core.properties, chosen: leftovers.length - counted.length };
+  }
+  if (counted.length) return { status: "blocked", pages: core.pages, removed, notDone, leftovers: counted, decrypted: core.decrypted, checked, ...props };
+  return { status: "ok", bytes: core.bytes, pages: core.pages, removed, notDone, decrypted: core.decrypted, checked, ...props };
 }
 
 class BadAreas extends Error {}
