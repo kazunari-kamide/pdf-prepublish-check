@@ -19,6 +19,7 @@
 // 保存の前に、入れた PDF と出来上がった PDF の両方に同じ確かめ（checks）をかけ、種類ごとの残りが1つでも増えたら blocked にする。
 
 import { PDFArray, PDFBool, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { isInflateLimitError } from "../rules/shared/inflate-limit.ts";
 import { loadPdf } from "../rules/shared/load.ts";
 import { SETTINGS, makeVisibility, readPageForCheck } from "./content.ts";
 import { onePagePdf } from "./image-sample.ts";
@@ -159,7 +160,8 @@ function tally(left: RedactLeftover[]): Map<string, { label: string; count: numb
 export async function compress(bytes: Uint8Array, options: CompressOptions): Promise<CompressResult> {
   try {
     return await compressCore(bytes, options);
-  } catch {
+  } catch (e) {
+    if (isInflateLimitError(e)) return { status: "error", code: "too_large", message: "解くと大きすぎる所があるため、小さくできませんでした。" };
     // 細工・破損した PDF で、途中の部品の読み取りが失敗したとき（止まらずにエラーを返す）
     return { status: "error", code: "unreadable", message: "PDF の中を読めなかったため、小さくできませんでした。" };
   }
@@ -271,7 +273,12 @@ async function compressCore(bytes: Uint8Array, options: CompressOptions): Promis
     let decoded;
     try {
       decoded = await options.codec.decode(await onePagePdf(ctx, stream, size.colorSpaces), W * H);
-    } catch {
+    } catch (e) {
+      // 解くと大きすぎる画像は、そのまま残す（小さくしない）
+      if (isInflateLimitError(e)) {
+        skip("too_large");
+        continue;
+      }
       decoded = null;
     }
     if (!decoded || decoded.width !== W || decoded.height !== H) {

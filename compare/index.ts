@@ -11,7 +11,8 @@
 //
 // ページは番号で対応させる（元の n ページ目と、公開する PDF の n ページ目）。
 
-import { PDFArray, PDFName, PDFRawStream, PDFStream, decodePDFRawStream, type PDFDocument } from "pdf-lib";
+import { PDFArray, PDFName, PDFRawStream, PDFStream, type PDFDocument } from "pdf-lib";
+import { decodeStream, rethrowIfInflateLimit } from "../rules/shared/inflate-limit.ts";
 import { detectP1Info } from "../rules/p1-info/index.ts";
 import { detectP5Revisions } from "../rules/p5-revisions/index.ts";
 import { scanAnnotations } from "../rules/p6-text/annotations.ts";
@@ -228,8 +229,9 @@ function readXmp(doc: PDFDocument): string | null {
   if (!(meta instanceof PDFStream)) return null;
   let data: Uint8Array;
   try {
-    data = meta instanceof PDFRawStream ? decodePDFRawStream(meta).decode() : meta.getContents();
-  } catch {
+    data = decodeStream(meta);
+  } catch (e) {
+    rethrowIfInflateLimit(e);
     return null;
   }
   if (data.length > MAX_XMP_BYTES) data = data.subarray(0, MAX_XMP_BYTES);

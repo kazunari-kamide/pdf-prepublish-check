@@ -90,12 +90,15 @@ function pagesText(pages: number[]): string {
 function partialReasons(rules: RuleResult[]): string[] {
   const heavy: number[] = [];
   const unreadable: number[] = [];
+  const tooLarge: number[] = [];
   const images: number[] = [];
+  const largeImages: number[] = [];
   let imagesNoPage = false;
   const other = new Set<string>();
   for (const r of rules) {
     for (const n of r.notices) {
-      if (n.kind === "skipped_pages") (n.reason === "unreadable" ? unreadable : heavy).push(...n.pages);
+      if (n.kind === "skipped_pages") (n.reason === "unreadable" ? unreadable : n.reason === "too_large" ? tooLarge : heavy).push(...n.pages);
+      else if (n.kind === "unchecked_images" && n.reason === "too_large") largeImages.push(...n.pages);
       else if (n.kind === "unchecked_images") {
         images.push(...n.pages);
         if (!n.pages.length) imagesNoPage = true;
@@ -105,6 +108,8 @@ function partialReasons(rules: RuleResult[]): string[] {
   const out: string[] = [];
   if (heavy.length) out.push(`図形が多すぎるため、ページ ${pagesText(heavy)} を省きました。`);
   if (unreadable.length) out.push(`読めなかったため、ページ ${pagesText(unreadable)} を省きました。`);
+  if (tooLarge.length) out.push(`解くと大きすぎる中身があるため、ページ ${pagesText(tooLarge)} を省きました。`);
+  if (largeImages.length) out.push(`ページ ${pagesText(largeImages)} に、大きすぎるため調べていない画像があります。`);
   if (images.length) out.push(`ページ ${pagesText(images)} に、読み解けなかった画像があります。`);
   else if (imagesNoPage) out.push("読み解けなかった画像があります。");
   out.push(...other);
