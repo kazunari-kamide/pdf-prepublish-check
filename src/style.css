@@ -6,6 +6,8 @@
  */
 
 @import "../design/tokens.css";
+/* デザインシート（design/sheet.md）。色の段・面の重なり・枠・お知らせの役の名前。tokens.css に入ったら、この行は外してよい */
+@import "../design/sheet.css";
 
 /*
  * 同梱の書体：Noto Sans JP を、Shift_JIS の字と画面の記号だけ、太さ 400〜700 に絞ったもの（SIL OFL 1.1）。
@@ -25,18 +27,21 @@
 }
 
 html {
+  /* 暗い色の設定の人にも、白をもとにした明るい画面で出す（ブラウザに自動で暗くさせない。design/sheet.md） */
+  color-scheme: light;
   font-family: var(--font-body);
   font-size: var(--text-base);
   line-height: var(--leading);
   letter-spacing: var(--tracking);
-  color: var(--color-base);
-  background: var(--color-paper);
+  color: var(--text-strong);
+  background: var(--surface-page);
   -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  background: var(--surface-page);
   display: flex;
   flex-direction: column;
   /* 狭い画面への切り替えは、この幅を html の字の大きさ（rem）で測る（@container page）。
@@ -106,8 +111,8 @@ button {
   align-items: center;
   gap: var(--space-3) var(--space-5);
   padding: var(--space-3) var(--space-5);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-line);
+  background: var(--surface-card);
+  border-bottom: var(--bw-2) solid var(--line-strong);
 }
 
 .brand {
@@ -144,7 +149,8 @@ button {
   min-height: var(--target-min);
   padding: var(--space-1) var(--space-4) var(--space-1) var(--space-2);
   border-radius: var(--radius-full);
-  background: var(--color-chip);
+  background: var(--surface-subtle);
+  border: var(--bw-1) solid var(--line-default);
 }
 
 /* 番号の丸。済んだ段は ✓ にする（字でも「置きました」などの一言で示す） */
@@ -524,9 +530,10 @@ button {
 .render-note {
   margin: 0;
   max-width: 40rem;
-  border-left: 4px solid var(--color-base);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  border: var(--bw-1) solid var(--info);
+  border-left-width: var(--bw-accent);
+  border-radius: var(--radius-m);
+  background: var(--info-bg);
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-small);
 }
@@ -535,9 +542,9 @@ button {
 
 .results {
   align-self: start;
-  background: var(--color-surface);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-panel);
+  background: var(--surface-card);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
   padding: var(--space-5) var(--space-5) var(--space-6);
   min-width: 0;
 }
@@ -547,8 +554,11 @@ button {
 }
 
 .results h2 {
-  font-size: var(--text-h1);
-  margin: 0 0 var(--space-1);
+  font-size: var(--fs-h1);
+  /* 大見出し：下に墨の 2px の線 */
+  margin: 0 0 var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: var(--bw-2) solid var(--line-strong);
 }
 
 #status {
@@ -580,10 +590,11 @@ progress {
 
 .notices {
   margin: var(--space-3) 0;
-  border-left: 4px solid var(--color-base);
-  border-radius: var(--radius);
+  border: var(--bw-1) solid var(--info);
+  border-left-width: var(--bw-accent);
+  border-radius: var(--radius-m);
   padding: var(--space-2) var(--space-4);
-  background: var(--color-chip);
+  background: var(--info-bg);
 }
 
 .notices h3 {
@@ -602,8 +613,9 @@ progress {
   display: grid;
   grid-template-columns: var(--width-fuda) minmax(0, 1fr);
   margin-top: var(--space-3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-panel);
+  border: var(--bw-1) solid var(--line-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-card);
   overflow: hidden;
 }
 
@@ -906,13 +918,13 @@ progress {
 }
 
 .item:hover {
-  background: var(--color-accent-tint);
+  background: var(--surface-subtle);
 }
 
 /* 選んだ項目：線を太く、紅に（線の太さでも示す） */
 .item.is-selected {
-  border: var(--border-strong) solid var(--color-accent);
-  background: var(--color-accent-tint);
+  border: var(--bw-2) solid var(--danger-line);
+  background: var(--danger-bg);
 }
 
 .item > span {
@@ -928,7 +940,22 @@ progress {
 }
 
 .item-no {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.8em;
+  height: 1.8em;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: var(--text-on-strong);
   font-weight: 700;
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.item[data-check] .item-no {
+  background: transparent;
+  color: var(--check);
+  border: var(--bw-2) dashed var(--check);
 }
 
 /* 深刻度の札：形（▲■●）と字で示す。色だけに頼らない */
@@ -1010,9 +1037,10 @@ progress {
 .clean {
   margin: var(--space-3) 0;
   padding: var(--space-4);
-  background: var(--color-ok-tint);
-  border: var(--border-strong) solid var(--color-ok);
-  border-radius: var(--radius-panel);
+  background: var(--ok-bg);
+  border: var(--bw-1) solid var(--ok-line);
+  border-top-width: var(--bw-accent);
+  border-radius: var(--radius-l);
 }
 
 /* 残っている所がある・言い切れないときは、緑にしない */
@@ -1181,9 +1209,10 @@ progress {
 .not-done {
   margin: var(--space-3) 0;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
-  border-left: 4px solid var(--color-accent);
-  border-radius: var(--radius);
+  background: var(--danger-bg);
+  border: var(--bw-1) solid var(--danger-line);
+  border-left-width: var(--bw-accent);
+  border-radius: var(--radius-m);
 }
 
 .not-done h3,
@@ -1225,8 +1254,10 @@ progress {
 }
 
 .verified[data-state="clean"] {
-  border: var(--border-strong) solid var(--color-ok);
-  border-radius: var(--radius);
+  border: var(--bw-1) solid var(--ok-line);
+  border-left-width: var(--bw-accent);
+  border-radius: var(--radius-m);
+  background: var(--ok-bg);
   padding: var(--space-2) var(--space-3);
   color: var(--color-ok);
   font-weight: 700;
@@ -1239,9 +1270,10 @@ progress {
 .scope-note {
   margin: var(--space-4) 0 0;
   padding: var(--space-3) var(--space-4);
-  border-left: 4px solid var(--color-base);
-  border-radius: var(--radius);
-  background: var(--color-chip);
+  border: var(--bw-1) solid var(--info);
+  border-left-width: var(--bw-accent);
+  border-radius: var(--radius-m);
+  background: var(--info-bg);
   font-size: var(--text-small);
 }
 
@@ -1615,4 +1647,29 @@ progress {
   margin: var(--space-1) 0 0;
   font-size: var(--text-small);
   color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------- デザインシート（design/sheet.md）の決まりのうち、部品ごとに書かないもの */
+
+/* お知らせの題の前の印（色だけで示さない。知らせ：ｉ／合格：✓） */
+.notices h3::before {
+  content: "ｉ ";
+}
+
+.verified[data-state="clean"] p::before {
+  content: "✓ ";
+}
+
+/* 押せる所のカーソル：チェックボックス・ラジオボタンとその字・開け閉めの見出しも指の形。押せないものは ⊘ */
+input[type="checkbox"],
+input[type="radio"],
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]),
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
 }
