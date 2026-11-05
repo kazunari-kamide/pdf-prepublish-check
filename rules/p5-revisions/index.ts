@@ -459,10 +459,11 @@ function classify(
     return chars > 0 ? { counted: true, kind: "info", chars } : { counted: false, kind: "info", reason: "info_without_counted_keys" };
   }
   const part: P5Part = type === K.Font || type === K.FontDescriptor ? "font" : type === K.CMap ? "cmap" : "other";
-  // オブジェクトストリームの中の、どこからも指されていない辞書で、字の値を持つもの（1.2.0）。構造の部品は数えない
+  // オブジェクトストリームの中の、どこからも指されていない辞書で、字の値を持つもの（1.2.0）。構造の部品は数えない。
+  // 1.3.0 から：どの版の xref にも載らない辞書（orphan。%%EOF のあとに足したものなど）も、オブジェクトストリームの外でも数える
   const typeName = type instanceof PDFName ? type.decodeText() : null;
   const isolated = where === "unreferenced" || where === "orphan";
-  if (def.objstm !== null && isolated && part === "other" && (typeName === null || !STRUCTURE_TYPES.has(typeName))) {
+  if ((def.objstm !== null || where === "orphan") && isolated && part === "other" && (typeName === null || !STRUCTURE_TYPES.has(typeName))) {
     const chars = stringChars(o);
     if (chars > 0) return { counted: true, kind: "dict_text", chars };
   }

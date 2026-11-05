@@ -220,6 +220,15 @@ describe("P5 1.3.0：資源にあるが描かれない部品", () => {
     expect(await kinds("q 0 g 0 0 10 10 re f Q", { forms: { Fm1: "0 g 0 0 10 10 re f" } })).toEqual([]);
   });
 
+  it("どの xref にも載らない（%%EOF のあとに足した）字の入った辞書は dict_text。空白だけの足し物は出さない", async () => {
+    const base = await makePdf(NAME);
+    const tail = new TextEncoder().encode("\n99 0 obj\n<< /Note (old draft Taro Yamada) >>\nendobj\n");
+    const leak = new Uint8Array([...base, ...tail]);
+    expect((await detectP5Revisions(leak)).findings.map((f) => `${f.kind}:${f.where}`)).toEqual(["dict_text:orphan"]);
+    const blank = new Uint8Array([...base, ...new TextEncoder().encode("\n   \n")]);
+    expect((await detectP5Revisions(blank)).findings).toEqual([]);
+  });
+
   it("画面：骨組み（そのほかの部品）だけの「片付けで消せる残り」は出さない", async () => {
     const p5rule = RULES.find((r) => r.id === "p5-revisions")!;
     const doc = await PDFDocument.create({ updateMetadata: false });
@@ -264,6 +273,19 @@ describe("alt-text 1.1.0：ページに描いた字と同じ題・説明は数�
   it("見出しと同じしおりの題は数えず、本文にない題だけを数える", async () => {
     const r = await detectAltText(await makePdf("BT /F1 12 Tf 20 150 Td (Chapter One) Tj ET", { outlines: ["Chapter One", "Hanako Kasou 000-0000"] }));
     expect(r.findings).toMatchObject([{ kind: "outline", count: 1 }]);
+    expect(r.notCounted.inBody).toBe(1);
+  });
+
+  it("構造要素の題（/T）・略語の展開（/E）も、本文にないものを数える", async () => {
+    const doc = await PDFDocument.create({ updateMetadata: false });
+    const ctx = doc.context;
+    const page = doc.addPage([300, 200]);
+    page.node.set(PDFName.of("Resources"), ctx.obj({ Font: { F1: ctx.register(ctx.obj({ Type: "Font", Subtype: "Type1", BaseFont: "Helvetica" })) } } as never));
+    page.node.set(PDFName.of("Contents"), ctx.register(ctx.stream("BT /F1 12 Tf 20 150 Td (Figure 1) Tj ET")));
+    const el = ctx.register(ctx.obj({ Type: "StructElem", S: "Figure", Alt: PDFHexString.fromText("Figure 1"), T: PDFHexString.fromText("Draft by Jiro Kasou"), E: PDFHexString.fromText("Jiro Kasou") } as never));
+    doc.catalog.set(PDFName.of("StructTreeRoot"), ctx.register(ctx.obj({ Type: "StructTreeRoot", K: [el] } as never)));
+    const r = await detectAltText(new Uint8Array(await doc.save({ useObjectStreams: false })));
+    expect(r.findings).toMatchObject([{ kind: "alt", where: "structure", count: 2 }]);
     expect(r.notCounted.inBody).toBe(1);
   });
 

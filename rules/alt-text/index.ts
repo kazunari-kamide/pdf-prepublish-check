@@ -6,7 +6,7 @@
 // 種類（kind）：
 //   actual_text_diff：ページの中の /ActualText（マーク付きの中身の代わりの文字）が、描いた字と違う（コピーすると、描いた字ではなく代わりの字が出る）
 //   outline：しおり（/Outlines）の題。画面の横に見えるもの。低い「確認してほしい所」
-//   alt：読み上げ用の説明（構造の /Alt）と、構造の /ActualText、字を描いていない所の /ActualText。
+//   alt：読み上げ用の説明（構造の /Alt）と、構造の /ActualText・/T（題）・/E（略語の展開。/T・/E は 1.1.0 から）、字を描いていない所の /ActualText。
 //        行政の PDF のアクセシビリティで推奨されるので危険にはせず、低い「確認してほしい所」として件数を出す
 // 数えないもの：描いた字と同じ /ActualText（合字・異体字を、ふつうの字に直すためのもの）。
 //   1.1.0 から：ページに描いた字の中にそのまま出てくる、しおりの題・読み上げ用の説明（見出しと同じ題、図の見える説明と同じ /Alt）。
@@ -112,7 +112,8 @@ export async function detectAltText(bytes: Uint8Array): Promise<AltReport> {
           limit("too_many_struct");
           break;
         }
-        for (const key of ["Alt", "ActualText"]) {
+        // 構造要素の題（/T）と略語の展開（/E）も、読み上げや支援技術で取り出される（1.1.0 から。ページに描いた字と同じものは数えない）
+        for (const key of ["Alt", "ActualText", "T", "E"]) {
           const t = visibleText(textOf(ctx, v.get(N(key))) ?? "");
           if (t) structTexts.push(t);
         }
