@@ -35,6 +35,7 @@ import { sampleFile } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
 import { setupTermsDialog } from "./ui/terms-dialog";
+import { originNote, repoFromMeta } from "./ui/rule-origin-note";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -558,6 +559,8 @@ function renderGroups(s: Session) {
       const li = make("li");
       li.append(itemButton(r));
       if (r.content) li.append(revealBox(r.content, `${r.no} 番`));
+      // 見つける段から来た型だけ、出どころの札（src/ui/rule-origin.ts）
+      if (r.origin) li.append(originNote(document, r.origin, repoFromMeta(document)));
       if (candidates.some((c) => c.no === r.no)) li.append(candidateButton(r));
       list.append(li);
     }
