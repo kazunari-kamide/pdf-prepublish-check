@@ -22,6 +22,7 @@ import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, t
 import type { CoverageRow } from "./ui/coverage";
 import { FUDA_SCOPE, fudaLabel } from "./ui/fuda";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { isOfficialHost, UNOFFICIAL_NOTE } from "./ui/official";
 import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
@@ -713,7 +714,12 @@ function renderProperties(s: Session) {
     return;
   }
   const count = p ? p.info.length + p.xmp.length : 0;
-  const summary = make("summary", p ? `プロパティの一覧（文書情報 ${p.info.length} 欄・XMP ${p.xmp.length} 欄）` : "プロパティの一覧（読めませんでした）");
+  const summary = make("summary");
+  summary.append(
+    make("span", p ? `プロパティの一覧（文書情報 ${p.info.length} 欄・XMP ${p.xmp.length} 欄）` : "プロパティの一覧（読めませんでした）"),
+    // 閉じていても読める一言（値をそのまま出す所なので、画面共有・画面の撮影の前に閉じてもらう）
+    make("span", "開くと欄の値をそのまま出します。画面を共有・撮影する前は、閉じておいてください。", "props-warn"),
+  );
   ui.props.append(summary);
   const body = make("div", undefined, "props-body");
   body.append(
@@ -747,7 +753,8 @@ function renderProperties(s: Session) {
     body.append(go, make("p", "「片付ける」を押すと、文書情報と XMP の欄を、まとめて消した PDF を新しく作ります（元の PDF は変えません）。", "props-note"));
   }
   ui.props.append(body);
-  ui.props.open = count > 0 && s.phase === "before";
+  // 最初は閉じた形で出す（値をそのまま出す所なので、開くのは利用者が決める）
+  ui.props.open = false;
   ui.props.hidden = false;
 }
 
@@ -1309,6 +1316,13 @@ ui.compressDownload.addEventListener("click", (e) => {
   if (ui.compressDownload.getAttribute("aria-disabled") === "true") e.preventDefault();
 });
 
+
+// 公式のサイトで動いていなければ、画面の上に知らせる（丸写しの目印。守りの中心にはしない。src/ui/official.ts）
+if (!isOfficialHost(location.hostname)) {
+  const note = el<HTMLParagraphElement>("unofficial");
+  note.textContent = UNOFFICIAL_NOTE;
+  note.hidden = false;
+}
 
 ui.sample.addEventListener("click", () => {
   const file = sampleFile();

@@ -56,6 +56,9 @@ export class PdfView {
       useWorkerFetch: false,
       useWasm: false,
       enableXfa: false,
+      // PDF の中の書体を、ブラウザの書体（@font-face）として読ませない。字は PDF.js が形をなぞって描く。
+      // 細工した書体がブラウザの書体の処理に届く道を閉じる（2026-11-05。絵の変わり方は design/screenshots/ で比べた）
+      disableFontFace: true,
       disableRange: true,
       disableStream: true,
       disableAutoFetch: true,

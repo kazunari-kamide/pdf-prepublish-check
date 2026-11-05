@@ -1425,3 +1425,26 @@ progress {
 .compress .download {
   font-size: 1.125rem;
 }
+
+/* 公式のサイトでないときの知らせ（画面のいちばん上。紅の地に白の字と「▲」。色だけにしない） */
+.unofficial {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-on-dark);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.unofficial::before {
+  content: "▲ ";
+}
+
+/* プロパティの一覧の見出しの下の一言（閉じていても読める） */
+.props summary .props-warn {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-small);
+  font-weight: 400;
+  color: var(--color-muted);
+}
