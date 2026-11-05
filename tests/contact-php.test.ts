@@ -393,14 +393,26 @@ describe.skipIf(!hasPhp)("contact-send.php を PHP で動かす", () => {
       expect(r.sent).toHaveLength(2);
     });
 
-    it("同じ接続元から続けて送れない（60 秒に 1 通・1 時間に 5 通）。ほかの接続元は送れる", () => {
+    it("同じ接続元から続けて送れない（60 秒に 1 通・1 時間に 5 通・24 時間に 3 通）。ほかの接続元は送れる", () => {
       freshData();
       const at = (s: number, ip = "192.0.2.60") => ({ now: T0 + s, post: ok({}, T0 + s), server: { REMOTE_ADDR: ip } });
-      const r = run([at(0), at(30), at(0, "192.0.2.61"), at(61), at(122), at(183), at(244), at(305), at(3601)]);
-      // 0・61・122・183・244 秒の 5 通で 1 時間の上限。305 秒の 6 通目は止まり、3601 秒には 0 秒の分が 1 時間の外に出る
-      expect(r.results.map((x) => x.status)).toEqual([200, 429, 200, 200, 200, 200, 200, 429, 200]);
-      expect(r.results[1]!.headers).toEqual(["Retry-After: 60"]);
+      const r = run([at(0), at(30), at(0, "192.0.2.61"), at(61), at(122), at(183)]);
+      // 0 秒の 1 通目から 60 秒は止まる。0・61・122 秒の 3 通で 24 時間の上限（183 秒の 4 通目は止まる）
+      expect(r.results.map((x) => x.status)).toEqual([200, 429, 200, 200, 200, 429]);
+      expect(r.results[1]!.headers).toEqual(["Retry-After: 30"]);
       expect(msgs(r.results[1]!)).toContain("続けて送ることはできません");
+      // 1 通目（0 秒）が 24 時間の外に出るまで：0 + 86400 - 183
+      expect(r.results[5]!.headers).toEqual(["Retry-After: 86217"]);
+      expect(r.sent).toHaveLength(4);
+    });
+
+    it("24 時間に 3 通の上限は、いちばん古い分が 24 時間の外に出ると、また送れる", () => {
+      freshData();
+      const at = (s: number) => ({ now: T0 + s, post: ok({}, T0 + s), server: { REMOTE_ADDR: "192.0.2.63" } });
+      // 0・61・122 秒は送れる。183・244 秒は 24 時間の上限で止まる。86401 秒には 0 秒の分が外に出る
+      const r = run([at(0), at(61), at(122), at(183), at(244), at(86_401)]);
+      expect(r.results.map((x) => x.status)).toEqual([200, 200, 200, 429, 429, 200]);
+      expect(r.sent).toHaveLength(4);
     });
 
     it("IPv6 は前の 64 ビットでまとめる", () => {
