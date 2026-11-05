@@ -76,10 +76,14 @@
         <div id="actions" class="actions" hidden>
           <button id="sanitize" type="button" aria-describedby="sanitize-note">片付ける</button>
           <p id="sanitize-note"></p>
+          <div id="redact-left" class="not-done" hidden>
+            <h4>▲ 読み直しで残っていた所</h4>
+            <ul id="redact-left-list"></ul>
+          </div>
           <div id="pick-tools" class="pick-tools" hidden>
             <button id="pick-toggle" class="pick-toggle" type="button" aria-pressed="false">自分で黒塗りする所を選ぶ</button>
-            <p id="pick-help" class="pick-help" hidden>ページの上を、黒塗りしたい所の角から角へ、ドラッグしてください。選んだ所は、墨の点線の枠で出ます。キーボードだけでは、まだ選べません。</p>
-            <p class="pick-help">個人情報の候補から選ぶ：候補を探すルールが、この版にはまだないため使えません。</p>
+            <p id="pick-help" class="pick-help" hidden>ページの上を、黒塗りしたい所の角から角へ、ドラッグしてください。選んだ所は、墨の点線の枠で出ます。</p>
+            <p class="pick-help">個人情報の候補から選ぶ：下の「個人情報らしい字」の一覧で、行ごとに「黒塗りに加える」を押します（キーボードでも選べます）。</p>
             <div id="picks" class="picks" hidden>
               <p id="pick-count"></p>
               <ul id="pick-list"></ul>

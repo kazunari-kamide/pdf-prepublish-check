@@ -2,8 +2,8 @@
 //
 // 画面と検査の Worker の間でやり取りする形。
 
-import type { PrecheckResult } from "./precheck";
-import type { InspectSummary } from "./report";
+import type { PrecheckResult } from "./precheck.ts";
+import type { InspectSummary } from "./report.ts";
 
 export type InspectRequest = { type: "inspect"; id: number; buffer: ArrayBuffer };
 

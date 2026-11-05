@@ -239,6 +239,8 @@ export const SKIPPED = [
 ];
 
 const P = (...p) => p;
+// 人名のない題・主題を P1 として出すのは正しい扱い（2026-11-05、人の答え）。その対照では P1 だけを許す
+const EXCEPT_P1 = P("P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13");
 
 /** @type {Array<{ id: string, type: string, kind: string, about: string, expect: any, residual?: any, make: () => Buffer }>} */
 export const CASES = [];
@@ -289,7 +291,7 @@ add("T04", "b-sjis-literal", "leak", "Title を Shift_JIS のバイト列のま�
   const s = Buffer.concat([Buffer.from("/Title ("), SJIS_NAME, Buffer.from(" " + M("04", "B") + ") " + D)]);
   return build({ pages: [{ content: HEAD }], info: s.toString("latin1") }).bytes();
 }, { markers: [M("04", "B")] });
-add("T04", "ctl-sjis-generic", "control", "Subject に Shift_JIS で「会議」だけ（人名なし）", { forbid: null }, () =>
+add("T04", "ctl-sjis-generic", "control", "Subject に Shift_JIS で「会議」だけ（人名なし）。題を P1 として出すのはよい", { forbid: EXCEPT_P1 }, () =>
   build({ pages: [{ content: HEAD }], info: `/Subject ${hexStr(Buffer.from("89EF8B63", "hex"))} ${D}` }).bytes(),
 );
 
@@ -305,7 +307,7 @@ add("T05", "b-title-differs", "leak", "Info の題は新しく、XMP の dc:titl
   build({ pages: [{ content: HEAD }], info: `/Title (Fictional sample report) ${D}`, catalog: withXmp(xmpTitle(`Interview notes Shiro ${M("05", "B")}`)) }).bytes(),
   { markers: [M("05", "B")] },
 );
-add("T05", "ctl-agree", "control", "Info と XMP の題が同じで、人名なし", { forbid: null }, () =>
+add("T05", "ctl-agree", "control", "Info と XMP の題が同じで、人名なし。題を P1 として出すのはよい", { forbid: EXCEPT_P1 }, () =>
   build({ pages: [{ content: HEAD }], info: `/Title (Fictional sample report) ${D}`, catalog: withXmp(xmpTitle("Fictional sample report")) }).bytes(),
 );
 
@@ -380,7 +382,7 @@ add("T11", "a-other-org-title", "leak", "Title に別の架空の団体名。本
   build({ pages: [{ content: HEAD + text(72, 700, 12, "Issued by Mokusei Town office") }], info: `/Title (Kasou City application form ${M("11", "A")}) ${D}` }).bytes(),
   { markers: [M("11", "A")] },
 );
-add("T11", "ctl-same-org", "control", "Title と本文が同じ架空の団体名", { forbid: null }, () =>
+add("T11", "ctl-same-org", "control", "Title と本文が同じ架空の団体名。題を P1 として出すのはよい", { forbid: EXCEPT_P1 }, () =>
   build({ pages: [{ content: HEAD + text(72, 700, 12, "Issued by Mokusei Town office") }], info: `/Title (Mokusei Town application form) ${D}` }).bytes(),
 );
 
@@ -392,7 +394,7 @@ add("T12", "b-unc-in-xmp", "leak", "XMP の DerivedFrom に \\\\サーバー\\�
   build({ pages: [{ content: HEAD }], catalog: withXmp(`<xmpMM:DerivedFrom rdf:parseType="Resource"><stRef:filePath>\\\\fileserv-${M("12", "B").toLowerCase()}\\share\\plan.indd</stRef:filePath></xmpMM:DerivedFrom>`) }).bytes(),
   { markers: [M("12", "B").toLowerCase()] },
 );
-add("T12", "ctl-slashes", "control", "Title に、パスでない記号（2026/2027・A:B・3\\4）", { forbid: null }, () =>
+add("T12", "ctl-slashes", "control", "Title に、パスでない記号（2026/2027・A:B・3\\4）。題を P1 として出すのはよい", { forbid: EXCEPT_P1 }, () =>
   build({ pages: [{ content: HEAD }], info: `/Title ${lit("Plan 2026/2027 - ratio A:B - item 3\\4")} ${D}` }).bytes(),
 );
 
