@@ -43,7 +43,7 @@
 | 名前 | ライセンス | 何に使うか | 置き場所 | 出典 | 足した日 |
 |---|---|---|---|---|---|
 | BIZ UDゴシック Regular（BIZUDGothic-Regular.ttf、SHA-256 `709fcd41e3209fb765da750472f55ccdf925653e9fa7e1eb007cb65c8f749c75`） | SIL Open Font License 1.1（予約フォント名の指定なし）。全文は同じフォルダの `OFL.txt` | 合成 PDF の字。PDF には使う字だけを埋め込む。埋め込む前に、字のデータを 4 バイトの区切りにそろえる（@pdf-lib/fontkit の不具合を避けるため。字の形は変えない） | `fixtures/p6/fonts/`（案の段階では `proposals/p6/fixtures/p6/fonts/`） | https://github.com/google/fonts/tree/main/ofl/bizudgothic （Google Fonts のリポジトリ。Windows に入っているフォントは使っていない） | 2026-11-03 |
-| Noto Sans JP 2.004（`NotoSansJP[wght].ttf`、SHA-256 `c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f`） | SIL Open Font License 1.1（予約フォント名「Source」）。全文は `design/fonts/source/OFL.txt` と、配る書体の横の `OFL.txt` | 画面の書体。Shift_JIS の字と画面の記号だけ、太さ 400〜700 に絞った WOFF2（`src/assets/fonts/NotoSansJP-subset.woff2`）を dist/ に入れて配る。字を絞るのは改変に当たるので、OFL 1.1 のまま配り、ライセンスの文も配る（画面から開ける） | 元：`design/fonts/source/`。配るもの：`src/assets/fonts/` | https://github.com/google/fonts/tree/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp （Google Fonts のリポジトリ。コミットを固定） | 2026-11-05 |
+| Noto Sans JP 2.004（`NotoSansJP[wght].ttf`、SHA-256 `c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f`） | SIL Open Font License 1.1（予約フォント名「Source」）。全文は `design/fonts/source/OFL.txt` と、配る書体の横の `OFL.txt` | 画面の書体。Shift_JIS の字と画面の記号だけ、太さ 400〜700 に絞った WOFF2（`src/assets/fonts/NotoSansJP-subset.woff2`）を dist/ に入れて配る。字を絞るのは改変に当たるので、OFL 1.1 のまま配り、ライセンスの文も配る（ライセンスのページ `/licenses.html` から開ける） | 元：`design/fonts/source/`。配るもの：`src/assets/fonts/` | https://github.com/google/fonts/tree/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp （Google Fonts のリポジトリ。コミットを固定） | 2026-11-05 |
 
 数え直すときは、package-lock.json の各項目の `license` を読む。
 
@@ -61,7 +61,9 @@
 
 なし（2026-11-03 時点）。
 
-外部の素材としては、2026-11-05 から、同梱の書体（Noto Sans JP を絞ったもの）と、そのライセンスの文（`OFL.txt`）が dist/assets/ に入る（上の「フォント・素材」）。
+外部の素材としては、2026-11-05 から、同梱の書体（Noto Sans JP を絞ったもの）と、そのライセンスの文（`OFL.txt`）が dist/ に入る（上の「フォント・素材」）。
+
+2026-11-05 から、サイトのライセンスのページ（`/licenses.html`）を、ビルドの時にこのファイルの表（「直接の依存」の出典・「フォント・素材」）と package-lock.json から作る（`site-licenses.ts`）。並べるのは、ブラウザに配るもの（dist/）に入る部品と書体だけ（画面・ルール・片付けが読み込む pdf-lib・pdfjs-dist とその依存、置き場所が src/assets/ の書体）。開発・テスト・配信にだけ使う道具は、このファイルにだけ載せる。表の見出しや列の名前を変えるときは、`site-licenses.ts` も直す（合わなければビルドが止まって知らせる）。
 
 ## 値を参考にしたもの（コード・ファイルは写していない）
 
