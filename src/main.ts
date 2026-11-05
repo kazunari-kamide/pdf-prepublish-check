@@ -327,7 +327,11 @@ async function runCompress() {
     ui.progress.hidden = true;
     ui.compressRun.disabled = false;
     busy = false;
-    if (gen === generation) ui.compressTitle.focus();
+    // 結果の一文へ移し、保存のボタン（なければ結果の欄）が窓に入るまで動かす（押した所の下に出るので、気づけるように）
+    if (gen === generation && !ui.compressResult.hidden) {
+      ui.compressHeadline.focus({ preventScroll: true });
+      (ui.compressDownload.hidden ? ui.compressResult : ui.compressDownload).scrollIntoView({ block: "nearest" });
+    } else if (gen === generation) ui.compressTitle.focus();
   }
 }
 
@@ -1328,6 +1332,9 @@ ui.sample.addEventListener("click", () => {
   const file = sampleFile();
   if (file) void handle(file);
 });
+
+// 「別の PDF を選ぶ」：結果のあとは置き場（とファイルの欄）が隠れるので、ボタンからファイルの欄を開く（Tab で行けるように）
+el<HTMLButtonElement>("file-again").addEventListener("click", () => ui.input.click());
 
 ui.input.addEventListener("change", () => {
   const file = ui.input.files?.[0];

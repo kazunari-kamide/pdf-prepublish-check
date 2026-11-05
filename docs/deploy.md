@@ -53,7 +53,8 @@
 - `Options -Indexes` は書かない（2026-11-05 に外した）。フォルダの一覧は、いまの配信先ですでに 403 で出ておらず、書いても得がないのに、配信先が `.htaccess` の `Options` を許していないとサイト全体が 500 になるおそれがあるため。一覧が出ていないことは `check-live` で確かめる。
 - 見つからないときは、自前の 404 のページ（`ErrorDocument 404 /404.html`。`site.ts` が作る）を返す。ヘッダーは `Header always set` で付けるので、404 の応答にも同じ CSP などが付く。
 - キャッシュ（`Cache-Control`）：ふだんは `no-cache`（毎回、新しい版があるかを確かめさせる。古い画面が残らないように）。名前に中身のハッシュが付いた `assets/` の、見つかった応答（200）だけ `max-age=31536000, immutable`。`assets/` に名前の変わらないファイルを置くと古いものが残るので、`scripts/check-dist.mjs` が、ハッシュのない名前を止める。
-- HSTS（`Strict-Transport-Security`）：https の応答にだけ付ける（`"expr=%{HTTPS} == 'on'"`）。値は `htaccess.ts` の `HSTS`。延ばし方は下。
+- HSTS（`Strict-Transport-Security`）：条件を付けずに、いつも付ける。値は `htaccess.ts` の `HSTS`。延ばし方は下。
+  - 初めは https の応答だけに付けていた（`"expr=%{HTTPS} == 'on'"`）が、2026-11-05 の初回の配信の `check-live` で、本番の応答に付いていなかった。Xserver は前の nginx で https を受けて後ろの Apache に渡すので、この条件が真にならないため（推測）。ブラウザは http の応答の HSTS を使わず（RFC 6797 §8.1）、http で来た要求は 301 で https へ移すだけなので、条件を外した。`X-Forwarded-Proto` で見分ける形は、nginx がそのヘッダーを付けるかが分からず、同じように黙って付かなくなるおそれがあるので選ばなかった。
 
 ### HSTS の延ばし方
 
@@ -99,7 +100,7 @@ HSTS は、一度ブラウザに覚えさせると、期間が切れるまで取
 
 ## まだ確かめていないこと
 
-- `Header` の `expr=`（`%{HTTPS}`・`%{REQUEST_STATUS}`）が Xserver の Apache で効くか。効かないと、HSTS が付かないか、`assets/` が `no-cache` のままになる。`check-live` で分かる。
+- `Header` の `expr=`（`%{REQUEST_STATUS}`）は、2026-11-05 の初回の配信の `check-live` で、`assets/` のキャッシュが付くことを確かめた（`%{HTTPS}` は真にならなかったので、HSTS では使わない）。
 - 成果物の受け渡し（upload-artifact v7.0.2・download-artifact v8.0.2。2026-11-05 時点のいちばん新しい版を SHA で固定）が、初回の配信で動くか。
 
 - Xserver の前に立つ nginx のキャッシュなどで、静的ファイルにヘッダーが付かないことがあるか。初回の配信のあと `check:live` で確かめる。

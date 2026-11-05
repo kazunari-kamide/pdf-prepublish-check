@@ -13,7 +13,10 @@ export const OFFICIAL_HOST = "omamoripdf.com";
 export const OFFICIAL_ORIGIN = `https://${OFFICIAL_HOST}`;
 
 /**
- * HSTS（このドメインには https だけで来るよう、ブラウザに覚えさせる）。https の応答にだけ付ける。
+ * HSTS（このドメインには https だけで来るよう、ブラウザに覚えさせる）。条件を付けず、いつも付ける。
+ * Xserver は前の nginx で https を受けて後ろの Apache に渡すので、Header の "expr=%{HTTPS} == 'on'" が真にならず、
+ * 本番で HSTS が付かなかった（2026-11-05 の初回の配信の check-live。理由は推測）。ブラウザは http の応答の HSTS を使わず
+ * （RFC 6797 §8.1）、http で来た要求は下の 301 で https へ移すだけなので、いつも付けても困らない。
  * まず 1 日（86400 秒）で始め、本番で問題がないことを確かめながら延ばす（延ばし方は docs/deploy.md）。
  * 一度覚えさせると、期間が切れるまで取り消せないので、includeSubDomains・preload はまだ付けない
  */
@@ -49,8 +52,9 @@ export function buildHtaccess(): string {
     "# CSP などのヘッダー。index.html の <meta> の CSP と同じ値に、frame-ancestors 'none' を足したもの",
     "<IfModule mod_headers.c>",
     ...headers,
-    "  # HSTS は https の応答にだけ付ける（http の応答に付けても、ブラウザは使わない）",
-    `  Header always set Strict-Transport-Security ${quoted("Strict-Transport-Security", HSTS)} "expr=%{HTTPS} == 'on'"`,
+    "  # HSTS は条件を付けずに付ける（配信先の前の nginx が https を受けるため、%{HTTPS} では見分けられない。",
+    "  # ブラウザは http の応答の HSTS を使わない。http で来た要求は、下の 301 で https へ移す）",
+    `  Header always set Strict-Transport-Security ${quoted("Strict-Transport-Security", HSTS)}`,
     "  # キャッシュ：ふだんは毎回確かめさせ、名前にハッシュの付いた assets/ の、見つかった応答（200）だけ長く持たせる。",
     "  # 見つからない assets/ の応答（404）を長く持たせないため、状態も見る。順番に意味がある（あとの行が上書きする）",
     `  Header always set Cache-Control ${quoted("Cache-Control", CACHE_DEFAULT)}`,
