@@ -41,8 +41,9 @@ const TRAP_FIELD = 'hp_x7q';
 const TOKEN_MIN_SECONDS = 4;
 /** ページを開いてから送るまで、長くても何秒（古いページの印は使わせない） */
 const TOKEN_MAX_SECONDS = 7200;
-/** 同じ接続元から：[何秒の間に, 何回まで]。送ろうとした回数（ボットの送信・送れなかった送信も含む）で数える */
-const LIMITS = [[60, 1], [3600, 5]];
+/** 同じ接続元から：[何秒の間に, 何回まで]。送ろうとした回数（ボットの送信・送れなかった送信も含む）で数える。
+ * 24 時間に 3 回までにして、1 つの接続元だけで 1 日の上限（ふつう・セキュリティの弱点のどちらの枠も）を使い切れないようにする（記録は 24 時間残すので数えられる） */
+const LIMITS = [[60, 1], [3600, 5], [86400, 3]];
 /** 24 時間に、実際にメールを送る数の上限（届け先のメールの箱をあふれさせないため）。種類ごとの枠：'g' はふつう、's' はセキュリティの弱点 */
 const DAILY_MAX = ['g' => 50, 's' => 20];
 /** 迷惑防止の記録を残す長さ（秒）。同じ本文を止める長さ・1 日の上限の長さも同じ */
@@ -230,21 +231,24 @@ function contact_with_store(string $dir, int $now, callable $fn): ?array
     }
 }
 
-/** 同じ接続元から、続けて送ろうとしていないか */
-function contact_client_busy(array $store, string $client, int $now): bool
+/** 同じ接続元から、続けて送ろうとしていないか。送れるなら 0、送れないなら、また送れるようになるまでの秒数 */
+function contact_client_busy(array $store, string $client, int $now): int
 {
+    $wait = 0;
     foreach (LIMITS as [$seconds, $max]) {
-        $n = 0;
+        $times = [];
         foreach ($store['c'] as [$k, $t]) {
             if ($k === $client && $t > $now - $seconds) {
-                $n++;
+                $times[] = $t;
             }
         }
-        if ($n >= $max) {
-            return true;
+        if (count($times) >= $max) {
+            sort($times);
+            // 数が上限より 1 つ少なくなる（古いほうから max 個目までが外に出る）まで
+            $wait = max($wait, $times[count($times) - $max] + $seconds - $now, 1);
         }
     }
-    return false;
+    return $wait;
 }
 
 /** 字を整える：改行をそろえ、制御の字と、見えない字・字の向きを変える字を除き、前後の空白を除く。字でない・UTF-8 でなければ null */
@@ -360,7 +364,7 @@ function contact_handle(array $server, array $post, ?array $config, int $now, ar
     // その接続元の続けての数には入れるが、1 日の上限には数えない（ボットに、フォーム全体を止めさせないため）
     if ($isBot) {
         $done = contact_with_store($config['data_dir'], $now, function (array &$store) use ($client, $now): array {
-            if (!contact_client_busy($store, $client, $now)) {
+            if (contact_client_busy($store, $client, $now) === 0) {
                 $store['c'][] = [$client, $now];
             }
             return ['bot'];
@@ -396,9 +400,10 @@ function contact_handle(array $server, array $post, ?array $config, int $now, ar
         '返事の宛先：' . ($email === '' ? '（書かれていません。返事は要らない）' : $email),
         '受け付けた時刻：' . $time,
         '',
-        '---- 本文 ----',
+        '本文は、次の 2 つの区切りの間です。区切りの印（' . $mark . '）が違う行は、本文の一部です。',
+        '---- 本文（印 ' . $mark . '）----',
         $body,
-        '---- ここまで ----',
+        '---- 本文ここまで（印 ' . $mark . '）----',
         '',
         'このメールは、対応が済んだら消してください。長くても、届いてから 90 日で消します（プライバシーのページの約束）。',
     ]);
@@ -407,8 +412,9 @@ function contact_handle(array $server, array $post, ?array $config, int $now, ar
 
     // 記録をロックしたまま、確かめる → 送る → 書き足す（ほかの送信と重なって、上限を超えないように）
     $outcome = contact_with_store($config['data_dir'], $now, function (array &$store) use ($client, $bodyKey, $slot, $now, $config, $subject, $text): array {
-        if (contact_client_busy($store, $client, $now)) {
-            return ['client'];
+        $wait = contact_client_busy($store, $client, $now);
+        if ($wait > 0) {
+            return ['client', $wait];
         }
         // 送ろうとした回数として数える（送れなかったときも、その接続元からの繰り返しは止める）
         $store['c'][] = [$client, $now];
@@ -441,7 +447,7 @@ function contact_handle(array $server, array $post, ?array $config, int $now, ar
     }
     switch ($outcome[0]) {
         case 'client':
-            return $result(429, 'error', ['続けて送ることはできません。しばらく時間をおいてから、もう一度送ってください。'], ['Retry-After: ' . LIMITS[0][0]]);
+            return $result(429, 'error', ['続けて送ることはできません。しばらく時間をおいてから、もう一度送ってください。'], ['Retry-After: ' . $outcome[1]]);
         case 'duplicate':
             return $result(409, 'error', ['同じ本文は、すでに受け付けています。続けて送る必要はありません。']);
         case 'daily':
