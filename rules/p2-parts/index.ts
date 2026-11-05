@@ -3,7 +3,7 @@
 // 検出ルール：部品に残った情報（p2-parts）1.0.0。見つけたもの1件ごとに、型の番号を付ける（2026-11-04 人の決定）。
 //   P2（XMP メタデータ）：人名らしい欄（dc:creator など）、Illustrator の編集用データの利用者名（%%For）、編集用データそのもの
 //   P4（ファイルパス）：パソコンのユーザーのフォルダ（Users\<名前>\ など）を含むパス
-//   P10（画像の位置情報など）：GPS の緯度・経度
+//   P10（画像の位置情報など）：GPS の緯度・経度。1.2.0 から、製造番号（aux:SerialNumber など）と機種（tiff:Make・tiff:Model など）も
 //
 // 見る所：
 // - 文書全体の XMP（カタログの /Metadata）とは別に、画像・部品（フォーム XObject）・マーク付きの中身の /Properties・ページなど、
@@ -25,7 +25,7 @@ import type { EncryptionSummary } from "../shared/decrypt.ts";
 import { loadPdf } from "../shared/load.ts";
 
 export const RULE_ID = "p2-parts";
-export const RULE_VERSION = "1.1.0";
+export const RULE_VERSION = "1.2.0";
 
 /** 1つの XMP・編集用データとして読む大きさの上限（バイト）。超えた分は読まない【仮の値】 */
 export const MAX_STREAM_BYTES = 16 * 1024 * 1024;
@@ -38,7 +38,7 @@ export type PartOwner = "image" | "form" | "properties" | "page" | "document" | 
 
 export type P2PartsFinding = {
   pattern: "P2" | "P4" | "P10";
-  kind: "person" | "path" | "gps" | "private_data";
+  kind: "person" | "path" | "gps" | "serial" | "camera" | "private_data";
   source: "xmp" | "illustrator" | "app";
   /** 欄の名前（dc:creator、stRef:filePath、%%For など） */
   field: string;
@@ -74,10 +74,13 @@ export type DetectOptions = { includeValues?: boolean };
 // ---------------------------------------------------------------- XMP を読む（XML の部品は使わず、決まった欄だけを正規表現で拾う）
 
 /** 人名らしい欄 */
-export const PERSON_FIELDS = ["dc:creator", "dc:contributor", "pdf:Author", "xmp:Author", "xmpRights:Owner", "photoshop:CaptionWriter"] as const;
+export const PERSON_FIELDS = ["dc:creator", "dc:contributor", "pdf:Author", "xmp:Author", "xmpRights:Owner", "photoshop:CaptionWriter", "tiff:Artist"] as const;
 /** パスが入る欄。xmpMM:DerivedFrom・xmpMM:Ingredients の中のパスは stRef:filePath として拾う（二重に数えない） */
 export const PATH_FIELDS = ["stRef:filePath", "stRef:lastURL", "photoshop:DocumentAncestors"] as const;
 const GPS_FIELDS = ["exif:GPSLatitude", "exif:GPSLongitude"] as const;
+/** 製造番号・機種の欄（1.2.0。P10） */
+const SERIAL_FIELDS = ["aux:SerialNumber", "exifEX:BodySerialNumber", "aux:LensSerialNumber", "exifEX:LensSerialNumber"] as const;
+const CAMERA_FIELDS = ["tiff:Make", "tiff:Model", "exifEX:LensModel", "aux:Lens"] as const;
 
 const GENERIC_NAMES = new Set(["author", "user", "users", "administrator", "admin", "owner", "guest", "public", "default", "default user", "all users", "shared", "unknown", "ユーザー", "ユーザ", "管理者"]);
 const SOFTWARE = /\b(adobe|illustrator|photoshop|indesign|acrobat|microsoft|word|excel|quark|canon|nikon|epson|ricoh|fujifilm|sharp|xerox|konica|kyocera)\b/i;
@@ -351,6 +354,9 @@ export async function detectP2Parts(bytes: Uint8Array, options: DetectOptions = 
     }
     const gps = GPS_FIELDS.map((f) => xmpValues(xml, f)[0] ?? "").filter(Boolean);
     if (gps.length) add("P10", "gps", "xmp", "exif:GPSLatitude/exif:GPSLongitude", owner, gps.join(" "), 0);
+    for (const [kind, fields] of [["serial", SERIAL_FIELDS], ["camera", CAMERA_FIELDS]] as const) {
+      for (const field of fields) for (const v of new Set(xmpValues(xml, field))) if (v.trim()) add("P10", kind, "xmp", field, owner, v, [...v.trim()].length);
+    }
   }
 
   // ---- Illustrator 以外のアプリの私的データ（中身は読まない。あるかどうかだけ）

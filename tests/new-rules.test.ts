@@ -286,3 +286,57 @@ describe("P12 押して開くリンクの行き先（1.2.0）", () => {
     expect(r.notCounted.link).toBe(3);
   });
 });
+
+// ---------------------------------------------------------------- 11/5 公開 PDF で見つかった型（型と条件だけ。中身はすべて架空）
+
+import { rawPdf } from "../eval/cases/raw-pdf.ts";
+import { detectP1Info } from "../rules/p1-info/index.ts";
+import { detectUnusedImages } from "../rules/unused-images/index.ts";
+import * as uic from "../eval/cases/unused-images.ts";
+import { sanitizePdf } from "../sanitize/index.ts";
+
+const PAGE = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>";
+
+describe("P1 増分更新の形で、最後の trailer に /Info が無いもの（1.3.0）", () => {
+  it("線形化した形（先頭の trailer に /Info、最後の trailer は /Size だけで /Prev も無い）でも、作成者を読む", async () => {
+    const b = rawPdf([
+      { objects: { 6: "<< /Linearized 1 /L 1000 /N 1 >>", 1: "<< /Type /Catalog /Pages 2 0 R >>", 3: PAGE, 4: "<< /Author (Kakuu Taro) >>" }, trailer: "/Size 7 /Root 1 0 R /Info 4 0 R", prevOf: 1 },
+      { objects: { 2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", 5: "<< >>" }, trailer: "/Size 7" },
+    ]);
+    const r = await detectP1Info(b);
+    expect(r.hasInfo).toBe(true);
+    expect(r.findings.map((f) => f.key)).toEqual(["Author"]);
+  });
+  it("対照：増分更新（/Prev あり）で /Info を外したものは、いまの版に文書情報なし", async () => {
+    const b = rawPdf([
+      { objects: { 1: "<< /Type /Catalog /Pages 2 0 R >>", 2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", 3: PAGE, 4: "<< /Author (Kakuu Taro) >>" }, trailer: "/Size 6 /Root 1 0 R /Info 4 0 R" },
+      { objects: { 5: "<< >>" }, trailer: "/Size 6 /Root 1 0 R", prevOf: 0 },
+    ]);
+    const r = await detectP1Info(b);
+    expect(r).toMatchObject({ hasInfo: false, findings: [] });
+  });
+});
+
+describe("描かれていない資源に残る画像（unused-images）", () => {
+  it("違いの割合と大きさだけを返す", async () => {
+    const r = await detectUnusedImages(await pdf(uic.CASES, "ui-l01"));
+    expect(r.findings).toEqual([{ pattern: "P5", page: 1, width: 40, height: 30, match: "similar", diffRatio: 0.01, bytes: 1200 }]);
+  });
+  it("片付けると、ページの資源の描かれない画像は外れる。描かれた部品の資源の中に残るものは、まだ外れない（C に頼む）", async () => {
+    for (const [id, left] of [["ui-l01", 0], ["ui-l03", 0], ["ui-l02", 1]] as const) {
+      const s = await sanitizePdf(await pdf(uic.CASES, id));
+      expect(s.status).toBe("ok");
+      if (s.status !== "ok") continue;
+      expect((await detectUnusedImages(s.bytes)).findings.length).toBe(left);
+    }
+  });
+});
+
+describe("P4 Mac の共有ボリューム（1.2.0）", () => {
+  it("ボリューム名の字数。起動ディスクの既定の名前は数えない", () => {
+    expect(findPaths("/Volumes/Kakuu Share/a.psd").map((h) => [h.kind, h.chars])).toEqual([["server", 11]]);
+    expect(findPaths("file:///Volumes/KAKUU-NAS/a.ai").map((h) => h.kind)).toEqual(["server"]);
+    expect(findPaths("/Volumes/Macintosh HD/Users/kakuu/a.ai").map((h) => h.kind)).toEqual(["user_path"]);
+    expect(findPaths("/Volumes/Macintosh HD/Applications/x see /Volumes")).toEqual([]);
+  });
+});
