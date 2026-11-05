@@ -2,6 +2,8 @@
 
 このリポジトリのコードは AGPL-3.0-only です。外部のライブラリ・データ・フォント・素材を足すたびに、この一覧を更新します（CLAUDE.md §10）。
 
+ただし、ロゴの SVG（`design/logo/*.svg`・`design/proposals/2026-11-05-logo/*.svg`）は、作者が作った素材で、AGPL-3.0-only ではありません（`LicenseRef-OmamoriPDF-Logo`。改変版には使えない。条件は `design/logo/README.md`。2026-11-05 本人が決めた）。外部の素材は使っていません。
+
 ## 直接の依存（package.json ではすべて開発用。dist/ に入るものは「何に使うか」に書く。2026-11-03 時点）
 
 | 名前 | 版 | ライセンス | 何に使うか | 足した日 | 出典 |
