@@ -294,6 +294,13 @@ describe("検査のページ（index.html）", () => {
     expect(links).toEqual(FOOT_LINKS.map(([h, l]) => [h, l]));
   });
 
+  it("提出のために小さくする入口：置き場の近くに、名前のついた上限の選択（既定は「選ばない」＝ふつうの検査）", () => {
+    const entry = html.match(/<div class="limit-entry" id="limit-row">[\s\S]*?<\/div>/)![0];
+    expect(entry).toContain('<label class="limit-title" for="size-limit">提出のためにファイルを小さくする</label>');
+    expect([...entry.matchAll(/<option value="([^"]*)">/g)].map((m) => m[1])).toEqual([""]);
+    expect(html.indexOf('id="limit-row"')).toBeGreaterThan(html.indexOf('id="sample-row"'));
+  });
+
   it("上の帯に、サービス紹介のページへのリンクを 1 つだけ置く", () => {
     const band = html.match(/<header class="band">[\s\S]*?<\/header>/)![0];
     expect([...band.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1])).toEqual([ABOUT_PATH]);
