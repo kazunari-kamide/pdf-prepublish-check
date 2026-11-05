@@ -109,7 +109,7 @@ export async function checkAreas(bytes: Uint8Array, areas: RedactArea[], opts: {
 
 /** 作品の検査の結果の形（src/inspect/report.ts の InspectSummary のうち、使う所だけ。src/ は読み込まない） */
 type InspectLike = {
-  rules: Array<{ ruleId: string; pattern: string; status: "ok" | "error"; items: Array<{ pattern: string; page: number | null; rect: Rect | null }> }>;
+  rules: Array<{ ruleId: string; pattern: string; status: "ok" | "error"; items: Array<{ pattern: string; page: number | null; rect: Rect | null; field?: string }> }>;
 };
 
 /**
@@ -138,7 +138,7 @@ export function rulesCheck(inspect: (bytes: Uint8Array) => Promise<InspectLike>)
           if (CANDIDATE_PATTERNS.includes(it.pattern)) continue;
           out.push({
             check: "rules", kind: "rule_item", pattern: it.pattern, count: 1, label: `読み直しの検査で、${it.pattern} の残りが見つかりました`,
-            ...(it.page !== null ? { page: it.page } : {}), ...(it.rect ? { rect: it.rect } : {}),
+            ...(it.page !== null ? { page: it.page } : {}), ...(it.rect ? { rect: it.rect } : {}), ...(it.field ? { field: it.field } : {}),
           });
         }
       }
