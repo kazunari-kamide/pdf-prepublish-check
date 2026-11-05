@@ -993,9 +993,38 @@ body:has(.terms-dialog[open]) {
   padding: 0;
   border: var(--border-mark) solid var(--color-accent);
   border-radius: 4px;
-  background: var(--color-accent-wash);
+  background: transparent; /* 中の薄い地は .mark-fills の層に描く（重なっても濃くならない） */
   min-width: 0.75rem;
   min-height: 0.75rem;
+}
+
+/*
+ * 印の中の薄い地：1 つの層にまとめ、層ごと薄くする（src/ui/mark-fills.ts）。層の中の地は不透明の色なので、
+ * 何枚重なっても 1 枚分になり、そのあと層全体が 10%（前の --color-accent-wash と同じ濃さ）になる。
+ * 前は印ごとに 10% の地を重ねていたので、切り抜いた画像が同じ所に何枚もあるページで、絵が暗い赤に覆われた
+ */
+.mark-fills {
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.mark-fill {
+  position: absolute;
+  min-width: 0.75rem;
+  min-height: 0.75rem;
+  border-radius: 4px;
+  background: var(--color-accent);
+}
+
+/* 片付けた所の地：緑の層（前の --color-ok-wash と同じ 8%） */
+.mark-fills-done {
+  opacity: 0.08;
+}
+
+.mark-fills-done .mark-fill {
+  background: var(--color-ok);
 }
 
 /* 番号の札：枠の左上の角に、小さく重ねる（色だけに頼らない）。白の縁で、札どうしが近くても境が見える。
@@ -1050,7 +1079,7 @@ body:has(.terms-dialog[open]) {
 /* 片付けた所：緑の点線の細い枠と「済」の札。押せない（残っている所の枠と、色・線・字で見分ける） */
 .mark.mark-done {
   border: var(--border-done) dashed var(--color-ok);
-  background: var(--color-ok-wash);
+  background: transparent;
   cursor: default;
 }
 

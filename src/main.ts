@@ -26,6 +26,7 @@ import type { CompressPreset, SizeLimit } from "./ui/compress-model";
 import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
 import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { uniqueFills, type Fraction } from "./ui/mark-fills";
 import { isOfficialHost, UNOFFICIAL_NOTE } from "./ui/official";
 import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, SPLIT_STEP_PX } from "./ui/compact";
 import { orgSegments } from "./ui/org-words";
@@ -759,14 +760,30 @@ function hitAt(e: HTMLElement, f: { left: number; top: number; width: number; he
   e.style.setProperty("--h", `${f.height * 100}%`);
 }
 
+/** 印の中の薄い地をまとめた層（見た目だけ。読み上げ・押す所には出さない）。層ごと薄くするので、地どうしが重なっても濃くならない */
+function fillLayer(fills: Fraction[], className: string): HTMLElement {
+  const layer = make("div", undefined, className);
+  layer.setAttribute("aria-hidden", "true");
+  for (const f of uniqueFills(fills)) {
+    const fill = make("div", undefined, "mark-fill");
+    placeAt(fill, f);
+    layer.append(fill);
+  }
+  return layer;
+}
+
 function placeMarks(s: Session, page: number) {
   ui.marks.replaceChildren();
   const box = s.boxes.get(page);
   if (!box) return;
+  // 印の中の薄い地は、印とは別の層に 1 つにまとめる（重なっても濃くならない。src/ui/mark-fills.ts）
+  const doneFills: Fraction[] = [];
+  const foundFills: Fraction[] = [];
   // 片付けた所（緑の点線の枠と「済」の札）。押せない。残っている所の枠より下に置く
   for (const d of s.doneByPage.get(page) ?? []) {
     const f = toFraction(box, d.rect);
     if (!f) continue;
+    doneFills.push(f);
     const done = make("div", undefined, "mark mark-done");
     done.setAttribute("role", "img");
     done.setAttribute("aria-label", `消した所：${d.label}`);
@@ -777,6 +794,8 @@ function placeMarks(s: Session, page: number) {
   for (const m of s.marksByPage.get(page)?.marks ?? []) {
     const f = toFraction(box, m.rect);
     if (!f) continue;
+    // 見えている候補は地を付けない（墨の点線の枠だけ）
+    if (!m.candidate) foundFills.push(f);
     // 見た目の枠（隠した所の大きさのまま）と、押す所（枠を中心に縦横とも 44px 以上）を分ける。
     // 枠を大きくすると、細い黒塗りの所が太い枠に見えるため。押す所は透明で、上に重ねる
     const frame = make("div", undefined, `mark sev-${m.severity}${m.candidate ? " mark-candidate" : ""}`);
@@ -803,6 +822,8 @@ function placeMarks(s: Session, page: number) {
     });
     ui.marks.append(mark);
   }
+  // 地の層は、枠と押す所より下（先頭）に置く
+  ui.marks.prepend(fillLayer(foundFills, "mark-fills"), fillLayer(doneFills, "mark-fills mark-fills-done"));
   placePicks(s, page);
   spreadMarkBadges();
 }
