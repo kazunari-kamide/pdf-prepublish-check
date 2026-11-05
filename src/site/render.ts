@@ -114,6 +114,25 @@ function toInspector(): string {
       </aside>`;
 }
 
+/** 記事の最後に置く、関係する記事へのつなぎ（slug が記事の一覧にないときは止める） */
+function toRelated(a: Article): string {
+  const e = escapeHtml;
+  const items = a.related.map((slug) => {
+    const r = ARTICLES.find((x) => x.slug === slug);
+    if (!r) throw new Error(`関係する記事が見つかりません：${a.slug} → ${slug}`);
+    const tag = r.pattern ? `<span class="site-tag">${e(r.pattern)}</span>` : "";
+    return `          <li><a href="${articlePath(r)}">${tag}${e(r.title)}</a></li>`;
+  });
+  return [
+    `      <nav class="site-section" aria-label="関係する記事">`,
+    `        <h2>関係する記事</h2>`,
+    `        <ul class="site-list">`,
+    ...items,
+    `        </ul>`,
+    `      </nav>`,
+  ].join("\n");
+}
+
 export function renderArticle(a: Article, o: RenderOptions): string {
   const e = escapeHtml;
   const kicker = a.pattern ? `型の解説・${a.pattern}` : "正しいやり方の手順";
@@ -124,6 +143,7 @@ export function renderArticle(a: Article, o: RenderOptions): string {
     `      <p class="site-lead">${e(a.description)}</p>`,
     ...a.sections.map(renderSection),
     toInspector(),
+    ...(a.related.length ? [toRelated(a)] : []),
     `      <p class="site-back"><a href="${ARTICLES_PATH}">記事の一覧へ戻る</a></p>`,
     `      </article>`,
   ].join("\n");

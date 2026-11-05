@@ -266,3 +266,23 @@ describe("書体に残った字形：Type3（1.1.0）", () => {
     expect(r.findings).toEqual([{ pattern: "P7", font: expect.any(Number), fontType: "type3", glyphs: 6, used: 2, leftover: 4 }]);
   });
 });
+
+// ---------------------------------------------------------------- P12 1.2.0：気をつける行き先のリンクだけ
+
+import { cautionUri } from "../rules/p12-actions/index.ts";
+
+describe("P12 押して開くリンクの行き先（1.2.0）", () => {
+  it("気をつける行き先", () => {
+    expect(
+      ["http://example.jp/", "file:///C:/a.pdf", "smb://kakuu-fs/share", "javascript:void(0)", "https://kakuu-intra/", "https://10.0.0.5/", "https://u:p@example.jp/", "https://fs.local/a"].map(cautionUri),
+    ).toEqual([true, true, true, true, true, true, true, true]);
+  });
+  it("ふつうの https・メール・電話・相対の場所は数えない", () => {
+    expect(["https://www.example.jp/docs/?q=1#a", "HTTPS://Example.org", "mailto:a@example.jp", "tel:0000", "../別紙.pdf"].map(cautionUri)).toEqual([false, false, false, false, false]);
+  });
+  it("ふつうの https のリンクは notCounted.link に数える", async () => {
+    const r = await detectP12Actions(await pdf(p12.CASES, "p12-c05"));
+    expect(r.findings).toEqual([]);
+    expect(r.notCounted.link).toBe(3);
+  });
+});

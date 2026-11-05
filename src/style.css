@@ -1318,3 +1318,110 @@ progress {
   border: var(--border-strong) solid var(--color-base);
   background: var(--color-chip);
 }
+
+/* ページの絵（自分で黒塗りする所を、キーボードで選んでいる間だけ Tab で止まる） */
+.sheet[data-picking="true"]:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-offset);
+}
+
+/* ファイルを小さくする（片付けの compress）。片付けた結果の欄の中に、区切り線の下に置く */
+.compress {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+.compress h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.compress-note {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.compress-presets {
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.compress-presets legend {
+  padding: 0;
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.compress-preset {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-2);
+  align-items: center;
+  min-height: var(--target-min);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-line);
+  cursor: pointer;
+}
+
+.compress-preset input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--color-base);
+}
+
+.compress-preset-name {
+  font-weight: 700;
+}
+
+.compress-preset-note {
+  grid-column: 2;
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.compress-run {
+  width: auto;
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-base);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.compress-run:disabled {
+  color: var(--color-muted);
+  cursor: progress;
+}
+
+.compress-result {
+  margin-top: var(--space-2);
+}
+
+.compress-headline,
+.compress-recheck {
+  margin: 0 0 var(--space-1);
+  font-weight: 700;
+}
+
+.compress-sizes {
+  margin: 0 0 var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.compress-lines {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-4);
+  font-size: var(--text-small);
+}
+
+.compress .download {
+  font-size: 1.125rem;
+}
