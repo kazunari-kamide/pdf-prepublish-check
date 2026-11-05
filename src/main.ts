@@ -992,6 +992,8 @@ async function handle(file: File) {
   if (busy) return;
   busy = true;
   const gen = ++generation;
+  // 通信を数える拡張機能（extension/）への合図。ページの中の属性を変えるだけで、通信はしない
+  document.documentElement.dataset.omamoriPdf = String(gen);
   const old = session;
   session = null;
   void old?.pdf?.close();
