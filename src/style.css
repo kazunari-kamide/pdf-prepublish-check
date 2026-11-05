@@ -760,21 +760,25 @@ body:has(.terms-dialog[open]) {
   min-height: 0.75rem;
 }
 
-/* 番号の札を、枠の左上の外に出す（色だけに頼らない） */
+/* 番号の札：枠の左上の角に、小さく重ねる（色だけに頼らない）。白の縁で、札どうしが近くても境が見える。
+   前は枠の上の外に出していたので、上の行の字を隠していた。近い札どうしは、画面が横へずらす（src/ui/badges.ts。2026-11-05 夜のレビュー 1） */
 .mark-no {
   position: absolute;
-  left: calc(-1 * var(--border-mark));
-  bottom: calc(100% + 3px);
-  min-width: 1.5rem;
-  padding: 0 var(--space-2);
-  border: var(--border-strong) solid var(--color-accent);
-  border-radius: var(--radius-full);
+  top: -0.7rem;
+  left: -0.7rem;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.25rem;
+  border: 0;
+  border-radius: var(--radius-pill);
   background: var(--color-accent);
   color: var(--color-on-dark);
-  font-size: var(--text-small);
+  font-size: 0.75rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.4rem;
   text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 0 0 2px var(--surface-card);
 }
 
 /* 選んだ枠：太く、札を白抜きに（形も変える） */
@@ -797,8 +801,12 @@ body:has(.terms-dialog[open]) {
 }
 
 .mark.mark-candidate .mark-no {
-  border-color: var(--line-strong);
   background: var(--line-strong);
+}
+
+/* 選んだ枠は、ほかの枠と札より前に出す（入れ子の枠の下に隠れないように） */
+.mark.is-selected {
+  z-index: 2;
 }
 
 /* 片付けた所：緑の点線の細い枠と「済」の札。押せない（残っている所の枠と、色・線・字で見分ける） */
@@ -809,9 +817,7 @@ body:has(.terms-dialog[open]) {
 }
 
 .mark.mark-done .mark-no {
-  left: calc(-1 * var(--border-done));
   background: var(--color-ok);
-  border-color: var(--color-ok);
 }
 
 .thumb-count.thumb-done {
@@ -864,6 +870,21 @@ body:has(.terms-dialog[open]) {
 }
 
 /* 整えて通ったときは、上の文を出さない（C1）。空のときは印（◯）も出さない */
+/* 何も見つからないとき：同じ意味の緑の箱があるので、見た目では隠す（読み上げには残す） */
+#status[data-quiet="true"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 読み上げのためにフォーカスを移す見出し（押せない。tabindex="-1"）には、フォーカスの四角を出さない（下線と二重になる。2026-11-05 夜のレビュー 9） */
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 #status:empty {
   display: none;
 }
@@ -911,32 +932,24 @@ progress {
   font-size: var(--text-small);
 }
 
-/* 種類ごとの囲み：左に縦書きの札、右に見出しと項目（案 E2） */
+/* 種類ごとの囲み：枠の色は 1 つ。強調は左の辺を太くするだけ（design/sheet.md「枠」。角丸の枠に色の違う帯を足さない。
+   2026-11-05 夜のレビュー 3）。狭い画面でも同じ形（上の帯にしない） */
 .group {
-  display: grid;
-  grid-template-columns: var(--width-fuda) minmax(0, 1fr);
-  margin-top: var(--space-3);
+  margin-top: var(--sp-3);
   border: var(--bw-1) solid var(--line-default);
   border-radius: var(--radius-l);
   background: var(--surface-card);
-  overflow: hidden;
 }
 
-/* 左の色の帯（字は出さない。2026-11-05 本人の画面のレビュー B4） */
-.fuda {
-  display: block;
-  background: var(--color-accent);
+.group[data-status="found"] {
+  border-color: var(--danger-line);
+  border-left-width: var(--bw-accent);
 }
 
-/* 見た所・見なかった所：札は墨の字に札の地（緑にしない。「調べた」は「すべて大丈夫」ではないため） */
-.group[data-status="scope"] .fuda {
-  background: var(--color-chip);
-  color: var(--color-base);
-}
-
-/* 見えている個人情報らしい字（候補）：紅にせず、知らせの形（墨の帯・「ｉ」の印）。黒塗りにするかは本人が決める（2026-11-05 夜のレビュー §0） */
-.group[data-status="candidate"] .fuda {
-  background: var(--line-strong);
+/* 見えている個人情報らしい字（候補）：紅にせず、知らせの形（墨の太い左の辺・「ｉ」の印）。黒塗りにするかは本人が決める（2026-11-05 夜のレビュー §0） */
+.group[data-status="candidate"] {
+  border-color: var(--line-strong);
+  border-left-width: var(--bw-accent);
 }
 
 .group[data-status="candidate"] .group-name::before {
@@ -1252,31 +1265,50 @@ progress {
 
 .items {
   list-style: none;
-  margin: 0;
+  margin: var(--sp-2) 0 0;
   padding: 0;
+}
+
+/* 1 つの項目＝1 つの li（番号・題・中身・ボタンを、同じ行のまとまりに入れる）。項目どうしは細い線で区切る。
+   枠の三重の入れ子（結果の欄 ▸ 種類 ▸ 項目）をやめる（2026-11-05 夜のレビュー 4） */
+.items > li {
+  padding: var(--sp-1) var(--sp-2) var(--sp-2);
+  border-top: var(--bw-1) solid var(--line-hair);
+  border-radius: var(--radius-m);
+}
+
+.items > li:first-child {
+  border-top-color: transparent;
+}
+
+/* 選んだ項目：li の地の色と内側の線（太さは変えないので、押しても動かない）。前後の区切りの線は隠す */
+.items > li:has(> .item.is-selected) {
+  background: var(--danger-bg);
+  box-shadow: inset 0 0 0 var(--bw-2) var(--danger-line);
+  border-top-color: transparent;
+}
+
+.items > li:has(> .item.is-selected) + li {
+  border-top-color: transparent;
 }
 
 .item {
   display: block;
   width: 100%;
   min-height: var(--target-min);
-  margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  padding: var(--sp-1) 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  color: inherit;
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.item:hover {
-  background: var(--surface-subtle);
-}
-
-/* 選んだ項目：線を太く、紅に（線の太さでも示す） */
-.item.is-selected {
-  border: var(--bw-2) solid var(--danger-line);
-  background: var(--danger-bg);
+.item:hover .item-title {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 .item > span {
@@ -1331,9 +1363,6 @@ progress {
   color: var(--color-base);
 }
 
-.item[data-check] {
-  border-style: dashed;
-}
 
 .item-page {
   color: var(--color-muted);
@@ -1346,9 +1375,8 @@ progress {
   font-size: var(--text-small);
 }
 
-/* 閉じた形を詰める：行の高さと上下の余白を小さく。中身の行（.reveal）も項目のすぐ下に寄せる */
+/* 閉じた形を詰める：行の高さを小さく。中身の行（.reveal）も項目のすぐ下に寄せる */
 .items .item {
-  padding-block: var(--space-1);
   line-height: 1.5;
 }
 
@@ -1429,6 +1457,16 @@ progress {
   font-weight: 700;
   font-size: var(--text-h2);
   cursor: pointer;
+}
+
+/* 何も見つからないとき：「念のため整える」は第 2 の形（枠だけ・墨の字・ふつうの大きさ。2026-11-05 夜のレビュー 7） */
+.actions #sanitize[data-weight="sub"] {
+  min-height: var(--target-min);
+  border-width: var(--bw-1);
+  border-color: var(--line-control);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font-size: var(--fs-small);
 }
 
 .actions button:disabled {
@@ -1726,6 +1764,18 @@ progress {
   margin: 0;
 }
 
+/* 何も見つからないときの箱の 2 行目：見つけられる範囲の一文（同じ塊に入れる。ふつうの太さ・補足の大きさ） */
+.verified .verified-scope {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-small);
+  font-weight: normal;
+  color: var(--text-strong);
+}
+
+.verified-scope:empty {
+  display: none;
+}
+
 .scope-note {
   margin: var(--space-4) 0 0;
   padding: var(--space-3) var(--space-4);
@@ -1804,13 +1854,6 @@ progress {
   }
   .stage {
     padding: var(--space-3);
-  }
-  /* 狭いときは、札を囲みの上の横書きの帯にする（縦書きの札が幅を取らないように） */
-  .group {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .fuda {
-    height: var(--width-fuda);
   }
   /* 狭いときは縦に積むので、PDF の欄を上に貼り付けない（D1） */
   .workspace[data-state="result"] .stage {
@@ -2165,7 +2208,7 @@ progress {
   content: "ｉ ";
 }
 
-.verified[data-state="clean"] p::before {
+.verified[data-state="clean"] p:first-child::before {
   content: "✓ ";
 }
 

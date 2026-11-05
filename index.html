@@ -92,6 +92,8 @@
           </div>
           <figcaption id="sheet-caption"></figcaption>
         </figure>
+        <!-- 狭い画面（縦に積むとき）だけ：項目を押して絵へ動いたあと、押した項目へ戻る（2026-11-05 夜のレビュー 6） -->
+        <button id="back-to-list" class="btn-sub back-to-list" type="button" hidden>一覧へ戻る</button>
         <p class="render-note" id="render-note" hidden></p>
       </section>
 
@@ -121,6 +123,7 @@
 
         <div id="verified" class="verified" data-state="none" hidden>
           <p id="verified-text"></p>
+          <p id="verified-scope" class="verified-scope"></p>
         </div>
 
         <section id="clean" class="clean" aria-labelledby="clean-title" hidden>

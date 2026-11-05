@@ -31,6 +31,7 @@ import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, S
 import { orgSegments } from "./ui/org-words";
 import { addAllCandidates, buildBlockedView, isCandidate, pickLabel, toAreas, toggleCandidate, type PickedArea } from "./ui/picks";
 import { buildRulesetView } from "./ui/ruleset";
+import { spreadBadges } from "./ui/badges";
 import { sampleFile, wantsSample, withoutSample } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
@@ -85,9 +86,11 @@ const ui = {
   progress: el<HTMLProgressElement>("progress"),
   verified: el<HTMLDivElement>("verified"),
   verifiedText: el<HTMLParagraphElement>("verified-text"),
+  verifiedScope: el<HTMLParagraphElement>("verified-scope"),
   clean: el<HTMLElement>("clean"),
   cleanCount: el<HTMLParagraphElement>("clean-count"),
   cleanCandidates: el<HTMLParagraphElement>("clean-candidates"),
+  backToList: el<HTMLButtonElement>("back-to-list"),
   download: el<HTMLAnchorElement>("download"),
   downloadNote: el<HTMLParagraphElement>("download-note"),
   saveNote: el<HTMLParagraphElement>("save-note"),
@@ -205,7 +208,11 @@ let cleanedState: { view: ViewModel; notDone: NotDoneItem[]; name: string } | nu
 /** 提出のために小さくする入口で選んだ上限（PDF を置いたときの選択。選ばなければ null＝ふつうの検査） */
 let shrinkLimit: SizeLimit | null = null;
 
+/** 見つけられる範囲の一文（結果の下の知らせと、何も見つからないときの緑の箱で同じ文。CLAUDE.md §11-5b） */
+const SCOPE_NOTE = "見つけられるのは、ここに並べた種類だけです。すべての漏れを見つけられるわけではありません。";
+
 function setStatus(text: string, tone: "neutral" | "ok" | "problem" = "neutral") {
+  delete ui.status.dataset.quiet;
   ui.status.textContent = text;
   ui.status.dataset.tone = tone;
 }
@@ -427,7 +434,7 @@ async function shrinkToLimit(gen: number, limit: SizeLimit) {
 
 function clearResults() {
   for (const part of [ui.noticeList, ui.groups, ui.coverageSlot, ui.thumbs, ui.marks]) part.replaceChildren();
-  for (const part of [ui.notices, ui.actions, ui.pickTools, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props, ui.ruleset]) part.hidden = true;
+  for (const part of [ui.notices, ui.actions, ui.pickTools, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props, ui.ruleset, ui.backToList]) part.hidden = true;
   for (const part of [ui.sanitizeMore, ui.cleanMore, ui.cleanTools]) part.open = false;
   ui.caption.textContent = "";
   delete ui.workspace.dataset.thumbs;
@@ -489,10 +496,8 @@ const SEVERITY_MARK: Record<Row["severity"], string> = { high: "▲", medium: "�
 function groupBox(kind: "found" | "candidate" | "scope"): { box: HTMLElement; body: HTMLDivElement } {
   const box = make("section", undefined, "group");
   box.dataset.status = kind;
-  const tag = make("span", undefined, "fuda");
-  tag.setAttribute("aria-hidden", "true");
   const body = make("div", undefined, "group-body");
-  box.append(tag, body);
+  box.append(body);
   return { box, body };
 }
 
@@ -793,6 +798,24 @@ function placeMarks(s: Session, page: number) {
     ui.marks.append(mark);
   }
   placePicks(s, page);
+  spreadMarkBadges();
+}
+
+/**
+ * ページの絵の上の番号の札を、重ならないように横へずらす（見つかった所の番号の順 → 消した所 → 自分で選んだ所の順に、
+ * 先の札ほど動かさない）。札の位置は描いたあとの大きさで測る（絵の幅で変わるため、描き直すたびに測り直す）
+ */
+function spreadMarkBadges() {
+  const all = [...ui.marks.querySelectorAll<HTMLElement>(".mark-no")];
+  for (const b of all) b.style.transform = "";
+  const kind = (b: HTMLElement) => (b.parentElement?.classList.contains("mark-done") ? 1 : b.parentElement?.classList.contains("mark-pick") ? 2 : 0);
+  const order = [...all].sort((a, b) => kind(a) - kind(b));
+  const rects = order.map((b) => b.getBoundingClientRect());
+  if (!rects.some((r) => r.width > 0)) return;
+  const dx = spreadBadges(rects.map((r) => ({ x: r.left, y: r.top, w: r.width, h: r.height })));
+  order.forEach((b, i) => {
+    if (dx[i]) b.style.transform = `translateX(${dx[i]}px)`;
+  });
 }
 
 function markSelected(no: number | null) {
@@ -868,10 +891,25 @@ async function showPage(page: number, selectNo: number | null) {
   ui.renderNote.hidden = note === "";
 }
 
+/** 縦に積む狭い画面か（結果の欄が上、ページの絵がずっと下にある形） */
+const stacked = () => getComputedStyle(ui.workspace).flexDirection === "column";
+
 async function select(r: Row) {
   if (r.page !== null && session) await showPage(r.page, r.hasRect ? r.no : null);
   markSelected(r.no);
+  // 狭い画面では、ページの絵が結果のずっと下にあるので、押した所の枠まで動かす。絵の下に「一覧へ戻る」を出す
+  if (r.hasRect && stacked()) {
+    document.getElementById(`mark-frame-${r.no}`)?.scrollIntoView({ block: "center" });
+    ui.backToList.dataset.no = String(r.no);
+    ui.backToList.hidden = false;
+  }
 }
+
+ui.backToList.addEventListener("click", () => {
+  const item = document.getElementById(`item-${ui.backToList.dataset.no ?? ""}`);
+  item?.scrollIntoView({ block: "center" });
+  item?.focus();
+});
 
 // ---------------------------------------------------------------- プロパティの一覧（値を出してよいのは、ここだけ）
 
@@ -988,7 +1026,7 @@ function renderInspection(s: Session) {
   renderGroups(s);
   renderProperties(s);
   renderRuleset(s);
-  ui.scopeNote.hidden = false;
+  ui.scopeNote.hidden = s.view.clean && s.phase === "before";
 
   renderThumbs(s);
   ui.workspace.dataset.thumbs = ui.thumbs.hidden ? "none" : "some";
@@ -1041,10 +1079,19 @@ function renderSummary(s: Session) {
   setStep(ui.stepClean, v.rows.length ? "now" : "todo");
   ui.stepCleanNote.textContent = "「整える」を押します";
 
-  // 何も見つからなかったときの札（片付けたあとの「全部緑」は renderCleaned）
+  // 何も見つからなかったときの札（片付けたあとの「全部緑」は renderCleaned）。
+  // 同じ意味の文を 2 回出さない：上の状態の文は見た目では隠し（読み上げには残す）、緑の箱 1 つにする。
+  // 「見つけられるのは、ここに並べた種類だけ」も、この箱の続きに入れて 1 つの塊にする（2026-11-05 夜のレビュー 7）
+  const checkedKinds = v.coverage.filter((c) => c.state === "checked").length;
   ui.verified.dataset.state = v.clean ? "clean" : "none";
-  ui.verifiedText.textContent = v.clean ? "調べた項目では、見つかりませんでした。" : "";
+  ui.verifiedText.textContent = v.clean ? `調べた ${checkedKinds} 種類では、見つかりませんでした。` : "";
+  ui.verifiedScope.textContent = v.clean ? SCOPE_NOTE : "";
   ui.verified.hidden = !v.clean;
+  if (v.clean) ui.status.dataset.quiet = "true";
+  ui.scopeNote.hidden = v.clean;
+  // 何も見つからないときは、「整える」を主のボタンから第 2 の形に下げる（公開してよいのか、整えるべきかで迷わせない）
+  ui.sanitize.dataset.weight = v.clean ? "sub" : "main";
+  ui.sanitize.textContent = v.clean ? "念のため整える（プロパティなどを消した写しを作る）" : "整える";
 
   renderInspection(s);
   // 押したボタン（見本の PDF で試す など）が隠れてフォーカスが行き場を失ったときは、結果の見出しへ移す
@@ -1719,8 +1766,16 @@ ui.saveConfirmBox.addEventListener("change", () => {
   else lockDownload();
 });
 // 押せない形のときは、押しても何もしない（href がないので、もともと保存は起きない。念のため止める）
+/** 保存を押したあとの一言（保存しても画面が変わらず、済んだのか分からないため。2026-11-05 夜のレビュー 19） */
+const SAVED_NOTE = "✓ 保存しました（ダウンロードのフォルダ）。公開する前に、保存した PDF をもう一度ここに入れると、念のため確かめられます。";
+
 ui.download.addEventListener("click", (e) => {
-  if (ui.download.getAttribute("aria-disabled") === "true") e.preventDefault();
+  if (ui.download.getAttribute("aria-disabled") === "true") {
+    e.preventDefault();
+    return;
+  }
+  ui.saveNote.textContent = SAVED_NOTE;
+  ui.saveNote.dataset.gate = "saved";
 });
 
 ui.compressRun.addEventListener("click", () => void runCompress());
@@ -1730,7 +1785,12 @@ ui.compressConfirmBox.addEventListener("change", () => {
   else lockCompressDownload();
 });
 ui.compressDownload.addEventListener("click", (e) => {
-  if (ui.compressDownload.getAttribute("aria-disabled") === "true") e.preventDefault();
+  if (ui.compressDownload.getAttribute("aria-disabled") === "true") {
+    e.preventDefault();
+    return;
+  }
+  ui.compressSaveNote.textContent = SAVED_NOTE;
+  ui.compressSaveNote.dataset.gate = "saved";
 });
 
 
