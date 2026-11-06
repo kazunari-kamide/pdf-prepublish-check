@@ -59,8 +59,12 @@ export const HEADING_CHARS = path.join(ROOT, "design", "fonts", "heading-chars.t
 /** 元の書体の SHA-256（前からの名前。Noto Sans JP） */
 export const SOURCE_SHA256 = JOBS[0].sha256;
 
-/** Shift_JIS にない、画面で使う記号（状態の印・矢印など） */
-const EXTRA = "✓▲■●◐○－⊘？→…・「」『』（）〜※";
+/**
+ * Shift_JIS にない、画面で使う記号（状態の印・矢印など）。
+ * ▶ は「見た所・見なかった所」の開け閉めの印（src/style.css の .coverage-summary .group-head::before）。見出しの書体（Zen Maru Gothic）にない字なので、
+ * ここに入れないと OS の書体で出ていた（2026-11-06 に足した）
+ */
+const EXTRA = "✓▲▶■●◐○－⊘？→…・「」『』（）〜※";
 
 /** Shift_JIS で書ける字を、決まった順に集める */
 export function shiftJisChars() {
