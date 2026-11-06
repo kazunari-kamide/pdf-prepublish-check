@@ -2887,6 +2887,42 @@ body {
     overflow-wrap: anywhere;
     word-break: normal;
   }
+  /* ロゴの名前と、今の段の名前も、入りきらなければ折る（字だけ大きくした 390 幅で、横に 267px はみ出していた） */
+  .site-brand {
+    flex-wrap: wrap; /* ロゴと名前が横に入りきらなければ、名前をロゴの下へ */
+    min-width: 0;
+    white-space: normal;
+  }
+  .steps li {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  /* ページの欄は、列の幅いっぱいにする（結果のときの align-self: start のままだと、ページの絵の幅（px で決める）に合わせて広がり、
+     ファイルの帯ごと横に 32px はみ出していた。2026-11-06、B の画面の PR の後に測った） */
+  .workspace[data-state="result"] .stage {
+    align-self: stretch;
+  }
+  .picks li {
+    flex-wrap: wrap;
+  }
+  .step-name,
+  .sheet-wrap figcaption,
+  .filebar-again,
+  .picks li {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  /* 「整える」の帯は、ここでは画面の下に固定しない（字を大きくすると帯が画面の半分ほどになり、読む所を隠すため）。
+     結果の面の下の端の、もとの置き場に戻す（.actions #sanitize と同じ形）。
+     static でなく relative にする：整えている間の進み具合（::before。position: absolute）が、帯の中に収まるように */
+  .workspace[data-state="result"] .actions:not([hidden]) #sanitize:not([data-weight="sub"]) {
+    position: relative;
+    z-index: auto;
+    width: calc(100% + 2 * var(--face-pad));
+    min-height: calc(var(--button-height-large) + var(--sp-2));
+    margin: var(--sp-3) calc(-1 * var(--face-pad)) calc(-1 * var(--face-pad));
+    padding: var(--sp-3) var(--face-pad);
+    box-shadow: none;
+  }
 }
 
 /* 高さの低い窓（横向きのスマートフォン・大きな拡大）：上の帯を詰め、「整える」が早く見えるようにする */

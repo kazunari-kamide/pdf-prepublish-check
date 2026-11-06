@@ -25,7 +25,9 @@
 
 .site-links p {
   flex-basis: 100%;
+  min-width: 0;
   margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere; /* 字だけ大きくした狭い画面で、omamoripdf.com などの英字の続きが画面の外へ出ないように折り返す */
 }
 
 /* 公式のサイトの場所の1文（サイトのページの下の帯と同じ文。src/site/render.ts の OFFICIAL_NOTE）。警告に見えないよう、ふつうの太さ・補足の色（D2） */
