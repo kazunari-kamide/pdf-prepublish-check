@@ -17,6 +17,8 @@ import { fromFraction, toFraction, viewSize } from "./inspect/view";
 import { PdfView, RenderTimeout } from "./render/pdf-view";
 import { MAX_REDACT_AREAS } from "./sanitize/areas";
 import { compressInWorker, preflightInWorker, sanitizeInWorker } from "./sanitize/run";
+import { loadPartsAfterDisplay, resetParts, waitParts } from "./parts";
+import { startFile } from "./worker-slot";
 import type { TidyChoices } from "./sanitize/protocol";
 import type { PropertyKey, TidyPreflight } from "../sanitize/types.ts";
 import { buildEdits, CONSENT_TEXT, DATE_HINT, MODE_LABEL, PROPERTY_FIELDS, type PropertyChoice, type PropertyMode } from "./ui/tidy-model";
@@ -470,6 +472,8 @@ function reset() {
 function goHome() {
   if (busy) return;
   generation++;
+  // 前のファイルで使った Worker を捨て、次の PDF のために新しく作って温める（PDF を入れる前に済ませる。src/parts.ts）
+  void resetParts();
   const old = session;
   session = null;
   void old?.pdf?.close();
@@ -1163,7 +1167,7 @@ function makeSession(
 }
 
 function renderOutcome(outcome: InspectOutcome, base: Pick<Session, "generation" | "fileName" | "original" | "sha256" | "byteLength" | "pdf" | "pdfProblem">) {
-  if (outcome.kind === "timeout") return fail("時間がかかりすぎたため、検査を止めました。画面はそのまま使えます。");
+  if (outcome.kind === "timeout") return fail("時間がかかりすぎたため、検査を止めました。ページを減らすか、いくつかに分けてから、「別の PDF」で入れ直してください。");
   if (outcome.kind === "error") return fail(outcome.message);
   if (!outcome.precheck.ok) return fail(outcome.precheck.message);
   if (!outcome.summary) return fail("検査の結果を受け取れませんでした。");
@@ -1198,10 +1202,19 @@ async function handle(file: File) {
   ui.fileFacts.textContent = "";
   ui.filePage.textContent = "";
   ui.filebar.hidden = false;
-  setStatus("確かめています…");
   ui.progress.hidden = false;
   ui.progress.value = 0;
   try {
+    // 新しいファイルとして数える（前のファイルで使った Worker は使わない。src/worker-slot.ts）。
+    // 部品をまだ読み終えていなければ、読み終わるまで待つ（PDF を入れた後に部品を読みに行かないため。src/parts.ts）
+    startFile();
+    await waitParts((p) => {
+      ui.progress.max = p.total;
+      ui.progress.value = p.done;
+      setStatus(`準備しています（${p.done}/${p.total}）…`);
+    });
+    setStatus("確かめています…");
+    ui.progress.value = 0;
     const buffer = await file.arrayBuffer();
     // 検査の Worker には元を渡し切るので、絵を描く側と片付けに渡す側には写しを持つ
     const forPicture = new Uint8Array(buffer.slice(0));
@@ -1714,7 +1727,7 @@ async function runSanitize() {
     ui.pickTools.hidden = true;
     const out = await sanitizeInWorker(original.buffer as ArrayBuffer, undefined, areas, tidy);
     if (gen !== generation) return;
-    if (out.kind === "timeout") return cleanFailed("時間がかかりすぎたため、整えるのを止めました。画面はそのまま使えます。");
+    if (out.kind === "timeout") return cleanFailed("時間がかかりすぎたため、整えるのを止めました。ページを減らすか、いくつかに分けてから、「別の PDF」で入れ直してください。");
     if (out.kind === "blocked") return redactBlocked(s, retry, out.leftovers, out.notDone);
     if (out.kind !== "done") return cleanFailed(out.message);
 
@@ -1954,3 +1967,6 @@ if (wantsSample(location.search)) {
   const file = sampleFile();
   if (file) void handle(file);
 }
+
+// 処理に要る部品は、画面の表示が終わってから裏で読み込む（2026-11-06 本人が決定。src/parts.ts）
+loadPartsAfterDisplay();

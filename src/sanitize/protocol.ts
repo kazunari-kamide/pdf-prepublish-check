@@ -13,7 +13,9 @@ export type SanitizeRequest =
   /** 整える前に、プロパティの今の値・PDF/A の印・電子署名の数を聞く（片付けの preflightTidy） */
   | { type: "preflight"; id: number; buffer: ArrayBuffer }
   /** 片付けた PDF を小さくする（片付けの compress。sanitize/README.md「ファイルを小さくする」） */
-  | { type: "compress"; id: number; buffer: ArrayBuffer; maxDpi: number; jpegQuality: number };
+  | { type: "compress"; id: number; buffer: ArrayBuffer; maxDpi: number; jpegQuality: number }
+  /** PDF を入れる前に、PDF.js と画像を解く部品を読み込んでおく（2026-11-06。src/worker-slot.ts） */
+  | { type: "warm"; id: number };
 
 /** 整えるときに本人が選んだこと（プロパティの書き直し・PDF/A の印・電子署名）。指定しなかったプロパティは消す */
 export type TidyChoices = { properties?: PropertyEdits; pdfaMark?: "remove" | "keep"; signatures?: "remove" | "keep" };
@@ -28,6 +30,7 @@ export type SanitizeResponse =
   | { type: "compress_blocked"; id: number; sizeBefore: number; sizeAfter: number; increased: CompressIncrease[] }
   /** 片付けを始められなかったとき（パスワードが要る・読めない など）。message は画面にそのまま出せる文 */
   | { type: "refused"; id: number; message: string }
+  | { type: "warm-done"; id: number; ok: boolean }
   | { type: "error"; id: number; message: string };
 
 /** 画面から見た、片付けの結果 */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // ビルドしたもの（dist/）を確かめる。
-// - HTML に CSP の <meta> が入っていて、connect-src が 'none'（検査のページ check.html だけは 'self'。2026-11-06 本人が決定）か
+// - HTML に CSP の <meta> が入っていて、connect-src 'none' を含むか（検査のページも同じ。2026-11-06 の夕方に 'self' から戻した。D170）
 // - .htaccess（配信先で CSP をヘッダーで返す）があり、その CSP が <meta> と食い違っていないか
 // - HTML の中に、直接書いたスクリプトや style がないか（CSP で止まるため。入っていたら作りの誤り）
 // - 外のサイトから読み込んでいないか
@@ -20,8 +20,8 @@
 // 例外は1つだけ（2026-11-03 本人が決定。理由は docs/no-network.md）：
 //   PDF.js（ページの絵を描くため）のファイルは、中に fetch などのコードを持つ。これは、
 //   (1) npm の pdfjs-dist（package-lock.json で版を固定）のファイルと、1バイトも違わない写しであり、
-//   (2) 検査のページの CSP の connect-src が 'self'（自分の配信先だけ）で、外のサイトを含まない
-//   ときに限って許す（2026-11-06 から、検査のページだけ 'self'。PDF.js が /pdfjs/ の部品を読むため。それまでは 'none'）。
+//   (2) CSP に connect-src 'none' が入っている
+//   ときに限って許す（2026-11-06 の朝から夕方までは、検査のページだけ 'self' だった。字の対応表をメモリから渡すようにして戻した。D170）。
 //   配信の中の /pdfjs/（PDF.js の部品。src/render/pdfjs-parts.ts）は、どのファイルも pdfjs-dist と 1 バイトも違わない写しであること。このとき、ブラウザで外への要求が0件であることを scripts/check-browser.mjs で確かめる。
 //   自分たちのコードを PDF.js のファイルに混ぜると (1) が崩れて止まる。
 
@@ -29,7 +29,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { withFormActionSelf } from "../csp.ts";
-import { PDFJS_PARTS, PDFJS_PARTS_BASE } from "../src/render/pdfjs-parts.ts";
+import { PDFJS_PARTS, isBundledCmap } from "../src/render/pdfjs-parts.ts";
 import { missingHeadingChars } from "../design/fonts/heading-chars.mjs";
 import { CHECK_PAGE_FILE, CHECK_PAGE_RULES, CLEAN_URL_RULES, LICENSE_TEXTS_RULES, CONTACT_PAGE_FILE, CONTACT_REWRITE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 
@@ -74,11 +74,10 @@ if (!existsSync(path.join(DIST, CHECK_PAGE_FILE))) {
 const html = readFileSync(path.join(DIST, CHECK_PAGE_FILE), "utf8");
 const decode = (s) => s.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
 const meta = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/);
-// 検査のページだけ connect-src 'self'（外のサイトを含まない）。ほかのページの値は、それを 'none' にしたもの（baseCsp）
-const cspHasNoConnect = !!meta && decode(meta[1]).split(";").some((d) => d.trim() === "connect-src 'self'");
+const cspHasNoConnect = !!meta && decode(meta[1]).split(";").some((d) => d.trim() === "connect-src 'none'");
 if (!meta) problems.push(`${CHECK_PAGE_FILE} に CSP の <meta> がありません`);
-else if (!cspHasNoConnect) problems.push(`${CHECK_PAGE_FILE} の CSP の connect-src が 'self' ではありません（自分の配信先だけにする）`);
-const baseCsp = meta && cspHasNoConnect ? decode(meta[1]).replace("connect-src 'self'", "connect-src 'none'") : null;
+else if (!cspHasNoConnect) problems.push("CSP に connect-src 'none' がありません");
+const baseCsp = meta ? decode(meta[1]) : null;
 
 // ---- 配信先（Xserver）で CSP などをヘッダーで返す .htaccess（docs/deploy.md）
 // ヘッダーの CSP は、<meta> の CSP に frame-ancestors 'none' を足しただけのものであること（食い違うと厳しい方が効くため）
@@ -95,15 +94,9 @@ if (htaccess !== null) {
   else if (baseCsp) {
     const fromHeader = split(header[1]);
     const expected = [...split(baseCsp), "frame-ancestors 'none'"];
-    if (fromHeader.join("; ") !== expected.join("; ")) problems.push(".htaccess の CSP が、<meta> の CSP（connect-src 'none'。＋ frame-ancestors 'none'）と食い違っています");
-    // 検査のページだけ、connect-src 'self' の CSP を返す（<FilesMatch>）。<meta> の CSP ＋ frame-ancestors 'none' と同じで、ほかのファイルには当たらない
-    const checkBlock = [...htaccess.matchAll(/^<FilesMatch "([^"]+)">\n([\s\S]*?)^<\/FilesMatch>/gm)].find((b) => new RegExp(b[1]).test(CHECK_PAGE_FILE));
-    const checkCsp = checkBlock?.[2].match(/^\s*Header always set Content-Security-Policy "([^"]+)"\s*$/m)?.[1];
-    const checkNames = checkBlock ? [CHECK_PAGE_FILE, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, "privacy.html", "404.html"].filter((f) => new RegExp(checkBlock[1]).test(f)) : [];
-    if (!checkBlock || !checkCsp) problems.push(".htaccess に、検査のページの CSP（<FilesMatch>。connect-src 'self'）がありません");
-    else if (split(checkCsp).join("; ") !== [...split(decode(meta[1])), "frame-ancestors 'none'"].join("; ")) problems.push(".htaccess の検査のページの CSP が、検査のページの <meta> の CSP（＋ frame-ancestors 'none'）と食い違っています");
-    else if (checkNames.join() !== CHECK_PAGE_FILE) problems.push(`.htaccess の検査のページの <FilesMatch> が、ほかのファイルにも当たります（当たる：${checkNames.join("・")}）`);
-    if ((htaccess.match(/^\s*Header\b[^\n]*connect-src 'self'/gm) ?? []).length !== 1) problems.push(".htaccess で connect-src 'self' が、検査のページの <FilesMatch> の外にもあります");
+    if (fromHeader.join("; ") !== expected.join("; ")) problems.push(".htaccess の CSP が、<meta> の CSP（＋ frame-ancestors 'none'）と食い違っています");
+    // 検査のページだけ別の CSP を返す <FilesMatch> は、もう置かない（D170）。connect-src 'self' がどこにもないこと
+    if (/connect-src 'self'/.test(htaccess)) problems.push(".htaccess に connect-src 'self' があります（どのページも 'none' のはず）");
   }
   if (!/^\s*AddType text\/javascript \.mjs\s*$/m.test(htaccess)) problems.push(".htaccess に AddType text/javascript .mjs がありません");
   if (!/^\s*AddType application\/wasm \.wasm\s*$/m.test(htaccess)) problems.push(".htaccess に AddType application/wasm .wasm がありません");
@@ -141,7 +134,7 @@ if (htaccess !== null) {
 }
 
 // ---- すべての HTML（検査のページ check.html と、サイトのページ）
-// サイトのページは、検査のページの CSP の connect-src を 'none' にした値（baseCsp）と同じ
+// サイトのページも、検査のページと同じ CSP
 const indexCsp = baseCsp;
 // 公式の URL を指す canonical のリンクは、読み込みではないので許す（写したサイトでも、本物を指すように）
 const canonical = new RegExp(`<link rel="canonical" href="${OFFICIAL_ORIGIN.replace(/\./g, "\\.")}/[^"]*"`, "g");
@@ -261,31 +254,56 @@ try {
   // pdfjs-dist が入っていなければ、例外は使えない（ふつうに通信の仕組みを探す）
 }
 
-// ---- PDF.js の部品（/pdfjs/。2026-11-06 本人が決定。src/render/pdfjs-parts.ts）：どのファイルも pdfjs-dist と 1 バイトも違わない写しで、
-// 決めた名前のものだけ（Liberation の書体など、置かないと決めたものは入っていない）。決めたものは全部そろっている
+// ---- PDF.js の部品（/pdfjs/<版の印>/。2026-11-06 本人が決定。src/render/pdfjs-parts.ts）：どのファイルも pdfjs-dist と 1 バイトも違わない写しで、
+// 決めた名前のものだけ（Liberation の書体など、置かないと決めたものは入っていない）。決めたものは全部そろっている。
+// 字の対応表をまとめた cmaps.mjs は、中の 1 つずつが pdfjs-dist の cmaps/*.bcmap と同じで、数もそろっている。
+// <版の印> は 10 字の 16 進数で、フォルダは 1 つだけ（.htaccess で長くキャッシュさせるため、版ごとに場所が変わる形にする）
 {
-  const partsDir = path.join(DIST, PDFJS_PARTS_BASE.slice(1));
-  const inDist = files
-    .map((f) => path.relative(DIST, f).replace(/\\/g, "/"))
-    .filter((rel) => rel.startsWith(PDFJS_PARTS_BASE.slice(1)))
-    .map((rel) => rel.slice(PDFJS_PARTS_BASE.length - 1));
+  const rels = files.map((f) => path.relative(DIST, f).replace(/\\/g, "/")).filter((rel) => rel.startsWith("pdfjs/"));
+  const hashes = [...new Set(rels.map((rel) => rel.split("/")[1]))];
+  if (rels.length && (hashes.length !== 1 || !/^[0-9a-f]{10}$/.test(hashes[0] ?? ""))) {
+    problems.push(`pdfjs/ の下のフォルダが、版の印（10 字の 16 進数）1 つだけではありません（${hashes.join("・")}）`);
+  }
+  const base = rels.length ? `pdfjs/${hashes[0]}/` : "";
+  const inDist = rels.map((rel) => rel.slice(base.length));
   const wanted = existsSync(PDFJS_DIR)
     ? PDFJS_PARTS.flatMap(({ dir, include }) => readdirSync(path.join(PDFJS_DIR, dir)).filter(include).map((n) => `${dir}/${n}`))
     : [];
   for (const rel of inDist) {
+    if (rel === "cmaps.mjs") continue;
     const part = PDFJS_PARTS.find((p) => rel.startsWith(`${p.dir}/`));
     if (!part || !part.include(rel.slice(part.dir.length + 1)) || rel.slice(part.dir.length + 1).includes("/")) {
-      problems.push(`${PDFJS_PARTS_BASE.slice(1)}${rel} は、配信に入れると決めた PDF.js の部品ではありません（src/render/pdfjs-parts.ts）`);
+      problems.push(`${base}${rel} は、配信に入れると決めた PDF.js の部品ではありません（src/render/pdfjs-parts.ts）`);
       continue;
     }
     const src = path.join(PDFJS_DIR, rel);
-    if (!existsSync(src) || sha256(readFileSync(src)) !== sha256(readFileSync(path.join(partsDir, rel)))) {
-      problems.push(`${PDFJS_PARTS_BASE.slice(1)}${rel} が、pdfjs-dist のファイルと違います（手を加えずに写す）`);
+    if (!existsSync(src) || sha256(readFileSync(src)) !== sha256(readFileSync(path.join(DIST, base, rel)))) {
+      problems.push(`${base}${rel} が、pdfjs-dist のファイルと違います（手を加えずに写す）`);
     }
   }
-  // そろっているかは、/pdfjs/ を置いたときに見る（本物のビルドでは、vite.config.ts の pdfjsParts が必ず置く）
-  const missing = existsSync(partsDir) ? wanted.filter((rel) => !inDist.includes(rel)) : [];
-  if (missing.length) problems.push(`PDF.js の部品のうち ${missing.length} 個が dist/ にありません（${missing.slice(0, 5).join("・")}${missing.length > 5 ? " ほか" : ""}）`);
+  if (rels.length) {
+    const missing = [...wanted, "cmaps.mjs"].filter((rel) => !inDist.includes(rel));
+    if (missing.length) problems.push(`PDF.js の部品のうち ${missing.length} 個が dist/ にありません（${missing.slice(0, 5).join("・")}${missing.length > 5 ? " ほか" : ""}）`);
+  }
+  // 字の対応表をまとめたモジュール：中身を読み、1 つずつ pdfjs-dist の cmaps/*.bcmap と照らす
+  if (inDist.includes("cmaps.mjs") && existsSync(PDFJS_DIR)) {
+    const text = readFileSync(path.join(DIST, base, "cmaps.mjs"), "utf8");
+    const m = text.match(/^export default (\{[\s\S]*\});\s*$/m);
+    let bundle = null;
+    try {
+      bundle = m ? JSON.parse(m[1]) : null;
+    } catch {
+      bundle = null;
+    }
+    const names = readdirSync(path.join(PDFJS_DIR, "cmaps")).filter(isBundledCmap).sort();
+    if (!bundle) problems.push(`${base}cmaps.mjs の中身を読めません（export default の JSON のはず）`);
+    else {
+      const keys = Object.keys(bundle).sort();
+      if (keys.join() !== names.join()) problems.push(`${base}cmaps.mjs の字の対応表の名前が、pdfjs-dist の cmaps/ と違います（${keys.length} 個・pdfjs-dist は ${names.length} 個）`);
+      const bad = names.filter((n) => typeof bundle[n] !== "string" || sha256(Buffer.from(bundle[n], "base64")) !== sha256(readFileSync(path.join(PDFJS_DIR, "cmaps", n))));
+      if (bad.length) problems.push(`${base}cmaps.mjs の字の対応表のうち ${bad.length} 個が、pdfjs-dist のファイルと違います（${bad.slice(0, 3).join("・")}）`);
+    }
+  }
 }
 
 const NET = [
@@ -320,7 +338,7 @@ for (const f of files.filter((f) => /\.(m?js)$/.test(f))) {
 console.log(`dist/ のファイル：${files.length} 件`);
 for (const f of files) console.log(`  ${path.relative(DIST, f).replace(/\\/g, "/")}  ${statSync(f).size} バイト`);
 if (allowed.length) {
-  console.log("\n例外として許したファイル（PDF.js の写し。検査のページの CSP の connect-src が 'self'（自分の配信先だけ）のときだけ。docs/no-network.md）：");
+  console.log("\n例外として許したファイル（PDF.js の写し。CSP に connect-src 'none' があるときだけ。docs/no-network.md）：");
   for (const a of allowed) console.log(`  - ${a}`);
 }
 if (allowedHtml.length) {

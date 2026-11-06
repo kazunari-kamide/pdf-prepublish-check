@@ -7,16 +7,17 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const src = readFileSync("src/render/pdf-view.ts", "utf8");
-const opts = src.slice(src.indexOf("lib.getDocument({"), src.indexOf("});", src.indexOf("lib.getDocument({")));
+// PDF を開くときの設定は LOAD_OPTIONS にまとめてある（温めにも同じものを使う。2026-11-06）
+const opts = src.slice(src.indexOf("const LOAD_OPTIONS = {"), src.indexOf("};", src.indexOf("const LOAD_OPTIONS = {")));
 
 describe("ページの絵の PDF.js の設定", () => {
-  it("書体をブラウザの書体として読ませない・部品は自分の配信先の /pdfjs/ からだけ読む", () => {
+  it("書体をブラウザの書体として読ませない・部品は自分の配信先の /pdfjs/ から読むか、メモリから渡す", () => {
     for (const k of ["disableFontFace: true", "useWorkerFetch: false", "useWasm: false", "disableRange: true", "disableStream: true", "disableAutoFetch: true", "enableXfa: false"]) {
       expect(opts, k).toContain(k);
     }
-    // 2026-11-06 から（案 B）：画像を解く部品と cMap は、配信の中の /pdfjs/ から読む（src/render/pdfjs-parts.ts）。
-    // URL から PDF を読む道・標準の書体（Liberation の書体のライセンスのため置かない）・ICC は開けない
-    for (const k of ["wasmUrl: PDFJS_WASM_URL", "cMapUrl: PDFJS_CMAP_URL", "cMapPacked: true"]) expect(opts, k).toContain(k);
+    // 2026-11-06 から：画像を解く部品は配信の中の /pdfjs/<版の印>/ から読み、字の対応表はメモリから渡す（MemoryBinaryData。
+    // PDF を入れた後に読みに行かない）。URL から PDF を読む道・標準の書体（Liberation の書体のライセンスのため置かない）・ICC は開けない
+    for (const k of ["wasmUrl: PDFJS_WASM_URL", "BinaryDataFactory: MemoryBinaryData", "cMapPacked: true"]) expect(opts, k).toContain(k);
     for (const k of ["url:", "standardFontDataUrl", "iccUrl"]) expect(opts, k).not.toContain(k);
   });
 });

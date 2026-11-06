@@ -7,9 +7,9 @@
 // - img-src に data: と blob: を許すのは、PDF のページの絵をブラウザの中で作って見せるため
 // - worker-src 'self'：検査の Worker は、同じサイトのファイルからだけ起動する
 // - 'wasm-unsafe-eval' は、WASM を使うと決めたときに足す（今は使わない。画像を解く部品は、WASM ではなく代わりの JS を読む）
-// - 検査のページ（check.html）だけ connect-src を 'self' にする（2026-11-06 本人が決定。下の withConnectSelf）。
-//   ページの絵を描く PDF.js が、配信の中に置いた字の対応表（cMap）を、自分の配信先から読むため。
-//   外のサイトへの送り先は増やさない。サイトのページ（記事など）と、ほかのファイルは 'none' のまま
+// - 検査のページ（check.html）も、ほかのページと同じ connect-src 'none'（2026-11-06 本人が決定。D170）。
+//   2026-11-06 の朝から夕方までは、検査のページだけ 'self' にしていた（PDF.js が字の対応表を fetch で読んでいたため）。
+//   字の対応表を cmaps.mjs として import() で読み、メモリから渡すようにしたので（D165）、fetch で読む所がなくなった
 
 const directives: Record<string, string> = {
   "default-src": "'self'",
@@ -59,21 +59,6 @@ export const cspForContactHeader = withFormActionSelf(cspForHeader);
  */
 export const CONTACT_REFERRER = "same-origin";
 
-/**
- * 検査のページ（check.html）だけの CSP（2026-11-06 本人が決定）。ほかのページと同じ値から、connect-src だけを 'self' にする。
- * 自分の配信先の /pdfjs/ に置いた部品（cMap）を、PDF.js が読むため。外のサイトは足さない
- */
-export function withConnectSelf(csp: string): string {
-  const parts = csp.split("; ");
-  const i = parts.indexOf("connect-src 'none'");
-  if (i < 0) throw new Error("CSP に connect-src 'none' がありません（検査のページの CSP を作れません）");
-  parts[i] = "connect-src 'self'";
-  return parts.join("; ");
-}
-
-export const cspForCheckMeta = withConnectSelf(cspForMeta);
-export const cspForCheckHeader = withConnectSelf(cspForHeader);
-
 /** CSP と一緒に返すヘッダー */
 export const securityHeaders: Record<string, string> = {
   "Content-Security-Policy": cspForHeader,
@@ -94,10 +79,4 @@ export const contactHeaders: Record<string, string> = {
   "Content-Security-Policy": cspForContactHeader,
   "Referrer-Policy": CONTACT_REFERRER,
   "Cache-Control": "no-store",
-};
-
-/** 検査のページで返すヘッダー。ほかのページと違うのは、CSP の connect-src だけ */
-export const checkHeaders: Record<string, string> = {
-  ...securityHeaders,
-  "Content-Security-Policy": cspForCheckHeader,
 };
