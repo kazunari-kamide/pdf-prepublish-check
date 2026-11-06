@@ -23,21 +23,49 @@ function job(name: string): string {
   while (end < lines.length && !/^ {2}[\w-]+:$/.test(lines[end]!)) end++;
   return lines.slice(start, end).join("\n");
 }
-/** run: の中身（コメントを除く）だけを集める */
+/** run: の中身（コメントを除く）だけを集める。複数行（run: |）を先に見る（先に 1 行の形を見ると、「run: |」の 1 行だけで止まり、中身を見落とす） */
 const runs = (text: string) =>
   text
     .split("\n")
     .filter((l) => !/^\s*#/.test(l))
     .join("\n")
-    .match(/run: [^\n]*|run: \|\n(?: {10,}[^\n]*\n?)*/g) ?? [];
+    .match(/run: \|\n(?: {10,}[^\n]*\n?)*|run: [^\n]*/g) ?? [];
 
 describe("配信の手順（deploy.yml）", () => {
   const build = job("build");
   const deploy = job("deploy");
 
-  it("ジョブは build と deploy の 2 つで、deploy は build のあとに動く", () => {
-    expect([...wf.slice(wf.indexOf("\njobs:\n")).matchAll(/^ {2}([\w-]+):$/gm)].map((m) => m[1])).toEqual(["build", "deploy"]);
+  const release = job("release");
+
+  it("ジョブは build・deploy・release の 3 つで、deploy は build のあと、release は両方が成功したあとに動く", () => {
+    expect([...wf.slice(wf.indexOf("\njobs:\n")).matchAll(/^ {2}([\w-]+):$/gm)].map((m) => m[1])).toEqual(["build", "deploy", "release"]);
     expect(deploy).toMatch(/^ {4}needs: build$/m);
+    expect(release).toMatch(/^ {4}needs: \[build, deploy\]$/m);
+    // if: で always() などを付けると、配信が失敗してもリリースができてしまう
+    expect(release).not.toMatch(/^ {4}if:/m);
+  });
+
+  it("書き込みの権限は release のジョブだけで、release は Environment・Secrets を使わず、コードも取り出さない（D171）", () => {
+    expect(release).toMatch(/^ {4}permissions:\n {6}contents: write$/m);
+    expect(build).not.toMatch(/permissions:/);
+    expect(deploy).not.toMatch(/permissions:/);
+    expect(release).not.toMatch(/environment:/);
+    expect(release).not.toMatch(/secrets\./);
+    expect(release).not.toContain("actions/checkout@");
+  });
+
+  it("release は、ハッシュを照らしてから、コミットの短い印の名前でリリースを作り、一覧を本文と添付に載せる", () => {
+    const cmds = runs(release).join("\n");
+    expect(release).toContain("WANT: ${{ needs.build.outputs.list-sha256 }}");
+    expect(cmds).toContain('tag="deploy-${GITHUB_SHA::7}"');
+    expect(cmds).toContain("cat dist.sha256");
+    expect(cmds).toMatch(/gh release create "\$tag" dist\.sha256 --target "\$GITHUB_SHA"/);
+    expect(cmds.indexOf('test "$got" = "$WANT"')).toBeLessThan(cmds.indexOf("gh release create"));
+    // 同じコミットを配信し直したときは作り直さず、一覧が違えば失敗にする
+    expect(cmds).toContain("cmp -s before.sha256 dist.sha256");
+    // npm は動かさない（本文の「確かめ方」の echo の中の字は除いて見る）
+    const notEcho = cmds.split("\n").filter((l) => !/^\s*echo\b/.test(l)).join("\n");
+    expect(notEcho).not.toMatch(/\bnpm\b|\bnpx\b/);
   });
 
   it("build は Environment・Secrets を使わず、インストールのスクリプトを動かさない", () => {
