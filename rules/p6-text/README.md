@@ -328,7 +328,8 @@ P6 1.5.0 を、非公開の場所で実物の公開 PDF 100 個にかけたと�
 - 注釈の見た目の中の字も、字として集める（あとの注釈に覆われれば数える）。
 - 2つ以上の覆いで半分ずつ隠れた字は、どの覆いにも「半分以上」でなければ数えない。
 - 縦書きの字は、横書きと同じ箱で近似している。
-- Identity 以外の CMap（UniJIS-UCS2-H など）を使うフォントは、2バイトずつ区切り、幅は `/W` の CID ではなくコードで引く。字の幅がずれることがある。
+- 決まった字の対応表のうち、90ms-RKSJ-H/V・90msp-RKSJ-H/V・RKSJ-H/V・UniJIS-UCS2-H/V・UniJIS-UCS2-HW-H/V・UniJIS-UTF16-H/V（12 個）は、Shift-JIS・Unicode として区切って字を読み、幅は `/W` の CID で引く（2026-11-06 から。`rules/shared/predefined-cmaps.ts`）。CID は、字のある全部のコードで Adobe の対応表と同じになることを確かめた（PDF.js と比べて作る例外の表で直す）。字の中身はコードの決まりのまま読むので、PDF.js と一部の記号・異体字で違う（例：RKSJ の 0x5C は「\」、PDF.js は「¥」）。
+- それ以外の CMap（83pv・90pv・Add・Ext の RKSJ、UTF8・UTF32 の Unicode の表、ほかの言語の表など）を使うフォントは、いまも 2 バイトずつ区切り、幅は `/W` の CID ではなくコードで引く。字の中身は分からず、幅がずれることがある。
 - 字の幅と高さは、P7 と同じ共通の読み方（`rules/shared/fonts.ts`。1.3.1 から）で引く。
   - 幅：`/Widths` → 標準の書体（ラテン文字の12書体と、Arial などの別名）なら pdf-lib が持つ寸法（WinAnsi の範囲の字だけ）→ `/MissingWidth` → 0.5em。
   - 高さ：`/Ascent`・`/Descent` → `/FontBBox` → 標準の書体の寸法 → 0.8em・−0.2em。

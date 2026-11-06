@@ -11,3 +11,6 @@
 *.woff2 binary
 design/fonts/source/** -text
 src/assets/fonts/** -text
+
+# 字の対応表は、作るスクリプトが LF で書く。取り出し直しで CRLF になると --check が改行の違いで落ちるので、LF に固める
+rules/shared/cid-unicode/*.ts text eol=lf
