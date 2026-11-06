@@ -173,9 +173,18 @@ const loadApp = async () => {
 
 // ---------- 合成 PDF ごとに動かす ----------
 // --file <PDF> を付けたときは、その1つだけにかけ、<out>/raw/file/ に書く（道具が動くかを、その版に付いてきた試しの PDF で確かめるため）
+// --dir <フォルダ> [--name <名前>] を付けたときは、そのフォルダの PDF（下の階層も）を全部かけ、<out>/raw/<名前>/ に書く
+// （見ないで作るテスト集にかけるため。名前の既定は blind。PDF の名前は、下の階層の区切りを __ にしたもの）
 const ONE_FILE = arg("--file");
+const DIR = arg("--dir");
+const listPdfs = (base, rel = "") =>
+  readdirSync(path.join(base, rel), { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? listPdfs(base, path.join(rel, d.name)) : d.name.endsWith(".pdf") ? [path.join(rel, d.name)] : [],
+  ).sort();
 const jobs = ONE_FILE
   ? [{ type: "file", dir: path.dirname(path.resolve(ONE_FILE)), files: [path.basename(ONE_FILE)] }]
+  : DIR
+  ? [{ type: arg("--name") ?? "blind", dir: path.resolve(DIR), files: listPdfs(path.resolve(DIR)) }]
   : TYPES.filter((t) => !ONLY || t === ONLY).map((t) => {
       const dir = path.join(ROOT, "fixtures", t);
       return { type: t, dir, files: readdirSync(dir).filter((f) => f.endsWith(".pdf")).sort() };
@@ -193,7 +202,7 @@ for (const { type, dir, files } of jobs) {
     let out;
     try {
       const r = await Promise.race([
-        send("Runtime.evaluate", { expression: `window.__omamoriRun(${JSON.stringify(b64)}, ${JSON.stringify(file)})`, awaitPromise: true, returnByValue: true }, sessionId),
+        send("Runtime.evaluate", { expression: `window.__omamoriRun(${JSON.stringify(b64)}, ${JSON.stringify(path.basename(file))})`, awaitPromise: true, returnByValue: true }, sessionId),
         sleep(PER_FILE_MS).then(() => ({ timeout: true })),
       ]);
       if (r.timeout) out = { ok: false, timeout: true };
@@ -204,7 +213,7 @@ for (const { type, dir, files } of jobs) {
     }
     out.passwordPrompts = dialogs;
     out.ms = Date.now() - t0;
-    writeFileSync(path.join(outDir, file.replace(/\.pdf$/, ".json")), JSON.stringify(out, null, 2) + "\n");
+    writeFileSync(path.join(outDir, file.replace(/[\\/]/g, "__").replace(/\.pdf$/, ".json")),JSON.stringify(out, null, 2) + "\n");
     out.ok ? ok++ : failed++;
   }
   summary.push(`${type}：${ok + failed} 個（結果あり ${ok}、開けなかった・止まった ${failed}）`);
