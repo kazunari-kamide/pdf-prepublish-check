@@ -1,0 +1,78 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+# Ratchet の 1 回分のループ（段取り）
+
+docs/ratchet.md §3 の「1 回分を回す道具」の段取り。人が 1 回起こすと、PR を出したところで止まる。マージはしない。
+
+- 呼び出しは `claude -p`（2026-11-07 本人の決定）。そのため、段取りは Workflow のスクリプト（`*.js`）ではなく、Node のスクリプト `ratchet/run.ts` に置いた。このファイルは、その段取りの説明。
+- 定時の実行（予定タスク・`/loop`）は、まだ作っていない（docs/ratchet.md §4.1）。
+
+## 起こし方
+
+```sh
+# 束の置き場所は、環境変数でだけ渡す（パスをコマンドの履歴・画面・リポジトリに残さないよう、シェルの設定などから読む）
+export OMAMORI_RATCHET_CORPUS=…   # 公開 PDF の束のフォルダ
+export OMAMORI_RATCHET_STATE=…    # 読んだ記録・ログ・PR の本文の下書きを置くフォルダ（リポジトリの外）
+export OMAMORI_RATCHET_EXCLUDE=…  # 採点用の実データの sha256 の一覧（1 行に 1 つ）。無ければ省く
+
+npm run ratchet            # 既定は dry-run：PR の本文を記録のフォルダに書くだけ
+npm run ratchet -- --pr    # push して PR を出す（ラベル ratchet を付ける）
+```
+
+道具を確かめるときは、架空の束を作って渡す（実物の公開 PDF は使わない）：
+
+```sh
+npm run ratchet:synthetic -- .tmp/ratchet-synth/corpus
+OMAMORI_RATCHET_CORPUS=.tmp/ratchet-synth/corpus OMAMORI_RATCHET_STATE=.tmp/ratchet-synth/state npm run ratchet
+```
+
+画面とログに出るのは、件数・時刻・エラーの種類・番号（b01 など）だけ。束のパス・ファイル名・PDF の中身は出さない。
+
+## 段
+
+| 段 | 何をするか | 誰が | 道具 |
+|---|---|---|---|
+| 0. 却下を読む | ラベル ratchet の、マージされずに閉じた PR の「却下：〈理由〉」のコメントから、型と理由だけを読む | `ratchet/rejections.ts`（gh） | — |
+| 1. 束を選ぶ | 採点用の実データを sha256 で除き、まだ読んでいない PDF を sha256 の順に 50 件。止まった束があれば、その続きから | `ratchet/bundle.ts` | — |
+| 2. 下読み | 1 件ずつ、構造の要約（値は伏せる）と今のルールの判定を作り、今のルールで捕まっていない疑いを挙げる | `ratchet/probe.ts`（子のプロセス・時間で打ち切り）＋ Haiku 5.5 | 道具なし |
+| 3. 候補 | 疑いを束ねて、ルールにする価値のある候補を挙げる（前に却下されたものは挙げない） | Opus 5.5 | 道具なし |
+| 4. 反証 | 候補ごとに、もう捕まる・漏れではない・合成で再現できない・前に却下された、のどれかなら落とす | Opus 5.5 | 道具なし |
+| 5. 前の数 | main を別の作業の木に出して、採点の数をそろえて測る | `ratchet/metrics.ts` | — |
+| 6. ルールと見本 | 候補ごとに main から作業の木を作り、ルール・合成 PDF（その場で作る）・テスト・合格基準の案（proposals/）を書く | Opus 5.5 | 読み書きだけ（Read・Edit・Write・Glob・Grep）。コマンド・ウェブなし |
+| 7. 歯止め | 変えてよいファイルかを確かめ、採点・テスト・ビルド・外への要求 0 件を測り、main と比べる。届かなければ理由を渡して直させる（3 回まで） | `ratchet/gate.ts`・`ratchet/metrics.ts` | — |
+| 8. PR | 通ったものだけ、決まった形の本文で PR（dry-run なら本文を書くだけ）。本文にパス・ファイル名が混ざっていたら出さない | `ratchet/prbody.ts`・gh | — |
+
+## 上限（2026-11-07 本人の決定）
+
+- 直す回数：候補 1 件につき 3 回。ルールにまで進める候補は 1 回に 3 件まで。
+- 費用：まず呼び出しの回数でかける（下読み 50 回・判断と反証あわせて 10 回・ルール書き 9 回）。金額の上限（`--run-budget`・`--call-budget`）は、架空の束で測ってから決める【要確認：値】。月の上限は Anthropic のコンソールで本人が決める。
+- モデル：下読み Haiku 5.5。判断・反証・ルール書き Opus 5.5。
+
+## 守り
+
+- どの呼び出しも `claude -p --restricted`：道具を作業のフォルダの中に閉じこめる。下読み・判断・反証は道具なし（`--tools ""`）なので、PDF の中に指示が埋め込まれていても何もできない。データは指示と分けて囲んで渡す。
+- ルール書きは、作業の木の `.claude/settings.json` を `--settings` で渡し、書き込みの見張り（deny とフック）を効かせる。止められたら、その候補はそこで止めて記録する（回り道をしない）。2026-11-07、`fixtures/` への書き込みが止まり、`rules/` へは書けることを確かめた。
+- 歯止めは、差分のファイルでも確かめる。変えてよいのは `rules/`・`src/inspect/rules.ts`・新しい `eval/cases/*.ts`・`eval/cases/registry.ts` に足すこと・新しい `tests/*`・`proposals/`（`proposals/blind/` を除く）・`sanitize/` だけ。今ある合成 PDF・採点の道具・テスト・`rubric/`・`verifier/`・`fixtures/`・画面（`src/ui/`）を変えたら通さない。
+- 例外は、ルールの一覧を固定で並べた 2 か所への「1 行足すだけ」（2026-11-07 本人の決定）：`tests/inspect-all.test.ts`（RULES の id の一覧）と `src/ui/fuda.ts`（札の短い名前）。足した行が 1・消した行が 0 のときだけ通す。
+- 新しい型があるときは、画面の一覧（`src/inspect/rules.ts` の RULES）にルールが増えていることも確かめる（入っていなければ、マージしても検査器に入らないので通さない）。今あるルールが一覧から消えても通さない。
+- Claude の答えは決めた JSON スキーマで受け取り、`ratchet/schema.ts` でもう一度確かめて、合わなければ捨てる。
+- 失敗（API の失敗・上限・採点のエラー）は、それ以上進めずに止めて記録する。
+
+## 片付け
+
+1 回ごとに、作業の木（`.tmp/ratchet-work/<回の番号>/base`・`c1`…）と、候補ごとのブランチ（`claude/ratchet-<回の番号>-<n>`）が残る。dry-run のときも、ブランチはこの手元にだけ作られる（push はしない）。要らなくなったら：
+
+```sh
+# node_modules は本体のものへのつなぎ（Windows は junction）。先につなぎだけを外す（外さずに木を消すと、本体の node_modules まで消えることがある）
+cmd //c rmdir .tmp\ratchet-work\<回の番号>\base\node_modules       # Windows。ほかは rm .tmp/ratchet-work/<回の番号>/base/node_modules
+git worktree remove --force .tmp/ratchet-work/<回の番号>/base       # c1 なども同じ手順
+git branch -D claude/ratchet-<回の番号>-<n>                         # PR を出したものは、マージか却下のあとで
+```
+
+`--from-candidates <JSON>` を付けると、束を読む・下読み・候補・反証を省いて、渡した候補（`ratchet/schema.ts` の CANDIDATES の形）からルール書きを始める。道具の確かめと、撮影のやり直しのため。
+
+## 記録（記録のフォルダの runs/<回の番号>/）
+
+- `log.jsonl`：段ごとの件数・時刻・エラーの種類
+- `summary.json`：読んだ数・疑い・候補・反証で落とした数と理由・PR・呼び出しの回数・費用・かかった分
+- `pr-<n>.md`：PR の本文（docs/evolution.md に足す行も入れてある）
+- `metrics-*`：採点の数（main と候補）
