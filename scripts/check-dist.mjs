@@ -31,6 +31,8 @@ import path from "node:path";
 import { withFormActionSelf } from "../csp.ts";
 import { PDFJS_PARTS, isBundledCmap } from "../src/render/pdfjs-parts.ts";
 import { missingHeadingChars } from "../design/fonts/heading-chars.mjs";
+import { missingUiChars } from "../design/fonts/ui-chars.mjs";
+import { shiftJisChars } from "../design/fonts/chars.mjs";
 import { CHECK_PAGE_FILE, CHECK_PAGE_RULES, CLEAN_URL_RULES, LICENSE_TEXTS_RULES, CONTACT_PAGE_FILE, CONTACT_REWRITE, CONTACT_SEND_FILE, OFFICIAL_ORIGIN } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -338,6 +340,12 @@ for (const f of files.filter((f) => /\.(m?js)$/.test(f))) {
 {
   const missing = missingHeadingChars(DIST);
   if (missing.length) problems.push(`見出しの字 ${missing.length} 字（${missing.slice(0, 20).join("")}${missing.length > 20 ? "…" : ""}）が、見出しの書体の字の一覧にありません。npm run fonts:headings と npm run fonts:build をしてから、もう一度ビルドしてください`);
+}
+
+// 画面の字が、本文の書体の「画面の字の塊」の一覧にあるか（漏れた字も残りの塊で出るが、最初の表示で余分な塊を読むため止める。design/fonts/README.md）
+{
+  const missing = missingUiChars(DIST, new Set(shiftJisChars()));
+  if (missing.length) problems.push(`画面の字 ${missing.length} 字（${missing.slice(0, 20).join("")}${missing.length > 20 ? "…" : ""}）が、本文の書体の画面の字の一覧にありません。npm run fonts:ui と npm run fonts:build をしてから、もう一度ビルドしてください`);
 }
 
 console.log(`dist/ のファイル：${files.length} 件`);
