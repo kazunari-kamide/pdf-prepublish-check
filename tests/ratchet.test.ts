@@ -3,7 +3,7 @@
 // Ratchet の 1 回分のループの道具（ratchet/）の確かめ。Claude は呼ばない（呼ぶ道具を差し替える）。
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,7 +16,10 @@ import type { Metrics, TypeScore } from "../ratchet/metrics.ts";
 import { findLeaks, renderPrBody } from "../ratchet/prbody.ts";
 import { summarizeCli, xmpElementNames } from "../ratchet/probe.ts";
 import { parseRejections, reasonOf } from "../ratchet/rejections.ts";
-import { REFUTE, SKIM, validate } from "../ratchet/schema.ts";
+import { CANDIDATES, REFUTE, SKIM, validate, WRITE_REPORT } from "../ratchet/schema.ts";
+import { parseReadme, readCatalog, ruleDirOf, shortCatalog } from "../ratchet/catalog.ts";
+import { countCaught, patternOfKey, ruleIdOfKey } from "../ratchet/known.ts";
+import { JUDGE_PROMPT, KNOWN_GUIDE, REFUTE_PROMPT, SKIM_PROMPT, writePrompt } from "../ratchet/prompts.ts";
 
 const t = (key: string, found: number, expected: number, fp = 0, extra: Partial<TypeScore> = {}): TypeScore => ({
   key, source: key.startsWith("rubric") ? "rubric" : "cases", expected, found, falsePositiveRate: fp ? fp / 10 : 0, falsePositives: fp,
@@ -26,6 +29,8 @@ const metrics = (types: TypeScore[], blindPass = 10): Metrics => ({
   types, blind: { pass: blindPass, total: 10 }, test: { ok: true, passed: 100, failed: 0 }, build: { ok: true }, errors: [],
 });
 const okBrowser = { ok: true, external: 0 };
+/** main の検査器が、新しい型 cases:NEW:x の隠しありを 1 つも捕まえなかった */
+const notCaught = { "cases:NEW:x": { key: "cases:NEW:x", leaks: 10, caught: 0, byRules: [] } };
 
 describe("歯止め（どれも下がらず、1 つは良くなる）", () => {
   const base = metrics([t("rubric:P6", 32, 32), t("cases:P8:p8-annot", 9, 9)]);
@@ -42,10 +47,34 @@ describe("歯止め（どれも下がらず、1 つは良くなる）", () => {
     expect(g.reasons).toContain("良くなった所がない");
   });
 
-  it("新しい型が合格基準を満たし、ほかが下がらなければ通す", () => {
-    const g = compareMetrics(base, metrics([t("rubric:P6", 32, 32), t("cases:P8:p8-annot", 9, 9), t("cases:NEW:x", 10, 10)]), okBrowser);
+  it("新しい型が合格基準を満たし、ほかが下がらなければ通す（main が捕まえない隠しありがあるとき）", () => {
+    const g = compareMetrics(base, metrics([t("rubric:P6", 32, 32), t("cases:P8:p8-annot", 9, 9), t("cases:NEW:x", 10, 10)]), okBrowser, notCaught);
     expect(g.pass).toBe(true);
     expect(g.improved.join()).toContain("cases:NEW:x");
+  });
+
+  it("新しい型の隠しありを、main の検査器がすでに全部捕まえるなら「すでに捕まる」で通さない（直させない）", () => {
+    const c = metrics([t("rubric:P6", 32, 32), t("cases:P8:p8-annot", 9, 9), t("cases:P9:p9-x", 5, 5)]);
+    const g = compareMetrics(base, c, okBrowser, { "cases:P9:p9-x": { key: "cases:P9:p9-x", leaks: 5, caught: 5, byRules: ["p9-attach"] } });
+    expect(g.pass).toBe(false);
+    expect(g.alreadyCaught).toBe(true);
+    expect(g.reasons.join()).toContain("すでに捕まる（main の p9-attach が、隠しありの 5 件中 5 件を報告）");
+    expect(g.improved).toEqual([]);
+  });
+
+  it("main が一部だけ捕まえるなら通し、捕まえない分だけを「良くなった」に書く。採点表に main の数を出す", () => {
+    const c = metrics([t("rubric:P6", 32, 32), t("cases:P8:p8-annot", 9, 9), t("cases:P12:p12-x", 5, 5)]);
+    const g = compareMetrics(base, c, okBrowser, { "cases:P12:p12-x": { key: "cases:P12:p12-x", leaks: 5, caught: 1, byRules: ["p12-actions"] } });
+    expect(g.pass).toBe(true);
+    expect(g.alreadyCaught).toBeUndefined();
+    expect(g.improved.join()).toContain("main が捕まえない隠しあり 4 件");
+    expect(g.table.find((r) => r.key === "cases:P12:p12-x")!.after).toContain("main がすでに捕まえた隠しあり 1/5（p12-actions）");
+  });
+
+  it("新しい型を main の検査器で確かめられなかったら通さない", () => {
+    const c = metrics([t("rubric:P6", 32, 32), t("cases:P8:p8-annot", 9, 9), t("cases:NEW:x", 10, 10)]);
+    expect(compareMetrics(base, c, okBrowser).reasons.join()).toContain("main の検査器で確かめられなかった");
+    expect(compareMetrics(base, c, okBrowser, { "cases:NEW:x": null }).pass).toBe(false);
   });
 
   it("新しい型の検出率が 95% に届かなければ通さない", () => {
@@ -79,7 +108,7 @@ describe("歯止め（どれも下がらず、1 つは良くなる）", () => {
     const b = { ...base, ruleIds: ["p6-text", "p8-annot"] };
     const types = [t("rubric:P6", 32, 32), t("cases:P8:p8-annot", 9, 9), t("cases:NEW:x", 10, 10)];
     expect(compareMetrics(b, { ...metrics(types), ruleIds: ["p6-text", "p8-annot"] }, okBrowser).reasons.join()).toContain("RULES");
-    expect(compareMetrics(b, { ...metrics(types), ruleIds: ["p6-text", "p8-annot", "x"] }, okBrowser).pass).toBe(true);
+    expect(compareMetrics(b, { ...metrics(types), ruleIds: ["p6-text", "p8-annot", "x"] }, okBrowser, notCaught).pass).toBe(true);
     expect(compareMetrics(b, { ...metrics(types), ruleIds: ["p6-text", "x"] }, okBrowser).pass).toBe(false);
   });
 
@@ -278,7 +307,7 @@ describe("PR の本文と、出してはいけない字", () => {
   it("本文は決めた見出しをそろえ、表の区切りを壊さない", () => {
     const body = renderPrBody({
       date: "2026-11-07 05:00", runId: "r", attempts: 1,
-      candidate: { id: "c1", pattern: "P8", title: "注釈の作者", whyMissed: "作者の欄 | を見ていない", evidenceCount: 3, fixturePlan: "架空の注釈" },
+      candidate: { id: "c1", pattern: "P8", title: "注釈の作者", nearestRule: "p8-annot：返信の注釈を見ていない", whyMissed: "作者の欄 | を見ていない", evidenceCount: 3, fixturePlan: "架空の注釈" },
       refute: { reason: "残す", explanation: "まだ捕まらない" },
       write: { ruleId: "p8-x", summary: "足した", discarded: "全部の欄を見る案" },
       gate: { pass: true, reasons: [], improved: ["cases:P8:p8-x：新しい型"], declined: [], table: [{ key: "cases:P8:p8-x", before: "—", after: "検出 5/5（100.0%）・誤検知 0 件（0.0%）", change: "新しい" }] },
@@ -286,7 +315,110 @@ describe("PR の本文と、出してはいけない字", () => {
     });
     for (const h of ["## 何の型か", "## Claude の判断", "## 採点表", "## 歯止めの結果", "## 捨てた案", "## この回の量と費用", "## docs/evolution.md に足す行"]) expect(body).toContain(h);
     expect(body).toContain("作者の欄 ／ を見ていない");
+    expect(body).toContain("いちばん近い今のルールと、それでは足りない理由：p8-annot：返信の注釈を見ていない");
     expect(body).toContain("却下：");
+  });
+});
+
+describe("今あるルールの一覧（判断・反証に全部渡す）", () => {
+  it("README から、地の文の要点と、表の種類（kind）を取る。コードと見出しは取らない", () => {
+    const r = parseReadme([
+      "# 検出ルール：P12 `p12-x`",
+      "",
+      "PDF を入れると、動作を返す。",
+      "中身は返さない。",
+      "",
+      "```ts",
+      "import { x } from './x.ts';",
+      "```",
+      "",
+      "| 種類（`kind`） | 何か |",
+      "|---|---|",
+      "| `open_action` | 開いたときの動作 |",
+      "| hidden_layer | 表示しない層 |",
+    ].join("\r\n"));
+    expect(r.summary).toBe("PDF を入れると、動作を返す。 中身は返さない。");
+    expect(r.kinds).toEqual([{ kind: "open_action", what: "開いたときの動作" }, { kind: "hidden_layer", what: "表示しない層" }]);
+  });
+
+  it("registry の ruleId の添え書きを外して、rules/ のフォルダの名前にする", () => {
+    expect(ruleDirOf("p9-attach（inner）")).toBe("p9-attach");
+    expect(ruleDirOf("p6-text（図形の層）")).toBe("p6-text");
+    expect(ruleDirOf("p8-annot")).toBe("p8-annot");
+  });
+
+  it("この木の一覧に、1 回目（2026-11-07）で「無い」とされた 3 つの近いルールが、種類まで入っている", async () => {
+    const c = await readCatalog(process.cwd());
+    const kinds = (id: string) => c.rules.find((r) => r.id === id)?.kinds.map((k) => k.kind) ?? [];
+    expect(kinds("p12-actions")).toEqual(expect.arrayContaining(["open_action", "page_aa", "annotation"]));
+    expect(kinds("p7-hidden")).toContain("hidden_layer");
+    expect(c.rules.map((r) => r.id)).toContain("p9-attach");
+    expect(c.scoredTypes.some((t) => t.ruleId.startsWith("p9-attach") && t.label === "添付ファイルの中身")).toBe(true);
+    // 下読みに渡す短い形には、説明の文を入れない（呼び出しが多いので軽くする）
+    const s = shortCatalog(c);
+    expect(s.length).toBe(c.rules.length);
+    expect(Object.keys(s[0]!).sort()).toEqual(["id", "kinds", "label", "pattern"]);
+  });
+
+  it("判断・反証・下読みの指示に、一覧の読み方が入っている。反証の「もう捕まる」は一覧で判断する", () => {
+    for (const p of [SKIM_PROMPT, JUDGE_PROMPT, REFUTE_PROMPT]) expect(p).toContain(KNOWN_GUIDE);
+    expect(REFUTE_PROMPT).toContain("knownRules のどれかのルールが、すでにこの形を見ている");
+    expect(JUDGE_PROMPT).toContain("nearestRule");
+    expect(writePrompt()).toContain("alreadyCovered");
+  });
+
+  it("候補には nearestRule が要り、ルール書きの報告には alreadyCovered が要る", () => {
+    const c = { id: "c1", pattern: "P12", title: "t", whyMissed: "w", evidenceCount: 1, fixturePlan: "f" };
+    expect(validate(CANDIDATES, { candidates: [c] }).length).toBeGreaterThan(0);
+    expect(validate(CANDIDATES, { candidates: [{ ...c, nearestRule: "p12-actions：しおりの動作を見ていない" }] })).toEqual([]);
+    const w = { ruleId: "x", changedFiles: [], summary: "s", discarded: "d" };
+    expect(validate(WRITE_REPORT, w).length).toBeGreaterThan(0);
+    expect(validate(WRITE_REPORT, { ...w, alreadyCovered: "" })).toEqual([]);
+  });
+
+  it("1 回目の 3 件（架空の形にした候補）は、いまの候補の形に合う", () => {
+    const j = JSON.parse(readFileSync(join(process.cwd(), "ratchet/testdata/known-misses.json"), "utf8"));
+    expect(validate(CANDIDATES, j)).toEqual([]);
+    expect(j.candidates.map((c: { pattern: string }) => c.pattern)).toEqual(["P12", "P9", "P7"]);
+  });
+});
+
+describe("main の検査器がすでに捕まえるか（新しい型の合成 PDF）", () => {
+  const P = (pattern: string, ruleId: string, title = "見出し") => ({ pattern, ruleId, title });
+
+  it("隠しありに、同じ型の番号の報告があれば捕まえたと数える。対照に同じ報告があっても引かない", () => {
+    const k = countCaught("cases:P9:p9-x", [
+      { kind: "leak", seen: [P("P9", "p9-attach", "添付ファイルが入っています")] },
+      { kind: "leak", seen: [P("P9", "p9-attach", "添付ファイルが入っています")] },
+      { kind: "control", seen: [P("P9", "p9-attach", "添付ファイルが入っています")] },
+      { kind: "control", seen: [] },
+    ]);
+    expect(k).toEqual({ key: "cases:P9:p9-x", leaks: 2, caught: 2, byRules: ["p9-attach"] });
+  });
+
+  it("ほかの型の番号の報告は数えない（しおりの題の報告は、しおりの JavaScript を捕まえたことにならない）", () => {
+    const k = countCaught("cases:P12:p12-x", [
+      { kind: "leak", seen: [P("P7", "alt-text")] },
+      { kind: "leak", seen: [P("P12", "p12-actions")] },
+      { kind: "leak", seen: [] },
+      { kind: "control", seen: [P("P7", "alt-text")] },
+    ]);
+    expect(k).toEqual({ key: "cases:P12:p12-x", leaks: 3, caught: 1, byRules: ["p12-actions"] });
+  });
+
+  it("型が NEW のときは、対照のどれにも出ない報告（見出しの数字はそろえる）があれば捕まえたと数える", () => {
+    const k = countCaught("cases:NEW:x", [
+      { kind: "leak", seen: [P("P1", "p1-info", "作成者の欄（3 字）")] },
+      { kind: "leak", seen: [P("P5", "p5-revisions")] },
+      { kind: "control", seen: [P("P1", "p1-info", "作成者の欄（5 字）")] },
+    ]);
+    expect(k).toEqual({ key: "cases:NEW:x", leaks: 2, caught: 1, byRules: ["p5-revisions"] });
+  });
+
+  it("鍵から ruleId と型の番号を取る", () => {
+    expect(ruleIdOfKey("cases:P12:p12-outline-js")).toBe("p12-outline-js");
+    expect(patternOfKey("cases:P12:p12-outline-js")).toBe("P12");
+    expect(ruleIdOfKey("rubric:P6")).toBeNull();
   });
 });
 
@@ -305,7 +437,7 @@ describe("構造の要約（値は伏せる）", () => {
 
 describe("node でそのまま動く", () => {
   // npm run ratchet は node の型の取り除き（strip-only）で動く。vitest では通っても、node では読めない書き方がある
-  it.each(["bundle", "claude", "config", "gate", "metrics", "prbody", "probe", "prompts", "rejections", "schema", "synthetic"])("ratchet/%s.ts", (name) => {
+  it.each(["bundle", "catalog", "claude", "config", "gate", "known", "metrics", "prbody", "probe", "prompts", "rejections", "schema", "synthetic"])("ratchet/%s.ts", (name) => {
     const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(join(process.cwd(), "ratchet", `${name}.ts`)).href)})`], { encoding: "utf8" });
     expect(r.stderr).not.toMatch(/ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX|SyntaxError/);
     expect(r.status).toBe(0);

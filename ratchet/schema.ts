@@ -47,6 +47,8 @@ export const CANDIDATES: Schema = obj({
       id: str(40),
       pattern: { type: "string", enum: PATTERNS },
       title: str(80),
+      /** いちばん近い今のルール（一覧の id。無ければ「なし」）と、それでは足りない理由を 1 文 */
+      nearestRule: str(300),
       /** なぜ今のルールで捕まらないか */
       whyMissed: str(400),
       /** 根拠になった束の中の件数（番号 b01 などの数だけ） */
@@ -71,6 +73,8 @@ export const WRITE_REPORT: Schema = obj({
   summary: str(600),
   /** 捨てた案（1 つ） */
   discarded: str(300),
+  /** 今あるルールで足りると分かったときだけ、そのルールの id（書かずに返す）。書いたときは空 */
+  alreadyCovered: str(60),
 });
 
 export type ValidationError = { path: string; message: string };

@@ -7,7 +7,7 @@
 import { basename } from "node:path";
 import type { GateResult } from "./gate.ts";
 
-export type Candidate = { id: string; pattern: string; title: string; whyMissed: string; evidenceCount: number; fixturePlan: string };
+export type Candidate = { id: string; pattern: string; title: string; nearestRule: string; whyMissed: string; evidenceCount: number; fixturePlan: string };
 
 export type PrInput = {
   date: string;
@@ -38,6 +38,7 @@ export function renderPrBody(p: PrInput): string {
     `## Claude の判断`,
     ``,
     `- なぜ怪しいと見たか：${p.candidate.whyMissed}`,
+    `- いちばん近い今のルールと、それでは足りない理由：${p.candidate.nearestRule}`,
     `- 根拠：束の中の ${p.candidate.evidenceCount} 件（番号だけで数えた。どの PDF かは書かない）`,
     `- 反証の結果：${p.refute.reason}。${p.refute.explanation}`,
     `- 作った合成 PDF：${p.candidate.fixturePlan}`,

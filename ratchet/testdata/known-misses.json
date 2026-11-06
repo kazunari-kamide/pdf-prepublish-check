@@ -1,0 +1,31 @@
+{
+  "candidates": [
+    {
+      "id": "km-p12",
+      "pattern": "P12",
+      "title": "開いたときやしおりで動く JavaScript",
+      "nearestRule": "なし（P12 のルールが一つもない）",
+      "whyMissed": "今のルールの報告に P12 が一つも出ていないので、JavaScript や開いたときの動作を見るルールが無い。しおりの項目の動作に JavaScript が付いていても、報告されない。",
+      "evidenceCount": 3,
+      "fixturePlan": "隠しあり：しおりの項目を押すと動く JavaScript（中身は架空の 1 行）。対照：ふつうのしおりだけの PDF。"
+    },
+    {
+      "id": "km-p9",
+      "pattern": "P9",
+      "title": "名前の木の添付ファイルの中身の個人情報",
+      "nearestRule": "なし（P9 のルールが無い）",
+      "whyMissed": "文書の添付ファイルの一覧（名前の木）に文字のファイルが入っているのに、添付の中身を読むルールが無い。名簿のような表が入っていても分からない。",
+      "evidenceCount": 2,
+      "fixturePlan": "隠しあり：架空の名簿 3 行の CSV を名前の木に添付。対照：品目と数量だけの CSV を添付。"
+    },
+    {
+      "id": "km-p7",
+      "pattern": "P7",
+      "title": "既定で非表示の層（OCG）の字",
+      "nearestRule": "なし（非表示の層を見るルールが無い）",
+      "whyMissed": "既定で表示しない層（/OCProperties の /D の /OFF）に字が入っている PDF があるが、今のルールの報告に層のことが出ていない。",
+      "evidenceCount": 4,
+      "fixturePlan": "隠しあり：層 2 つのうち 1 つを /OFF にして、そこに架空の内部メモの字を置く。対照：同じ層を両方表示にした PDF。"
+    }
+  ]
+}

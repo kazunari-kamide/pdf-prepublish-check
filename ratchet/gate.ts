@@ -3,10 +3,13 @@
 // 歯止め（docs/ratchet.md §3.4）。main と候補の数を比べて、PR にしてよいかを決める。
 //   1. 合格基準：変わった型・新しい型は、検出率 95% 以上・誤検知率 5% 以下。合格基準のある型は、片付けたあとに残る情報 0 件。
 //   2. どれも下がらず、少なくとも 1 つは良くなる。すべてが同じなら「良くなった所がない」として入れない。
+//      新しい型は、その合成 PDF の「隠しあり」を main の検査器にかけ、main が捕まえないものが 1 つも無ければ「すでに捕まる」として入れない
+//      （2026-11-07 本人の決定。数え方は known.ts）。一部だけ捕まえるときは、捕まえない分だけを「良くなった」に数える。
 //   3. npm test・npm run build が通る。外への要求が 0 件のまま（check:browser の結果は呼ぶ側が渡す）。
 // あわせて、候補が「採点する側」を変えていないかを、main との差分のファイルで確かめる（ルールの側の採点の数を、
 // 合成 PDF を書き換えて良く見せることを止める）。
 
+import type { CaughtByMain } from "./known.ts";
 import type { Metrics, TypeScore } from "./metrics.ts";
 
 export const THRESHOLDS = { recallMin: 0.95, falsePositiveRateMax: 0.05, residualMax: 0 };
@@ -18,6 +21,8 @@ export type GateResult = {
   improved: string[];
   declined: string[];
   table: Array<{ key: string; before: string; after: string; change: "上がった" | "下がった" | "同じ" | "新しい" }>;
+  /** 新しい型を、main の検査器がすでに全部捕まえた（直しても変わらないので、直させずに止める） */
+  alreadyCaught?: boolean;
 };
 
 const rate = (t: TypeScore) => (t.expected ? t.found / t.expected : null);
@@ -35,7 +40,17 @@ function meetsThreshold(t: TypeScore): string | null {
   return null;
 }
 
-export function compareMetrics(base: Metrics, cand: Metrics, browser: { ok: boolean; external: number | null } | null): GateResult {
+/**
+ * caught：新しい型ごとの、main の検査器がすでに捕まえた「隠しあり」の数（known.ts の caughtByMain）。
+ * 新しい型があるのに、その型の数が無い（確かめられなかった）ときは通さない。
+ */
+export function compareMetrics(
+  base: Metrics,
+  cand: Metrics,
+  browser: { ok: boolean; external: number | null } | null,
+  caught: Record<string, CaughtByMain | null> = {},
+): GateResult {
+  let alreadyCaught = false;
   const reasons: string[] = [];
   const improved: string[] = [];
   const declined: string[] = [];
@@ -82,8 +97,15 @@ export function compareMetrics(base: Metrics, cand: Metrics, browser: { ok: bool
     if (bkeys.has(c.key)) continue;
     const miss = meetsThreshold(c);
     if (miss) reasons.push(miss);
-    else improved.push(`${c.key}：新しい型（${show(c)}）`);
-    table.push({ key: c.key, before: "—", after: show(c), change: "新しい" });
+    const k = caught[c.key];
+    const mainNote = k ? `・main がすでに捕まえた隠しあり ${k.caught}/${k.leaks}${k.byRules.length ? `（${k.byRules.join("、")}）` : ""}` : "";
+    if (!k) reasons.push(`${c.key}：新しい型の合成 PDF を、main の検査器で確かめられなかった`);
+    else if (k.leaks === 0) reasons.push(`${c.key}：隠しの入った合成 PDF がない`);
+    else if (k.caught >= k.leaks) {
+      alreadyCaught = true;
+      reasons.push(`${c.key}：すでに捕まる（main の ${k.byRules.join("、") || "検査器"} が、隠しありの ${k.leaks} 件中 ${k.caught} 件を報告）`);
+    } else if (!miss) improved.push(`${c.key}：新しい型（${show(c)}）。main が捕まえない隠しあり ${k.leaks - k.caught} 件を新しく見つける`);
+    table.push({ key: c.key, before: "—", after: show(c) + mainNote, change: "新しい" });
   }
   if (base.blind && cand.blind) {
     if (cand.blind.pass < base.blind.pass) declined.push(`見ないで作るテスト集の「合」：${base.blind.pass} → ${cand.blind.pass}`);
@@ -104,7 +126,7 @@ export function compareMetrics(base: Metrics, cand: Metrics, browser: { ok: bool
 
   if (declined.length) reasons.push(`下がった所がある（${declined.length} か所）`);
   if (!declined.length && !improved.length) reasons.push("良くなった所がない");
-  return { pass: reasons.length === 0, reasons, improved, declined, table };
+  return { pass: reasons.length === 0, reasons, improved, declined, table, ...(alreadyCaught ? { alreadyCaught } : {}) };
 }
 
 /** git diff --name-status の 1 行 */
