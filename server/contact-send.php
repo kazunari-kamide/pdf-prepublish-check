@@ -484,10 +484,11 @@ function contact_fill_form(string $html, array $result): string
     $html = str_replace(TOKEN_FIELD, 'name="t" value="' . contact_h($result['token']) . '"', $html);
     $v = $result['values'];
     if (($v['kind'] ?? '') !== '' && array_key_exists($v['kind'], KINDS)) {
-        $html = str_replace('value="' . $v['kind'] . '" required />', 'value="' . $v['kind'] . '" required checked />', $html);
+        // 選ぶ欄（select）で選んだ種類を、選んだままにして返す（「選んでください」に戻さない。2026-11-06 にラジオボタンから替えた）
+        $html = str_replace('<option value="' . $v['kind'] . '">', '<option value="' . $v['kind'] . '" selected>', $html);
     }
     // 誤りのある欄に、読み上げにも分かる印（aria-invalid）を付ける
-    foreach (['body' => '<textarea id="contact-body"', 'email' => '<input id="contact-email"'] as $field => $tag) {
+    foreach (['kind' => '<select id="contact-kind"', 'body' => '<textarea id="contact-body"', 'email' => '<input id="contact-email"'] as $field => $tag) {
         if (isset($messages[$field])) {
             $html = str_replace($tag, $tag . ' aria-invalid="true"', $html);
         }

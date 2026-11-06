@@ -16,8 +16,10 @@ import { renderSitemap, repoUrl, siteCss, siteFiles } from "../site.ts";
 import {
   CHECKLIST_BLOCKS,
   CHECKLIST_META,
-  CONTACT_BLOCKS,
+  CONTACT_KINDS,
+  CONTACT_LEAD,
   CONTACT_META,
+  CONTACT_WARNING,
   FAQ_BLOCKS,
   FAQ_META,
   GUIDE_PATHS,
@@ -106,7 +108,11 @@ describe("書き方の決まり", () => {
   const sec = (s: Section & { links?: Array<{ label: string }> }) => [s.heading, ...(s.paragraphs ?? []), ...(s.list ?? []), ...(s.steps ?? []), s.note ?? "", ...(s.links ?? []).map((l) => l.label)];
   const all = [
     ...[TERMS_META, CONTACT_META, FAQ_META, CHECKLIST_META, LICENSES_META].flatMap((m) => [m.title, m.description]),
-    ...[TERMS_BLOCKS, CONTACT_BLOCKS, FAQ_BLOCKS, CHECKLIST_BLOCKS].flat().flatMap(sec),
+    ...[TERMS_BLOCKS, FAQ_BLOCKS, CHECKLIST_BLOCKS].flat().flatMap(sec),
+    // お問い合わせは節をやめ、1 行・注意・種類ごとの案内だけにした（2026-11-06）
+    CONTACT_LEAD,
+    ...CONTACT_WARNING,
+    ...CONTACT_KINDS.flatMap((k) => [k.label, ...k.guide]),
   ];
   const NG: Array<[string, RegExp]> = [
     ["安全です", /安全です/],
@@ -154,18 +160,23 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     expect(p).not.toContain("PDF を入れた、などの画面での操作");
   });
 
-  it("お問い合わせ：同じサイトの送り先へのフォームだけ。GitHub・メールの窓口は出さない", () => {
+  it("お問い合わせ：同じサイトの送り先へのフォームだけ。GitHub の窓口・メールの窓口は出さない（外へのリンクは SECURITY.md の 1 本だけ）", () => {
     const c = page("contact.html");
     expect(c.match(/<form\b[^>]*>/g)).toEqual(['<form class="site-form" method="post" action="/contact-send.php" accept-charset="UTF-8">']);
-    expect(c).not.toMatch(/github\.com|issues|advisories|mailto:/i);
+    // 2026-11-06 本人の指示（弱点の案内に SECURITY.md へのリンク）で、11-05 の「GitHub を出さない」を、この 1 本だけ許すように変えた
+    expect(c.match(/https:\/\/github\.com[^"]*/g)).toEqual([`${REPO}/blob/main/SECURITY.md`]);
+    expect(c).not.toMatch(/issues|advisories|mailto:/i);
     expect(c).toContain(`<meta name="referrer" content="${CONTACT_REFERRER}" />`);
   });
 
   it("お問い合わせ：種類と本文は必ず、メールアドレスは任意、名前の欄はない。人には見えない欄がある", () => {
     const c = page("contact.html");
-    const radios = c.match(/<input type="radio" name="kind" value="(\w+)" required \/>/g) ?? [];
-    expect(radios).toHaveLength(4);
-    for (const label of ["質問", "不具合", "セキュリティの弱点", "その他"]) expect(c).toContain(`<span>${label}`);
+    // 種類は選ぶ欄（select）。先頭は値の空な「選んでください」で、required なので選ばずには送れない
+    expect(c).toContain('<select id="contact-kind" name="kind" required>');
+    expect(c).not.toMatch(/type="radio"/);
+    const options = [...c.matchAll(/<option value="(\w*)">([^<]*)<\/option>/g)].map((m) => [m[1], m[2]]);
+    expect(options).toEqual([["", "選んでください"], ["question", "質問"], ["bug", "不具合"], ["security", "セキュリティの弱点"], ["other", "その他"]]);
+    expect(c).not.toMatch(/<option[^>]*selected/);
     // 画面でも、サーバーと同じ決まり（10〜4000 字・URL は 2 つまで）を出す
     expect(c).toMatch(/<textarea id="contact-body" name="body" rows="8" minlength="10" maxlength="4000" required aria-describedby="contact-body-hint"><\/textarea>/);
     expect(c).toContain("（必ず書く。10〜4000 字）");
@@ -176,7 +187,8 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     expect(c).toMatch(/<input id="contact-email" name="email" type="email" maxlength="254"/);
     expect(c).not.toMatch(/name="email"[^>]*required/);
     expect(c).not.toMatch(/name="(name|namae|full_?name)"/);
-    expect(c).toContain("（返事がほしいときだけ）");
+    // 添え書きは 2 つ置き、弱点を選んだときだけ「（必ず書く）」を見せる（site.css。必ずかどうかの判定は PHP）
+    expect(c).toContain('<span class="site-form-need site-form-need-optional">（返事がほしいときだけ）</span><span class="site-form-need site-form-need-security">（必ず書く）</span>');
     // 人には見えない欄：読み上げから外し、Tab でも止まらない
     // 名前は意味のないもの（website などにすると、自動入力が埋めて、正しい送信が捨てられる）
     expect(c).toMatch(/<div class="site-form-trap" aria-hidden="true">[\s\S]*<input id="contact-hp_x7q" name="hp_x7q" type="text" tabindex="-1" autocomplete="off" \/>/);
@@ -184,16 +196,31 @@ describe("利用規約・お問い合わせ・よくある質問・自己点検�
     expect(siteCss()).toMatch(/\.site-form-trap \{[^}]*left: -10000px/);
   });
 
-  it("お問い合わせ：フォームのすぐ上に「書かないで」の注意、セキュリティの弱点には「中身を書き、メールアドレスも必ず」", () => {
+  it("お問い合わせ：前段は 1 行。フォームのすぐ上に「書き写さない」「名前は要らない」の注意。種類ごとの案内と、弱点の 3 文", () => {
     const c = page("contact.html");
-    const warn = c.indexOf('<p class="site-form-warn"><span aria-hidden="true">▲ </span>PDF や個人情報、見つかった字の中身は書かないでください。</p>');
+    // 前段は 1 行だけ（前の「知らせ方」などの 3 つの節はやめた。2026-11-06）
+    expect(c).toContain('<p class="site-lead">質問・不具合・セキュリティの弱点は、下のフォームだけで受け付けています。</p>');
+    expect(c.slice(c.indexOf("<h1>"), c.indexOf('<section class="site-section" aria-labelledby="contact-form-head"'))).not.toMatch(/<h2\b|<section\b/);
+    const warn = c.indexOf('<p class="site-form-warn"><span aria-hidden="true">▲ </span>PDF のファイルは送れません。業務の PDF の中身や個人情報、見つかった字の中身を書き写さないでください。<br />名前は要りません。送った中身は運営者にだけ届き、公開しません。</p>');
     expect(warn).toBeGreaterThan(0);
     expect(c.indexOf("<form")).toBeGreaterThan(warn);
     // 注意とフォームの間に、ほかの段落を挟まない
     expect(c.slice(warn + 1, c.indexOf("<form"))).not.toMatch(/<p\b/);
-    expect(c).toMatch(/セキュリティの弱点<span class="site-form-hint">何が起きるか・再現の手順・ブラウザの種類と版を書いてください。メールアドレスも必ず書いてください。<\/span>/);
-    // セキュリティの弱点の節：中身を本文に書いてよい。メールアドレスは必ず。架空の名前・番号で再現し、直すまで公開しない（2026-11-05 本人が決定）
-    for (const s of ["弱点の詳しい中身を本文に書いて", "メールアドレスを必ず書いてください", "架空の名前・番号で作ったもの", "実在の人名・団体名は書かないでください", "直すまでの間は、中身を公開しないでください"]) expect(c, s).toContain(s);
+    // 種類ごとの案内：4 つとも選ぶ欄のすぐ後ろに置き、site.css で選んだ分だけ見せる（:has が効かないときは 4 つとも見える）
+    const guides = [...c.matchAll(/<p class="site-form-hint site-form-guide" id="contact-guide-(\w+)" data-kind="\1">/g)].map((m) => m[1]);
+    expect(guides).toEqual(["question", "bug", "security", "other"]);
+    expect(c.indexOf("</select>")).toBeLessThan(c.indexOf('id="contact-guide-question"'));
+    // 弱点の案内は 3 文と、SECURITY.md へのリンク（中身は本文に書いてよい。メールアドレスは必ず。直すまで公開しない）
+    expect(CONTACT_KINDS.find((k) => k.value === "security")!.guide).toHaveLength(3);
+    expect(c).toContain(
+      `<p class="site-form-hint site-form-guide" id="contact-guide-security" data-kind="security"><span class="site-form-guide-name">セキュリティの弱点：</span>弱点の中身・再現の手順・ブラウザの種類と版を、本文に書いてください。追加で聞くことがあるので、メールアドレスを必ず書いてください。直すまでの間は、中身を公開しないでください。詳しい決まり：<a href="${REPO}/blob/main/SECURITY.md">SECURITY.md</a></p>`,
+    );
+    // 出し分けの決まり：:has が効くときだけ案内を隠し、選んだ種類の分を出す
+    const css = siteCss();
+    const supports = css.slice(css.indexOf("@supports selector(:has(*))"));
+    expect(supports).toMatch(/^@supports selector\(:has\(\*\)\) \{\s*\.site-form-guide \{\s*display: none;/);
+    for (const k of ["question", "bug", "security", "other"]) expect(supports).toContain(`.site-form-kind:has(option[value="${k}"]:checked) .site-form-guide[data-kind="${k}"]`);
+    expect(css.slice(0, css.indexOf("@supports selector(:has(*))"))).not.toMatch(/\.site-form-guide \{[^}]*display: none/);
     expect(c).not.toContain("連絡先だけ");
     expect(c).not.toContain("フォームには書かないでください");
   });

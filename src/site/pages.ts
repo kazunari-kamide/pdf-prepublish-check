@@ -187,13 +187,29 @@ export const CONTACT_META: PageMeta = {
   description: "お守りPDF への質問・不具合・セキュリティの弱点の知らせは、このページのフォームだけで受け付けています。PDF や個人情報、見つかった字の中身は書かないでください。",
 };
 
-/** フォームの種類。value は server/contact-send.php の KINDS と同じ（tests/contact-php.test.ts で照らす） */
-export const CONTACT_KINDS: ReadonlyArray<{ value: string; label: string; note?: string }> = [
-  { value: "question", label: "質問" },
-  { value: "bug", label: "不具合" },
-  { value: "security", label: "セキュリティの弱点", note: "何が起きるか・再現の手順・ブラウザの種類と版を書いてください。メールアドレスも必ず書いてください。" },
-  { value: "other", label: "その他" },
+/**
+ * フォームの種類。value は server/contact-send.php の KINDS と同じ（tests/contact-php.test.ts で照らす）。
+ * guide は、その種類を選んだときだけ、選ぶ欄のすぐ下に出す案内（2026-11-06。出し分けは site.css の :has で、スクリプトは使わない）
+ */
+export const CONTACT_KINDS: ReadonlyArray<{ value: string; label: string; guide: readonly string[] }> = [
+  { value: "question", label: "質問", guide: ["使い方や、表示の意味について聞けます。"] },
+  { value: "bug", label: "不具合", guide: ["どの手順で何が起きたかと、ブラウザの種類と版を書いてください。"] },
+  {
+    value: "security",
+    label: "セキュリティの弱点",
+    guide: [
+      "弱点の中身・再現の手順・ブラウザの種類と版を、本文に書いてください。",
+      "追加で聞くことがあるので、メールアドレスを必ず書いてください。",
+      "直すまでの間は、中身を公開しないでください。",
+    ],
+  },
+  { value: "other", label: "その他", guide: ["直してほしい所や、見つけられない漏れ方の知らせも、ここから送れます。"] },
 ];
+/**
+ * 弱点の案内のあとに付ける、詳しい決まりへのリンク（GitHub のリポジトリの SECURITY.md）。
+ * このページから外を指すリンクは、この 1 本だけ（Issues・非公開の報告・メールの窓口は出さない。2026-11-06 に 11-05 の決まりを一部変えた）
+ */
+export const CONTACT_SECURITY_DOC = "/blob/main/SECURITY.md";
 /** 入力の決まり。server/contact-send.php の BODY_MIN_CHARS・BODY_MAX_CHARS・EMAIL_MAX_CHARS・URL_MAX と同じ（tests/contact-php.test.ts で照らす） */
 export const CONTACT_BODY_MIN = 10;
 export const CONTACT_BODY_MAX = 4000;
@@ -211,66 +227,54 @@ export const CONTACT_TRAP_FIELD = "hp_x7q";
 export const CONTACT_ERRORS_MARK = "<!--CONTACT_ERRORS-->";
 export const CONTACT_ERRORS_TOP_MARK = "<!--CONTACT_ERRORS_TOP-->";
 export const CONTACT_TOKEN_FIELD = 'name="t" value=""';
-/** フォームのすぐ上に置く注意 */
-export const CONTACT_WARNING = "PDF や個人情報、見つかった字の中身は書かないでください。";
-
-export const CONTACT_BLOCKS: Block[] = [
-  {
-    heading: "知らせ方",
-    paragraphs: [
-      "質問・不具合・直してほしい所・セキュリティの弱点は、このページの下のフォームから送ってください。ほかの窓口では受け付けていません。",
-      "送った中身は、運営者にだけメールで届きます。公開はしません。",
-    ],
-  },
-  {
-    heading: "書く前に、必ず読んでください",
-    list: [
-      "PDF のファイルは送れません。業務の PDF の中身や、実在の人名・団体名を書き写さないでください。",
-      "見つかった字の中身（黒塗りの下の字・名前・番号など）を、そのまま書かないでください。種類と数だけで十分です。",
-      "ブラウザの種類と版、どの手順で何が起きたかを書いてもらえると、調べやすくなります。",
-      "名前は要りません。メールアドレスは、返事がほしいときだけ書いてください。",
-    ],
-  },
-  {
-    heading: "セキュリティの弱点を見つけたとき",
-    paragraphs: [
-      "種類で「セキュリティの弱点」を選び、弱点の詳しい中身を本文に書いて送ってください。何が起きるか、再現の手順、使ったブラウザの種類と版があると、早く調べられます。",
-      "追加で聞くことがあるので、メールアドレスを必ず書いてください。",
-      "再現に使う PDF は、架空の名前・番号で作ったものにしてください。業務の PDF の中身や、実在の人名・団体名は書かないでください。",
-      "直すまでの間は、中身を公開しないでください。",
-    ],
-  },
+/** ページの初めの 1 行（2026-11-06。前は、この下に「知らせ方」「書く前に、必ず読んでください」「セキュリティの弱点を見つけたとき」の 3 つの節があった） */
+export const CONTACT_LEAD = "質問・不具合・セキュリティの弱点は、下のフォームだけで受け付けています。";
+/**
+ * フォームのすぐ上に置く注意（2 行）。前の「書く前に、必ず読んでください」の節から、
+ * 「業務の PDF の中身や個人情報を書き写さない」「名前は要らない」を、「知らせ方」の節から「運営者にだけ届き、公開しない」を、ここにまとめた（2026-11-06）
+ */
+export const CONTACT_WARNING: readonly string[] = [
+  "PDF のファイルは送れません。業務の PDF の中身や個人情報、見つかった字の中身を書き写さないでください。",
+  // 送る人が安心するための一文（前の「知らせ方」の節から。2026-11-06）
+  "名前は要りません。送った中身は運営者にだけ届き、公開しません。",
 ];
 
-function contactForm(): string {
-  const kinds = CONTACT_KINDS.map((k) =>
-    [
-      `            <li><label><input type="radio" name="kind" value="${e(k.value)}" required /><span>${e(k.label)}`,
-      k.note ? `<span class="site-form-hint">${e(k.note)}</span>` : "",
-      `</span></label></li>`,
-    ].join(""),
-  );
+/** 種類の案内の id（選ぶ欄の aria-describedby と、site.css の出し分けに使う） */
+const kindGuideId = (value: string) => `contact-guide-${value}`;
+
+function contactForm(o: Pick<RenderOptions, "repoUrl">): string {
+  const options = CONTACT_KINDS.map((k) => `              <option value="${e(k.value)}">${e(k.label)}</option>`);
+  const securityDoc = resolve(`repo:${CONTACT_SECURITY_DOC}`, o);
+  // 案内は 4 つとも置き、選んだ種類の分だけを site.css で見せる（:has が効かないブラウザでは 4 つとも見える）
+  const guides = CONTACT_KINDS.map((k) => {
+    const more = k.value === "security" && securityDoc ? `詳しい決まり：<a href="${e(securityDoc)}">SECURITY.md</a>` : "";
+    return `            <p class="site-form-hint site-form-guide" id="${kindGuideId(k.value)}" data-kind="${e(k.value)}"><span class="site-form-guide-name">${e(k.label)}：</span>${k.guide.map(e).join("")}${more}</p>`;
+  });
   return [
     `      <section class="site-section" aria-labelledby="contact-form-head">`,
     `        <h2 id="contact-form-head">フォーム</h2>`,
-    `        <p class="site-form-warn"><span aria-hidden="true">▲ </span>${e(CONTACT_WARNING)}</p>`,
+    `        <p class="site-form-warn"><span aria-hidden="true">▲ </span>${CONTACT_WARNING.map(e).join("<br />")}</p>`,
     `        ${CONTACT_ERRORS_MARK}`,
     `        <form class="site-form" method="post" action="${CONTACT_SEND_PATH}" accept-charset="UTF-8">`,
     // ページを開いた時刻の印（サーバーの秘密の値で署名したもの）。本番では、PHP がフォームを返すときに入れる
     `          <input type="hidden" ${CONTACT_TOKEN_FIELD} />`,
-    `          <fieldset class="site-form-field">`,
-    `            <legend>種類<span class="site-form-need">（必ず選ぶ）</span></legend>`,
-    `            <ul class="site-form-choices">`,
-    ...kinds,
-    `            </ul>`,
-    `          </fieldset>`,
+    `          <div class="site-form-field site-form-kind">`,
+    `            <label for="contact-kind">種類<span class="site-form-need">（必ず選ぶ）</span></label>`,
+    // 先頭の「選んでください」は値が空なので、required で、選ばずには送れない（PHP も確かめる）
+    `            <select id="contact-kind" name="kind" required>`,
+    `              <option value="">選んでください</option>`,
+    ...options,
+    `            </select>`,
+    ...guides,
+    `          </div>`,
     `          <div class="site-form-field">`,
     `            <label for="contact-body">本文<span class="site-form-need">（必ず書く。${CONTACT_BODY_MIN}〜${CONTACT_BODY_MAX} 字）</span></label>`,
     `            <textarea id="contact-body" name="body" rows="8" minlength="${CONTACT_BODY_MIN}" maxlength="${CONTACT_BODY_MAX}" required aria-describedby="contact-body-hint"></textarea>`,
     `            <p class="site-form-hint" id="contact-body-hint">URL は ${CONTACT_URL_MAX} つまで。同じ本文は、続けて送れません。</p>`,
     `          </div>`,
     `          <div class="site-form-field">`,
-    `            <label for="contact-email">メールアドレス<span class="site-form-need">（返事がほしいときだけ）</span></label>`,
+    // 見出しの添え書きは、「セキュリティの弱点」を選んだときだけ「（必ず書く）」に替える（site.css。必ずかどうかの判定は PHP がする）
+    `            <label for="contact-email">メールアドレス<span class="site-form-need site-form-need-optional">（返事がほしいときだけ）</span><span class="site-form-need site-form-need-security">（必ず書く）</span></label>`,
     `            <input id="contact-email" name="email" type="email" maxlength="${CONTACT_EMAIL_MAX}" autocomplete="email" inputmode="email" aria-describedby="contact-email-hint" />`,
     `            <p class="site-form-hint" id="contact-email-hint">返事のためだけに使います。セキュリティの弱点のときは、必ず書いてください。</p>`,
     `          </div>`,
@@ -295,9 +299,8 @@ export function renderContact(o: RenderOptions): string {
     `      <h1>${e(CONTACT_META.title)}</h1>`,
     // 送れなかったときに、PHP がここへ「直す所は下にある」の一言を入れる（ページの上で気づけるように）
     `      ${CONTACT_ERRORS_TOP_MARK}`,
-    `      <p class="site-lead">${e(CONTACT_META.description)}</p>`,
-    ...CONTACT_BLOCKS.map((b) => renderBlock(b, co)),
-    contactForm(),
+    `      <p class="site-lead">${e(CONTACT_LEAD)}</p>`,
+    contactForm(co),
     `      <p class="site-back"><a href="${INSPECTOR_PATH}">検査のページへ</a></p>`,
     `      </div>`,
   ].join("\n");

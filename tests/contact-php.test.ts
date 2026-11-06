@@ -386,8 +386,20 @@ describe.skipIf(!hasPhp)("contact-send.php を PHP で動かす", () => {
       const html = r.results[0]!.html!;
       expect(html).toContain('<p class="site-form-warn" role="alert"><a href="#contact-errors">送れませんでした。');
       expect(html).toMatch(/<div class="site-form-warn site-form-errors" id="contact-errors"><p>送れませんでした。次の所を直してから[^<]*<\/p><ul><li>本文：10 字以上書いてください（いまは 2 字です）。<\/li><\/ul><\/div>/);
-      expect(html).toContain('value="bug" required checked />');
-      expect(html).not.toContain('value="question" required checked');
+      // 選んだ種類は、選ぶ欄で選んだまま返す（「選んでください」に戻さない。選んだのは 1 つだけ）
+      expect(html).toContain('<option value="bug" selected>不具合</option>');
+      expect(html.match(/<option[^>]*selected/g)).toEqual(['<option value="bug" selected']);
+      expect(html).not.toMatch(/<select id="contact-kind"[^>]*aria-invalid/);
+      // 弱点でメールアドレスを書かなかったとき：種類は弱点のまま返す（画面はメールアドレスの欄に「（必ず書く）」を出す）
+      freshData();
+      const sec = run([{ post: ok({ kind: "security", email: "" }) }], config(), { render: true }).results[0]!.html!;
+      expect(sec.match(/<option[^>]*selected/g)).toEqual(['<option value="security" selected']);
+      expect(sec).toMatch(/<input id="contact-email" aria-invalid="true"/);
+      // 種類を選ばなかったとき：どれも選ばずに返し、選ぶ欄に誤りの印を付ける
+      freshData();
+      const none = run([{ post: ok({ kind: "" }) }], config(), { render: true }).results[0]!.html!;
+      expect(none).not.toMatch(/<option[^>]*selected/);
+      expect(none).toContain('<select id="contact-kind" aria-invalid="true" name="kind" required>');
       expect(html).toMatch(/<textarea id="contact-body" aria-invalid="true"[^>]*>\n短い<\/textarea>/);
       expect(html).toContain('<input id="contact-email" value="reply@example.invalid" name="email"');
       expect(html).not.toMatch(/<input id="contact-email"[^>]*aria-invalid/);
