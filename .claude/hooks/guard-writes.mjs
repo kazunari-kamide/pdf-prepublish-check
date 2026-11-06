@@ -9,6 +9,17 @@
 //
 // 今の版からの変更は、シェルのコマンドの判定（checkShell 以降）だけ。
 // 道具（Edit・Write など）の判定と、作業フォルダの外の判定は、今の版と同じ。
+//
+// 11/6 の直し（読むだけのコマンドを止める誤検知を減らす。止める範囲は狭めすぎない）：
+// - 名前の前が「書いたとおりのフォルダ名」（proposals/blind/fixtures の blind）で、作業フォルダの名前と違えば、
+//   奥の同じ名前のフォルダとみなして数えない（nestedElsewhere）。$X/fixtures・../fixtures などは今までどおり数える。
+// - スクリプトに読ませる部分は、その部分に出てくる名前で見る。コマンドの別の所（grep verifier/ など）の名前は、
+//   引数・環境変数・標準入力を読むとき、今いるフォルダが分からないとき、シェルで書いた中身に名前があるときだけ足す。
+// - open( は、書く形（'w'・'a'・'+'・'>' など、またはモードが分からない）のときだけ書き込みとみなす。
+//   replace・remove も、ファイルの操作の形（os.replace、引数1つの .replace、os.remove など）のときだけ。
+//   スクリプトの言語（node・python）では、> を書き出しとみなさない（比べる記号のため）。
+// - PowerShell の代入（$x = …、$env:X=1）と、値だけの文（"$($_.Name)" など）は、命令とみなさない。
+// - 書いた中身を命令として見るのは、書いたファイルと動かしたファイルが同じ（か分からない）ときだけ。
 
 import { readFileSync, realpathSync, existsSync, statSync } from "node:fs";
 import os from "node:os";
@@ -121,9 +132,147 @@ const SHELL_WRITE =
   /(^|[^0-9&<>=-])>>?(?!\s*(&\d|\/dev\/null|\$null))|(^|[;&|(\n"'`]\s*|\b(xargs|sudo)\s+)(rm|rmdir|mv|cp|tee|touch|mkdir|ln|chmod|chown|truncate|dd|install|rsync|unzip|tar|ni|ri|del|erase|move|copy|ren|md|rd|sc|ac)\b|\bsed\s+(-[a-z]*i|--in-place)|\bgit\s+(checkout|restore|rm|mv|apply|stash|reset|clean|am|cherry-pick|revert|merge|pull|switch)\b|\b(set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|rename-item|clear-content|set-item|expand-archive)\b/i;
 const CODE_WRITE = /\b(writefile|writefilesync|appendfile|createwritestream|unlink|rmsync|copyfile|renamesync)\b/i;
 // スクリプトに読ませる部分だけに使う、広めの一覧（Node・Python・Perl・PHP・.NET などの書き込み）
+// 11/6：open・fopen・replace・remove は外し、codeWrites() で形を見る。save・copy・extractall などを足した（止める側に広げる）
 const CODE_WRITE_WIDE =
-  /\b(writefile|writefilesync|appendfile|appendfilesync|createwritestream|unlink|unlinksync|rm|rmsync|rmdir|rmdirsync|mkdir|mkdirsync|copyfile|copyfilesync|cp|cpsync|rename|renamesync|truncate|truncatesync|symlink|symlinksync|link|linksync|writealltext|writeallbytes|writealllines|appendalltext|appendalllines|streamwriter|rmtree|copytree|copy2|move|remove|removedirs|makedirs|write_text|write_bytes|touch|replace|chmod|open|fopen|file_put_contents|writetextfile|writefile|system|exec|execsync|spawn|spawnsync)\b/i;
+  /\b(writefile|writefilesync|appendfile|appendfilesync|createwritestream|unlink|unlinksync|rm|rmsync|rmdir|rmdirsync|mkdir|mkdirsync|copyfile|copyfilesync|cp|cpsync|rename|renamesync|truncate|truncatesync|symlink|symlinksync|link|linksync|writealltext|writeallbytes|writealllines|appendalltext|appendalllines|streamwriter|rmtree|copytree|copy2|move|removedirs|makedirs|write_text|write_bytes|touch|chmod|file_put_contents|writetextfile|writefile|system|exec|execsync|spawn|spawnsync|writesync|writev|writevsync|save|savefig|ez_save|copy|extract|extractall|urlretrieve|subprocess|popen|child_process|execfile|execfilesync|shell_exec|passthru|proc_open|symlink_to|hardlink_to|link_to|delete|deletefile|moveto|copyto|openwrite|createtext|appendtext|replacefile|movefile)\b/i;
+// open( などに渡す、書く形のモード（'w'・'a+'・'r+'・'x'・'w:gz' など）
+const WRITE_MODE_LIT = /(['"])(?:[rbtU]*[wax+][rwaxbtU+]*(?::[\w*]*)?)\1/;
 const INTERPRETER = /\b(bash|sh|zsh|pwsh|powershell|node|python3?|perl|ruby|cmd|eval|invoke-expression|iex)(\.exe)?\b/i;
+// スクリプトがコマンドの別の所の値（引数・環境変数・標準入力・シェルの変数）を読んでいるか
+const REFS_OUTSIDE =
+  /argv|environ|getenv|process\.env|\$env:|\benv\s*\[|%env|\$args\b|\$input\b|stdin|\binput\s*\(|readline|fileinput|\$\{?[A-Za-z_0-9@*#?!]|%[A-Za-z_]\w*%|\bENV\b/i;
+// スクリプトの言語（node・python）では、> は比べる記号なので、書き出しとみなさない
+const SHELL_WRITE_NOREDIR = new RegExp(SHELL_WRITE.source.replace(/^\(\^\|\[\^0-9&<>=-\]\)>>\?\(\?!\\s\*\(&\\d\|\\\/dev\\\/null\|\\\$null\)\)\|/, ""), "i");
+
+// ---- 11/6：スクリプトの中の書き込みを、形で見る ----
+// s[k] が開きかっこのとき、対応する閉じかっこの位置と、かっこの中の引数（上の層の , で分けたもの）を返す
+function callArgs(s, k) {
+  const args = [];
+  let depth = 0;
+  let cur = "";
+  for (let j = k; j < s.length; j++) {
+    const ch = s[j];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      const e = s.indexOf(ch, j + 1);
+      if (e < 0) return null;
+      cur += s.slice(j, e + 1);
+      j = e;
+      continue;
+    }
+    if ("([{".includes(ch)) { depth++; if (depth === 1) continue; }
+    else if (")]}".includes(ch)) {
+      depth--;
+      if (depth === 0) { if (cur.trim() !== "" || args.length) args.push(cur.trim()); return { end: j, args }; }
+    } else if (ch === "," && depth === 1) { args.push(cur.trim()); cur = ""; continue; }
+    cur += ch;
+  }
+  return null;
+}
+
+const strLit = (a) => {
+  const m = /^\s*[rRbBuUfF]{0,2}(['"`])([^'"`]*)\1\s*$/.exec(a);
+  return m ? m[2] : null;
+};
+// モードの文字列を見分ける："write"・"read"・null（モードではない＝パスなど）
+function modeKind(lit) {
+  if (/^[rwaxbtU+]{1,4}(:[\w*]*)?$/.test(lit)) return /[wax+]/.test(lit.split(":")[0]) ? "write" : "read";
+  if (/^\s*(\+?>|\+<|\|)/.test(lit) || /\|\s*$/.test(lit)) return "write"; // Perl の '>'・'>>'・'+<'・'|cmd'
+  if (/^\s*<\s*$/.test(lit) || /^\s*<(?!.*\|)/.test(lit)) return "read";
+  return null;
+}
+
+// open(…) が書く形か。読むだけと言い切れる形（モードなし・読むモードだけ）以外は、書く形とみなす（安全側）
+function openWrites(code) {
+  const re = /(\.)?\b(open|fopen|opensync)\s*\(/gi;
+  let m;
+  while ((m = re.exec(code))) {
+    const dotted = !!m[1];
+    const r = callArgs(code, m.index + m[0].length - 1);
+    if (!r) return true;
+    const pos = [];
+    for (const a of r.args) {
+      const kw = /^([A-Za-z_]\w*)\s*=(?!=)\s*([\s\S]*)$/.exec(a);
+      if (kw) {
+        const key = kw[1].toLowerCase();
+        if (["encoding", "errors", "newline", "buffering", "closefd"].includes(key)) continue;
+        if (key === "mode") {
+          const lit = strLit(kw[2]);
+          if (lit == null || modeKind(lit) !== "read") return true;
+          pos.push({ kind: "read" });
+          continue;
+        }
+        return true; // 知らないキーワード（opener=・flags= など）
+      }
+      if (/\bO_(WRONLY|RDWR|CREAT|TRUNC|APPEND|EXCL)\b/.test(a)) return true;
+      if (/\bO_RDONLY\b/.test(a)) { pos.push({ kind: "read" }); continue; }
+      if (/^\{[\s\S]*\}$/.test(a)) {
+        // { flag: 'w' } など
+        if (/\b(flags?|mode)\s*:/.test(a) && !/\b(flags?|mode)\s*:\s*['"]r['"]/.test(a)) return true;
+        pos.push({ kind: "neutral" });
+        continue;
+      }
+      const lit = strLit(a);
+      if (lit == null) { pos.push({ kind: "expr" }); continue; }
+      const k = modeKind(lit);
+      if (k === "write") return true;
+      pos.push({ kind: k ?? "path" });
+    }
+    const firstMode = pos.findIndex((p) => p.kind === "read");
+    if (firstMode >= 0) {
+      // モードより前に、1つめ（パスやファイルの入れ物）のほかの式があれば、形が分からない
+      if (pos.slice(1, firstMode).some((p) => p.kind === "expr")) return true;
+      continue;
+    }
+    if (pos.length === 0) continue; // p.open() など
+    if (pos.length === 1) {
+      // open(p)・fitz.open(p)。ただし Path(…).open(m) の m が書くモードかもしれないので、
+      // 点つきで中身が式のときは、コードのどこかに書くモードの文字列があれば書く形とみなす
+      if (dotted && pos[0].kind === "expr" && WRITE_MODE_LIT.test(code)) return true;
+      continue;
+    }
+    return true; // open(p, m) のようにモードが式で、分からない
+  }
+  // Perl の、かっこなしの open（open my $fh, '>', $f）
+  const pm = /\bopen\s+(?:my\s+)?[$\w]+\s*,([^;\n]*)/g;
+  while ((m = pm.exec(code))) {
+    const lits = [...m[1].matchAll(/(['"])([^'"]*)\1/g)].map((x) => modeKind(x[2]));
+    if (!lits.includes("read") || lits.includes("write")) return true;
+  }
+  return false;
+}
+
+// os.replace・Path.replace（引数1つ）・os.remove などのファイルの操作か。str.replace(a, b)・list.remove(x) は数えない
+function fileOpCalls(code, name, osNames) {
+  const re = new RegExp(`\\b${name}\\s*\\(`, "gi");
+  let m;
+  while ((m = re.exec(code))) {
+    let k = m.index;
+    while (k > 0 && /\s/.test(code[k - 1])) k--;
+    if (code[k - 1] === "-") continue; // PowerShell の -replace（演算子）
+    if (code[k - 1] !== ".") return true; // from os import remove; remove(p)
+    k--;
+    while (k > 0 && /\s/.test(code[k - 1])) k--;
+    let h = k;
+    while (h > 0 && /[\w.$]/.test(code[h - 1])) h--;
+    const recv = code.slice(h, k);
+    if (recv && osNames.includes(recv.split(".")[0])) return true;
+    const r = callArgs(code, m.index + m[0].length - 1);
+    if (!r) return true;
+    if (name === "replace" && r.args.length === 1) return true; // pathlib の Path.replace(target)
+  }
+  return false;
+}
+
+function codeWrites(code) {
+  if (CODE_WRITE_WIDE.test(code)) return true;
+  if (openWrites(code)) return true;
+  // open 以外の呼び出しに、書くモードを渡すもの（zipfile.ZipFile(p, 'w') など）
+  if (/(['"])(w[bt]?\+?|[ra]\+[bt]?|xb|w:\w*|wb\+)\1/.test(code)) return true;
+  const osNames = ["os", "shutil", "pathlib", "fs", "fse", "process"];
+  for (const m of code.matchAll(/\bimport\s+(?:os|shutil)\s+as\s+(\w+)/g)) osNames.push(m[1]);
+  if (fileOpCalls(code, "replace", osNames) || fileOpCalls(code, "remove", osNames)) return true;
+  return false;
+}
 
 function stripLiterals(cmd) {
   let s = cmd.replace(
@@ -136,13 +285,90 @@ function stripLiterals(cmd) {
   return s;
 }
 
-function mentionsOld(text) {
+// ---- 11/6：名前の前のフォルダを見る ----
+let ROOT_NAMES = []; // 作業フォルダの名前（小文字。末尾の . と空白を除く）。下の main で入れる
+let ROOT_KEYS = []; // 作業フォルダの絶対パス（比べる形）
+let ROOT_DIR = "."; // 書いたとおりのパスを解くときの元
+// コマンドがリンクを作るときは、フォルダのつながりが変わるので、奥の同じ名前のフォルダとみなさない（main で入れる）
+let MAKES_LINKS = false;
+const PREFIX_CACHE = new Map();
+const LINK_WORDS = /\b(ln|mklink|junction|symboliclink|hardlink|symlink|symlinksync|symlink_to|hardlink_to|link_to|link|linksync|new-psdrive|ndr|subst|mount|bindfs)\b|\bcp\s+(-[a-z]*s|--symbolic-link)/i;
+const PLAIN_CH = /[a-z0-9_.\-\u0080-\uffff]/;
+const SEG_EDGE = /[\s"'=(,;|&<>]/;
+
+// lower（小文字・/ 区切り）の idx から始まる名前の直前が / のとき、その前のフォルダが
+// 書いたとおりの名前で、作業フォルダの名前と違えば、奥の同じ名前のフォルダ（proposals/blind/fixtures など）とみなす。
+// $X/・${X}/・%X%/・$env:X/・*/・../・./・C:/ などは、作業フォルダかもしれないので数える（今までどおり）
+function nestedElsewhere(lower, idx) {
+  if (MAKES_LINKS || lower[idx - 1] !== "/") return false;
+  const j = idx - 1;
+  let k = j;
+  while (k > 0 && PLAIN_CH.test(lower[k - 1])) k--;
+  const seg = lower.slice(k, j);
+  if (!seg || /^\.+$/.test(seg)) return false;
+  const before = k > 0 ? lower[k - 1] : "";
+  if (before && before !== "/" && !SEG_EDGE.test(before)) return false;
+  if (ROOT_NAMES.includes(seg.replace(/[. ]+$/, ""))) return false;
+  // 前が書いたとおりのパスなら、リンクをたどった先が作業フォルダそのものでないかも見る
+  let s = k;
+  while (s > 0 && !SEG_EDGE.test(lower[s - 1])) s--;
+  const prefix = lower.slice(s, j);
+  if (!/[$%~*?{}[\]`@!^]/.test(prefix)) {
+    if (!PREFIX_CACHE.has(prefix)) {
+      let isRoot;
+      try {
+        isRoot = ROOT_KEYS.includes(segsOf(realish(path.resolve(ROOT_DIR, hostPath(prefix)))).join("/"));
+      } catch {
+        isRoot = true; // 分からなければ数える
+      }
+      PREFIX_CACHE.set(prefix, isRoot);
+    }
+    if (PREFIX_CACHE.get(prefix)) return false;
+  }
+  return true;
+}
+
+function anyMention(lower, re, accept) {
+  re.lastIndex = 0;
+  let m;
+  while ((m = re.exec(lower))) {
+    const idx = m.index + m[1].length;
+    if (!nestedElsewhere(lower, idx) && (!accept || accept(idx))) return true;
+  }
+  return false;
+}
+
+// 11/6：名前のあとの ; | & ) と、前の < > + ` , も足した（D=fixtures;、Perl の ">fixtures/a" など。止める側に広げる）
+const oldRe = (d) => new RegExp(`(^|[\\s"'=/(:;|&<>+\`,])${d}(?=/|\\s|"|'|$|\\*|[;|&),\`])`, "gi");
+const wideRe = (d) => new RegExp(`(^|[^a-z0-9_-])${d}(?=[^a-z0-9_-]|$)`, "g");
+
+function mentionsOld(text, accept) {
   const lower = text.replace(/\\/g, "/").toLowerCase();
-  const dirs = PROTECTED_DIRS.filter((d) =>
-    new RegExp(`(^|[\\s"'=/(:;|&])${d}(/|\\s|"|'|$|\\*)`, "i").test(lower),
-  );
+  const dirs = PROTECTED_DIRS.filter((d) => anyMention(lower, oldRe(d), accept));
   const guard = /\.claude\/(settings\.json|hooks)/i.test(lower);
   return { dirs, guard };
+}
+
+// スクリプトの中の名前：今いるフォルダが分かり、中で cd していなければ、書いたとおりの相対パスは解いて比べる
+// （.tmp/omamori-verifier-p7/verifier/… は数えない。fixtures/… や、組み立てたパスは数える）
+function mentionsAt(text, base, ctx) {
+  const lower0 = text.replace(/\\/g, "/").toLowerCase();
+  // リンクを作るコード（相対パスはリンクを置く場所からになる）も、解かずに数える
+  if (base == null || MAKES_LINKS || /\b(chdir|cd|set-location|push-location|pushd|sl)\b/.test(lower0)) return mentionsOld(text);
+  const accept = (idx) => {
+    let a = idx;
+    while (a > 0 && !/[\s"'`(),;|&<>=[\]{}+]/.test(lower0[a - 1])) a--;
+    let b = idx;
+    while (b < lower0.length && !/[\s"'`(),;|&<>=[\]{}+]/.test(lower0[b])) b++;
+    const tok = lower0.slice(a, b);
+    const edge = a > 0 ? lower0[a - 1] : "";
+    if (edge && !/[\s"'`(,=[]/.test(edge)) return true; // }fixtures・)/fixtures など（組み立てたパス）
+    if (/[$%~*?@!^:]/.test(tok.replace(/^[a-z]:\//, ""))) return true;
+    if (tok.startsWith("/") && !/^\/(mnt\/|cygdrive\/)?[a-z]\//.test(tok)) return true;
+    const abs = path.resolve(base, hostPath(tok));
+    return !!(hitProtected(abs, ctx) || hitProtected(realish(abs), ctx));
+  };
+  return mentionsOld(text, accept);
 }
 
 function denyByMention(m, why) {
@@ -159,13 +385,30 @@ function legacyTop(command) {
   }
 }
 
-// シェルやスクリプトに読ませる部分：引用符も外さずに、今の版の目安（と広めの一覧）で見る
-function legacyCode(code, ctx) {
+// シェルやスクリプトに読ませる部分：引用符も外さずに、今の版の目安（と広めの一覧）で見る。
+// 11/6：コマンド全体を読んでから判定する（シェルで書いた中身に名前があるかを知るため）。
+// base はその部分を動かすときの今いるフォルダ（分からなければ null）。lang は "script"（node・python）か "shell"
+function legacyCode(code, ctx, base = null, lang = "shell") {
+  ctx.codeChecks.push({ code, base: base ?? null, lang });
+}
+
+function legacyCodeNow({ code, base, lang }, ctx) {
   const c = code.replace(/\\/g, "/");
-  const mc = mentionsOld(c);
-  const mw = ctx.mentionWhole;
-  const m = { dirs: [...new Set([...mc.dirs, ...mw.dirs])], guard: mc.guard || mw.guard };
-  if ((m.dirs.length || m.guard) && (SHELL_WRITE.test(c) || CODE_WRITE.test(c) || CODE_WRITE_WIDE.test(c))) {
+  const mc = base != null ? mentionsAt(c, base, ctx) : mentionsOld(c);
+  const dirs = [...mc.dirs];
+  let guard = mc.guard;
+  // 今いるフォルダが守る場所の中なら、相対パスで書くだけで当たる
+  const inside = base != null ? insideProtected(base, ctx) : null;
+  if (inside) inside.guard ? (guard = true) : dirs.push(inside.rel);
+  // コマンドの別の所の名前を足すのは、その部分が外の値を読むとき・今いるフォルダが分からないとき・
+  // シェルで書いた中身に名前があるとき（書いたファイルを読むかもしれない）だけ
+  if (base == null || REFS_OUTSIDE.test(c) || ctx.writtenMentions) {
+    dirs.push(...ctx.mentionWhole.dirs);
+    guard = guard || ctx.mentionWhole.guard;
+  }
+  const m = { dirs: [...new Set(dirs)], guard };
+  const sw = lang === "script" ? SHELL_WRITE_NOREDIR : SHELL_WRITE;
+  if ((m.dirs.length || m.guard) && (sw.test(c) || CODE_WRITE.test(c) || codeWrites(c))) {
     denyByMention(m, "シェルやスクリプトに読ませる部分に、書き込みらしい操作がある");
   }
 }
@@ -186,7 +429,8 @@ function legacyUnknown(text, ctx) {
 function fallback(ctx, why) {
   if (!ctx.mentionWide) {
     const lower = ctx.whole.replace(/\\/g, "/").toLowerCase();
-    const dirs = PROTECTED_DIRS.filter((d) => new RegExp(`(^|[^a-z0-9_-])${d}([^a-z0-9_-]|$)`).test(lower));
+    // 11/6：奥の同じ名前のフォルダ（proposals/blind/fixtures など）は数えない
+    const dirs = PROTECTED_DIRS.filter((d) => anyMention(lower, wideRe(d)));
     ctx.mentionWide = { dirs, guard: /\.claude([^a-z0-9_-]|$)/.test(lower) };
   }
   const m = ctx.mentionWide;
@@ -642,6 +886,7 @@ function parse(src0, dialect) {
       if (!ps && src[i + 1] === ">") { readRedirect(); continue; }
       i++;
       if (!ps || isCmd) finish(false); // PowerShell では呼び出しの記号
+      else cur.callOp = true; // 11/6：& $x … は命令の呼び出し（値の文ではない）
       continue;
     }
     if (c === "|") {
@@ -747,6 +992,35 @@ function hitProtected(abs, ctx) {
     if (ok) return t;
   }
   return null;
+}
+
+// abs が守る場所そのものか、その中なら、その場所を返す（上のフォルダは含めない）
+function insideProtected(abs, ctx) {
+  const a = segsOf(abs);
+  for (const t of ctx.protectedSegs) {
+    if (a.length >= t.segs.length && t.segs.every((s, k) => s === a[k])) return t;
+  }
+  return null;
+}
+
+// 書いたファイルと動かしたファイルが同じ（か、分からない）か
+function samePath(t, tb, e, eb) {
+  if (!e || !t || e.dynamic || t.dynamic) return true;
+  const keys = (w, b) => {
+    const out = [];
+    for (const x of candidates(w)) {
+      if (/[*?[{]/.test(x)) return null;
+      const hp = hostPath(x);
+      if (b == null && !path.isAbsolute(hp)) return null;
+      const abs = path.resolve(b ?? "/", hp);
+      out.push(segsOf(abs).join("/"), segsOf(realish(abs)).join("/"));
+    }
+    return out;
+  };
+  const A = keys(t, tb);
+  const B = keys(e, eb);
+  if (!A || !B) return true;
+  return A.some((a) => B.includes(a));
 }
 
 function starBraces(s) {
@@ -865,6 +1139,39 @@ function cmdName(t) {
   return s.replace(/\.(exe|cmd|bat|com)$/, "");
 }
 
+// ---- 11/6：PowerShell の代入と、値だけの文 ----
+// 代入なら、右の語の並びを返す。代入でなければ null
+function psAssign(words) {
+  const w0 = words[0];
+  if (!w0 || w0.quoted && !w0.raw.startsWith("$")) return null;
+  const lhs = String.raw`(?:\[[\w.\[\]]+\])*(?:\$\{[^}]+\}|\$[\w:?^]+)(?:\.\w+|\[[^\]]*\])*`;
+  if (new RegExp(`^${lhs}$`).test(w0.raw) && words[1] && /^([+\-*/%]|\?\?)?=$/.test(words[1].raw)) return words.slice(2);
+  const m = new RegExp(`^${lhs}([+\\-*/%]|\\?\\?)?=([\\s\\S]*)$`).exec(w0.raw);
+  if (!m) return null;
+  const val = m[2];
+  if (val === "") return words.slice(1);
+  // $env:FOO=1 のように、右が1語の決まった値なら、値ごと外す
+  if (/^([\w.\-+:/\\]*|'[^']*'|"[^"$`]*")$/.test(val)) return words.slice(1);
+  return null;
+}
+
+// 値を書いた文を返すだけの文で、ファイルを書きうるメソッドを呼んでいなければ true
+const PS_SAFE_METHODS = new Set(`
+  replace trim trimstart trimend split substring tolower toupper tolowerinvariant toupperinvariant tostring contains
+  startswith endswith indexof lastindexof padleft padright join format equals gettype toarray where foreach
+  getvalue containskey tochararray normalize isnullorempty isnullorwhitespace round floor ceiling abs max min add
+  getfilename getextension getdirectoryname getfilenamewithoutextension match matches compareto getbytes getstring
+  tostring tojson insert
+`.split(/\s+/).filter(Boolean));
+function psValueOnly(words) {
+  const f = words[0];
+  if (!f || !/^[$'"@]/.test(f.raw)) return false;
+  const raw = words.map((w) => w.raw).join(" ");
+  if (raw.includes("::")) return false;
+  for (const m of raw.matchAll(/\.\s*([A-Za-z_]\w*)\s*\(/g)) if (!PS_SAFE_METHODS.has(m[1].toLowerCase())) return false;
+  return true;
+}
+
 const projectRootFallback = (ctx) => ctx.projectDir;
 const HERE = (dialect) => ({ text: ".", alt: null, raw: "（今いるフォルダ）", dynamic: false, quoted: false, dialect });
 
@@ -904,6 +1211,11 @@ const PSHELLS = set(`pwsh powershell powershell_ise`);
 const SCRIPTS = set(`node nodejs bun tsx ts-node python python3 python2 py perl ruby php lua osascript`);
 const CD = set(`cd pushd chdir set-location sl push-location pushl`);
 const GIT_WRITE = set(`checkout restore rm mv apply stash clean am cherry-pick revert merge pull switch read-tree checkout-index reset update-index clone worktree`);
+// 11/6：書く中身を引数で受け取る命令（rm・cp などの引数は、書く中身ではない）
+const CONTENT_CMDS = set(`tee tee-object set-content sc add-content ac out-file new-item ni`);
+const SCRIPT_LANG = set(`node nodejs bun tsx ts-node python python3 python2 py deno`);
+// 11/6：書いても、そのままでは動かない文書・データのファイル
+const DATA_EXT = /\.(md|markdown|txt|text|log|json|jsonl|csv|tsv|pdf|html?|xml|ya?ml|png|jpe?g|gif|svg|webp|out|err|diff)$/i;
 const SCRIPT_EXT = /\.(sh|bash|zsh|ps1|psm1|py|js|mjs|cjs|ts|mts|cts|rb|pl|php|bat|cmd)$/i;
 const PATCH_MAX = 5 * 1024 * 1024;
 
@@ -951,14 +1263,14 @@ function isCodeFlag(lang, t) {
 // ---- 1つのコマンド全体を調べる ----
 function checkShell(command, dialect, cwd, ctx) {
   const run = (src, d, base, depth) => {
-    if (depth > 8) { legacyCode(src, ctx); return; }
+    if (depth > 8) { legacyCode(src, ctx, base); return; }
     let cmds;
     try {
       cmds = parse(src, d);
     } catch (e) {
       if (!(e instanceof ParseError)) throw e;
       if (depth === 0) legacyTop(src);
-      else legacyCode(src, ctx);
+      else legacyCode(src, ctx, base);
       return;
     }
     let here = base;
@@ -970,7 +1282,8 @@ function checkShell(command, dialect, cwd, ctx) {
       const upstream = sameP.slice(0, stage).map((x) => x.raw).join("\n");
       // この命令が書くかもしれない中身（同じコマンドの中でスクリプトとして動かされたときに見る）
       c.data = [c.words.slice(1).map((w) => w.raw).join(" "), ...c.stdin.map((h) => h.body), upstream].join("\n");
-      if (c.redirs.some((r) => !isSink(r.word.text) && r.word.raw !== "$null")) ctx.written.push(c.data);
+      const outs = c.redirs.map((r) => r.word).filter((w) => !isSink(w.text) && w.raw !== "$null");
+      if (outs.length) ctx.written.push({ data: c.data, targets: outs, base: here, content: true });
       for (const r of c.redirs) target(r.word, here, ctx);
       here = one(c, here, d, depth, { upstream, stage }, run);
     }
@@ -984,10 +1297,18 @@ function checkShell(command, dialect, cwd, ctx) {
     let xargs = false;
     for (let guard = 0; guard < 30 && words.length; guard++) {
       if (!ps && !words[0].quoted && /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/.test(words[0].raw)) { words.shift(); continue; }
+      if (ps) {
+        // 11/6：PowerShell の代入（$x = …、$env:FOO=1、[int]$x = …）は、右だけを見る
+        const rest = psAssign(words);
+        if (rest) { words = rest; continue; }
+        // 11/6：値だけの文（"$($_.Name)"、$x、$(…).Count など）は命令ではない。中の $(…) は別に見ている。
+        // ただし & をつけた呼び出しと、ファイルを書きうるメソッドの呼び出し（$f.Delete() など）は今までどおり
+        if (!c.callOp && psValueOnly(words)) return cwd;
+      }
       const w0 = words[0];
       if (w0.dynamic) {
         fallback(ctx, `命令の名前が変数などで決まる：${short(w0.raw)}`);
-        legacyCode(words.map((w) => w.raw).join(" "), ctx);
+        legacyCode(words.map((w) => w.raw).join(" "), ctx, cwd);
         return cwd;
       }
       const nm = cmdName(w0.text);
@@ -1024,7 +1345,7 @@ function checkShell(command, dialect, cwd, ctx) {
             const src = rest.map((w) => w.text).join(" ");
             if (rest.some((w) => w.dynamic)) fallback(ctx, "env -S に渡す命令が変数などで決まる");
             run(src, "bash", cwd, depth + 1);
-            legacyCode(src, ctx);
+            legacyCode(src, ctx, cwd);
             return cwd0;
           }
           if (t === "-u" || t === "--unset") { rest.shift(); rest.shift(); continue; }
@@ -1047,25 +1368,35 @@ function checkShell(command, dialect, cwd, ctx) {
     const nm = cmdName(words[0].text);
     const args = words.slice(1);
     const T = (w, base = cwd) => {
-      if (w && !w.sink) ctx.written.push(c.data ?? "");
+      if (w && !w.sink) ctx.written.push({ data: c.data ?? "", targets: [w], base, content: CONTENT_CMDS.has(nm) });
       target(w, base, ctx);
     };
     const code = (src, dd, base = cwd) => {
       run(src, dd, base, depth + 1);
-      legacyCode(src, ctx);
+      legacyCode(src, ctx, base);
     };
+    // 11/6：node・python の中では > を書き出しとみなさない。Perl・Ruby・PHP・awk などは > や `…` でシェルを動かせるので、今までどおり
+    const lang = SCRIPT_LANG.has(nm) ? "script" : "shell";
     const scriptCode = (w) => {
       if (!w) return;
       if (w.dynamic) fallback(ctx, `スクリプトに渡す命令が変数などで決まる：${short(w.raw)}`);
-      legacyCode(w.text + "\n" + w.raw, ctx);
+      legacyCode(w.text + "\n" + w.raw, ctx, cwd, lang);
     };
     // 標準入力から命令を読むとき：ヒアドキュメント・ヒア文字列・パイプの前の段を命令として見る
     const stdinCode = (dd) => {
+      const l = dd ? "shell" : lang;
+      // 11/6：bash < x.sh のように、ファイルから命令を読むときも、そのファイルを動かしたものとして扱う（止める側に広げる）
+      for (const w of c.inputs) ran(w, l);
       for (const h of c.stdin) {
         if (dd) run(h.body, dd, cwd, depth + 1);
-        legacyCode(h.body, ctx);
+        legacyCode(h.body, ctx, cwd, l);
       }
-      if (pipe.upstream) legacyCode(pipe.upstream, ctx);
+      if (pipe.upstream) legacyCode(pipe.upstream, ctx, cwd, "shell");
+    };
+    // 11/6：スクリプトのファイルを動かしたことを、ファイルの名前つきで残す（null は分からない）
+    const ran = (w, l = "shell") => {
+      ctx.execScript = true;
+      ctx.execs.push({ w: w ?? null, base: cwd, lang: l });
     };
 
     if (xargs && !READONLY.has(nm)) fallback(ctx, "書き先を標準入力から受け取る（xargs）");
@@ -1278,7 +1609,7 @@ function checkShell(command, dialect, cwd, ctx) {
         const re = /(?:^|[;\n{}])\s*[wW]\s*([^\n;}]+)|\/[gpiImMe0-9]*w\s*([^\n;}]+)/g;
         let m;
         while ((m = re.exec(s.text))) T({ text: (m[1] ?? m[2]).trim(), alt: null, raw: s.raw, dynamic: false, dialect: d });
-        legacyCode(s.text, ctx);
+        legacyCode(s.text, ctx, cwd);
       }
       return cwd;
     }
@@ -1347,7 +1678,7 @@ function checkShell(command, dialect, cwd, ctx) {
     }
 
     if (nm === "source" || nm === ".") {
-      ctx.execScript = true;
+      ran(args[0]);
       return cwd;
     }
 
@@ -1371,7 +1702,7 @@ function checkShell(command, dialect, cwd, ctx) {
           continue;
         }
         readsStdin = false; // スクリプトのファイル（中は見えない）
-        ctx.execScript = true;
+        ran(args[k]);
         break;
       }
       if (readsStdin) stdinCode("bash");
@@ -1403,13 +1734,13 @@ function checkShell(command, dialect, cwd, ctx) {
           readsStdin = false;
           break;
         }
-        if (/^[-/](f|fi|fil|file)$/.test(tl)) { readsStdin = false; ctx.execScript = true; break; }
+        if (/^[-/](f|fi|fil|file)$/.test(tl)) { readsStdin = false; ran(args[k + 1]); break; }
         if (/^[-/](wd|workingdirectory)$/.test(tl)) { dir = resolveDir(dir, args[k + 1]); k++; continue; }
         if (/^[-/](executionpolicy|ep|ex|exe|exec\w*|inputformat|inf|if|outputformat|of|windowstyle|w|wi|win\w*|version|v|configurationname|config\w*|psconsolefile|settingsfile|settings\w*|custompipename)$/.test(tl)) { k++; continue; }
         if (t.startsWith("-")) continue;
         // 位置の引数：Windows PowerShell は命令として扱う（安全側で、命令として読む）
         code(args.slice(k).map((w) => w.text).join(" "), "ps", dir);
-        ctx.execScript = true; // ファイルの名前のこともある
+        ran(args[k]); // ファイルの名前のこともある
         readsStdin = false;
         break;
       }
@@ -1436,6 +1767,7 @@ function checkShell(command, dialect, cwd, ctx) {
       let sawScript = false;
       let stdin = false;
       let inplace = false;
+      let scriptWord = null;
       const pos = [];
       const list = nm === "deno" || nm === "bun" ? (["run", "x"].includes(args[0]?.text) ? args.slice(1) : args) : args;
       for (let k = 0; k < list.length; k++) {
@@ -1459,10 +1791,11 @@ function checkShell(command, dialect, cwd, ctx) {
           continue;
         }
         sawScript = true; // スクリプトのファイル（中は見えない）
+        scriptWord = a;
       }
       if (!sawCode && !sawScript) stdin = true;
       if (stdin) stdinCode(null);
-      else if (sawScript) ctx.execScript = true;
+      else if (sawScript) ran(scriptWord, lang);
       if (inplace) pos.forEach((w) => T(w));
       return cwd;
     }
@@ -1480,9 +1813,9 @@ function checkShell(command, dialect, cwd, ctx) {
 
     // .NET の呼び出し（[IO.File]::WriteAllText など）はスクリプトとして見る
     const rawWords = words.map((w) => w.raw).join(" ");
-    if (ps && nm.includes("::")) { legacyCode(rawWords, ctx); return cwd; }
+    if (ps && nm.includes("::")) { legacyCode(rawWords, ctx, cwd); return cwd; }
     // 名前がパスや、スクリプトの拡張子のもの（./x.sh、.\x.ps1 など）は、スクリプトのファイルを動かしている
-    if (/[\\/]/.test(words[0].text) || SCRIPT_EXT.test(words[0].text)) ctx.execScript = true;
+    if (/[\\/]/.test(words[0].text) || SCRIPT_EXT.test(words[0].text)) ran(words[0], /\.(m?js|cjs|ts|mts|cts|py)$/i.test(words[0].text) ? "script" : "shell");
     // 知らない命令：今の版と同じ目安で見る
     legacyUnknown(rawWords, ctx);
     return cwd;
@@ -1518,10 +1851,33 @@ function checkShell(command, dialect, cwd, ctx) {
 
   ctx.written = [];
   ctx.execScript = false;
+  ctx.execs = [];
+  ctx.codeChecks = [];
   run(command, dialect, cwd, 0);
   // 同じコマンドの中で、ファイルを書き、スクリプトのファイルを動かしている：書いた中身を命令として見る
-  // （echo 'rm -rf rubric' > x.sh && bash x.sh など。どのファイルを動かしたかは比べない。安全側）
-  if (ctx.execScript) for (const data of ctx.written) legacyCode(data, ctx);
+  // （echo 'rm -rf rubric' > x.sh && bash x.sh など）。
+  // 11/6：書いた先が、動かしたファイルと違う、文書・データのファイル（.md・.json など）のときだけは見ない。
+  // 動かしたファイルや書いた先が分からないとき・スクリプトの拡張子のとき・名前のないときは、今までどおり見る（安全側）
+  if (ctx.execScript) {
+    const execLang = ctx.execs.length && ctx.execs.every((e) => e.lang === "script") ? "script" : "shell";
+    const bases = [...new Set(ctx.execs.map((e) => e.base))];
+    const hitsExec = (wr) => !ctx.execs.length || ctx.execs.some((e) => wr.targets.some((t) => samePath(t, wr.base, e.w, e.base)));
+    // 動かしたファイルに1つでも書いていれば（mv・cp で中身を移した場合も含め）、書いたものを全部見る
+    const all = ctx.written.some(hitsExec);
+    for (const wr of ctx.written) {
+      const dataOnly = wr.targets.every((t) => t && !t.dynamic && DATA_EXT.test(t.text) && (t.alt == null || DATA_EXT.test(t.alt)));
+      if (dataOnly && !all) continue;
+      legacyCode(wr.data, ctx, bases.length === 1 ? bases[0] : null, execLang);
+    }
+  }
+  // 書いた中身（> の書き出し・tee・Set-Content など）に守る場所の名前があれば、スクリプトがそれを読むかもしれないので、
+  // コマンド全体の名前も足して見る（rm・cp などの引数は、書く中身ではないので数えない）
+  ctx.writtenMentions = ctx.written.some((wr) => {
+    if (!wr.content) return false;
+    const m = mentionsOld(wr.data);
+    return m.dirs.length > 0 || m.guard;
+  });
+  for (const chk of ctx.codeChecks) legacyCodeNow(chk, ctx);
 }
 
 // ===========================================================================
@@ -1547,6 +1903,11 @@ if (["Edit", "Write", "NotebookEdit", "MultiEdit"].includes(tool)) {
 } else if (tool === "Bash" || tool === "PowerShell") {
   if (typeof ti.command === "string") {
     const roots = [...new Set([path.resolve(projectDir), projectReal])];
+    // 11/6：奥の同じ名前のフォルダを見分けるための、作業フォルダの名前とパス
+    ROOT_DIR = path.resolve(projectDir);
+    ROOT_NAMES = [...new Set(roots.map((r) => path.basename(r).toLowerCase().replace(/[. ]+$/, "")))];
+    ROOT_KEYS = roots.map((r) => segsOf(r).join("/"));
+    MAKES_LINKS = LINK_WORDS.test(ti.command);
     const protectedSegs = [];
     for (const root of roots) {
       for (const p of SHELL_PROTECTED) protectedSegs.push({ ...p, segs: segsOf(path.join(root, p.rel)) });
