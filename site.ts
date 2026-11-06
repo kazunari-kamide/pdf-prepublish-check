@@ -140,6 +140,27 @@ export function heroScripts(): { loader: { file: string; source: string }; scene
   };
 }
 
+/**
+ * about の最初の画面の絵と 3D（2026-11-06 本人が承認）。
+ * - img：q47 の絵、plate：3D のときに下に敷く地と影の絵（どちらも src/site/hero/。design/3d/ の書き出しから作ったもの）
+ * - scene：src/site/about-3d-scene.js（形は about-3d-data.js）を three.js と束ねたもの。読み込み役は記事の一覧と同じ site-3d.js
+ */
+export function aboutHero(): { img: { file: string; buf: Uint8Array }; img960: { file: string; buf: Uint8Array }; plate: { file: string; buf: Uint8Array }; scene: { file: string; entry: string }; loader: { file: string; source: string } } {
+  const pic = (name: string) => {
+    const buf = readFileSync(path.join(ROOT, "src", "site", "hero", `${name}.webp`));
+    return { file: `assets/${name}-${createHash("sha256").update(buf).digest("hex").slice(0, 10)}.webp`, buf };
+  };
+  const entry = path.join(ROOT, "src", "site", "about-3d-scene.js");
+  const three = JSON.parse(readFileSync(path.join(ROOT, "node_modules", "three", "package.json"), "utf8")) as { version: string };
+  const sceneHash = createHash("sha256")
+    .update(readFileSync(entry, "utf8"))
+    .update(readFileSync(path.join(ROOT, "src", "site", "about-3d-data.js"), "utf8"))
+    .update(`three@${three.version}`)
+    .digest("hex")
+    .slice(0, 10);
+  return { img: pic("about-hero"), img960: pic("about-hero-960"), plate: pic("about-hero-bg"), scene: { file: `assets/about-3d-${sceneHash}.js`, entry }, loader: heroScripts().loader };
+}
+
 /** 3D の飾りの scene を、three.js と一緒に 1 つの ES モジュールに束ねて縮める（ビルドと、開発のサーバーで使う） */
 export async function buildHeroScene(entry = heroScripts().scene.entry): Promise<string> {
   const out = await viteBuild({
@@ -165,6 +186,10 @@ export function siteBinaryFiles(): Map<string, Uint8Array> {
   const files = new Map(buildFigures().files);
   for (const [name, buf] of buildThumbs().files) files.set(name, buf);
   for (const [name, buf] of siteFonts().files) files.set(name, buf);
+  const h = aboutHero();
+  files.set(h.img.file, h.img.buf);
+  files.set(h.img960.file, h.img960.buf);
+  files.set(h.plate.file, h.plate.buf);
   return files;
 }
 
@@ -218,7 +243,9 @@ export function siteFiles(): Map<string, string> {
   files.set(search.file, search.source);
   // サービスの紹介のページ（LP）と、そのページだけの CSS
   const about = aboutCss();
-  files.set(fileFor(ABOUT_PATH), renderAbout(options, `/${about.file}`));
+  const ah = aboutHero();
+  files.set(fileFor(ABOUT_PATH), renderAbout(options, `/${about.file}`, { img: `/${ah.img.file}`, img960: `/${ah.img960.file}`, plate: `/${ah.plate.file}`, scene: `/${ah.scene.file}`, loader: `/${ah.loader.file}` }));
+  files.set(ah.loader.file, ah.loader.source);
   files.set(about.file, about.source);
   const licenses = buildLicenses(ROOT);
   for (const [name, page] of renderGuidePages(options, licenses.data)) files.set(name, page);
@@ -342,6 +369,8 @@ export function sitePages(): Plugin {
       for (const [fileName, source] of siteFiles()) this.emitFile({ type: "asset", fileName, source });
       this.emitFile({ type: "asset", fileName: OG_IMAGE_PATH.slice(1), source: ogImage() });
       for (const [fileName, source] of siteBinaryFiles()) this.emitFile({ type: "asset", fileName, source });
+      const ah = aboutHero();
+      this.emitFile({ type: "asset", fileName: ah.scene.file, source: await buildHeroScene(ah.scene.entry) });
     },
     // vite preview（check:browser・check:layout が開く）でも、本番の .htaccess と同じに、.html なしの場所でページを返す
     configurePreviewServer(server) {
@@ -358,8 +387,9 @@ export function sitePages(): Plugin {
           return res.end(ogImage());
         }
         const key = name.replace(/^\//, "");
-        if (key === heroScripts().scene.file) {
-          buildHeroScene().then(
+        const sceneEntry = key === heroScripts().scene.file ? heroScripts().scene.entry : key === aboutHero().scene.file ? aboutHero().scene.entry : null;
+        if (sceneEntry) {
+          buildHeroScene(sceneEntry).then(
             (code) => {
               res.setHeader("Content-Type", TYPES[".js"] ?? "text/javascript");
               res.end(code);
