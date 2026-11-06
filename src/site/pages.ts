@@ -526,7 +526,10 @@ function licenseTable(rows: LicenseEntry[], caption: string): string {
         ? `<span class="site-copy-none">ライセンスの文に著作権の行がありません（全文を見てください）</span>`
         : "—";
     const text = r.textHref ? `<a href="${e(r.textHref)}">全文</a>` : `<span class="site-copy-none">${e(r.noText ?? "—")}</span>`;
-    const name = r.source ? `<a href="${e(r.source)}">${e(r.name)}</a>` : e(r.name);
+    // 名前は / の後ろでだけ折る（区切りごとの塊は .site-name-part で折らない。@pdf-lib/standard-fonts が「-」で折れないように）
+    const parts = r.name.split("/");
+    const label = parts.map((s, i) => `<span class="site-name-part">${e(i < parts.length - 1 ? `${s}/` : s)}</span>`).join("<wbr>");
+    const name = r.source ? `<a href="${e(r.source)}">${label}</a>` : label;
     return `            <tr><th scope="row">${name}</th><td>${e(r.version)}</td><td>${e(r.license)}</td><td>${copy}</td><td>${text}</td></tr>`;
   };
   return [

@@ -34,8 +34,8 @@ describe("選んだ番号の札の色", () => {
     expect(ratio(token("--color-accent"), token("--color-surface"))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("候補・自分で選んだ所の札を選んでも、墨の地が残らず、白い丸に墨の字（4.5:1 以上）", () => {
-    for (const s of [".mark.is-selected.mark-candidate .mark-no", ".mark.is-selected.mark-pick .mark-no"]) {
+  it("候補・自分で選んだ所・紅でない段の札を選んでも、段の地が残らず、白い丸に墨の字（4.5:1 以上）", () => {
+    for (const s of [".mark.is-selected.mark-candidate .mark-no", ".mark.is-selected.mark-pick .mark-no", ".mark.is-selected.tier-check .mark-no", ".mark.is-selected.tier-medium .mark-no", ".mark.is-selected.tier-low .mark-no"]) {
       const b = body(s);
       expect(b).toMatch(/background: var\(--color-surface\)/);
       expect(b).toMatch(/color: var\(--color-base\)/);
@@ -45,7 +45,7 @@ describe("選んだ番号の札の色", () => {
 
   it("選んでいない札は、今のとおり塗った丸（選んだ札と形で見分ける）", () => {
     expect(body(".mark-no")).toMatch(/background: var\(--color-accent\)/);
-    expect(body(".mark.mark-candidate .mark-no")).toMatch(/background: var\(--line-strong\)/);
+    expect(body(".mark.mark-candidate .mark-no")).toMatch(/background: var\(--face-kinari\)/); // 候補の札は生成り（3：段ごとの色。2026-11-06）
     expect(body(".mark.mark-pick .mark-no")).toMatch(/background: var\(--color-base\)/);
   });
 });

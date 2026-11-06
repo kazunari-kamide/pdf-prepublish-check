@@ -695,8 +695,7 @@ body:has(#workspace[data-state="empty"]) .steps {
 
 /* 本文の中のリンク：太字＋下線（D166。黄のマーカーはやめた）。色は墨 900（白の地で 4.5:1 以上）。色だけに頼らず、下線で示す */
 .terms-note a,
-.about-more,
-.origin-text a {
+.about-more {
   color: var(--text-strong);
   font-weight: var(--fw-strong);
   text-decoration-line: underline;
@@ -706,8 +705,7 @@ body:has(#workspace[data-state="empty"]) .steps {
 
 /* 指を置いたとき・フォーカスのとき：下線を太くする（形で示す） */
 .terms-note a:is(:hover, :focus-visible),
-.about-more:is(:hover, :focus-visible),
-.origin-text a:is(:hover, :focus-visible) {
+.about-more:is(:hover, :focus-visible) {
   text-decoration-thickness: 3px;
 }
 
@@ -738,6 +736,63 @@ body:has(#workspace[data-state="empty"]) .steps {
 body:has(.terms-dialog[open]) {
   overflow: hidden;
 }
+
+/* 整える前の確かめ（design/README.md「整える前の確かめ」）。利用規約のダイアログの形を使い、幅は少し狭く */
+.tidy-dialog {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
+.tidy-dialog-counts {
+  font-weight: 700;
+}
+
+.tidy-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: var(--sp-3);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-line);
+}
+
+/* 狭い画面でも「閉じる」を縦に折らない（題のほうを折る） */
+.tidy-dialog .terms-dialog-close {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 30rem) {
+  .tidy-dialog .terms-dialog-head,
+  .tidy-dialog .terms-dialog-body,
+  .tidy-dialog-actions {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+  .tidy-dialog .terms-dialog-title {
+    font-size: var(--text-h2);
+  }
+}
+
+.tidy-dialog-run {
+  min-height: var(--target-min);
+  padding: var(--sp-2) var(--sp-5);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--danger);
+  color: var(--text-on-strong);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tidy-dialog-run::after {
+  content: " →";
+}
+
+.tidy-dialog-run:hover {
+  background: var(--beni-800);
+}
+
 
 .terms-dialog-head {
   display: flex;
@@ -1056,11 +1111,73 @@ body:has(.terms-dialog[open]) {
   box-shadow: 0 0 0 2px var(--surface-card);
 }
 
-/* 選んだ枠：太く、札を白抜きに（形も変える） */
-.mark.is-selected {
-  border-width: calc(var(--border-mark) * 2);
+/* 選んだ枠：細い線にし、中を塗らない（下の絵を見て確かめられるように）。外に墨の破線を 1 本足して、形でも見分ける。
+   番号の札は枠の外（上の外。ページの上の端に近い枠は下の外）に出し、ほかの印は薄くする（2026-11-06 本人） */
+.marks .mark.is-selected {
+  border-width: var(--bw-2);
   outline: var(--border-strong) dashed var(--color-base);
   outline-offset: 3px;
+}
+
+.marks .mark.is-selected .mark-no {
+  top: auto;
+  bottom: calc(100% + 3px + var(--border-strong) + 2px);
+  left: -3px;
+}
+
+.marks .mark.is-selected.badge-below .mark-no {
+  top: calc(100% + 3px + var(--border-strong) + 2px);
+  bottom: auto;
+}
+
+/* 選んだ印があるときは、ほかの印・消した所・自分で選んだ所を薄くする（選んだ印が目に入るように） */
+.marks:has(.mark.is-selected) > .mark:not(.is-selected) {
+  opacity: 0.35;
+}
+
+/* 行から印へ動いたとき：少しのあいだ、黄の光の輪を 3 回（動きを減らす設定では、動かさずに輪だけ出す） */
+.mark.is-flash {
+  animation: mark-flash 0.5s var(--ease-out) 3 alternate;
+}
+
+@keyframes mark-flash {
+  from {
+    box-shadow: 0 0 0 0 var(--marker-ki);
+  }
+  to {
+    box-shadow: 0 0 0 8px var(--marker-ki);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark.is-flash {
+    animation: none;
+    box-shadow: 0 0 0 6px var(--marker-ki);
+  }
+}
+
+/* 押している間だけ、印を全部消す（「押している間、印を消す」。印の下の絵を見るため） */
+.sheet[data-peek="true"] .marks {
+  visibility: hidden;
+}
+
+.marks-peek {
+  margin-top: var(--sp-2);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 候補から黒塗りに加えた所：候補の枠そのものを、自分で選んだ所の形（墨の破線・墨の札「n・選m」）にする */
+.mark.mark-candidate.is-picked {
+  border-style: dashed;
+  border-color: var(--color-base);
+}
+
+.mark.mark-candidate.is-picked .mark-no {
+  background: var(--color-base);
+  color: var(--color-on-dark);
+  box-shadow: 0 0 0 2px var(--surface-card);
 }
 
 /* 選んだ札：白い丸に、その枠の色の太い縁と字（紅 7.55:1、墨 14.34:1。白の地に対して）。
@@ -1074,20 +1191,62 @@ body:has(.terms-dialog[open]) {
   box-shadow: inset 0 0 0 2px currentColor, 0 0 0 2px var(--surface-card);
 }
 
+/* 紅でない段（確かめる・中・低）と候補・自分で選んだ所は、白い丸に墨の字。段の札の地（黄・白）より強く当てる */
 .mark.is-selected.mark-candidate .mark-no,
-.mark.is-selected.mark-pick .mark-no {
+.mark.is-selected.mark-pick .mark-no,
+.mark.is-selected.tier-check .mark-no,
+.mark.is-selected.tier-medium .mark-no,
+.mark.is-selected.tier-low .mark-no {
+  background: var(--color-surface);
   color: var(--color-base);
+  box-shadow: inset 0 0 0 2px currentColor, 0 0 0 2px var(--surface-card);
 }
 
-/* 見えている候補の枠：墨の点線（見えない情報の紅の実線と、色と線の形で分ける）。札も墨 */
-.mark.mark-candidate {
+/*
+ * 段ごとの枠と札（一覧の番号の丸と同じ色。2026-11-06）。高＝紅の実線（薄い紅の地は .mark-fills）／確かめる＝墨の破線と黄の札／
+ * 中＝墨の実線と墨の札／低＝墨 500 の実線と白の札／候補＝墨の点線と生成りの札。線の形でも分ける
+ */
+.mark.tier-check {
   border-style: dashed;
+  border-color: var(--line-strong);
+}
+
+.mark.tier-check .mark-no {
+  background: var(--marker-ki);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 2px var(--surface-card), inset 0 0 0 var(--bw-1) var(--text-strong);
+}
+
+.mark.tier-medium {
+  border-color: var(--line-strong);
+}
+
+.mark.tier-medium .mark-no {
+  background: var(--surface-strong);
+}
+
+.mark.tier-low {
+  border-width: var(--bw-2);
+  border-color: var(--line-control);
+}
+
+.mark.tier-low .mark-no {
+  background: var(--surface-page);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 2px var(--surface-card), inset 0 0 0 var(--bw-1) var(--line-control);
+}
+
+/* 見えている候補の枠：墨の点線（見えない情報の実線と、線の形で分ける）。札は生成り */
+.mark.mark-candidate {
+  border-style: dotted;
   border-color: var(--line-strong);
   background: transparent;
 }
 
 .mark.mark-candidate .mark-no {
-  background: var(--line-strong);
+  background: var(--face-kinari);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 2px var(--surface-card), inset 0 0 0 var(--bw-1) var(--line-strong);
 }
 
 /* 選んだ枠は、ほかの枠と札より前に出す（入れ子の枠の下に隠れないように） */
@@ -1558,12 +1717,17 @@ progress {
   border-top-color: transparent;
 }
 
-/* 選んだ項目（案 C の指摘 d）：紅の面の上では地の差が出ないので、選んだ行だけ白の地にし、内側に紅の 2px の線
+/* 選んだ項目（案 C の指摘 d）：紅の面の上では地の差が出ないので、選んだ行だけ白の地にし、内側に墨の 2px の線
    （太さは変えないので、押しても動かない）。前後の区切りの線は隠す */
 .items > li:has(> .item.is-selected) {
   background: var(--surface-page);
   box-shadow: inset 0 0 0 var(--bw-2) var(--danger);
   border-top-color: transparent;
+}
+
+/* 紅でない段（確かめる・中・低・候補）の選んだ行は、墨の線にする（紅にすると、どの段の行も「高」に見えるため。2026-11-06） */
+.tier:not([data-tier="high"]) .items > li:has(> .item.is-selected) {
+  box-shadow: inset 0 0 0 var(--bw-2) var(--line-strong);
 }
 
 .items > li:has(> .item.is-selected) + li {
@@ -1612,11 +1776,33 @@ progress {
   font-variant-numeric: tabular-nums;
 }
 
-.item[data-check] .item-no,
-.item[data-candidate] .item-no {
-  background: transparent;
-  color: var(--check);
-  border: var(--bw-2) dashed var(--check);
+/*
+ * 深刻度の段ごとの色（2026-11-06 本人「色が全部赤なのが紛らわしい」）。色は案 C の決まりの中から選び、
+ * 色だけに頼らず、札の印と字（▲ 高・？ 確かめる・■ 中・● 低・ｉ 候補）と、丸の形（塗り・破線・点線）でも分ける。
+ *   高＝紅の地に白／確かめる＝黄（マーカーの色）の地に墨／中＝墨の地に白／低＝白の地に墨 500 の線と補足の色／候補＝生成りの地に墨の点線
+ */
+.item[data-tier="check"] .item-no {
+  background: var(--marker-ki);
+  color: var(--text-strong);
+  box-shadow: inset 0 0 0 var(--bw-2) var(--text-strong);
+}
+
+.item[data-tier="medium"] .item-no {
+  background: var(--surface-strong);
+  color: var(--text-on-strong);
+}
+
+.item[data-tier="low"] .item-no {
+  background: var(--surface-page);
+  color: var(--text-muted);
+  box-shadow: inset 0 0 0 var(--bw-1) var(--line-control);
+}
+
+.item[data-tier="candidate"] .item-no {
+  background: var(--face-kinari);
+  color: var(--text-strong);
+  outline: var(--bw-2) dotted var(--text-strong);
+  outline-offset: -2px;
 }
 
 /* 深刻度の札：形（▲■●）と字で示す。色だけに頼らない */
@@ -1633,10 +1819,81 @@ progress {
   color: var(--danger);
 }
 
-/* 確かめてほしい所：「？ 確かめる」の札は点線（言い切らない形）。項目の枠も点線 */
+/* 確かめてほしい所：「？ 確かめる」の札は破線（言い切らない形）と黄の地 */
 .item-sev.sev-check {
   border-style: dashed;
-  color: var(--color-base);
+  color: var(--text-strong);
+  background: var(--marker-ki);
+}
+
+.item-sev.sev-medium {
+  color: var(--text-strong);
+}
+
+.item-sev.sev-low {
+  color: var(--text-muted);
+  border-color: var(--line-control);
+}
+
+/* 個人情報の候補：点線の札（見えている字。黒塗りにするかは本人が決める） */
+.item-sev.sev-candidate {
+  border-style: dotted;
+  color: var(--text-strong);
+  background: var(--face-kinari);
+}
+
+/*
+ * 深刻度の段（details.tier）：段の見出しは、印と名前・意味の一言・件数。中・低・候補は最初は閉じる。
+ * 段の間は、結果の面の中の白の 2px の線（面・枠を重ねない）
+ */
+.tier {
+  border-top: var(--bw-2) solid var(--surface-page);
+}
+
+.groups > .tier:first-child {
+  border-top: 0;
+}
+
+.results .tier > summary.tier-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: first baseline;
+  gap: 0 var(--sp-3);
+  min-height: var(--target-min);
+  padding-block: var(--sp-3) var(--sp-2);
+  cursor: pointer;
+}
+
+.tier-name {
+  font-weight: 700;
+  font-size: var(--fs-h3);
+}
+
+.tier-note {
+  flex: 1 1 10em;
+  min-width: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.tier-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tier[data-tier="high"] .tier-name,
+.tier[data-tier="high"] .tier-count {
+  color: var(--danger);
+}
+
+/* 段の中の種類の見出しは、段の見出しより一段小さく */
+.tier .group {
+  padding-top: var(--sp-1);
+}
+
+.tier .group-head {
+  font-size: var(--fs-small);
 }
 
 
@@ -1688,26 +1945,6 @@ progress {
 .item-detail {
   font-size: var(--text-small);
   color: var(--color-muted);
-}
-
-/* 出どころの札：見つける段から来た型の項目の下に 1 行（design/README.md「出どころの札」）。紅は使わず、補足の色で控えめに */
-.items > li > .origin-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 var(--space-2);
-  margin: 2px 0 var(--space-1);
-  font-size: var(--text-small);
-  color: var(--color-muted);
-  overflow-wrap: anywhere;
-}
-
-.origin-mark {
-  padding: 0 var(--space-2);
-  border: 1px solid currentColor;
-  border-radius: var(--radius-full);
-  line-height: 1.6;
-  white-space: nowrap;
 }
 
 
@@ -1782,6 +2019,36 @@ progress {
   background: var(--surface-sunken);
   color: var(--text-muted);
   cursor: default;
+}
+
+/* 7：整えている間は、帯そのものが進み具合（design/README.md「処理中の帯」）。地は紅 800、進んだ分を左から紅で塗る */
+.actions #sanitize[data-busy="true"] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--beni-800);
+  color: var(--text-on-strong);
+  cursor: progress;
+}
+
+.actions #sanitize[data-busy="true"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: calc(var(--band-progress, 0) * 100%);
+  background: var(--danger);
+  transition: width var(--dur-hover) var(--ease-out);
+}
+
+.actions #sanitize[data-busy="true"]::after {
+  content: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actions #sanitize[data-busy="true"]::before {
+    transition: none;
+  }
 }
 
 .actions p {
@@ -2042,6 +2309,108 @@ body {
   border-top: var(--bw-2) solid var(--surface-page);
 }
 
+/* 外した種類（整えずに残した。D168）：紅（残っている所）と見分けるため、墨の点線と「◇」の字（design/README.md「外した種類」） */
+.kept {
+  margin: var(--sp-2) 0;
+  padding: var(--sp-2) 0 0 var(--sp-3);
+  border-left: var(--bw-2) dashed var(--line-strong);
+}
+
+.kept h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-strong);
+}
+
+.kept ul {
+  overflow-wrap: anywhere;
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-small);
+}
+
+.keep-summary {
+  margin: var(--sp-2) 0;
+  padding-left: var(--sp-3);
+  border-left: var(--bw-2) solid var(--line-strong);
+  font-size: var(--text-small);
+}
+
+.item-kept {
+  margin-left: var(--sp-2);
+  padding: 0 var(--sp-1);
+  border: var(--bw-1) dashed var(--line-strong);
+  border-radius: var(--radius-s);
+  font-size: var(--text-small);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mark.mark-kept {
+  border-style: dotted;
+  border-color: var(--line-control);
+}
+
+.mark.mark-kept .mark-no {
+  background: var(--surface-card);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 2px var(--surface-card), inset 0 0 0 var(--bw-1) var(--line-control);
+}
+
+/* 整える種類（D168）：「整える内容」の中、プロパティの上 */
+.tidy-kinds {
+  margin: var(--sp-3) 0;
+  padding: 0;
+  border: 0;
+}
+
+.tidy-kinds legend {
+  padding: 0;
+  font-weight: 700;
+}
+
+.tidy-kinds ul {
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tidy-kind {
+  padding: var(--sp-1) 0;
+  border-top: var(--bw-1) solid var(--line-hair);
+}
+
+.tidy-kind-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--target-min);
+  cursor: pointer;
+}
+
+.tidy-kind-label input {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.tidy-kind-name {
+  font-weight: 700;
+}
+
+.tidy-kind[data-kept="true"] .tidy-kind-name::after {
+  content: "（外す）";
+  font-weight: 400;
+}
+
+.tidy-kind[data-fixed="true"] .tidy-kind-label {
+  cursor: default;
+}
+
+.tidy-kind-note {
+  margin: 0 0 0 calc(1.25rem + var(--sp-2));
+}
+
 .not-done h3,
 .not-done h4 {
   margin: 0;
@@ -2058,7 +2427,7 @@ body {
   font-size: var(--text-small);
 }
 
-/* 開けて読む欄：整えると消すもの（B1）・くわしい内容・そのほかの操作（C3） */
+/* 開けて読む欄：整える内容（B1。2026-11-06 に「整えると消すもの」から改めた）・くわしい内容・そのほかの操作（C3） */
 .sanitize-more,
 .clean-more {
   margin-top: var(--space-2);

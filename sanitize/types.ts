@@ -8,6 +8,14 @@ export type Rect = [number, number, number, number];
 /** 漏洩パターンの番号（docs/glossary.md）。P2＝XMP、P8＝注釈、P10＝画像の Exif、P11＝フォームの値、P12＝スクリプト・外部動作 */
 export type SanitizePattern = "P1" | "P2" | "P5" | "P6" | "P7" | "P8" | "P9" | "P10" | "P11" | "P12";
 
+/**
+ * 本人が「整えない」を選べる種類（2026-11-06 本人が決定。D168）。ほかの種類は外せない：
+ * P6・P7 はページの字と画像の 1 回の読みの中で分けて片付けていて、ルールの P6・P7 と分け方が食い違う所があるため（白や画像の覆いの下の字など）。
+ * P2・P1 はプロパティと XMP（XMP は丸ごと外す）。P5 は書き直すと必ず消える
+ */
+export const KEEPABLE_PATTERNS = ["P8", "P9", "P10", "P11", "P12"] as const;
+export type KeepablePattern = (typeof KEEPABLE_PATTERNS)[number];
+
 export type RemovedKind =
   | "covered_text" // P6：覆いの下の字
   | "covered_pixels" // P6：覆いの下の画像の画素
@@ -160,6 +168,15 @@ export type TidyPreflight =
   | { status: "error"; code: "empty" | "unreadable" | "encrypted" | "too_large"; message: string };
 
 export type SanitizeOptions = {
+  /**
+   * 整えない種類（D168。外せるのは KEEPABLE_PATTERNS だけ。ほかの値は無視する）。渡さないときは、今までどおり全部を片付ける。
+   * - P8：注釈を外さず、コメント・作者名も消さない（適用した墨消しの注釈は、P6 の片付けなので外す）
+   * - P9：添付ファイルを残す
+   * - P10：写真の中の撮影の情報（EXIF など）を残す（XMP にある分は、XMP の丸ごとの片付けで消える）
+   * - P11：見えない欄の値と、欄の書き出し用の名前（/TM）を残す（電子署名は signatures で決める）
+   * - P12：JavaScript と、外のプログラム・ファイルを開く動作を残す
+   */
+  keep?: readonly string[];
   /** 1ページの命令の数の上限（検出ルールと同じ 300 万が既定） */
   maxOperationsPerPage?: number;
   /** 丸ごと解く画像の大きさの上限（バイト）。超えた Flate の画像は、流して塗る */

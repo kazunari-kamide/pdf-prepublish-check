@@ -162,7 +162,7 @@ export function p6Item(f: P6TextReport["findings"][number]): Item {
   // 図形の層とそのほかの「確かめてください」は「中」（実物の公開 PDF で、注釈の四角や塗りの誤検知が「高」で多く出たため。2026-11-05 本人が決定）【仮】
   const darkOverUnreadable = f.layer === "image" && f.reason === "under_unreadable" && f.tone === "dark";
   const severity = (f.layer !== "vector" && f.confidence !== "check") || darkOverUnreadable ? ("high" as const) : ("medium" as const);
-  const base = { pattern: "P6" as const, severity, kind: f.layer, page: f.page, rect: f.rect, ...contentOf("text" in f ? f.text : undefined) };
+  const base = { pattern: "P6" as const, severity, page: f.page, rect: f.rect, ...contentOf("text" in f ? f.text : undefined) };
   const check = f.confidence === "check" ? { confidence: "check" as const } : {};
   if (f.layer === "text" && f.coverTone === "opaque") {
     // 白・灰・色の不透明な覆い（検出ルール 1.11.0 から）。覆いの下の字は、色によらず見せかけの黒塗りとして出す【文言は仮】
@@ -657,7 +657,6 @@ const p2Parts = defineRule<P2PartsReport>({
   items: (r) =>
     r.findings.map((f) => ({
       pattern: f.pattern,
-      kind: f.kind,
       severity: P2_PARTS_KIND[f.kind].severity, // 【仮】
       title: f.source === "illustrator" && f.kind !== "private_data" ? (f.kind === "person" ? "作ったアプリの編集用のデータに、名前が残っています" : "作ったアプリの編集用のデータに、パソコンのフォルダの名前が残っています") : P2_PARTS_KIND[f.kind].title,
       why: P2_PARTS_KIND[f.kind].why,
@@ -755,7 +754,6 @@ const p8 = defineRule<P8Report>({
   items: (r) =>
     r.findings.map((f) => ({
       pattern: "P8",
-      kind: f.hidden ? "hidden" : f.field,
       severity: f.hidden ? "high" : f.field === "AP" ? "low" : "medium", // 【仮】
       title: f.hidden
         ? "隠した注釈に、字が残っています"

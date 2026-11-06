@@ -1111,7 +1111,7 @@ add("F01", "ctl-hybrid", "control", "普通の xref 表と /XRefStm の両方を
   return serializeXrefStream(b.pdf, { root: b.root, trailer: `/Info ${b.infoNum} 0 R`, inObjStm: [b.pagesNum, b.f1], hybrid: true });
 });
 add("F02", "ctl-white-heading", "control", "黒い帯の上の白い見出し", { forbid: null }, () =>
-  build({ pages: [{ content: HEAD + rect(0, 690, 595, 30) + `BT /F1 16 Tf 1 g 72 698 Td (Section 2: Budget overview) Tj ET\n` + text(72, 660, 12, "Body text.") }] }).bytes());
+  build({ pages: [{ content: HEAD + rect(0, 690, 595, 30) + `q BT /F1 16 Tf 1 g 72 698 Td (Section 2: Budget overview) Tj ET Q\n` + text(72, 660, 12, "Body text.") }] }).bytes());
 add("F02", "ctl-white-heading-cmyk", "control", "CMYK の濃い帯の上の白い見出し（0 0 0 0 k）", { forbid: null }, () =>
   build({ pages: [{ content: HEAD + rect(0, 690, 595, 30, "0.9 0.7 0 0.3 k") + `BT /F1 16 Tf 0 0 0 0 k 72 698 Td (Section 3) Tj ET\n` }] }).bytes());
 add("F03", "ctl-dates-numbers", "control", "作成日・文書番号の数字の並び（16桁・14桁）", { forbid: null }, () =>

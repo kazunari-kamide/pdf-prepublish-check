@@ -6,7 +6,6 @@
 import type { Item, PageBox, Rect, Severity, InspectSummary } from "../inspect/report";
 import { buildCoverage, hasIncomplete, type CoverageRow } from "./coverage";
 import { scopeCaveats } from "./scope";
-import { ruleOrigin, type RuleOrigin } from "./rule-origin";
 import { CANDIDATE_PATTERNS } from "./picks";
 
 export type Row = {
@@ -35,8 +34,6 @@ export type Row = {
   content?: string;
   /** 文書情報・XMP の欄の値のとき、その欄の名前（Title・dc:title など） */
   field?: string;
-  /** 見つける段から来た型のとき、その出どころ（取り入れた PR）。最初から人が書いた型にはない（src/ui/rule-origin.ts） */
-  origin?: RuleOrigin;
 };
 
 /** 型（ルール）ごとのまとまり。見つからなかった型も並べる */
@@ -49,7 +46,39 @@ export type Group = {
   rows: Row[];
 };
 
-export type PageMarks = { box: PageBox; marks: Array<{ no: number; severity: Severity; title: string; rect: Rect; candidate: boolean }> };
+export type PageMarks = { box: PageBox; marks: Array<{ no: number; severity: Severity; title: string; rect: Rect; candidate: boolean; tier: TierKey; pattern: string }> };
+
+/**
+ * 深刻度の段（2026-11-06 本人が決定：深刻度ごとに分けて並べ、「中」「低」「個人情報の候補」は最初は閉じる）。
+ * 並び：高 → 確かめる → 中 → 低 → 個人情報の候補。段の中は、種類ごとにまとめる
+ */
+export type TierKey = "high" | "check" | "medium" | "low" | "candidate";
+export type Tier = {
+  key: TierKey;
+  /** 段の名前（印つき。色だけにしない） */
+  label: string;
+  /** 段の意味の一言 */
+  note: string;
+  /** 最初から開いておくか */
+  open: boolean;
+  count: number;
+  groups: Group[];
+};
+export const TIER_ORDER: readonly TierKey[] = ["high", "check", "medium", "low", "candidate"];
+const TIER_TEXT: Record<TierKey, { label: string; note: string; open: boolean }> = {
+  high: { label: "▲ 高", note: "すぐに消す", open: true },
+  check: { label: "？ 確かめる", note: "残っているかを、目で確かめる", open: true },
+  medium: { label: "■ 中", note: "消しておくとよい", open: false },
+  low: { label: "● 低", note: "念のため", open: false },
+  candidate: { label: "ｉ 個人情報の候補", note: "見えている字。黒塗りにするかは、あなたが決める", open: false },
+};
+
+/** 1 件がどの段に入るか */
+export function tierOf(r: { severity: Severity; check: boolean; candidate: boolean }): TierKey {
+  if (r.candidate) return "candidate";
+  if (r.check) return "check";
+  return r.severity;
+}
 
 /**
  * 結論（3つ）。found＝見つかった（確かめてほしい所だけのときも含む）、none＝調べた範囲では見つからなかった、
@@ -67,6 +96,8 @@ export type ViewModel = {
   /** 見えている個人情報らしい字（候補）の数。見えない情報とは別の一文で出す */
   candidates: number;
   groups: Group[];
+  /** 深刻度の段（見つかった段だけ。並びは TIER_ORDER） */
+  tiers: Tier[];
   notices: string[];
   /** notices のうち、字が 1 つもないページのお知らせ（no_text）の数。読み込んだ直後の結論は緑にしないが、
    *  整えたあとの読み直しの判定（clean-model）には数えない（整えると見えない字が消え、字のないページになるため） */
@@ -115,10 +146,17 @@ export function buildView(summary: InspectSummary): ViewModel {
       if (ca !== cb) return ca ? 1 : -1;
       return SEVERITY_ORDER[perRule[a]![0]!.severity] - SEVERITY_ORDER[perRule[b]![0]!.severity] || a - b;
     });
-  const all = order.flatMap((i) => perRule[i]!);
+  // 深刻度の段 → 種類の並び → 種類の中の並び（深刻度・ページ・上から）。番号は、この並べた順に振る
+  const rank = new Map(order.map((ruleIndex, k) => [ruleIndex, k]));
+  const tierRank = (it: Item & { ruleIndex: number }) =>
+    TIER_ORDER.indexOf(tierOf({ severity: it.severity, check: it.confidence === "check", candidate: isCandidatePattern(it.pattern) }));
+  const all = order
+    .flatMap((i) => perRule[i]!)
+    .map((it, k) => ({ it, k }))
+    .sort((a, b) => tierRank(a.it) - tierRank(b.it) || rank.get(a.it.ruleIndex)! - rank.get(b.it.ruleIndex)! || a.k - b.k)
+    .map((x) => x.it);
 
   const rows: Row[] = all.map((it, i) => {
-    const origin = ruleOrigin(summary.rules[it.ruleIndex]!.ruleId, it.kind);
     return {
     no: i + 1,
     severity: it.severity,
@@ -136,7 +174,6 @@ export function buildView(summary: InspectSummary): ViewModel {
     ...(it.field ? { field: it.field } : {}),
     check: it.confidence === "check",
     candidate: isCandidatePattern(it.pattern),
-    ...(origin ? { origin } : {}),
     };
   });
 
@@ -150,6 +187,15 @@ export function buildView(summary: InspectSummary): ViewModel {
       rows: rows.filter((_, j) => all[j]!.ruleIndex === i),
     };
   });
+
+  // 段ごとに、種類でまとめる（種類の並びは groups と同じ）
+  const tiers: Tier[] = TIER_ORDER.map((key) => {
+    const inTier = rows.filter((r) => tierOf(r) === key);
+    const tierGroups = groups
+      .map((g) => ({ ...g, rows: g.rows.filter((r) => tierOf(r) === key) }))
+      .filter((g) => g.status !== "error" && g.rows.length > 0);
+    return { key, ...TIER_TEXT[key], count: inTier.length, groups: tierGroups };
+  }).filter((t) => t.count > 0);
 
   // お知らせ：同じ文はまとめ、ページ番号を合わせる
   const merged = new Map<string, { pages: number[]; problem: boolean; noText: boolean }>();
@@ -178,7 +224,7 @@ export function buildView(summary: InspectSummary): ViewModel {
     const box = boxes.get(it.page);
     if (!box) return;
     const pm = byPage.get(it.page) ?? { box, marks: [] };
-    pm.marks.push({ no: row.no, severity: row.severity, title: row.title, rect: it.rect, candidate: row.candidate });
+    pm.marks.push({ no: row.no, severity: row.severity, title: row.title, rect: it.rect, candidate: row.candidate, tier: tierOf(row), pattern: row.pattern });
     byPage.set(it.page, pm);
   });
   const pages = [...byPage.values()].sort((a, b) => a.box.page - b.box.page);
@@ -226,5 +272,5 @@ export function buildView(summary: InspectSummary): ViewModel {
       ),
     ),
   ].sort((a, b) => a - b);
-  return { verdict, headline, tone, rows, hidden, candidates, groups, heavyPages, notices, noTextNotices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
+  return { verdict, headline, tone, rows, hidden, candidates, groups, tiers, heavyPages, notices, noTextNotices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
 }
