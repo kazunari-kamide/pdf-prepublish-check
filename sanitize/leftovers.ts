@@ -264,7 +264,7 @@ function walkFields(ctx: PDFContext, catalog: PDFDict, visit: (d: PDFDict, paren
 }
 
 /** P7・P11：構造要素の題（/T）と欄の書き出し用の名前（/TM）を外す。読み上げ用の説明（/Alt・/E・/TU）は消さずに数える */
-export function cleanStructText(doc: PDFDocument): { removed: RemovedItem[]; notDone: NotDoneItem[] } {
+export function cleanStructText(doc: PDFDocument, keepFieldNames = false): { removed: RemovedItem[]; notDone: NotDoneItem[] } {
   const ctx = doc.context;
   let titles = 0;
   let alt = 0;
@@ -278,7 +278,8 @@ export function cleanStructText(doc: PDFDocument): { removed: RemovedItem[]; not
   let tm = 0;
   let tu = 0;
   walkFields(ctx, doc.catalog, (d) => {
-    if (d.has(N("TM"))) {
+    // 本人がフォーム（P11）を「整えない」にしたときは、欄の書き出し用の名前も残す（D168）
+    if (d.has(N("TM")) && !keepFieldNames) {
       if (hasValue(ctx, d.get(N("TM")))) tm++;
       d.delete(N("TM"));
     }
@@ -372,11 +373,16 @@ export function cleanFormValues(doc: PDFDocument): { removed: RemovedItem[]; not
 }
 
 /** 文書全体の残りの片付け（index.ts から呼ぶ。順番：動作 → 写真の情報 → しおり → 題・名前 → フォームの値） */
-export function cleanLeftovers(doc: PDFDocument): { removed: RemovedItem[]; notDone: NotDoneItem[] } {
+export function cleanLeftovers(doc: PDFDocument, keep: ReadonlySet<string> = new Set()): { removed: RemovedItem[]; notDone: NotDoneItem[] } {
   const ctx = doc.context;
-  const removed: RemovedItem[] = [...removeExternalActions(ctx), ...removeImageExif(ctx), ...removeOutlines(doc)];
-  const s = cleanStructText(doc);
-  const f = cleanFormValues(doc);
+  // 本人が「整えない」を選んだ種類は飛ばす（D168。P12 外の動作・P10 写真の撮影の情報・P11 フォームの値）
+  const removed: RemovedItem[] = [
+    ...(keep.has("P12") ? [] : removeExternalActions(ctx)),
+    ...(keep.has("P10") ? [] : removeImageExif(ctx)),
+    ...removeOutlines(doc),
+  ];
+  const s = cleanStructText(doc, keep.has("P11"));
+  const f = keep.has("P11") ? { removed: [], notDone: [] } : cleanFormValues(doc);
   return { removed: [...removed, ...s.removed, ...f.removed], notDone: [...s.notDone, ...f.notDone] };
 }
 

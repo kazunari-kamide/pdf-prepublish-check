@@ -33,6 +33,7 @@ function tidyOptions(t: TidyChoices) {
     ...(t.properties && typeof t.properties === "object" ? { properties: t.properties } : {}),
     ...(t.pdfaMark === "keep" || t.pdfaMark === "remove" ? { pdfaMark: t.pdfaMark } : {}),
     ...(t.signatures === "keep" || t.signatures === "remove" ? { signatures: t.signatures } : {}),
+    ...(Array.isArray(t.keep) ? { keep: t.keep.filter((p): p is string => typeof p === "string") } : {}),
   };
 }
 

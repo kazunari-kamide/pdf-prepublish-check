@@ -14,6 +14,7 @@
 //
 // - 既定では、検査のあとに「片付ける」を押し、読み直すまで待ち、「片付けた PDF を保存する」を押して、保存された PDF を確かめる。
 //   片付け・読み直し・保存の間の要求も数える。保存先は一時フォルダで、終わったら消す。
+//   読み直しが「言い切れない」（保存に確認の印が要る形）のときは、人と同じく印を付けてから保存し、そのことを結果に書く。
 //
 // - Chrome（または Edge）を headless で動かし、DevTools の決まり（CDP）で操作する。場所は CHROME_PATH で変えられる。
 // - 数えるもの：ページを開いてから閉じるまでの、すべての要求（CSP で止められた要求も数える）。
@@ -503,7 +504,8 @@ async function pressSanitize(c, sessionId, evaluate, pdf) {
     const note = await evaluate("document.getElementById('actions').hidden ? '片付けるボタンが出ていません' : document.getElementById('sanitize-note').textContent");
     return { pressed: false, status: `押せない形でした（${note}）`, count: null, saved: "—", ok: null };
   }
-  await evaluate("document.getElementById('sanitize').click(); void 0");
+  // 「整える」を押すと、押す前の確かめ（ポップアップ）が出るので、中の「整える」も押す（2026-11-06）
+  await evaluate("(() => { document.getElementById('sanitize').click(); const d = document.getElementById('tidy-dialog'); if (d && d.open) document.getElementById('tidy-dialog-run').click(); })(); void 0");
   const working = "(() => { const s = document.getElementById('status').textContent; return /^(片付けています|整えています|片付けた PDF を、最初から|整えた PDF を、最初から)/.test(s); })()";
   // 重いページ（h01）は、片付けと読み直しに時間がかかる。最大 180 秒待つ
   for (let i = 0; i < 900 && (await evaluate(working)); i++) await sleep(200);
@@ -511,6 +513,11 @@ async function pressSanitize(c, sessionId, evaluate, pdf) {
   if (!(await evaluate("!document.getElementById('clean').hidden"))) return { pressed: true, status, count: null, saved: "保存のボタンが出ませんでした", ok: false };
   const count = await evaluate("document.getElementById('clean-count').textContent");
   const name = await evaluate("document.getElementById('download').download");
+  // 読み直しは 0 件だが言い切れない所があるとき（saveGate の confirm）は、人と同じく「分かったうえで保存する」に印を付けてから保存する。
+  // 失敗にはせず、印が要ったことを結果に書く（2026-11-06：cjk-cmap.pdf で、印を付けないまま保存を待ち続けて止まっていた）。
+  // 押せない形（blocked）のときは印もないので、そのまま下で保存が終わらずに失敗になる
+  const gate = await evaluate("(() => { const box = document.getElementById('save-confirm'); const link = document.getElementById('download'); if (!box.hidden && link.getAttribute('aria-disabled') === 'true') { document.getElementById('save-confirm-box').click(); return link.getAttribute('aria-disabled') === 'true' ? 'blocked' : 'confirm'; } return link.getAttribute('aria-disabled') === 'true' ? 'blocked' : 'ok'; })()");
+  const gateNote = gate === "confirm" ? "（言い切れない所があるため、確認の印を付けてから保存）" : "";
 
   // 保存：ブラウザの保存先を、押すたびに新しい一時フォルダにし、保存のボタンを押す。
   // ファイルが見えただけでは、書き終わっていないことがある（大きい PDF で、書きかけのファイルを読むと落ちる）。
@@ -539,7 +546,7 @@ async function pressSanitize(c, sessionId, evaluate, pdf) {
       await sleep(1000);
     }
   }
-  if (!file) return { pressed: true, status, count, saved: `保存されませんでした（${SAVE_TRIES} 回。${why}）`, ok: false, saveTries };
+  if (!file) return { pressed: true, status, count, saved: `保存されませんでした（${SAVE_TRIES} 回。${why}）${gate === "blocked" ? "。保存のボタンが押せない形でした" : ""}`, ok: false, saveTries };
   const bytes = readFileSync(file);
   const isPdf = bytes.subarray(0, 5).toString("latin1") === "%PDF-";
   const sameName = path.basename(file) === name;
@@ -547,7 +554,7 @@ async function pressSanitize(c, sessionId, evaluate, pdf) {
     pressed: true,
     status,
     count,
-    saved: `${sameName ? `「${name}」` : `名前が違う（${path.basename(file)}）`}・${bytes.length} バイト・${isPdf ? "%PDF- で始まる" : "PDF ではない"}`,
+    saved: `${sameName ? `「${name}」` : `名前が違う（${path.basename(file)}）`}・${bytes.length} バイト・${isPdf ? "%PDF- で始まる" : "PDF ではない"}${gateNote}`,
     ok: isPdf && sameName,
     saveTries,
   };

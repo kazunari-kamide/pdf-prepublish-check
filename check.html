@@ -112,6 +112,10 @@
             <div class="marks" id="marks"></div>
           </div>
           <figcaption id="sheet-caption"></figcaption>
+          <!-- 押している間だけ、印を消す（印の下の絵を見るため。2026-11-06 本人） -->
+          <button id="marks-peek" class="btn-sub marks-peek" type="button" aria-pressed="false">押している間、印を消す</button>
+          <!-- 一覧の行を押したとき、どこへ動いたか（ファイル全体の指摘は動かない）を読み上げに伝える。見た目には出さない -->
+          <p id="mark-note" class="visually-hidden" aria-live="polite"></p>
         </figure>
         <!-- 狭い画面（縦に積むとき）だけ：項目を押して絵へ動いたあと、押した項目へ戻る（2026-11-05 夜のレビュー 6） -->
         <button id="back-to-list" class="btn-sub back-to-list" type="button" hidden>一覧へ戻る</button>
@@ -157,17 +161,27 @@
           <div id="actions" class="actions" hidden>
             <div id="consent" class="consent" hidden></div>
             <p id="sanitize-note"></p>
+            <!-- 外す種類があるときの一言（「整える内容」を閉じていても読める） -->
+            <p id="keep-summary" class="keep-summary" hidden></p>
             <!-- 消す対象の列挙とプロパティの扱いは、開けて読む（2026-11-05 本人の画面のレビュー B1） -->
             <details id="sanitize-more" class="sanitize-more">
-              <summary>整えると消すもの</summary>
+              <summary>整える内容</summary>
               <p id="sanitize-list" class="sanitize-list"></p>
+              <!-- 5 の案 B（2026-11-06 本人。D168）：見つかった種類ごとに「整える」の印。外せない種類は印が入ったまま、理由を 1 行 -->
+              <fieldset id="tidy-kinds" class="tidy-kinds" hidden>
+                <legend>整える種類</legend>
+                <p class="props-note">印を外した種類は、整えずに残します。最初は、深刻な物（高・確かめる）を含む種類に印を入れています。</p>
+                <ul id="tidy-kinds-list"></ul>
+              </fieldset>
+              <!-- 6 の案 A（2026-11-06 本人）：プロパティの「消す／そのまま／書き直す」は、この選ぶ欄の中に置き、すぐ下が「整える」の帯になる -->
+              <div id="tidy-props" class="tidy-props" hidden></div>
               <p id="tidy-summary" class="tidy-summary"></p>
             </details>
             <div id="redact-left" class="not-done" hidden>
               <h3>▲ 読み直しで残っていた所</h3>
               <ul id="redact-left-list"></ul>
             </div>
-            <!-- 「整える」は結果の面の下の端いっぱいの紅の帯（案 C）。注意書きと「整えると消すもの」は、その上に置く -->
+            <!-- 「整える」は結果の面の下の端いっぱいの紅の帯（案 C）。注意書きと「整える内容」（選ぶ欄）は、その上に置く。帯は選ぶ欄の流れの最後（6 の案 A） -->
             <button id="sanitize" type="button" aria-describedby="sanitize-note tidy-summary">整える</button>
           </div>
         </div>
@@ -180,12 +194,17 @@
           <p id="save-note" class="save-note"></p>
           <label id="save-confirm" class="save-confirm" hidden>
             <input id="save-confirm-box" type="checkbox" />
-            <span>言い切れない所があると分かったうえで保存する</span>
+            <span id="save-confirm-text">言い切れない所があると分かったうえで保存する</span>
           </label>
           <p id="download-note" class="download-note"></p>
           <div id="not-done" class="not-done" hidden>
             <h4>▲ 消せなかった所</h4>
             <ul id="not-done-list"></ul>
+          </div>
+          <!-- 本人が「整えない」を選んだ種類（D168）。残しているので、必ず並べる -->
+          <div id="kept" class="kept" hidden>
+            <h4>◇ 外した種類（整えずに残しています）</h4>
+            <ul id="kept-list"></ul>
           </div>
           <!-- 保存のボタンが主役。ほかは開けて読む 2 つにまとめる（2026-11-05 本人の画面のレビュー C3） -->
           <details id="clean-more" class="clean-more">
@@ -260,6 +279,24 @@
 
     <!-- 利用規約のダイアログ。ビルドの時（開発サーバーでも）に site.ts が src/site/pages.ts の renderTermsDialog から作って入れる（通信をせずに読めるように） -->
     <!-- terms-dialog -->
+
+    <!-- 「整える」を押す前の確かめ（7 の案 A。2026-11-06 本人：確かめは画面全体のポップアップ）。中身は src/ui/tidy-confirm.ts の文を textContent で入れる -->
+    <dialog id="tidy-dialog" class="terms-dialog tidy-dialog" aria-labelledby="tidy-dialog-title" aria-describedby="tidy-dialog-lead">
+      <div class="terms-dialog-head">
+        <h2 id="tidy-dialog-title" class="terms-dialog-title" tabindex="-1">整える前に確かめてください</h2>
+        <button id="tidy-dialog-close" class="terms-dialog-close" type="button">閉じる</button>
+      </div>
+      <div class="terms-dialog-body">
+        <p id="tidy-dialog-lead"></p>
+        <p id="tidy-dialog-counts" class="tidy-dialog-counts"></p>
+        <ul id="tidy-dialog-notes"></ul>
+      </div>
+      <!-- 押すボタンは本文の外の下に置き、狭い画面で本文が長くても、いつも見える所に出す -->
+      <div class="tidy-dialog-actions">
+        <button id="tidy-dialog-run" class="tidy-dialog-run" type="button">整える</button>
+        <button id="tidy-dialog-cancel" class="btn-sub" type="button">やめる</button>
+      </div>
+    </dialog>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
