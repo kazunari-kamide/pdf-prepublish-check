@@ -25,8 +25,10 @@ import { applyProperties, checkEdits, checkOldValues, handleSignatures, prefligh
 import { cleanLeftovers } from "./leftovers.ts";
 import { pruneFonts } from "./font-prune.ts";
 import type { NotDoneItem, PropertyChange, RemovedItem, SanitizeOptions, SanitizeResult, TidyPreflight } from "./types.ts";
+import { KEEPABLE_PATTERNS } from "./types.ts";
 
 export type * from "./types.ts";
+export { KEEPABLE_PATTERNS } from "./types.ts";
 export { redact } from "./redact.ts";
 export { compress, COMPRESS_DPI, COMPRESS_QUALITY } from "./compress.ts";
 
@@ -94,6 +96,8 @@ async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: 
   }
   const doc = loaded.doc;
   const ctx = doc.context;
+  // 本人が「整えない」を選んだ種類（外せるものだけを拾う。D168）
+  const keep = new Set<string>((Array.isArray(options.keep) ? options.keep : []).filter((p) => (KEEPABLE_PATTERNS as readonly string[]).includes(p)));
   const removed: RemovedItem[] = [];
   const notDone: NotDoneItem[] = [];
   // 元のプロパティ・PDF/A の印（文書全体の片付けで XMP を外す前に読む）
@@ -154,16 +158,16 @@ async function sanitizeBody(bytes: Uint8Array, options: SanitizeOptions, hooks: 
   const sig = handleSignatures(doc, options.signatures ?? "remove");
   removed.push(...sig.removed);
   notDone.push(...sig.notDone);
-  removed.push(...cleanAnnotations(doc, redactAnnots));
-  removed.push(...removeAttachments(doc));
-  removed.push(...removeJavaScript(ctx));
+  removed.push(...cleanAnnotations(doc, redactAnnots, keep.has("P8")));
+  if (!keep.has("P9")) removed.push(...removeAttachments(doc));
+  if (!keep.has("P12")) removed.push(...removeJavaScript(ctx));
   removed.push(...removeXmp(ctx));
   // 文書情報と文書の XMP：選んだ値で書き直す（指定がなければ消す）
   const props = applyProperties(doc, original, edits?.ok ? edits.edits : null, options.pdfaMark ?? "remove");
   removed.push(...props.removed);
   notDone.push(...props.notDone);
   removed.push(...removeStructureExtras(doc));
-  const left = cleanLeftovers(doc);
+  const left = cleanLeftovers(doc, keep);
   removed.push(...left.removed);
   notDone.push(...left.notDone);
   // 描かれていない字形を書体から外す（0.8.0 から。ページの片付けのあとの中身で数える）

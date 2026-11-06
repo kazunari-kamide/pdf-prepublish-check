@@ -145,3 +145,60 @@ jobs:
 
       - name: 本番で、外への要求が0件かを確かめる
         run: node scripts/check-browser.mjs --url https://omamoripdf.com/check
+
+  # 配信が成功したときだけ（needs の既定）、そのコミットのリリースを作り、配信したファイルのハッシュの一覧を載せる（D171。CLAUDE.md §11-4）。
+  # 公開中のサイトが公開のコードと同じものだと、誰でも手元でビルドして確かめられるようにするため。
+  # - 書き込みの権限（contents: write）は、このジョブだけに渡す。Environment・Secrets は使わない。コードは取り出さない
+  # - 名前はコミットの短い印（deploy-<7 字>）。同じコミットを手で配信し直したときは作り直さず、前のリリースの一覧と同じかだけを確かめる
+  release:
+    name: ハッシュの一覧をリリースに載せる
+    needs: [build, deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: 成果物を受け取る
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: .
+          digest-mismatch: error
+
+      - name: リリースを作る
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WANT: ${{ needs.build.outputs.list-sha256 }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          got=$(sha256sum dist.sha256 | cut -d' ' -f1)
+          test -n "$WANT" && test "$got" = "$WANT"
+          tag="deploy-${GITHUB_SHA::7}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            # 同じコミットを配信し直した：一覧が前と同じなら、それでよい（違えば、同じコードから違うものができたので止める）
+            gh release download "$tag" --pattern dist.sha256 --output before.sha256
+            if cmp -s before.sha256 dist.sha256; then
+              echo "$tag は前からあり、ハッシュの一覧も同じでした（作り直さない）"
+              exit 0
+            fi
+            echo "::error::$tag は前からあるが、ハッシュの一覧が違う（同じコミットから違うものができた）"
+            exit 1
+          fi
+          {
+            echo "本番（https://omamoripdf.com/）に配信したファイルの SHA-256 の一覧です。"
+            echo
+            echo "- コミット：$GITHUB_SHA"
+            echo "- 配信の記録：$RUN_URL"
+            echo "- 一覧（dist.sha256）そのものの SHA-256：$got"
+            echo
+            echo "確かめ方：このコミットを取り出し、Node 24.19.0 で \`npm ci --ignore-scripts\` と \`npm run build\` をしたあと、"
+            echo "\`cd dist && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum\` の出力を、下の一覧（添付の dist.sha256 と同じもの）と比べます。"
+            echo "Windows では、行の終わりを変えずに取り出してください（\`git clone -c core.autocrlf=false\`。CRLF に変えると、作るファイルの一部が変わります）。"
+            echo
+            echo '```'
+            cat dist.sha256
+            echo '```'
+          } > notes.md
+          gh release create "$tag" dist.sha256 --target "$GITHUB_SHA" --title "配信 ${GITHUB_SHA::7}" --notes-file notes.md
