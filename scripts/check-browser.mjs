@@ -19,6 +19,8 @@
 // - Chrome（または Edge）を headless で動かし、DevTools の決まり（CDP）で操作する。場所は CHROME_PATH で変えられる。
 // - 数えるもの：ページを開いてから閉じるまでの、すべての要求（CSP で止められた要求も数える）。
 //   同じサイト（127.0.0.1 の vite preview）と blob:・data: 以外への要求が1件でもあれば、失敗にする。
+//   2026-11-06 から：PDF を入れてから保存するまでは、同じサイトへの要求も 0 件であること（部品は、画面の表示のあとに裏で読み終えておく。
+//   PDF を入れる前に、その読み終わり（html の data-parts-ready="true"）を待つ）。
 // - 要求は「最初の表示」（PDF を入れる前）と「PDF を入れた後」に分けて数える。アクセス解析のスクリプトは入れていないので、
 //   どちらも外への要求は0件のはず（開いた回数は、配信先のサーバーの記録で数える。docs/no-network.md）。
 // - サイトのページ（記事の一覧・各記事・プライバシー。dist/ の HTML から拾う）も1つずつ開き、外への要求が0件で、
@@ -164,7 +166,9 @@ try {
     }
     console.log(`  要求：全部で ${r.all.length} 件。同じサイト ${r.same.length} 件、外 ${r.outside.length} 件、CSP で止められた ${r.blocked.length} 件`);
     console.log(`    最初の表示：${r.first.all} 件（外 ${r.first.outside} 件・止められた ${r.first.blocked} 件）`);
+    console.log(`    裏で読む部品：${r.partsReady ? `読み終えた（${(r.partsMs / 1000).toFixed(1)} 秒待った）` : "読み終わらなかった"}`);
     console.log(`    PDF を入れた後：${r.after.all} 件（同じサイト ${r.after.same} 件・外 ${r.after.outside} 件・止められた ${r.after.blocked} 件）`);
+    for (const u of r.all.slice(r.first.all)) if (u.startsWith(origin + "/")) console.log(`    PDF を入れた後の同じサイト：${u.slice(origin.length)}`);
     for (const u of r.same) console.log(`    同じサイト：${u}`);
     for (const u of r.outside) console.log(`    外：${u}`);
     for (const b of r.blocked) console.log(`    CSP で止められた：${b}`);
@@ -195,6 +199,10 @@ try {
   const afterOutside = tried.reduce((n, r) => n + r.after.outside, 0);
   console.log(`\n最初の表示：外への要求 ${firstOutside} 件（解析のスクリプトは入れていないので、0 のはず）`);
   console.log(`PDF を入れた後：外への要求 ${afterOutside} 件`);
+  // PDF を入れてから保存するまで、同じサイトへの要求も 0 件（2026-11-06 本人が決定。部品は画面の表示のあとに読み終えておく）
+  const afterSame = tried.reduce((n, r) => n + (r.after?.same ?? 0), 0);
+  const notReady = tried.filter((r) => r.partsReady === false).length;
+  console.log(`PDF を入れた後：同じサイトへの要求 ${afterSame} 件（0 のはず）${notReady ? `。部品を読み終わらなかった回 ${notReady} 回` : ""}`);
   const notSaved = results.filter((r) => r.cleaned && r.cleaned.ok === false);
   console.log(`\n合計：PDF ${results.length} 件、外への要求 ${outside} 件、CSP で止められた要求 ${blocked} 件`);
   if (selfTest) {
@@ -206,6 +214,10 @@ try {
     }
   } else if (outside > 0 || blocked > 0) {
     console.error("失敗：外への要求、または止められた要求がありました。");
+    exitCode = 1;
+  } else if (!liveUrl && (afterSame > 0 || notReady > 0)) {
+    // 本番（--url）は、配信されている版が古いことがあるので、ここでは手元の vite preview のときだけ止める
+    console.error(`失敗：PDF を入れた後に、同じサイトへの要求が ${afterSame} 件ありました${notReady ? `（部品を読み終わらなかった回 ${notReady} 回）` : ""}。部品は画面の表示のあとに読み終えておくはず（src/parts.ts）。`);
     exitCode = 1;
   } else if (pageProblems.length) {
     console.error(`失敗：サイトのページが開けないか、console にエラーが出ました（${pageProblems.map((p) => p.path).join("、")}）。`);
@@ -339,7 +351,13 @@ async function checkOne(c, pdf) {
     // 本番（--url）は遠いので、読み込みを最大 30 秒待つ
     for (let i = 0; i < 300 &&(await evaluate("document.readyState")) !== "complete"; i++) await sleep(100);
     await sleep(300); // 最初の表示のあとに遅れて出る要求も、最初の表示の分として数える
-    // ここまでが「最初の表示」。ここから後が「PDF を入れた後」
+    // 処理に要る部品を、画面の表示のあとに裏で読み終えるまで待つ（src/parts.ts。最大 60 秒）。
+    // 読み終えたら、PDF を入れたあとは同じサイトへの要求も 0 件のはず（2026-11-06 本人が決定）
+    const partsStarted = Date.now();
+    for (let i = 0; i < 600 && (await evaluate("document.documentElement.dataset.partsReady")) !== "true"; i++) await sleep(100);
+    const partsMs = Date.now() - partsStarted;
+    const partsReady = (await evaluate("document.documentElement.dataset.partsReady")) === "true";
+    // ここまでが「最初の表示」（画面の表示と、裏で読む部品）。ここから後が「PDF を入れた後」
     const firstAll = all.length;
     const firstBlocked = blocked.length;
     if (limitMb !== null) {
@@ -418,6 +436,8 @@ async function checkOne(c, pdf) {
       same: all.filter((u) => u.startsWith(origin + "/")).map((u) => u.slice(origin.length)),
       outside: all.filter((u) => !local(u)),
       blocked,
+      partsReady,
+      partsMs,
       // 最初の表示（PDF を入れる前）と、PDF を入れた後に分けた数
       first: { all: firstAll, outside: all.slice(0, firstAll).filter((u) => !local(u)).length, blocked: firstBlocked },
       after: {

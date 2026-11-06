@@ -5,12 +5,14 @@
 import type { PrecheckResult } from "./precheck.ts";
 import type { InspectSummary } from "./report.ts";
 
-export type InspectRequest = { type: "inspect"; id: number; buffer: ArrayBuffer };
+/** warm＝PDF を入れる前に、PDF.js と画像を解く部品を読み込んでおく（2026-11-06。PDF を入れた後に部品を読みに行かないため） */
+export type InspectRequest = { type: "inspect"; id: number; buffer: ArrayBuffer } | { type: "warm"; id: number };
 
 export type InspectResponse =
   | { type: "progress"; id: number; done: number; total: number; label: string }
   | { type: "result"; id: number; precheck: PrecheckResult; summary: InspectSummary | null }
-  | { type: "error"; id: number; message: string };
+  | { type: "error"; id: number; message: string }
+  | { type: "warm-done"; id: number; ok: boolean };
 
 export type InspectProgress = { done: number; total: number; label: string };
 

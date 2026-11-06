@@ -17,7 +17,7 @@
 | 層 | 何を見るか | どこで |
 |---|---|---|
 | 1. 自分たちのコード | `src/`・`rules/`・`check.html`（検査のページ）に、`fetch`・`XMLHttpRequest`・`WebSocket`・`sendBeacon`・外の URL・`innerHTML`・`eval` がないこと | `tests/no-network.test.ts`（`npm test`） |
-| 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` の `connect-src` が、検査のページは `'self'`、ほかのページは `'none'` であること。サイトのページ（記事・プライバシー）を含む、すべての HTML に同じ CSP があり（お問い合わせのページは `form-action 'self'`、検査のページは `connect-src 'self'` だけが違う CSP）。`dist/pdfjs/`（PDF.js の部品）のどのファイルも `pdfjs-dist` の写しで、決めた名前のものだけであること、スクリプトを直接書かず、外から読み込まないこと（公式の URL を指す canonical だけは許す） | `scripts/check-dist.mjs`（`npm run build` の最後） |
+| 2. ビルドしたもの | `dist/` の JavaScript（`.js`・`.mjs`）に、通信の仕組みがないこと。CSP の `<meta>` に `connect-src 'none'` が入っていること（検査のページも同じ。2026-11-06 の夕方に `'self'` から戻した）。サイトのページ（記事・プライバシー）を含む、すべての HTML に同じ CSP があり（お問い合わせのページだけ `form-action 'self'` が違う CSP）、`.htaccess` のどこにも `connect-src 'self'` がないこと。`dist/pdfjs/`（PDF.js の部品）のどのファイルも `pdfjs-dist` の写しで、決めた名前のものだけであること、スクリプトを直接書かず、外から読み込まないこと（公式の URL を指す canonical だけは許す） | `scripts/check-dist.mjs`（`npm run build` の最後） |
 | 3. CSP | ページ全体の読み込み先と送り先を絞る（`connect-src 'none'`。検査のページだけ `'self'`。`img-src 'self' data: blob:` など） | `csp.ts` |
 | 4. 本物のブラウザ | 合成 PDF を入れて、ページを開いてから閉じるまでの要求を「最初の表示」と「PDF を入れた後」に分けて数え、どちらも外への要求が0件であること。サイトのページも1つずつ開き、外への要求が0件であること | `scripts/check-browser.mjs`（`npm run check:browser`） |
 
@@ -46,13 +46,36 @@
 
 | 部品 | 置き場所 | 読み方 | CSP |
 |---|---|---|---|
-| CCITT・JBIG2・JPEG 2000 を解く部品（WASM の代わりの JS 2 つ） | `/pdfjs/wasm/` | PDF.js が `import()` で読む | `script-src 'self'`（前と同じ） |
-| 字の対応表（cMap。169 個） | `/pdfjs/cmaps/` | この画面が `fetch` で読み、PDF.js の Worker に渡す | 検査のページだけ `connect-src 'self'` |
+| CCITT・JBIG2・JPEG 2000 を解く部品（WASM の代わりの JS 2 つ） | `/pdfjs/<版の印>/wasm/` | PDF.js が `import()` で読む | `script-src 'self'`（前と同じ） |
+| 字の対応表（cMap。169 個を base64 で 1 つにまとめた `cmaps.mjs`） | `/pdfjs/<版の印>/cmaps.mjs` | この画面が `import()` で 1 回読んでメモリに持ち、PDF.js にはメモリから渡す（`BinaryDataFactory`。`fetch` は使わない） | `script-src 'self'`（`connect-src` は `'none'` のまま） |
 
-- 外のサイトへの送り先は増えない。`connect-src 'self'` は検査のページ（`check.html`）だけで、サイトのページ・ほかのファイルは `'none'` のまま（`.htaccess` の `<FilesMatch>`）。
+- `<版の印>` は、写す部品の中身から作る 10 字の印（`vite.config.ts` の `PARTS_HASH`）。部品が変われば場所も変わるので、`assets/` と同じく 1 年そのまま使わせる（`.htaccess` の `Cache-Control: max-age=31536000, immutable`。`^/(assets|pdfjs)/` の 200 の応答だけ）。本番では `npm run check:live` が、`cmaps.mjs` と画像を解く部品の Cache-Control と、見つからない `pdfjs/` の場所が長く持たれないこと（404 は `no-cache`）を確かめる。
+
+- CSP（2026-11-06 本人が決定。D170）：検査のページも、ほかのページと同じ `connect-src 'none'`。朝から夕方までは、検査のページだけ `'self'` にしていた（PDF.js が字の対応表を `fetch` で読んでいたため）。字の対応表をメモリから渡すようにして `fetch` で読む所がなくなったので戻した。`check:browser` で、PDF を入れる前も後も、CSP で止められた要求が 0 件であることを確かめた。
 - 標準の書体（`standard_fonts/`）は置かない。PDF.js は Helvetica・Arial に Liberation の書体を使うが、Liberation は GPL 2.0 系で、このリポジトリの決まり（CLAUDE.md §10）に合わない。Foxit の書体だけを置くと Helvetica のたびに 404 になる。置かなくても、PDF.js は代わりの書体で字を描く。
 - 要求の名前に `?` などを付けない（ブラウザの拡張機能が、問い合わせの付いた要求を「送った」に数えるため）。
 - 層 2 は、`dist/pdfjs/` のどのファイルも `pdfjs-dist` と 1 バイトも違わない写しで、決めた名前のものだけであることを確かめる。
+
+### 開いたときに部品を読んでおく（2026-11-06 本人が決定。D165）
+
+PDF を入れた後は、同じサイトへの要求も 0 件にする。そのため、画面の表示が終わってから、処理に要る部品を裏で読んでおく（`src/parts.ts`）。最初の表示は遅らせない。
+
+- 読む順番（要る順）：1. ページの絵の PDF.js → 2. ページの絵の PDF.js の Worker と画像を解く部品（小さな見本を 1 回描かせる）→ 3. 字の対応表（`cmaps.mjs`）→ 4. 検査の Worker（中で PDF.js と画像を解く部品も読む）→ 5. 整える処理の Worker（同じ）。
+- 読み終わる前に PDF が入ったら、「準備しています（n/5）」と出して、読み終わるのを待ってから始める。1 つの部品が読めなくても先へ進み、その部品は使うときに読む（そのときは、PDF を入れた後に要求が出る）。
+- Worker の作り直し（`src/worker-slot.ts`）：1 つのファイルの流れ（検査 → 整える → 読み直す → 小さくする）の中では、同じ Worker を使い回す。細工された PDF の影響を次のファイルに残さないよう、**最初の画面に戻ったとき**（「別の PDF」）に捨てて作り直し、また温めておく。
+- 時間切れ：重い PDF で時間の上限を超えたら、その Worker を止めて、時間切れと画面に出す（何が終わっていないか・どうすればよいか）。**その場では Worker を作り直さない**（その PDF の後に要求を出さないため）。作り直すのは、最初の画面に戻ったとき。
+- 確かめの道具への合図：読み終わると `html` に `data-parts-ready="true"` を付ける（属性を変えるだけで、通信はしない）。`check:browser` は、これを待ってから PDF を入れ、PDF を入れた後の同じサイトへの要求が 1 件でもあれば失敗にする。
+
+測った量（2026-11-06。`dist/` を本番と同じ Cache-Control で返し、headless の Chrome で `/check` を開いた。圧縮なしのバイト数。合成 PDF `p6-t01` を 1 件入れた）：
+
+| | 1 回目（キャッシュなし） | 2 回目（同じブラウザで開き直す） |
+|---|---|---|
+| 最初の表示（HTML・画面のスクリプト・CSS・書体 2 つ） | 2,322,354 バイト（うち見出しの書体 2,079,698） | 422 バイト（HTML の確かめだけ。ほかはキャッシュ） |
+| 裏で読む部品（PDF.js・その Worker・画像を解く部品 2 つ・`cmaps.mjs`・検査の Worker・整える処理の Worker） | 5,552,351 バイト | 0 バイト（すべてキャッシュ） |
+| PDF を入れた後 | 0 件 | — |
+
+- 最初の表示が終わるまで 0.26 秒、部品を読み終えるまで 0.58 秒（手元のパソコンと手元のサーバー。回線の速さは入っていない）。
+- Worker の本体 3 つ（PDF.js の Worker・検査・整える処理）は、DevTools がバイト数を返さなかったので、`dist/` のファイルの大きさで足した。
 
 ### 層 4 の数え方
 
@@ -68,5 +91,6 @@
 
 - `--self-test` で確かめられたのは、ページの中から出した要求（画像・`fetch`）を捕まえることまで。Worker の中から出した要求を捕まえることは、点検用の Worker を CSP（`worker-src 'self'`）が止めるため、まだ確かめていない。
 - 層 4 は、選んだ合成 PDF を入れたときの結果。どんな PDF でも0件であることの証明ではない。
-- 2026-11-06 から、PDF を入れた後に、同じサイトへの要求（Worker・PDF.js・部品・cMap）が出る。外への要求ではないが、ブラウザの開発者の道具の「ネットワーク」には出る。PDF を入れた後は同じサイトへの要求も 0 件にする作り（開いたときに全部読んでおく）は、本人の決定を受けて、別の PR で進める。
+- PDF を入れた後の同じサイトへの要求が 0 件になるのは、部品を読み終えてから PDF を入れたとき。読み終わる前に入れたときは、待ってから始めるので 0 件のままだが、部品が読めなかったときは、使うときに読む（要求が出る）。
+- 最初の画面に戻らずに、結果の画面へ次の PDF を落としたときは、前のファイルの Worker を捨てて作り直すので、その PDF の後に Worker の本体と部品の要求が出る（2 回目からはキャッシュから読むので通信はほぼないが、開発者の道具の「ネットワーク」には出る）。
 - 配信先（Xserver）で、CSP を HTTP ヘッダーとして返せるか、`.mjs` を JavaScript の種類（`text/javascript`）で返すかは、配信の手順と一緒に確かめる。

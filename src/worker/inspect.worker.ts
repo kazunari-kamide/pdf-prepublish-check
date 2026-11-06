@@ -10,6 +10,7 @@ import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { createPdfjsImageDecoder, type ExternalImageDecoder, type PdfjsLike } from "../../rules/shared/pdfjs-images.ts";
 import { inspectAll } from "../inspect/inspect";
 import { PDFJS_WASM_URL } from "../render/pdfjs-parts";
+import { warmPdfjs } from "../render/warm-pdf";
 import { precheck } from "../inspect/precheck";
 import type { InspectRequest, InspectResponse } from "../inspect/protocol";
 
@@ -21,16 +22,34 @@ import type { InspectRequest, InspectResponse } from "../inspect/protocol";
  *   PDF.js が import() で読む（2026-11-06 本人が決定。src/render/pdfjs-parts.ts）。前は渡さなかったので、それらの画像は「調べられなかった」になっていた。
  * - 読み込めなかったときは、道具なしで調べる（JPEG の画像は「調べられなかった」と知らせる）。
  */
+let libPromise: Promise<PdfjsLike | undefined> | null = null;
+/** PDF.js と、その Worker の部品を、この Worker の中に 1 回だけ読み込む（温めと検査で同じものを使う） */
+function pdfjsLib(): Promise<PdfjsLike | undefined> {
+  libPromise ??= Promise.all([import(/* @vite-ignore */ pdfjsUrl) as Promise<PdfjsLike>, import(/* @vite-ignore */ pdfjsWorkerUrl)])
+    .then(([lib]) => lib)
+    .catch(() => undefined);
+  return libPromise;
+}
+
 async function imageDecoder(): Promise<ExternalImageDecoder | undefined> {
-  try {
-    const [lib] = await Promise.all([
-      import(/* @vite-ignore */ pdfjsUrl) as Promise<PdfjsLike>,
-      import(/* @vite-ignore */ pdfjsWorkerUrl),
-    ]);
-    return createPdfjsImageDecoder(lib, { jbig2Url: PDFJS_WASM_URL });
-  } catch {
-    return undefined;
-  }
+  const lib = await pdfjsLib();
+  return lib ? createPdfjsImageDecoder(lib, { jbig2Url: PDFJS_WASM_URL }) : undefined;
+}
+
+/** 温める：PDF.js を読み込み、小さな見本の画像を 1 回解かせて、画像を解く部品も読み込んでおく（src/render/warm-pdf.ts） */
+async function warm(): Promise<boolean> {
+  const lib = await pdfjsLib();
+  if (!lib) return false;
+  return warmPdfjs(lib as unknown as Parameters<typeof warmPdfjs>[0], {
+    isOffscreenCanvasSupported: false,
+    isImageDecoderSupported: false,
+    useWorkerFetch: false,
+    useWasm: false,
+    wasmUrl: PDFJS_WASM_URL,
+    disableFontFace: true,
+    stopAtErrors: false,
+    verbosity: 0,
+  });
 }
 
 type WorkerScope = {
@@ -41,6 +60,10 @@ const scope = self as unknown as WorkerScope;
 
 scope.onmessage = async (e) => {
   const req = e.data;
+  if (req?.type === "warm") {
+    scope.postMessage({ type: "warm-done", id: req.id, ok: await warm() });
+    return;
+  }
   if (!req || req.type !== "inspect" || !(req.buffer instanceof ArrayBuffer)) return;
   try {
     const bytes = new Uint8Array(req.buffer);

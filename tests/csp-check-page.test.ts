@@ -1,38 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検査のページだけ connect-src 'self'（2026-11-06 本人が決定。PDF.js が /pdfjs/ の部品を読むため）。
-// ほかのページ・ファイルは 'none' のまま。外のサイトを送り先に足していないことを確かめる。
+// 検査のページも、ほかのページと同じ CSP（connect-src 'none'）であることを確かめる（2026-11-06 本人が決定。D170）。
+// 2026-11-06 の朝から夕方までは、検査のページだけ 'self' だった（PDF.js が字の対応表を fetch で読んでいたため）。
+// 字の対応表を cmaps.mjs として import() で読み、メモリから渡すようにしたので、戻した（src/render/pdf-view.ts）。
 
 import { describe, expect, it } from "vitest";
-import { checkHeaders, cspForCheckHeader, cspForCheckMeta, cspForHeader, cspForMeta, securityHeaders, withConnectSelf } from "../csp.ts";
-import { buildHtaccess } from "../htaccess.ts";
+import * as csp from "../csp.ts";
+import { buildHtaccess, CHECK_PAGE_FILE } from "../htaccess.ts";
 
-const connectOf = (csp: string) => csp.split("; ").find((d) => d.startsWith("connect-src "));
+const connectOf = (v: string) => v.split("; ").find((d) => d.startsWith("connect-src "));
 
 describe("検査のページの CSP", () => {
-  it("connect-src だけが 'self' で、ほかの決まりは同じ", () => {
-    expect(connectOf(cspForCheckMeta)).toBe("connect-src 'self'");
-    expect(connectOf(cspForMeta)).toBe("connect-src 'none'");
-    expect(cspForCheckMeta.replace("connect-src 'self'", "connect-src 'none'")).toBe(cspForMeta);
-    expect(cspForCheckHeader).toBe(`${cspForCheckMeta}; frame-ancestors 'none'`);
-    expect(checkHeaders["Content-Security-Policy"]).toBe(cspForCheckHeader);
-    // CSP のほかのヘッダーは、ほかのページと同じ
-    for (const [k, v] of Object.entries(securityHeaders)) if (k !== "Content-Security-Policy") expect(checkHeaders[k]).toBe(v);
+  it("<meta> とヘッダーの CSP は connect-src 'none'", () => {
+    expect(connectOf(csp.cspForMeta)).toBe("connect-src 'none'");
+    expect(connectOf(csp.cspForHeader)).toBe("connect-src 'none'");
+    expect(csp.securityHeaders["Content-Security-Policy"]).toBe(csp.cspForHeader);
   });
 
-  it("外のサイト（http・https・ws）を送り先に足していない", () => {
-    expect(connectOf(cspForCheckHeader)).not.toMatch(/https?:|wss?:|\*/);
+  it("検査のページだけ別の CSP にする仕組み（withConnectSelf・checkHeaders）は、もう持たない", () => {
+    expect(Object.keys(csp)).not.toContain("withConnectSelf");
+    expect(Object.keys(csp)).not.toContain("checkHeaders");
+    expect(Object.keys(csp)).not.toContain("cspForCheckMeta");
   });
 
-  it("connect-src 'none' がない CSP からは作らない", () => {
-    expect(() => withConnectSelf("default-src 'self'")).toThrow(/connect-src 'none'/);
-  });
-
-  it(".htaccess：既定は 'none'、検査のページの <FilesMatch> だけ 'self'", () => {
+  it(".htaccess：connect-src 'self' はどこにもなく、検査のページだけに当たる <FilesMatch> もない", () => {
     const h = buildHtaccess();
-    expect(h).toContain(`Header always set Content-Security-Policy "${cspForHeader}"`);
-    const block = h.match(/<FilesMatch "\^check\\\.html\$">[\s\S]*?<\/FilesMatch>/)?.[0] ?? "";
-    expect(block).toContain(`Header always set Content-Security-Policy "${cspForCheckHeader}"`);
-    expect(h.match(/^\s*Header\b[^\n]*connect-src 'self'/gm)).toHaveLength(1);
+    expect(h).toContain(`Header always set Content-Security-Policy "${csp.cspForHeader}"`);
+    expect(h).not.toContain("connect-src 'self'");
+    const blocks = [...h.matchAll(/^<FilesMatch "([^"]+)">/gm)].map((m) => new RegExp(m[1]!));
+    expect(blocks.filter((re) => re.test(CHECK_PAGE_FILE))).toHaveLength(0);
   });
 });
