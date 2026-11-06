@@ -8,6 +8,7 @@
 
 - 日本語：`rules/props` の `orgMarks` のうち、〇〇市・町・村・区・県・都・府・北海道と、株式会社などの会社・法人の言葉のあるもの。課・室・係・局・部・庁は、同じ団体の中の部署のことが多いので比べない。
 - 英語：大文字で始まる語のあとに City・Town・Village・Ward・Prefecture・County が続くもの。会社は Inc.・Ltd.・Co.・Corporation・Corp.。比べるのは、後ろの言葉と、その直前の 1 語。
+- 団体名の頭の日付の切れ端は外して比べる（1.0.1 から）。「令和6年9月架空町議会」は数字の手前で切れて「月架空町」になるため、頭の年・月・日・号・回と、漢数字のすぐあとのものを外す（「九月架空町」→「架空町」）。
 - 見る欄：`/Info` の Title・Subject・Author・Keywords、XMP の dc:title・dc:description・dc:creator・pdf:Keywords。
 - 本文：ページの字（`rules/common/page-text.ts`）。
 
