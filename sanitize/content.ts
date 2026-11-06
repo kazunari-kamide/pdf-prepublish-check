@@ -832,8 +832,14 @@ class Walker {
       const f = g.font;
       if (!f) return;
       const glyphs = f.decode(bytes);
-      const width = f.twoByte ? 2 : 1;
-      const sliceable = glyphs.length * width === bytes.length;
+      // 字ごとのバイトの位置（決まった字の対応表では 1・2・4 バイトが混ざる。2026-11-06 から字ごとのバイト数で切る）
+      const starts: number[] = [];
+      let total = 0;
+      for (const gl of glyphs) {
+        starts.push(total);
+        total += gl.bytes;
+      }
+      const sliceable = total === bytes.length;
       const collect = !annotation || this.collectAp;
       const textOp = !collect ? null : (node.textOps.get(opIndex) ?? node.textOps.set(opIndex, { elems: new Map() }).get(opIndex)!);
       const slots: GlyphSlot[] = [];
@@ -873,7 +879,7 @@ class Walker {
           }
           slots.push({
             g: glyph,
-            bytes: sliceable ? bytes.subarray(k * width, (k + 1) * width) : null,
+            bytes: sliceable ? bytes.subarray(starts[k]!, starts[k]! + gl.bytes) : null,
             adj: g.size !== 0 ? (-step * 1000) / g.size : null,
           });
         }

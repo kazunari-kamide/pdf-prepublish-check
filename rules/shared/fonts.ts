@@ -24,6 +24,7 @@ import {
 } from "pdf-lib";
 import { cidUnicodeFor } from "./cid-unicode.ts";
 import { decodeStream } from "./inflate-limit.ts";
+import { predefinedCMap } from "./predefined-cmaps.ts";
 import { operations, type Tok } from "./content-lexer.ts";
 
 export type Glyph = {
@@ -37,6 +38,8 @@ export type Glyph = {
   isWordSpace: boolean;
   /** 字の中身（ToUnicode から。なければ ASCII の字。分からなければ空） */
   text: string;
+  /** この字のバイト数（2026-11-06 から）。決まった字の対応表（RKSJ・UTF16）では 1・2・4 バイトが混ざる */
+  bytes: number;
 };
 
 export type FontInfo = {
@@ -267,8 +270,10 @@ export function readFont(ctx: PDFContext, fontObj: PDFObject | undefined): FontI
     const desc = cid ? dictOf(ctx, cid.get(PDFName.of("FontDescriptor"))) : undefined;
     const std = standardMetrics(stripSubset(nameOf(ctx, cid?.get(PDFName.of("BaseFont")))));
     const { ascent, descent } = heights(ctx, desc, desc ? bboxOf(ctx, desc.get(PDFName.of("FontBBox")), 0.001) : undefined, std);
-    // Identity-H/V 以外の CMap も、2バイトで区切る（日本語の CMap の多くは2バイト。限界は rules/p6-text/README.md に書く）
     const encName = nameOf(ctx, font.get(PDFName.of("Encoding")));
+    // 決まった字の対応表（90ms-RKSJ-H・UniJIS-UCS2-H など。2026-11-06 から）：Shift-JIS・Unicode として区切って字を読み、幅は CID で引く
+    // （rules/shared/predefined-cmaps.ts）。ほかの名前の CMap は、これまでどおり 2 バイトずつ区切る（限界は rules/p6-text/README.md に書く）
+    const predefined = predefinedCMap(encName);
     // ToUnicode にない字は、Identity-H/V（字の番号＝CID）で CID の書体の並びが Adobe-Japan1 のとき、その並びの表から引く（2026-11-06）。
     // 埋め込みの CID の書体で ToUnicode のない PDF（印刷の会社が作るチラシなど）の字を読むため
     const sysInfo = cid ? dictOf(ctx, cid.get(PDFName.of("CIDSystemInfo"))) : undefined;
@@ -290,10 +295,21 @@ export function readFont(ctx: PDFContext, fontObj: PDFObject | undefined): FontI
       ...(vertical ? { vertical } : {}),
       decode(bytes) {
         const out: Glyph[] = [];
+        if (predefined) {
+          for (let k = 0; k < bytes.length; ) {
+            const ch = predefined.read(bytes, k);
+            const text = toUnicode.get(ch.code) ?? ch.text;
+            // 1 バイトのコード 32 には語の間隔（Tw）がかかる（PDF 1.7 §9.3.3）
+            const isWordSpace = ch.len === 1 && ch.code === 0x20;
+            out.push({ code: ch.code, width: (widths.get(ch.cid) ?? dw) / 1000, isSpace: isWordSpace || isBlank(text), isWordSpace, text, bytes: ch.len });
+            k += ch.len;
+          }
+          return out;
+        }
         for (let k = 0; k + 1 < bytes.length; k += 2) {
           const code = (bytes[k]! << 8) | bytes[k + 1]!;
           const text = toUnicode.get(code) ?? byCid?.(code) ?? "";
-          out.push({ code, width: (widths.get(code) ?? dw) / 1000, isSpace: isBlank(text), isWordSpace: false, text });
+          out.push({ code, width: (widths.get(code) ?? dw) / 1000, isSpace: isBlank(text), isWordSpace: false, text, bytes: 2 });
         }
         return out;
       },
@@ -332,7 +348,7 @@ export function readFont(ctx: PDFContext, fontObj: PDFObject | undefined): FontI
       const out: Glyph[] = [];
       for (const code of bytes) {
         const text = toUnicode.get(code) ?? (code >= 0x20 && code < 0x7f ? String.fromCharCode(code) : "");
-        out.push({ code, width: widthOf(code), isSpace: code === 0x20 || isBlank(text), isWordSpace: code === 0x20, text });
+        out.push({ code, width: widthOf(code), isSpace: code === 0x20 || isBlank(text), isWordSpace: code === 0x20, text, bytes: 1 });
       }
       return out;
     },
@@ -346,7 +362,7 @@ function fallbackFont(): FontInfo {
     ascent: DEFAULT_ASCENT,
     descent: DEFAULT_DESCENT,
     decode(bytes) {
-      return [...bytes].map((code) => ({ code, width: FALLBACK_WIDTH, isSpace: code === 0x20, isWordSpace: code === 0x20, text: "" }));
+      return [...bytes].map((code) => ({ code, width: FALLBACK_WIDTH, isSpace: code === 0x20, isWordSpace: code === 0x20, text: "", bytes: 1 }));
     },
   };
 }
