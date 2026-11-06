@@ -4,24 +4,28 @@
 
 import { describe, expect, it } from "vitest";
 import { buildProcessReport, type ProcessReportInput } from "../src/ui/process-report";
-import { cleanContent, fullContent, MAX_DOTS, MAX_SHOWN_CHARS, maskContent } from "../src/ui/reveal";
+import { cleanContent, fullContent, MAX_DOTS, MAX_SHOWN_CHARS, maskContent, showsWhole } from "../src/ui/reveal";
 
-describe("伏せ方：頭の 2 字（3 字以下なら 1 字）と「●」", () => {
+describe("伏せ方：頭の 2 字と「●」（3 字以下は伏せない）", () => {
   it("4 字以上は頭の 2 字", () => {
     expect(maskContent("見本花子")).toBe("見本●●");
     expect(maskContent("ritsu@kakuu.test")).toBe("ri" + "●".repeat(MAX_DOTS) + "…");
   });
-  it("3 字以下は頭の 1 字", () => {
-    expect(maskContent("見本子")).toBe("見●●");
-    expect(maskContent("見本")).toBe("見●");
+  it("3 字以下は伏せずに全部を出し、「中身を見る」も出さない（2026-11-06 本人が決定）", () => {
+    expect(maskContent("見本子")).toBe("見本子");
+    expect(maskContent("見本")).toBe("見本");
     expect(maskContent("見")).toBe("見");
+    expect(showsWhole("見本子")).toBe(true);
+    expect(showsWhole("見本花子")).toBe(false);
+    expect(showsWhole("  ")).toBe(false);
   });
   it("字はコードポイントで数える（サロゲートペアの字も 1 字）", () => {
     expect(maskContent("𠮷野家具")).toBe("𠮷野●●");
   });
   it("見えない制御の字・向きを変える字は「�」に、改行は空白にする", () => {
     expect(cleanContent("見‮本​\n花子\u0007")).toBe("見�本� 花子�");
-    expect(maskContent("‮‮")).toBe("�●");
+    expect(maskContent("‮‮")).toBe("��");
+    expect(maskContent("‮‮‮‮")).toBe("��●●");
   });
   it("全部を出すときも、長すぎるものは切って残りの字数を添える", () => {
     const long = "あ".repeat(MAX_SHOWN_CHARS + 5);

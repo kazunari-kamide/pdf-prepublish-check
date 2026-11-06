@@ -177,7 +177,13 @@ async function checkSize(c, appUrl, size, longPdf, scanPdf) {
 
     // 片付ける → 読み直す
     if (await p.eval("!document.getElementById('sanitize').disabled && !document.getElementById('actions').hidden")) {
+      // 「整える」を押すと、押す前の確かめ（画面全体のポップアップ）が出る。その形も測ってから、中の「整える」を押す（2026-11-06）
       await p.eval("document.getElementById('sanitize').click(); void 0");
+      await sleep(300);
+      if (await p.eval("document.getElementById('tidy-dialog')?.open === true")) {
+        steps.push(await p.measure("整える前の確かめ"));
+        await p.eval("document.getElementById('tidy-dialog-run').click(); void 0");
+      } else flowErrors.push("押す前の確かめが出ませんでした");
       await p.waitWhile("(() => { const s = document.getElementById('status').textContent; return /^(片付けています|整えています|片付けた PDF を、最初から|整えた PDF を、最初から)/.test(s); })()", 180_000);
       await sleep(1200);
       if (await p.eval("document.getElementById('clean').hidden")) flowErrors.push("片付けた結果が出ませんでした");
@@ -213,7 +219,7 @@ async function checkSize(c, appUrl, size, longPdf, scanPdf) {
       flowErrors.push("スキャンの PDF で「片付ける」を押せませんでした");
       return;
     }
-    await p.eval("document.getElementById('sanitize').click(); void 0");
+    await p.eval("(() => { document.getElementById('sanitize').click(); const d = document.getElementById('tidy-dialog'); if (d && d.open) document.getElementById('tidy-dialog-run').click(); })(); void 0");
     await p.waitWhile("(() => { const s = document.getElementById('status').textContent; return /^(片付けています|整えています|片付けた PDF を、最初から|整えた PDF を、最初から)/.test(s); })()", 180_000);
     await sleep(800);
     if (await p.eval("document.getElementById('compress').hidden")) {
@@ -430,7 +436,11 @@ function measureInPage(minTarget) {
   const sx = scrollX;
   const sy = scrollY;
   const covered = [];
+  // 画面全体のポップアップ（<dialog> の showModal）が開いている間は、ポップアップの外は覆われていて押せないのが正しい形。
+  // 中の部品だけを見る（2026-11-06：「整える」を押す前の確かめ）
+  const modal = document.querySelector("dialog[open]:modal");
   for (const el of targets) {
+    if (modal && !modal.contains(el)) continue;
     el.scrollIntoView({ block: "center", inline: "center" });
     const r = el.getBoundingClientRect();
     const x = r.left + r.width / 2;

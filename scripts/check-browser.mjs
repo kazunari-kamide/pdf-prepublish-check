@@ -524,7 +524,8 @@ async function pressSanitize(c, sessionId, evaluate, pdf) {
     const note = await evaluate("document.getElementById('actions').hidden ? '片付けるボタンが出ていません' : document.getElementById('sanitize-note').textContent");
     return { pressed: false, status: `押せない形でした（${note}）`, count: null, saved: "—", ok: null };
   }
-  await evaluate("document.getElementById('sanitize').click(); void 0");
+  // 「整える」を押すと、押す前の確かめ（ポップアップ）が出るので、中の「整える」も押す（2026-11-06）
+  await evaluate("(() => { document.getElementById('sanitize').click(); const d = document.getElementById('tidy-dialog'); if (d && d.open) document.getElementById('tidy-dialog-run').click(); })(); void 0");
   const working = "(() => { const s = document.getElementById('status').textContent; return /^(片付けています|整えています|片付けた PDF を、最初から|整えた PDF を、最初から)/.test(s); })()";
   // 重いページ（h01）は、片付けと読み直しに時間がかかる。最大 180 秒待つ
   for (let i = 0; i < 900 && (await evaluate(working)); i++) await sleep(200);

@@ -24,6 +24,8 @@ export type ProcessReportInput = {
   rules: string[];
   /** プロパティを項目ごとにどうしたか（tidy-model.ts の changeLines。値は入れない） */
   properties?: string[];
+  /** 本人が「整えない」を選んだ種類（D168。sanitize の keep と同じ一覧）と、その行の一言（CleanView.keptLines） */
+  kept?: { patterns: string[]; lines: string[] };
   /**
    * 見つけた字の中身（保存の前に「中身も入れる」を選んだときだけ渡す。初めは渡さない）。
    * 渡さなければ、報告書には中身を一切入れない
@@ -48,12 +50,17 @@ function coverageLine(c: CoverageRow): string {
 }
 
 /** 型ごとの、片付けの前と読み直したあとの数（見つかった所＋確かめる所） */
-export function beforeAfterCounts(before: CoverageRow[], after: CoverageRow[] | null): Array<{ key: string; name: string; before: number; after: number | null }> {
+export function beforeAfterCounts(
+  before: CoverageRow[],
+  after: CoverageRow[] | null,
+  kept: readonly string[] = [],
+): Array<{ key: string; name: string; before: number; after: number | null; kept: boolean }> {
   return before
     .map((b) => {
       const a = after?.find((x) => x.key === b.key);
       const counted = (c: CoverageRow | undefined) => (c && (c.state === "checked" || c.state === "partial") ? c.found + c.check : null);
-      return { key: b.key, name: b.name, before: counted(b) ?? 0, after: after ? counted(a) : null };
+      // kept：本人が「整えない」を選んだ種類（D168）。読み直したあとの数が残っていても、残しているのは本人が選んだため
+      return { key: b.key, name: b.name, before: counted(b) ?? 0, after: after ? counted(a) : null, kept: kept.includes(b.key) };
     })
     .filter((r) => r.before > 0 || (r.after ?? 0) > 0);
 }
@@ -79,10 +86,16 @@ export function buildProcessReport(input: ProcessReportInput): string {
   lines.push(input.verdict);
   lines.push("");
   lines.push("■ 型ごとの数（整える前 → 読み直したあと）");
-  const counts = beforeAfterCounts(before.coverage, after.coverage);
+  const counts = beforeAfterCounts(before.coverage, after.coverage, input.kept?.patterns ?? []);
   if (!counts.length) lines.push("- 見つかった所はありませんでした。");
-  for (const c of counts) lines.push(`- ${c.name}（${c.key}）：${c.before} → ${c.after === null ? "読み直せなかった" : c.after}`);
+  for (const c of counts) lines.push(`- ${c.name}（${c.key}）：${c.before} → ${c.after === null ? "読み直せなかった" : c.after}${c.kept ? "（外した：整えていません）" : ""}`);
   lines.push("");
+  if (input.kept?.patterns.length) {
+    lines.push("■ 外した種類（本人が「整えない」を選んだ。残しています）");
+    for (const p of input.kept.patterns) lines.push(`- ${patternWithName(p)}`);
+    for (const t of input.kept.lines) lines.push(`- ${t}`);
+    lines.push("");
+  }
   lines.push("■ 整えた内容（見えない情報を消した所）");
   if (!input.removed.length) lines.push("- ありません。");
   const chars = input.removed.filter((r) => CHAR_KINDS.has(r.kind)).reduce((n, r) => n + r.count, 0);

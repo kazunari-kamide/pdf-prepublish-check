@@ -110,13 +110,13 @@ describe("ページの HTML", () => {
       expect(page).toContain(`<link rel="canonical" href="${OFFICIAL_ORIGIN}/`);
       // お問い合わせのページだけ、form-action 'self'（同じサイトへのフォームの送信）だけが違う CSP（docs/contact.md）
       expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="${escapeHtml(name === "contact.html" ? cspForContactMeta : cspForMeta)}" />`);
-      // スクリプトを持たない。例外は記事の一覧のページだけ：検索のスクリプト（2026-11-05 本人が決定）。
-      // 3D の飾りの読み込み役は、案 C でやめた（2026-11-05 夜 本人が決定）ので、読み込まない
+      // スクリプトを持たない。例外は 2 ページだけ：記事の一覧の検索のスクリプト（2026-11-05 本人が決定）と、
+      // about の 3D の飾りの読み込み役（2026-11-06 本人が承認）。記事の一覧の 3D の飾りは、案 C でやめた（2026-11-05 夜 本人が決定）ので読み込まない
       const scripts = page.match(/<script\b[^>]*>/g) ?? [];
       if (name === "articles/index.html") {
         expect(scripts).toEqual([`<script type="module" src="/${searchScript().file}">`]);
         expect(page).not.toContain(heroScripts().loader.file);
-      }
+      } else if (name === "about.html") expect(scripts).toEqual([`<script type="module" src="/${heroScripts().loader.file}">`]);
       else expect(scripts).toEqual([]);
       expect(page).not.toMatch(/\sstyle=/);
       expect(page).not.toMatch(/\son[a-z]+=/);

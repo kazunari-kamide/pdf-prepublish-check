@@ -184,7 +184,31 @@ function paperStack(variant: "open" | "closed"): string {
   ].join("\n");
 }
 
-function hero(): string {
+/** 最初の画面の絵（q47）と、あとから 3D に入れ替える仕組みの場所（2026-11-06 本人が承認。site.ts の aboutHero） */
+export interface AboutHero {
+  /** q47 の絵（1920×1080 の webp。2 倍の画面のため） */
+  img: string;
+  /** q47 の絵（960×540。1 倍の画面のため） */
+  img960: string;
+  /** 3D のときに下に敷く、物を除いた地と影の絵 */
+  plate: string;
+  /** 3D の描画（about-3d-scene.js を three.js と束ねたもの） */
+  scene: string;
+  /** 読み込み役（site-3d.js） */
+  loader: string;
+}
+
+/** 右の列の絵。はじめは q47 の絵。読み込み役が手の空いたときに 3D の描画を読み、描けたら入れ替える。飾りなので読み上げない */
+function heroArt(h: AboutHero | undefined): string {
+  if (!h) return paperStack("open");
+  return [
+    `<div class="lp-hero-3d" data-plate="${e(h.plate)}">`,
+    `  <img src="${e(h.img)}" srcset="${e(h.img960)} 960w, ${e(h.img)} 1920w" sizes="(max-width: 56rem) calc(100vw - 2rem), 31rem" width="1920" height="1080" alt="" decoding="async" fetchpriority="high" />`,
+    `</div>`,
+  ].join("\n");
+}
+
+function hero(h?: AboutHero): string {
   return `      <section class="lp-hero" aria-labelledby="lp-hero-title">
         <div class="lp-wrap lp-hero-grid">
           <div class="lp-hero-text">
@@ -198,10 +222,11 @@ function hero(): string {
             </ul>
             <p class="lp-actions">${button(INSPECTOR_PATH, "PDF を確かめる")} ${button(SAMPLE_HREF, "架空の見本で試す", "secondary")}</p>
           </div>
-          <div class="lp-hero-art">
-${paperStack("open")}
+          <div class="lp-hero-art"${h ? ` aria-hidden="true" data-scene="${e(h.scene)}"` : ""}>
+${heroArt(h)}
           </div>
-        </div>
+        </div>${h ? `
+        <script type="module" src="${e(h.loader)}"></script>` : ""}
       </section>`;
 }
 
@@ -384,7 +409,7 @@ ${paperStack("closed")}
       </section>`;
 }
 
-export function renderAbout(o: RenderOptions, cssHref: string): string {
-  const body = [hero(), remains(), steps(), trust(), scope(), loop(o), scenes(), faq(), closing()].join("\n");
+export function renderAbout(o: RenderOptions, cssHref: string, h?: AboutHero): string {
+  const body = [hero(h), remains(), steps(), trust(), scope(), loop(o), scenes(), faq(), closing()].join("\n");
   return layout(ABOUT_META, body, o, { bodyClass: "site-lp", extraCssHref: cssHref });
 }

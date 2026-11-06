@@ -218,7 +218,7 @@ function stripAnnotation(ctx: PDFContext, a: PDFDict, subtype: string): boolean 
  * 墨消し注釈（適用したもの）もここで外す。
  * 外した注釈も、先に欄を消しておく（構造ツリーなど、ほかの所から指されていてファイルに残る場合のため）。
  */
-export function cleanAnnotations(doc: PDFDocument, redactAnnots: Set<PDFObject>): RemovedItem[] {
+export function cleanAnnotations(doc: PDFDocument, redactAnnots: Set<PDFObject>, keepComments = false): RemovedItem[] {
   const ctx = doc.context;
   const out: RemovedItem[] = [];
   const removedAnnots = new Set<PDFObject>();
@@ -237,6 +237,8 @@ export function cleanAnnotations(doc: PDFDocument, redactAnnots: Set<PDFObject>)
         annots.remove(i);
         continue;
       }
+      // 本人が注釈（P8）を「整えない」にしたときは、適用した墨消しの注釈だけを外し、ほかはそのまま残す（D168）
+      if (keepComments) continue;
       const subtype = nameOf(ctx, a.get(N("Subtype"))) ?? "";
       const had = stripAnnotation(ctx, a, subtype);
       if (subtype === "Popup" || COMMENT_TYPES.has(subtype)) {

@@ -18,7 +18,13 @@ export type SanitizeRequest =
   | { type: "warm"; id: number };
 
 /** 整えるときに本人が選んだこと（プロパティの書き直し・PDF/A の印・電子署名）。指定しなかったプロパティは消す */
-export type TidyChoices = { properties?: PropertyEdits; pdfaMark?: "remove" | "keep"; signatures?: "remove" | "keep" };
+export type TidyChoices = {
+  properties?: PropertyEdits;
+  pdfaMark?: "remove" | "keep";
+  signatures?: "remove" | "keep";
+  /** 本人が「整えない」を選んだ種類（D168。外せるのは sanitize/types.ts の KEEPABLE_PATTERNS だけ。片付けの側でも確かめる） */
+  keep?: string[];
+};
 
 export type SanitizeResponse =
   | { type: "sanitized"; id: number; buffer: ArrayBuffer; pages: number; removed: RemovedItem[]; notDone: NotDoneItem[]; decrypted: boolean; properties?: PropertyChange[] }

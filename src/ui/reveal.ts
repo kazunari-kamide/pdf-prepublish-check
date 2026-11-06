@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // 見つけた字の中身の出し方（2026-11-05 本人が決めた）。画面の部品に頼らない計算だけを置き、テストで確かめる。
-// - 最初は、頭の 2 字（3 字以下なら 1 字）だけを出し、残りは「●」で伏せる（例：「山田●●」）。
+// - 最初は、頭の 2 字だけを出し、残りは「●」で伏せる（例：「山田●●」）。
+// - 3 字以下の中身は、伏せずに全部を出し、「中身を見る」も出さない（2026-11-06 本人が決定。前は 3 字以下は頭の 1 字だけを出していた）。
 // - 「中身を見る」を押すと全部を出す。もう一度押すと伏せる。
 // - 中身は画面の中だけで使う。報告書には、保存の前に「中身も入れる」を選んだときだけ入れる。ログ・ファイル名には入れない。
 // - PDF から取り出した字は細工されている前提で扱う：見えない制御の字（向きを変える字・幅のない字など）は、見える印に置き換える。
@@ -9,6 +10,8 @@
 
 /** 頭に出す字数 */
 export const HEAD_CHARS = 2;
+/** これ以下の字数の中身は、伏せずに全部を出す（「中身を見る」も出さない） */
+export const SHOW_WHOLE_MAX = 3;
 /** 全部を出すときの上限の字数（これより長いものは切って、残りの字数を添える） */
 export const MAX_SHOWN_CHARS = 200;
 /** 伏せるときの「●」の上限（長い中身で行が伸びないように） */
@@ -31,10 +34,18 @@ export function cleanContent(raw: string): string {
 export function maskContent(raw: string): string {
   const c = chars(cleanContent(raw));
   if (!c.length) return "";
-  const head = c.length <= 3 ? 1 : HEAD_CHARS;
+  // 3 字以下は伏せない（showsWhole）。ここに来るのは 4 字以上
+  if (c.length <= SHOW_WHOLE_MAX) return c.join("");
+  const head = HEAD_CHARS;
   const rest = c.length - head;
   const dots = DOT.repeat(Math.min(rest, MAX_DOTS));
   return c.slice(0, head).join("") + dots + (rest > MAX_DOTS ? "…" : "");
+}
+
+/** 伏せずに全部を出す短さか（空のときは false） */
+export function showsWhole(raw: string): boolean {
+  const n = chars(cleanContent(raw)).length;
+  return n > 0 && n <= SHOW_WHOLE_MAX;
 }
 
 /** 全部を出す（長いものは切って、残りの字数を添える） */

@@ -48,7 +48,7 @@ describe("処理の報告書", () => {
   });
 
   it("前後の数は、見つかった型だけを並べる", () => {
-    expect(beforeAfterCounts([cov("P6", { found: 1 }), cov("P1")], [cov("P6"), cov("P1")])).toEqual([{ key: "P6", name: "名前P6", before: 1, after: 0 }]);
+    expect(beforeAfterCounts([cov("P6", { found: 1 }), cov("P1")], [cov("P6"), cov("P1")])).toEqual([{ key: "P6", name: "名前P6", before: 1, after: 0, kept: false }]);
   });
 
   it("SHA-256 は 16進の小文字 64 字", async () => {
