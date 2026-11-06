@@ -37,6 +37,8 @@
     "fonts:headings": "node design/fonts/heading-chars.mjs",
     "fonts:ui": "node design/fonts/ui-chars.mjs",
     "eval:blind": "node eval/blind/run.ts",
+    "ratchet": "node ratchet/run.ts",
+    "ratchet:synthetic": "node ratchet/synthetic.ts",
     "cli": "node cli/omamori.ts",
     "og:build": "node site-og-image.ts --write",
     "figures:draw": "node site-figures-draw.ts",
