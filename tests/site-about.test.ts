@@ -8,7 +8,7 @@
 // - sitemap に入り、どのサイトのページの上の帯からも来られる
 
 import { describe, expect, it } from "vitest";
-import { renderSitemap, siteFiles } from "../site.ts";
+import { aboutHero, renderSitemap, siteFiles } from "../site.ts";
 import { ABOUT_META, PATTERNS, REMAINS, SAMPLE_HREF } from "../src/site/about.ts";
 import { ARTICLES } from "../src/site/articles.ts";
 import { ABOUT_PATH, fileFor } from "../src/site/render.ts";
@@ -37,8 +37,13 @@ describe("サービスの紹介のページ", () => {
     expect(ABOUT_META.description).not.toMatch(/[【】]/);
   });
 
-  it("スクリプト・直接書いた style がない。読み込む CSS は、同じサイトの 2 つだけ", () => {
-    expect(page).not.toMatch(/<script\b/);
+  it("スクリプトは 3D の飾りの読み込み役 1 つだけ（2026-11-06 本人が承認）。直接書いた style がない。読み込む CSS は、同じサイトの 2 つだけ", () => {
+    const h = aboutHero();
+    expect(page.match(/<script\b[^>]*>/g)).toEqual([`<script type="module" src="/${h.loader.file}">`]);
+    // 読み込み役があとから読む描画と、はじめの絵・3D のときに敷く絵は、同じサイトの /assets/ の中
+    expect(page).toContain(`data-scene="/${h.scene.file}"`);
+    expect(page).toContain(`<img src="/${h.img.file}" srcset="/${h.img960.file} 960w, /${h.img.file} 1920w"`);
+    expect(page).toContain(`data-plate="/${h.plate.file}"`);
     expect(page).not.toMatch(/<style\b|\sstyle="/);
     const css = [...page.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);
     expect(css).toHaveLength(2);

@@ -225,6 +225,28 @@
   perspective: 900px;
 }
 
+/* q47 の絵（16:9）。あとから 3D に入れ替わる（site-3d.js と about-3d-scene.js。2026-11-06 本人が承認）。
+ * 3D のときは、絵を地と影だけの絵に替え、その上に透明の canvas で物を描く（はじめの姿は絵と重なる） */
+.lp-hero-3d {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.lp-hero-3d img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-card, 12px);
+}
+
+.lp-hero-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .lp-stack {
   position: relative;
   width: min(100%, 18rem);
