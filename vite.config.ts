@@ -111,5 +111,9 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
+    // テストごとの結果と時間を、毎回 .tmp/vitest/report.json にも残す（2026-11-06 から）。
+    // 端末でないとき、ふつうの出し方は落ちたテストしか詳しく出さないので、たまに落ちるテストを後から調べるため
+    reporters: ["default", "json"],
+    outputFile: { json: ".tmp/vitest/report.json" },
   },
 });
