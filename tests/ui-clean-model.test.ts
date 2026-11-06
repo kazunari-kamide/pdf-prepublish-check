@@ -200,9 +200,51 @@ describe("自分で選んだ所の黒塗り", () => {
       { pattern: "P6", kind: "redaction_box", label: "選んだ所に黒い四角を描きました", count: 1, page: 1, rect: [10, 10, 40, 20] },
     ];
     const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed: [...removed, ...self], notDone: [], decrypted: false });
-    expect(c.removed[0]).toMatchObject({ name: SELF_GROUP_NAME, self: true, total: 2 });
+    // 選んだ所は 1 か所なので、件数は 1 件（明細の行は、したこと 2 つを並べる）。2026-11-06 に、件数がしたことの数（2 件）になっていたのを直した
+    expect(c.removed[0]).toMatchObject({ name: SELF_GROUP_NAME, self: true, total: 1 });
+    expect(c.removed[0]!.lines).toEqual(["選んだ所の字（3 字）を消しました（ページ 1）", "選んだ所に黒い四角を描きました（ページ 1）"]);
     expect(c.removed.find((g) => g.pattern === "P6" && !g.self)?.total).toBe(1);
-    expect(c.doneMarks.filter((m) => m.label.startsWith("選んだ所"))).toHaveLength(2);
+    expect(c.doneMarks.filter((m) => m.label.startsWith("選んだ所"))).toEqual([{ page: 1, rect: [10, 10, 40, 20], label: "選んだ所に黒い四角を描きました" }]);
+  });
+
+  it("スキャンの 1 か所を選んだとき（画素・字・四角の 3 件）も、「済」の札は 1 つ（同じ所に 2 つ以上並べない。2026-11-06 本番で見つかった）", () => {
+    const self: RemovedItem[] = [
+      { pattern: "P6", kind: "redacted_pixels", label: "選んだ所の画像の中身（1200 画素を黒く塗りました）", count: 1200, page: 1, rect: [400, 700, 520, 760] },
+      { pattern: "P6", kind: "redacted_text", label: "選んだ所の字（2 字）を消しました", count: 2, page: 1, rect: [400, 700, 520, 760] },
+      { pattern: "P6", kind: "redaction_box", label: "選んだ所に黒い四角を描きました", count: 1, page: 1, rect: [400, 700, 520, 760] },
+    ];
+    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed: [...removed, ...self], notDone: [], decrypted: false });
+    expect(c.doneMarks.filter((m) => m.label.startsWith("選んだ所"))).toHaveLength(1);
+    expect(c.removed[0]).toMatchObject({ self: true, total: 1 });
+    // 見つかった所（見せかけの黒塗りの片付け）の札は、今までどおり 1 件に 1 つ
+    expect(c.doneMarks.filter((m) => !m.label.startsWith("選んだ所"))).toHaveLength(removed.filter((r) => r.rect).length);
+  });
+
+  it("2 か所を選んだときは、札も件数も 2", () => {
+    const self: RemovedItem[] = [
+      { pattern: "P6", kind: "redacted_pixels", label: "選んだ所の画像の中身（10 画素を黒く塗りました）", count: 10, page: 1, rect: [10, 10, 40, 20] },
+      { pattern: "P6", kind: "redaction_box", label: "選んだ所に黒い四角を描きました", count: 1, page: 1, rect: [10, 10, 40, 20] },
+      { pattern: "P6", kind: "redaction_box", label: "選んだ所に黒い四角を描きました", count: 1, page: 2, rect: [10, 10, 40, 20] },
+    ];
+    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed: self, notDone: [], decrypted: false });
+    expect(c.doneMarks).toEqual([
+      { page: 1, rect: [10, 10, 40, 20], label: "選んだ所に黒い四角を描きました" },
+      { page: 2, rect: [10, 10, 40, 20], label: "選んだ所に黒い四角を描きました" },
+    ]);
+    expect(c.removed[0]).toMatchObject({ self: true, total: 2 });
+  });
+
+  it("選んだ所が多く、明細の行を切り詰めたときも「ほか N 件」は報告の数で出す", () => {
+    const self: RemovedItem[] = [];
+    for (let p = 1; p <= MAX_LINES_PER_GROUP + 2; p++) {
+      self.push({ pattern: "P6", kind: "redacted_pixels", label: "選んだ所の画像の中身（10 画素を黒く塗りました）", count: 10, page: p, rect: [10, 10, 40, 20] });
+      self.push({ pattern: "P6", kind: "redaction_box", label: "選んだ所に黒い四角を描きました", count: 1, page: p, rect: [10, 10, 40, 20] });
+    }
+    const c = buildCleanView({ before: buildView(found), after: buildView(empty), removed: self, notDone: [], decrypted: false });
+    const g = c.removed[0]!;
+    expect(g.total).toBe(MAX_LINES_PER_GROUP + 2);
+    expect(g.lines).toHaveLength(MAX_LINES_PER_GROUP + 1);
+    expect(g.lines.at(-1)).toBe(`ほか ${self.length - MAX_LINES_PER_GROUP} 件`);
   });
 });
 

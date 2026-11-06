@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import { IMAGE, LARGE, LARGE_MIN_BYTES, OUT, PAGE, REDACTED, toPdfRect } from "../demo/scan-minutes/build.mjs";
 import { compress, sanitizePdf } from "../sanitize/index.ts";
 import { rulesCheck } from "../sanitize/redact-check.ts";
+import { redact } from "../sanitize/redact.ts";
 import { SIZE_LIMITS, nextForLimit } from "../src/ui/compress-model.ts";
 import { createNodeImageCodec } from "../sanitize/node/image-codec.ts";
 import { createNodeImageDecoder } from "../eval/image-decoder.ts";
@@ -188,5 +189,32 @@ describe("黒い四角を外した版（下が見える版）の画像", () => {
 
   it("隅の一言のあるなしで、黒く塗る所は同じ場所", () => {
     expect(boxes.boxes.every((b) => b.x > 0 && b.y > 0 && b.x + b.width < IMAGE.width && b.y + b.height < IMAGE.height)).toBe(true);
+  });
+});
+
+// 本番で見つかった不具合（2026-11-06）：大きい版で「自分で黒塗りする所を選ぶ」で 1 か所を選んで整えると、
+// 読み直したあとのページの絵で、その所に「済」の札が 2 つ並んでいた（片付けが、選んだ所 1 か所に「画素を塗った」と「黒い四角を描いた」の 2 件を返し、
+// 札を報告 1 件ごとに作っていたため）。札と件数は、選んだ所の数で出す（src/ui/clean-model.ts）
+describe("demo/scan-minutes の大きい版で、1 か所を選んで整える", () => {
+  it("選んだ所の「済」の札は 1 つ、一覧の件数も 1 件。見つかった 3 か所の札は 1 つずつ", { timeout: 60000 }, async () => {
+    const bytes = read(OUT.large);
+    const ctx = { imageDecoder: createNodeImageDecoder() };
+    const before = buildView(await inspectAll(bytes, () => {}, RULES, ctx));
+    // 1 ページめの右上（「公開」の印のあたり）。PDF の座標（左下が原点）
+    const pick = { page: 1, rect: [PAGE.width - 200, PAGE.height - 110, PAGE.width - 60, PAGE.height - 50] as [number, number, number, number] };
+    const r = await redact(bytes, [pick], { codec: createNodeImageCodec() });
+    expect(r.status).toBe("ok");
+    if (r.status !== "ok") return;
+    // 片付けは、選んだ 1 か所について報告を 2 件以上返す（画素を塗った・黒い四角を描いた）
+    expect(r.removed.filter((x) => x.kind === "redaction_box")).toHaveLength(1);
+    expect(r.removed.filter((x) => x.kind === "redacted_pixels").length).toBeGreaterThanOrEqual(1);
+    const c = buildCleanView({ before, after: buildView(await inspectAll(r.bytes, () => {}, RULES, ctx)), removed: r.removed, notDone: r.notDone, decrypted: r.decrypted });
+    const selfMarks = c.doneMarks.filter((m) => m.label.startsWith("選んだ所"));
+    expect(selfMarks).toHaveLength(1);
+    expect(c.doneMarks.filter((m) => !m.label.startsWith("選んだ所"))).toHaveLength(3);
+    // 同じ場所に札を 2 つ置かない
+    const keys = c.doneMarks.map((m) => `${m.page}:${m.rect.join(",")}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(c.removed.find((g) => g.self)).toMatchObject({ total: 1 });
   });
 });

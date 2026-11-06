@@ -91,24 +91,35 @@ export function buildCleanView(input: {
 }): CleanView {
   const { before, after, removed, notDone, decrypted } = input;
 
+  // 自分で選んだ所は、1 か所に「画素を塗った」「字を消した」「黒い四角を描いた」の報告がいくつも並ぶ。
+  // 片付けの redact は、選んだ四角ごとに必ず redaction_box を 1 件返すので、選んだ所の数と「済」の札は redaction_box で数える
+  // （前は報告 1 件ごとに数えていて、1 か所を選ぶと「2 件」、ページの絵には「済」が 2 つ並んでいた。2026-11-06 本番で見つかった）。
+  // redaction_box がない報告（古い形・テストの組み立て）のときは、前と同じく報告 1 件ごとに数える
+  const hasBoxes = removed.some((r) => r.kind === "redaction_box");
+  const countsAsArea = (r: RemovedItem) => !SELF_KINDS.has(r.kind) || !hasBoxes || r.kind === "redaction_box";
+
   const groups = new Map<string, RemovedGroup>();
+  // 明細の行の数（「ほか N 件」に使う）は、件数（total）とは別に、報告の数で数える
+  const reports = new Map<RemovedGroup, number>();
   for (const r of removed) {
     const self = SELF_KINDS.has(r.kind);
     const key = self ? "self" : r.pattern;
     const seen = self ? 0 : before.rows.filter((row) => row.pattern === r.pattern).length;
     const g = groups.get(key) ?? { pattern: r.pattern, name: self ? SELF_GROUP_NAME : (PATTERN_NAME[r.pattern] ?? r.pattern), self, found: seen > 0, seen, lines: [], total: 0 };
-    g.total++;
+    if (countsAsArea(r)) g.total++;
+    reports.set(g, (reports.get(g) ?? 0) + 1);
     if (g.lines.length < MAX_LINES_PER_GROUP) g.lines.push(withPage(r.label, r.page));
     groups.set(key, g);
   }
   for (const g of groups.values()) {
-    if (g.total > g.lines.length) g.lines.push(`ほか ${g.total - g.lines.length} 件`);
+    const n = reports.get(g) ?? 0;
+    if (n > g.lines.length) g.lines.push(`ほか ${n - g.lines.length} 件`);
   }
   const removedGroups = ["self", ...PATTERN_ORDER].filter((k) => groups.has(k)).map((k) => groups.get(k)!);
 
   const notDoneLines = notDone.map((n) => withPage(n.label, n.page));
   const doneMarks: DoneMark[] = removed
-    .filter((r): r is RemovedItem & { page: number; rect: Rect } => r.page !== undefined && r.rect !== undefined)
+    .filter((r): r is RemovedItem & { page: number; rect: Rect } => r.page !== undefined && r.rect !== undefined && countsAsArea(r))
     .map((r) => ({ page: r.page, rect: r.rect, label: r.label }));
 
   const notes: string[] = [];
