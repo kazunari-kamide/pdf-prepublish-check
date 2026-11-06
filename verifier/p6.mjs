@@ -15,10 +15,23 @@
 //              （全部が紙の色なら、もともと何も書かれていない）
 
 import { createHash } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
+// 手元の pdfjs-dist に入っている Adobe の字の対応表（cmaps/）の場所（2026-11-06 から。ファイルを読むだけで、通信はしない）。
+// 渡さないと、決まった字の対応表（90ms-RKSJ-H・UniJIS-UCS2-H など）や ToUnicode のない Adobe-Japan1 の書体の字を、PDF.js が黙って 0 個にする
+const CMAP_URL = (() => {
+  try {
+    const build = path.dirname(fileURLToPath(import.meta.resolve("pdfjs-dist/legacy/build/pdf.mjs")));
+    return `${path.join(build, "..", "..", "cmaps").split(path.sep).join("/")}/`;
+  } catch {
+    return undefined;
+  }
+})();
+
 export const VERIFIER_NAME = "omamori-verifier-p6";
-export const VERIFIER_VERSION = "0.2.0";
+export const VERIFIER_VERSION = "0.3.0";
 
 // 判定に使う値。合成 PDF（fixtures/p6/）で測って決めた（proposals/p6/verifier/README.md に測った値を書く）。
 export const THRESHOLDS = Object.freeze({
@@ -382,6 +395,8 @@ async function readPage(page, { includeText }) {
   const stack = [];
   let annotationDepth = 0;
   const fontCache = new Map();
+  // 読めなかった書体（PDF.js の書体の読み込みの失敗）で、字を描く命令があったか（2026-11-06 から。そのページは skipped_pages に unreadable_text として入れる）
+  let unreadableText = false;
 
   const loadFont = async (id) => {
     if (fontCache.has(id)) return fontCache.get(id);
@@ -396,7 +411,8 @@ async function readPage(page, { includeText }) {
       if (Number.isFinite(a)) asc = Math.min(1.5, Math.max(0.5, a));
       if (Number.isFinite(d)) desc = Math.max(-0.5, Math.min(0, d));
     }
-    const info = { fm, asc, desc, vertical: !!f?.vertical };
+    // PDF.js は書体を読めないとき、書体の代わりにエラーの文字列を置き、その書体の字を黙って 0 個にする（cMapUrl がないときの「Ensure that the `cMapUrl` …」など）
+    const info = { fm, asc, desc, vertical: !!f?.vertical, failed: typeof f === "string" };
     fontCache.set(id, info);
     return info;
   };
@@ -555,6 +571,8 @@ async function readPage(page, { includeText }) {
       case OPS.showSpacedText: {
         const font = st.font ?? { fm: [0.001, 0, 0, 0.001, 0, 0], asc: 0.8, desc: -0.2 };
         const size = st.fontSize;
+        // 読めなかった書体で字を描く命令（PDF.js は字を黙って 0 個にする）。位置の数だけの命令・中身のない Tj・空白では当たらない（2026-11-06 から）
+        if (font.failed) unreadableText = true;
         const base = mul(mul(st.ctm, st.textMatrix), [st.hScale, 0, 0, 1, st.x, st.y + st.rise]);
         let x = 0;
         const widthScale = size * font.fm[0];
@@ -594,7 +612,7 @@ async function readPage(page, { includeText }) {
     // 注釈が読めなくても、ページの中身の判定は続ける
   }
 
-  return { covers, glyphs, images };
+  return { covers, glyphs, images, unreadableText };
 }
 
 // 覆いごとに、下に残っているものをまとめる
@@ -683,6 +701,7 @@ export async function verifyP6(bytes, { includeText = false } = {}) {
       // pdfjs は渡した配列を手放す。また Node の Buffer は受け付けないので、純粋な Uint8Array の写しを渡す
       data: new Uint8Array(buf),
       isEvalSupported: false,
+      ...(CMAP_URL ? { cMapUrl: CMAP_URL, cMapPacked: true } : {}),
       disableFontFace: true,
       useSystemFonts: false,
       isOffscreenCanvasSupported: false,
@@ -706,6 +725,8 @@ export async function verifyP6(bytes, { includeText = false } = {}) {
         const read = await readPage(page, { includeText });
         if (read.skipped) { result.skipped_pages.push({ page: p, reason: read.skipped }); continue; }
         result.items.push(...judgePage(p, read, { includeText }));
+        // 読めた字の結果は items に入れたうえで、読めない字があったことを知らせる（「残っていない」と言い切らない）
+        if (read.unreadableText) result.skipped_pages.push({ page: p, reason: "unreadable_text" });
       } catch {
         result.skipped_pages.push({ page: p, reason: "unreadable_page" });
       } finally {

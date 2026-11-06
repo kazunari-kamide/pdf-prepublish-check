@@ -17,9 +17,22 @@
 // 注釈の中の字は P8 の範囲なので見ない（annotationMode: DISABLE）。
 
 import { createHash } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
-export const VERIFIER = { name: "omamori-verifier-p7", version: "0.2.0" };
+// 手元の pdfjs-dist に入っている Adobe の字の対応表（cmaps/）の場所（2026-11-06 から。ファイルを読むだけで、通信はしない）。
+// 渡さないと、決まった字の対応表（90ms-RKSJ-H・UniJIS-UCS2-H など）や ToUnicode のない Adobe-Japan1 の書体の字を、PDF.js が黙って 0 個にする
+const CMAP_URL = (() => {
+  try {
+    const build = path.dirname(fileURLToPath(import.meta.resolve("pdfjs-dist/legacy/build/pdf.mjs")));
+    return `${path.join(build, "..", "..", "cmaps").split(path.sep).join("/")}/`;
+  } catch {
+    return undefined;
+  }
+})();
+
+export const VERIFIER = { name: "omamori-verifier-p7", version: "0.3.0" };
 
 export const THRESHOLDS = Object.freeze({
   /** 字が「見えない」とみなす不透明さの上限 */
@@ -213,6 +226,8 @@ async function readPage(page, ocConfig) {
   const mcStack = []; // マーク付きの中身。true ＝ 表示しないレイヤーの中
   const fontCache = new Map();
   let run = 0;
+  // 読めなかった書体（PDF.js の書体の読み込みの失敗）で、字を描く命令があったか（2026-11-06 から。そのページは skipped_pages に unreadable_text として入れる）
+  let unreadableText = false;
 
   const hiddenNow = () => mcStack.some((x) => x);
   const loadFont = async (id) => {
@@ -228,7 +243,8 @@ async function readPage(page, ocConfig) {
       if (Number.isFinite(a)) asc = Math.min(1.5, Math.max(0.5, a));
       if (Number.isFinite(d)) desc = Math.max(-0.5, Math.min(0, d));
     }
-    const info = { fm, asc, desc };
+    // PDF.js は書体を読めないとき、書体の代わりにエラーの文字列を置き、その書体の字を黙って 0 個にする（cMapUrl がないときの「Ensure that the `cMapUrl` …」など）
+    const info = { fm, asc, desc, failed: typeof f === "string" };
     fontCache.set(id, info);
     return info;
   };
@@ -386,6 +402,8 @@ async function readPage(page, ocConfig) {
         run++;
         const font = st.font ?? { fm: [0.001, 0, 0, 0.001, 0, 0], asc: 0.8, desc: -0.2 };
         const size = st.fontSize;
+        // 読めなかった書体で字を描く命令（PDF.js は字を黙って 0 個にする）。位置の数だけの命令・中身のない Tj・空白では当たらない（2026-11-06 から）
+        if (font.failed) unreadableText = true;
         const base = mul(mul(st.ctm, st.textMatrix), [st.hScale, 0, 0, 1, st.x, st.y + st.rise]);
         const widthScale = size * font.fm[0];
         const strokeOnly = st.renderMode === 1 || st.renderMode === 5;
@@ -421,7 +439,7 @@ async function readPage(page, ocConfig) {
         break;
     }
   }
-  return { paints, glyphs };
+  return { paints, glyphs, unreadableText };
 }
 
 /** 1字の見えない理由。見える字は null。P6 で数える字は "p6"、文字認識の層は "ocr" */
@@ -481,6 +499,7 @@ export async function verifyP7(bytes, options = {}) {
     task = pdfjs.getDocument({
       data: new Uint8Array(buf),
       isEvalSupported: false,
+      ...(CMAP_URL ? { cMapUrl: CMAP_URL, cMapPacked: true } : {}),
       disableFontFace: true,
       useSystemFonts: false,
       isOffscreenCanvasSupported: false,
@@ -512,6 +531,8 @@ export async function verifyP7(bytes, options = {}) {
         result.skipped_pages.push({ page: pageNo, reason: read.skipped });
         continue;
       }
+      // 読めた字の結果は items に入れたうえで、読めない字があったことを知らせる（2026-11-06 から。「残っていない」と言い切らない）
+      if (read.unreadableText) result.skipped_pages.push({ page: pageNo, reason: "unreadable_text" });
       const view = Array.from(page.view);
       // 同じ「字を描く命令」の中で、同じ理由で続く字を1件にまとめる
       let cur = null;

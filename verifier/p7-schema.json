@@ -55,7 +55,7 @@
       "items": {
         "type": "object",
         "required": ["page", "reason"],
-        "properties": { "page": { "type": "integer" }, "reason": { "enum": ["too_many_operations", "unreadable_page"] } }
+        "properties": { "page": { "type": "integer" }, "reason": { "enum": ["too_many_operations", "unreadable_page", "unreadable_text"] } }
       }
     },
     "excluded": {
