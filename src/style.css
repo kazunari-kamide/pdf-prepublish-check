@@ -474,9 +474,11 @@ body:has(#workspace[data-state="empty"]) .steps {
   padding-top: var(--space-2);
 }
 
+/* flex: none：列は高さに上限がある（下の sticky）ので、縮めると枠が絵より小さくなり、絵が下の枠に重なっていた（2026-11-06 朝） */
 .thumb {
   position: relative;
   display: block;
+  flex: none;
   width: 100%;
   min-height: var(--target-min);
   padding: var(--sp-1);
@@ -495,15 +497,18 @@ body:has(#workspace[data-state="empty"]) .steps {
   aspect-ratio: 210 / 297;
 }
 
-.thumb-pic canvas {
+/* 描いた絵：枠（.thumb-pic）の縦横比は、描いたページの縦横比にそろえる（src/main.ts）。絵は枠いっぱいに、比を保って収める */
+.thumb-pic img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
 }
 
-/* 今のページ：墨の内側の線（太さを変えないので、押しても動かない）と、読み上げには aria-current */
-.thumb[aria-current="page"] {
-  box-shadow: inset 0 0 0 var(--border-mark) var(--line-strong);
+/* 今のページ：絵にぴったり沿う墨の線（外側に描き、絵の大きさを変えないので、押しても動かない）と、読み上げには aria-current */
+.thumb[aria-current="page"] .thumb-pic {
+  outline: var(--border-mark) solid var(--line-strong);
+  outline-offset: 0;
 }
 
 .thumb-no {
@@ -559,12 +564,15 @@ body:has(#workspace[data-state="empty"]) .steps {
 }
 
 /* 縮小したページの列も上に貼り付け、列の中だけをスクロールする（今のページの縮小が画面の外へ流れないように） */
+/* 横には送らない：右上の数の札（.thumb-count）が枠の外へ出る分は、右の余白に収める（前は横のスクロールバーが出ていた） */
 .workspace[data-state="result"] .thumbs {
   align-self: start;
   position: sticky;
   top: var(--sp-4);
   max-height: calc(100dvh - 2 * var(--sp-4));
+  overflow-x: hidden;
   overflow-y: auto;
+  padding-right: var(--space-2);
 }
 
 /* 置き場：紅の面 1 枚（枠なし）。面全体を押せる。中は「PDF を選ぶ」・「またはここに置く」・送らないことの一文を真ん中に縦に */
@@ -2096,6 +2104,14 @@ body {
 .workspace[data-state="result"] .stage,
 .workspace[data-state="result"] .thumbs {
   max-height: calc(100dvh - 2 * var(--sp-4) - var(--band-space));
+}
+
+/* 縮小したページの列は、上に貼り付く前（開いた直後で、窓を送る前）も、列の下の端を帯の上に収める（2026-11-06）。
+   --thumbs-top は、今の列の上の端の位置（src/main.ts の fitThumbsToWindow が、送ったとき・窓の大きさが変わったときに入れる）。
+   貼り付いたあとは、上の端が --sp-4 なので、上の決まりと同じ高さになる。
+   ページの絵の欄（.stage）は変えない（高さが変わるたびに、ページを描き直してしまうため） */
+.workspace[data-state="result"] .thumbs {
+  max-height: calc(100dvh - max(var(--thumbs-top, var(--sp-4)), var(--sp-4)) - var(--sp-4) - var(--band-space));
 }
 
 /* ---------------------------------------------------------------- 第 2 の形のボタン（枠だけ）：1 つの部品（2026-11-05 夜のレビュー 10）
