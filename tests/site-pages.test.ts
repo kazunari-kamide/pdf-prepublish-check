@@ -374,7 +374,7 @@ describe("検査のページ（check.html）", () => {
     expect(band).not.toMatch(/<h1\b/);
     const guide = html.match(/<div class="guide" id="guide">[\s\S]*?<\/ol>\s*<\/div>/)![0];
     // 見出しの文（2026-11-05 夜 本人が決定）。頭の説明では「読み直す」を「もう一度調べる」と言う（手順の名前はそのまま）
-    expect(guide).toContain('<h1 class="hero-title">見た目は消えても、<wbr />PDF の中に残ることがあります</h1>');
+    expect(guide).toContain('<h1 class="hero-title">見た目では消えても、<wbr />PDF の中に残ることがあります</h1>');
     expect(guide).toContain("黒塗りの下の字や作った人の名前、前の版などを見つけて消した PDF を作り、もう一度調べて消えたかを確かめます。");
     expect(guide).toContain('<p class="hero-scope">よくある残り方を調べます。すべてを見つけるものではありません。</p>');
     const chips = guide.match(/<ul class="hero-chips"[\s\S]*?<\/ul>/)![0];
