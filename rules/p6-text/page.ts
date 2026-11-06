@@ -34,7 +34,7 @@ import {
   type Point,
   type Rect,
 } from "./geometry.ts";
-import { readFont, type FontInfo } from "../shared/fonts.ts";
+import { glyphAdvance, glyphExtent, readFont, tjShift, type FontInfo } from "../shared/fonts.ts";
 import { arrArg, bytesArg, nameArg, numArg, operations, type Tok } from "../shared/content-lexer.ts";
 import type { P6TextSettings } from "./settings.ts";
 import { measureImageDarkness, probeImagePixels } from "./images.ts";
@@ -697,13 +697,10 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings, vec
           [gs.fontSize * gs.hScale, 0, 0, gs.fontSize, 0, gs.rise],
           multiply(tm, gs.ctm),
         );
-        // 縦書き（2026-11-05 から）：字は縦の原点から、横は幅の半分ずつ左右に、縦は原点から 1em 下へ広がる（PDF 1.7 §9.7.4.3）
-        const v = font.vertical;
+        // 縦書き（2026-11-05 から）：字は縦の原点から、横は幅の半分ずつ左右に、縦は原点から 1em 下へ広がる（PDF 1.7 §9.7.4.3）。
+        // 箱と送りは P7 と同じもの（rules/shared/fonts.ts の glyphExtent・glyphAdvance。2026-11-06 に共通にした。値は前と同じ）
         if (isFiniteMatrix(trm) && g.width > 0) {
-          const x0 = v ? -g.width / 2 : 0;
-          const x1 = v ? g.width / 2 : g.width;
-          const y0 = v ? font.descent - v.vy : font.descent;
-          const y1 = v ? font.ascent - v.vy : font.ascent;
+          const { x0, x1, y0, y1 } = glyphExtent(font, g.width);
           const corners: Point[] = [apply(trm, x0, y0), apply(trm, x1, y0), apply(trm, x1, y1), apply(trm, x0, y1)];
           addGlyph({
             seq: ++seq,
@@ -717,13 +714,8 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings, vec
             ...clipOpt(),
           });
         }
-        if (v) {
-          const ty = v.w1 * gs.fontSize - gs.charSpacing;
-          tm = multiply([1, 0, 0, 1, 0, ty], tm);
-          continue;
-        }
-        const tx = (g.width * gs.fontSize + gs.charSpacing + (g.isWordSpace ? gs.wordSpacing : 0)) * gs.hScale;
-        tm = multiply([1, 0, 0, 1, tx, 0], tm);
+        const [ax, ay] = glyphAdvance(font, g, gs.fontSize, gs.charSpacing, gs.wordSpacing, gs.hScale);
+        tm = multiply([1, 0, 0, 1, ax, ay], tm);
       }
     };
 
@@ -1015,12 +1007,8 @@ export function createPageScanner(ctx: PDFContext, settings: P6TextSettings, vec
           const arr = arrArg(args[0]) ?? [];
           for (const item of arr) {
             if (item.t === "num") {
-              if (gs.font?.vertical) {
-                tm = multiply([1, 0, 0, 1, 0, (-item.v / 1000) * gs.fontSize], tm); // 縦書きは、下へ詰める・空ける
-              } else {
-                const tx = (-item.v / 1000) * gs.fontSize * gs.hScale;
-                tm = multiply([1, 0, 0, 1, tx, 0], tm);
-              }
+              const [sx, sy] = tjShift(gs.font, item.v, gs.fontSize, gs.hScale); // 縦書きは、下へ詰める・空ける
+              tm = multiply([1, 0, 0, 1, sx, sy], tm);
             } else {
               const b = bytesArg(item);
               if (b) showText(b);
