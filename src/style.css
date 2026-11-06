@@ -1056,9 +1056,20 @@ body:has(.terms-dialog[open]) {
   outline-offset: 3px;
 }
 
-.mark.is-selected .mark-no {
+/* 選んだ札：白い丸に、その枠の色の太い縁と字（紅 7.55:1、墨 14.34:1。白の地に対して）。
+   見えている候補（墨の札）を選んだときも同じ形にする。前は候補の墨の地が残り、黒い丸に紅の字（1.90:1）で読みにくかった。
+   縁は内側の影で描き、札の大きさを変えない（2026-11-06 朝） */
+.mark.is-selected .mark-no,
+.mark.is-selected.mark-candidate .mark-no,
+.mark.is-selected.mark-pick .mark-no {
   background: var(--color-surface);
   color: var(--color-accent);
+  box-shadow: inset 0 0 0 2px currentColor, 0 0 0 2px var(--surface-card);
+}
+
+.mark.is-selected.mark-candidate .mark-no,
+.mark.is-selected.mark-pick .mark-no {
+  color: var(--color-base);
 }
 
 /* 見えている候補の枠：墨の点線（見えない情報の紅の実線と、色と線の形で分ける）。札も墨 */
@@ -1566,12 +1577,8 @@ progress {
   cursor: pointer;
 }
 
-/* 乗ったとき：題に黄のマーカー（下線は引かない。案 C） */
-.item:hover .item-title {
-  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
+/* 検出の行の題には、乗っても選んでもマーカーを引かない（題は折り返す箱なので、帯が 2 行目だけに出てしまう）。
+   選んだこと・乗ったことは、行の紅の枠と地の色で示す（2026-11-06 朝） */
 
 .item > span {
   display: block;
@@ -1773,6 +1780,46 @@ progress {
 .actions p {
   margin: var(--space-1) 0 0;
   font-size: var(--text-small);
+}
+
+/*
+ * 1：結果が出ている間、「整える」の帯を画面の下に固定する（2026-11-06 本人：「固定で常に画面内に」）。
+ * 帯の部品の場所（結果の欄の中・注意書きのあと）は変えないので、キーボードで移る順と読み上げは今のまま。
+ * 帯が隠す分は空ける：ページの下の余白・ページの絵の欄（上に貼り付けている）の高さ・スクロールで見せる位置（scroll-padding）。
+ * 何も見つからないときの「念のため整える」（第 2 の形）は固定しない
+ */
+:root {
+  --band-space: 0px;
+}
+
+html:has(.workspace[data-state="result"] .actions:not([hidden]) #sanitize:not([data-weight="sub"])) {
+  --band-space: calc(var(--button-height-large) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: var(--band-space);
+}
+
+body {
+  padding-bottom: var(--band-space);
+}
+
+.workspace[data-state="result"] .actions:not([hidden]) #sanitize:not([data-weight="sub"]) {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  box-sizing: border-box;
+  width: auto;
+  min-height: var(--band-space);
+  margin: 0;
+  padding: var(--sp-3) max(var(--sp-5), env(safe-area-inset-right, 0px)) calc(var(--sp-3) + env(safe-area-inset-bottom, 0px)) max(var(--sp-5), env(safe-area-inset-left, 0px));
+  border-radius: 0;
+  box-shadow: 0 -10px 24px rgb(43 42 40 / 14%);
+}
+
+/* 上に貼り付けているページの絵の欄と縮小したページの列は、帯の高さの分だけ短くする（ページの絵の下の端・印を隠さない） */
+.workspace[data-state="result"] .stage,
+.workspace[data-state="result"] .thumbs {
+  max-height: calc(100dvh - 2 * var(--sp-4) - var(--band-space));
 }
 
 /* ---------------------------------------------------------------- 第 2 の形のボタン（枠だけ）：1 つの部品（2026-11-05 夜のレビュー 10）

@@ -21,7 +21,7 @@ import { DEFAULT_SETTINGS, type P6TextSettings } from "./settings.ts";
 
 export const RULE_ID = "p6-text";
 // 1.13.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
-export const RULE_VERSION = "1.13.1";
+export const RULE_VERSION = "1.13.2";
 
 /**
  * P6 の層。text＝黒い四角の下に字が残っている型、image＝スキャン画像の画素が残っている型、

@@ -12,14 +12,17 @@
 import {
   PDFArray,
   PDFDict,
+  PDFHexString,
   PDFName,
   PDFNumber,
+  PDFString,
   PDFRawStream,
   PDFStream,
   StandardFontEmbedder,
   type PDFContext,
   type PDFObject,
 } from "pdf-lib";
+import { cidUnicodeFor } from "./cid-unicode.ts";
 import { decodeStream } from "./inflate-limit.ts";
 import { operations, type Tok } from "./content-lexer.ts";
 
@@ -111,6 +114,12 @@ function num(ctx: PDFContext, obj: PDFObject | undefined): number | undefined {
 function nameOf(ctx: PDFContext, obj: PDFObject | undefined): string | undefined {
   const v = obj ? ctx.lookup(obj) : undefined;
   return v instanceof PDFName ? v.decodeText() : undefined;
+}
+
+/** 文字列（PDFString・PDFHexString）の中身。CIDSystemInfo の Registry・Ordering を読むため */
+function textOf(ctx: PDFContext, obj: PDFObject | undefined): string | undefined {
+  const o = obj ? ctx.lookup(obj) : undefined;
+  return o instanceof PDFString || o instanceof PDFHexString ? o.decodeText() : undefined;
 }
 
 function dictOf(ctx: PDFContext, obj: PDFObject | undefined): PDFDict | undefined {
@@ -260,6 +269,13 @@ export function readFont(ctx: PDFContext, fontObj: PDFObject | undefined): FontI
     const { ascent, descent } = heights(ctx, desc, desc ? bboxOf(ctx, desc.get(PDFName.of("FontBBox")), 0.001) : undefined, std);
     // Identity-H/V 以外の CMap も、2バイトで区切る（日本語の CMap の多くは2バイト。限界は rules/p6-text/README.md に書く）
     const encName = nameOf(ctx, font.get(PDFName.of("Encoding")));
+    // ToUnicode にない字は、Identity-H/V（字の番号＝CID）で CID の書体の並びが Adobe-Japan1 のとき、その並びの表から引く（2026-11-06）。
+    // 埋め込みの CID の書体で ToUnicode のない PDF（印刷の会社が作るチラシなど）の字を読むため
+    const sysInfo = cid ? dictOf(ctx, cid.get(PDFName.of("CIDSystemInfo"))) : undefined;
+    const byCid =
+      encName === "Identity-H" || encName === "Identity-V"
+        ? cidUnicodeFor(textOf(ctx, sysInfo?.get(PDFName.of("Registry"))), textOf(ctx, sysInfo?.get(PDFName.of("Ordering"))))
+        : null;
     let vertical: FontInfo["vertical"];
     if (encName && /-V$/.test(encName)) {
       const dw2 = cid ? arrOf(ctx, cid.get(PDFName.of("DW2"))) : undefined;
@@ -276,7 +292,7 @@ export function readFont(ctx: PDFContext, fontObj: PDFObject | undefined): FontI
         const out: Glyph[] = [];
         for (let k = 0; k + 1 < bytes.length; k += 2) {
           const code = (bytes[k]! << 8) | bytes[k + 1]!;
-          const text = toUnicode.get(code) ?? "";
+          const text = toUnicode.get(code) ?? byCid?.(code) ?? "";
           out.push({ code, width: (widths.get(code) ?? dw) / 1000, isSpace: isBlank(text), isWordSpace: false, text });
         }
         return out;

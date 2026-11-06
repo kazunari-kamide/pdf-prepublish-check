@@ -29,7 +29,7 @@ import { TooManyOperations, extractText, pageContent, type ExtractSettings, type
 export const RULE_ID = "pii";
 // 0.1.2：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
 // 0.1.3：設定 includeText を足す（渡したときだけ、見つけた字そのものを 1 件ごとに返す。既定は返さない）
-export const RULE_VERSION = "0.1.4";
+export const RULE_VERSION = "0.1.5";
 
 export { PII_TYPES, type PiiType, type Confidence, type Basis, type ExcludeReason };
 export type { Rect };

@@ -66,11 +66,16 @@ function pdfjsParts(): Plugin {
         res.end(readFileSync(abs));
       });
     },
-    // vite preview：検査のページにだけ、本番と同じ CSP のヘッダー（connect-src 'self'）を返す（htaccess.ts の <FilesMatch> と同じ）
+    // vite preview：検査のページにだけ、本番と同じ CSP のヘッダー（connect-src 'self'）を返す（htaccess.ts の <FilesMatch> と同じ）。
+    // preview.headers（ほかのページと同じ 'none'）が、あとから同じ名前のヘッダーを付け直すので、付け直しても検査のページの値になるようにする
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
         const p = (req.url ?? "").split("?")[0];
-        if (p === "/check" || p === "/check.html") res.setHeader("Content-Security-Policy", cspForCheckHeader);
+        if (p === "/check" || p === "/check.html") {
+          const set = res.setHeader.bind(res);
+          res.setHeader = (name, value) => set(name, String(name).toLowerCase() === "content-security-policy" ? cspForCheckHeader : value);
+          res.setHeader("Content-Security-Policy", cspForCheckHeader);
+        }
         next();
       });
     },
