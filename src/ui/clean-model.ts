@@ -45,6 +45,14 @@ const CHOSEN_PATTERNS: readonly string[] = ["P1", "P2", "P3"];
 export type CleanView = {
   /** 本人が「そのまま」「書き直す」を選んだので、読み直しで「残り」に数えなかった行の数 */
   chosen: number;
+  /** 本人が「整えない」を選んだ種類（D168）で、読み直しで見つかった行の数。「残り」に数えない */
+  kept: number;
+  /** 外した種類ごとの一言（例「注釈・コメント（P8）：2 か所を残しています」）。結果の画面と報告書に必ず並べる */
+  keptLines: string[];
+  /** 外した種類の名前と数（例「注釈・コメント 2 か所、フォームの入力値 1 か所」）。外した物が残っていなければ空 */
+  keptNames: string;
+  /** 外した種類のほかにも、言い切れない所（消せなかった所・調べられなかった所）がある */
+  alsoUnsure: boolean;
   /** プロパティを項目ごとにどうしたか（値は入れない） */
   propertyLines: string[];
   /** clean＝読み直して残り 0 件で、片付けられなかった所も調べられなかった所もない（「全部緑」）。
@@ -78,6 +86,8 @@ export function buildCleanView(input: {
   decrypted: boolean;
   /** プロパティを書き直したとき、項目ごとに何をしたか（片付けの r.properties）。値そのものは入らない */
   properties?: PropertyChange[];
+  /** 本人が「整えない」を選んだ種類（D168。sanitize の keep と同じ一覧） */
+  kept?: readonly string[];
 }): CleanView {
   const { before, after, removed, notDone, decrypted } = input;
 
@@ -123,19 +133,42 @@ export function buildCleanView(input: {
   // 本人が「そのまま」「書き直す」を選んだ欄の値（文書情報・XMP）は、本人が選んだ値なので「残っている所」に数えない（2026-11-05）
   const chosen = chosenFields(input.properties);
   const chosenRows = after ? after.rows.filter((r) => CHOSEN_PATTERNS.includes(r.pattern) && r.field !== undefined && chosen.has(r.field)).length : 0;
-  const left = after ? after.rows.length - candidateRows - chosenRows : null;
+  // 本人が「整えない」を選んだ種類（D168）の行も、残りに数えない。数えなかった分は、別の行（keptLines）で必ず並べる
+  const keptSet = new Set(input.kept ?? []);
+  const keptRowsList = after ? after.rows.filter((r) => !r.candidate && keptSet.has(r.pattern) && !(CHOSEN_PATTERNS.includes(r.pattern) && r.field !== undefined && chosen.has(r.field))) : [];
+  const keptRows = keptRowsList.length;
+  const keptLines = [...keptSet]
+    .map((p) => ({ p, n: keptRowsList.filter((r) => r.pattern === p).length }))
+    .filter((x) => x.n > 0)
+    .map((x) => `${patternWithName(x.p)}：${x.n} か所を残しています（あなたが「整えない」を選んだ種類）`);
+  const left = after ? after.rows.length - candidateRows - chosenRows - keptRows : null;
   // 字のないページのお知らせ（no_text）は数えない：整えると見えない字が消えて、字のないページになることがあるため（2026-11-06）
   const afterClean = after ? after.clean || (left === 0 && after.unchecked.length === 0 && after.notices.length - (after.noTextNotices ?? 0) === 0) : false;
   let verdict: CleanView["verdict"];
   let headline: string;
+  let alsoUnsure = false;
+  const keptNames = [...keptSet]
+    .map((p) => ({ p, n: keptRowsList.filter((r) => r.pattern === p).length }))
+    .filter((x) => x.n > 0)
+    .map((x) => `${PATTERN_NAME[x.p] ?? x.p} ${x.n} か所`)
+    .join("、");
   if (left === null) {
     verdict = "unsure";
     headline = "整えた PDF を読み直せませんでした。残っていないとは言えません。";
   } else if (left > 0) {
     verdict = "left";
     headline = `読み直したところ、まだ ${left} か所残っています。`;
+  } else if (keptRows > 0) {
+    // 外した物が残っているので「全部消えた」とは言わない。保存は、分かったうえでの印を付けてから（confirm）
+    verdict = "unsure";
+    alsoUnsure = notDone.length > 0 || !afterClean;
+    headline =
+      `読み直したところ、整えた種類で残っている所は 0 件でした。あなたが外した種類（${keptNames}）は残しています。` +
+      (alsoUnsure ? "消せなかった所か、調べられなかった所もあります。" : "") +
+      "「全部消えた」ではありません。";
   } else if (notDone.length > 0 || !afterClean) {
     verdict = "unsure";
+    alsoUnsure = true;
     headline = "読み直したところ、残っている所は 0 件でしたが、消せなかった所か、調べられなかった所があります。「全部消えた」ではありません。";
   } else {
     verdict = "clean";
@@ -143,7 +176,7 @@ export function buildCleanView(input: {
   }
 
   if (chosenRows > 0) notes.push(`本人が「そのまま」「書き直す」を選んだプロパティの値（${chosenRows} か所）は、残っている所に数えていません。`);
-  return { verdict, headline, before: before.hidden, left, candidatesBefore: before.candidates, candidatesAfter: after ? candidateRows : null, removed: removedGroups, notDone: notDoneLines, notes, doneMarks, scope, chosen: chosenRows, propertyLines: changeLines(input.properties) };
+  return { verdict, headline, before: before.hidden, left, candidatesBefore: before.candidates, candidatesAfter: after ? candidateRows : null, removed: removedGroups, notDone: notDoneLines, notes, doneMarks, scope, chosen: chosenRows, kept: keptRows, keptLines, keptNames: keptRows > 0 ? keptNames : "", alsoUnsure, propertyLines: changeLines(input.properties) };
 }
 
 /**
@@ -159,6 +192,22 @@ export function saveGate(c: Pick<CleanView, "verdict" | "left">): SaveGate {
   if (c.verdict === "clean") return "ok";
   if (c.verdict === "unsure" && c.left === 0) return "confirm";
   return "blocked";
+}
+
+/** 確認の印の字（言い切れない所があるとき） */
+export const CONFIRM_LABEL = "言い切れない所があると分かったうえで保存する";
+
+/**
+ * 保存のボタンの下の一言と、確認の印の字（D168）。確認が要る理由で分ける：
+ * - 外した種類だけ：言い切れないのではなく、本人が残した物があるだけ。「外した種類を残したまま保存する」
+ * - 言い切れない所もある：今までの文に、外した種類の一文を足す
+ */
+export function saveTexts(c: Pick<CleanView, "verdict" | "left" | "keptNames" | "alsoUnsure">): { note: string; label: string } {
+  const gate = saveGate(c);
+  if (gate !== "confirm" || !c.keptNames) return { note: SAVE_NOTE[gate], label: CONFIRM_LABEL };
+  const kept = `あなたが外した種類（${c.keptNames}）が残っています。`;
+  if (!c.alsoUnsure) return { note: `${kept}残したまま保存するときだけ、印を付けてください。`, label: "外した種類を残したまま保存する" };
+  return { note: `${SAVE_NOTE.confirm}${kept}`, label: CONFIRM_LABEL };
 }
 
 /** 保存のボタンの下に出す一言 */

@@ -21,6 +21,6 @@ describe("検出の行の題のマーカー", () => {
   });
 
   it("本文のリンクのマーカーは残す", () => {
-    expect(css).toMatch(/\.origin-text a \{[^}]*--marker-ki/);
+    expect(css).toMatch(/\.terms-note a,[^{]*\{[^}]*--marker-ki/);
   });
 });

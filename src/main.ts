@@ -23,9 +23,9 @@ import { buildEdits, CONSENT_TEXT, DATE_HINT, MODE_LABEL, PROPERTY_FIELDS, type 
 import type { NotDoneItem } from "../sanitize/types.ts";
 import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET, limitLine, nextForLimit, SIZE_LIMITS, sizeLimitFrom } from "./ui/compress-model";
 import type { CompressPreset, SizeLimit } from "./ui/compress-model";
-import { buildCleanView, cleanedFileName, SAVE_NOTE, saveGate, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
+import { buildCleanView, cleanedFileName, PATTERN_NAME, SAVE_NOTE, saveGate, saveTexts, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
-import { buildView, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { buildView, tierOf, type Group, type PageMarks, type Row, type ViewModel } from "./ui/model";
 import { uniqueFills, type Fraction } from "./ui/mark-fills";
 import { isOfficialHost, UNOFFICIAL_NOTE } from "./ui/official";
 import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, SPLIT_STEP_PX } from "./ui/compact";
@@ -36,9 +36,11 @@ import { spreadBadges } from "./ui/badges";
 import { keepUnits } from "./ui/text";
 import { sampleFile, wantsSample, withoutSample } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
-import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE } from "./ui/reveal";
+import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE, showsWhole } from "./ui/reveal";
 import { setupTermsDialog } from "./ui/terms-dialog";
-import { originNote, repoFromMeta } from "./ui/rule-origin-note";
+import { isOutside } from "./ui/terms-click";
+import { bandProgressRatio, bandProgressText, buildTidyConfirm, propertySummary, sanitizeListText } from "./ui/tidy-confirm";
+import { buildKeepRows, initialKept, keepList, keptCount, keptSummary, tierCounts, type KeepRow } from "./ui/keep-model";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -55,7 +57,7 @@ function make<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, clas
 
 const ui = {
   /** プロパティの選び方の欄（プロパティの一覧を作るたびに作り直す） */
-  tidyProps: document.createElement("div"),
+  tidyProps: el<HTMLDivElement>("tidy-props"),
   input: el<HTMLInputElement>("file"),
   drop: el<HTMLLabelElement>("drop"),
   workspace: el<HTMLElement>("workspace"),
@@ -81,6 +83,13 @@ const ui = {
   canvas: el<HTMLCanvasElement>("sheet-canvas"),
   marks: el<HTMLDivElement>("marks"),
   caption: el<HTMLElement>("sheet-caption"),
+  markNote: el<HTMLParagraphElement>("mark-note"),
+  tidyKinds: el<HTMLFieldSetElement>("tidy-kinds"),
+  tidyKindsList: el<HTMLUListElement>("tidy-kinds-list"),
+  keepSummary: el<HTMLParagraphElement>("keep-summary"),
+  kept: el<HTMLDivElement>("kept"),
+  keptList: el<HTMLUListElement>("kept-list"),
+  marksPeek: el<HTMLButtonElement>("marks-peek"),
   renderNote: el<HTMLParagraphElement>("render-note"),
   resultTitle: el<HTMLHeadingElement>("result-title"),
   results: el<HTMLElement>("results"),
@@ -187,6 +196,11 @@ let cleanedBlob: Blob | null = null;
 let reportUrl: string | null = null;
 /** 整える前の問い合わせ（プロパティの今の値・PDF/A の印・電子署名）。片付けの Worker の preflightTidy */
 let tidyPre: Extract<TidyPreflight, { status: "ok" }> | null = null;
+/** 整える種類（D168）：見つかった種類の行と、本人が印を外した（整えない）種類 */
+let keepRows: KeepRow[] = [];
+let keptKinds = new Set<string>();
+/** 整えたときに外していた種類（整えたあとの画面で、外した印を見分けるため） */
+let keptAtClean = new Set<string>();
 /** 本人が選んだプロパティの書き直し（既定はすべて「消す」） */
 let propChoices: Partial<Record<PropertyKey, PropertyChoice>> = {};
 /** 報告書の中身（中身を入れるかを選び直したときに、作り直すため）。見つけた字の中身は contents に分けて持つ */
@@ -450,9 +464,24 @@ function reset() {
   releaseDownload();
   for (const part of [ui.notDoneList, ui.removedGroups, ui.cleanNotes, ui.redactLeftList]) part.replaceChildren();
   ui.redactLeft.hidden = true;
+  // 整える前の確かめと、処理中の帯の形を片付ける（整えている途中で別の PDF を入れたときも、次の PDF に持ち越さない）
+  const confirm = document.getElementById("tidy-dialog");
+  if (confirm instanceof HTMLDialogElement && confirm.open) confirm.close();
+  delete ui.sanitize.dataset.busy;
+  ui.sanitize.style.removeProperty("--band-progress");
   ui.consent.replaceChildren();
   ui.consent.hidden = true;
   ui.tidySummary.textContent = "";
+  ui.tidyProps.replaceChildren();
+  ui.tidyProps.hidden = true;
+  keepRows = [];
+  keptKinds = new Set();
+  keptAtClean = new Set();
+  ui.tidyKindsList.replaceChildren();
+  ui.tidyKinds.hidden = true;
+  ui.keepSummary.hidden = true;
+  ui.keptList.replaceChildren();
+  ui.kept.hidden = true;
   ui.clean.hidden = true;
   ui.filebar.hidden = true;
   ui.progress.hidden = true;
@@ -510,6 +539,7 @@ function itemButton(r: Row): HTMLButtonElement {
   btn.type = "button";
   btn.id = `item-${r.no}`;
   btn.dataset.severity = r.severity;
+  btn.dataset.tier = tierOf(r);
   if (r.check) btn.dataset.check = "true";
   if (r.candidate) btn.dataset.candidate = "true";
   btn.setAttribute("aria-expanded", "false");
@@ -517,13 +547,18 @@ function itemButton(r: Row): HTMLButtonElement {
   top.append(
     make("span", String(r.no), "item-no"),
     // 確かめてほしい所は、深刻度の札の代わりに「？ 確かめる」の札（形と字で示す。断定しない）
-    r.check
-      ? make("span", "？ 確かめる", "item-sev sev-check")
-      : make("span", `${SEVERITY_MARK[r.severity]} ${r.severityLabel}`, `item-sev sev-${r.severity}`),
+    r.candidate
+      ? make("span", "ｉ 候補", "item-sev sev-candidate")
+      : r.check
+        ? make("span", "？ 確かめる", "item-sev sev-check")
+        : make("span", `${SEVERITY_MARK[r.severity]} ${r.severityLabel}`, `item-sev sev-${r.severity}`),
     make("span", r.title, "item-title"),
   );
+  // 整えたあとに、本人が外した種類（D168）の行は、題の横に「外した」（残っている所と見分ける）
+  if (session?.phase === "after" && keptAtClean.has(r.pattern)) top.append(make("span", "◇ 外した（整えていません）", "item-kept"));
   // 閉じた形は 2 行（題の行と、場所・内訳の 1 行）。なぜ危ないかは、押して開いたときに出す（2026-11-05 本人の気づき）
-  const where = r.page !== null ? `ページ ${r.page}` : "ファイル全体";
+  // ファイル全体の指摘は、押してもページの絵が動かないと分かるように言う（2026-11-06）
+  const where = r.page !== null ? `ページ ${r.page}` : "ファイル全体（絵に印なし）";
   btn.append(
     top,
     make("span", `${where}・${compactDetail(r.detail)}`, "item-detail"),
@@ -549,6 +584,15 @@ function itemButton(r: Row): HTMLButtonElement {
  */
 function revealBox(content: string, what: string, full?: () => HTMLElement): HTMLElement {
   const box = make("div", undefined, "reveal");
+  // 3 字以下は伏せずに全部を出し、「中身を見る」を出さない（2026-11-06 本人が決定。src/ui/reveal.ts）
+  if (showsWhole(content)) {
+    box.dataset.whole = "true";
+    const whole = make("span", undefined, "reveal-text");
+    if (full) whole.replaceChildren(full());
+    else whole.textContent = fullContent(content);
+    box.append(make("span", "中身：", "reveal-label"), whole);
+    return box;
+  }
   const text = make("span", maskContent(content), "reveal-text");
   text.setAttribute("aria-live", "polite");
   const btn = make("button", REVEAL_LABEL.closed, "reveal-toggle btn-sub");
@@ -610,10 +654,27 @@ function coverageText(c: CoverageRow, phase: Session["phase"]): string {
 function renderGroups(s: Session) {
   // 中身を伏せていることの一言は、結果の一番上に 1 回だけ（種類ごとに繰り返さない。2026-11-05 本人の画面のレビュー B2）
   if (s.view.rows.some((r) => r.content)) {
-    ui.groups.append(make("p", `見つけた字の中身は、頭の数文字だけを出し、残りは伏せます。「中身を見る」で全部を出します（この端末のブラウザの中だけで、どこにも送りません）。${REVEAL_NOTE}`, "reveal-note"));
+    ui.groups.append(make("p", `見つけた字の中身は、頭の数文字だけを出し、残りは伏せます（3 字以下は、そのまま出します）。「中身を見る」で全部を出します（この端末のブラウザの中だけで、どこにも送りません）。${REVEAL_NOTE}`, "reveal-note"));
   }
-  for (const g of s.view.groups) {
-    if (g.status === "error" || !g.rows.length) continue;
+  // 深刻度の段（高 → 確かめる → 中 → 低 → 個人情報の候補）。中・低・候補は最初は閉じる（2026-11-06 本人が決定）。
+  // 段の中は種類ごと。番号は model が並べた順に振ってある
+  for (const t of s.view.tiers) {
+    const tier = make("details", undefined, "tier");
+    tier.dataset.tier = t.key;
+    tier.id = `tier-${t.key}`;
+    tier.open = t.open;
+    const sum = make("summary", undefined, "tier-head");
+    sum.append(make("span", t.label, "tier-name"), make("span", t.note, "tier-note"), make("span", keepUnits(`${t.count} 件`), "tier-count"));
+    tier.append(sum);
+    for (const g of t.groups) tier.append(renderGroup(s, g));
+    ui.groups.append(tier);
+  }
+  renderCoverage(s);
+}
+
+/** 1 つの段の中の、1 つの種類（見出しと項目） */
+function renderGroup(s: Session, g: Group): HTMLElement {
+  {
     const { box, body } = groupBox(g.rows[0]!.candidate ? "candidate" : "found");
     const head = make("h3", undefined, "group-head");
     const sure = g.rows.filter((r) => !r.check).length;
@@ -638,15 +699,18 @@ function renderGroups(s: Session) {
       const li = make("li");
       li.append(itemButton(r));
       if (r.content) li.append(revealBox(r.content, `${r.no} 番`));
-      // 見つける段から来た型だけ、出どころの札（src/ui/rule-origin.ts）
-      if (r.origin) li.append(originNote(document, r.origin, repoFromMeta(document)));
       if (candidates.some((c) => c.no === r.no)) li.append(candidateButton(r));
       list.append(li);
     }
     body.append(list);
-    ui.groups.append(box);
+    return box;
   }
-  renderCoverage(s);
+}
+
+/** 項目が閉じた段の中にあれば、その段を開く（ページの絵の番号を押したとき） */
+function openTierOf(no: number) {
+  const tier = document.getElementById(`item-${no}`)?.closest<HTMLDetailsElement>("details.tier");
+  if (tier && !tier.open) tier.open = true;
 }
 
 /** 見た所・見なかった所：P1〜P12 と新しい型を1行ずつ、毎回並べる（調べていない理由も） */
@@ -794,31 +858,42 @@ function placeMarks(s: Session, page: number) {
   for (const m of s.marksByPage.get(page)?.marks ?? []) {
     const f = toFraction(box, m.rect);
     if (!f) continue;
-    // 見えている候補は地を付けない（墨の点線の枠だけ）
-    if (!m.candidate) foundFills.push(f);
+    // 薄い紅の地は「高」の印だけに付ける（ほかの段は、段の色の枠だけ。紅ばかりで見分けにくかったため。2026-11-06 本人）
+    // 選んだ印は中を塗らない（下の絵を見て確かめられるように。2026-11-06 本人）
+    if (m.tier === "high" && s.selected !== m.no) foundFills.push(f);
     // 見た目の枠（隠した所の大きさのまま）と、押す所（枠を中心に縦横とも 44px 以上）を分ける。
     // 枠を大きくすると、細い黒塗りの所が太い枠に見えるため。押す所は透明で、上に重ねる
-    const frame = make("div", undefined, `mark sev-${m.severity}${m.candidate ? " mark-candidate" : ""}`);
+    // 整えたあとに、本人が外した種類（D168）の印は「外」の札と灰の点線（残っている所の紅と見分ける）
+    const kept = s.phase === "after" && keptAtClean.has(m.pattern);
+    const frame = make("div", undefined, `mark sev-${m.severity} tier-${m.tier}${m.candidate ? " mark-candidate" : ""}${kept ? " mark-kept" : ""}`);
     frame.id = `mark-frame-${m.no}`;
     frame.setAttribute("aria-hidden", "true");
-    frame.append(make("span", String(m.no), "mark-no"));
+    frame.append(make("span", kept ? `${m.no}・外` : String(m.no), "mark-no"));
+    // 選んだ印の番号は枠の外（上）に出す。ページの上の端に近い枠は、下に出す（絵の外で切れないように）
+    if (f.top < 0.05) frame.classList.add("badge-below");
     placeAt(frame, f);
     const mark = make("button", undefined, "mark-hit");
     mark.type = "button";
     mark.id = `mark-${m.no}`;
-    mark.setAttribute("aria-label", `番号 ${m.no}：${m.title}`);
+    mark.setAttribute("aria-label", kept ? `番号 ${m.no}（外した種類。整えずに残しています）：${m.title}` : `番号 ${m.no}：${m.title}`);
     if (s.selected === m.no) {
       mark.classList.add("is-selected");
       frame.classList.add("is-selected");
     }
+    if (flashing && flashing.no === m.no && performance.now() < flashing.until) frame.classList.add("is-flash");
     hitAt(mark, f);
     ui.marks.append(frame);
     mark.addEventListener("click", () => {
       if (picking) return; // 選んでいる間は、枠を押しても動かない（ドラッグを邪魔しない）
+      openTierOf(m.no);
       const item = document.getElementById(`item-${m.no}`);
-      item?.scrollIntoView({ block: "nearest" });
-      item?.focus();
+      // 結果の行を、見える所の上から 1/3 の高さに出す（「nearest」だと画面の下の端に付き、帯に隠れることがあった。2026-11-06 本人）
+      if (item) {
+        scrollToThird(item);
+        item.focus({ preventScroll: true });
+      }
       markSelected(m.no);
+      if (session) placeMarks(session, session.current);
     });
     ui.marks.append(mark);
   }
@@ -887,7 +962,6 @@ async function showPage(page: number, selectNo: number | null) {
   ui.sheetWrap.hidden = false;
   placeMarks(s, page);
   markSelected(selectNo);
-  if (selectNo !== null) document.getElementById(`mark-${selectNo}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
 
   // 絵を描く。描けないときは、白いページの形の上に枠だけを出す
   const clear = () => {
@@ -927,18 +1001,103 @@ async function showPage(page: number, selectNo: number | null) {
   ui.renderNote.hidden = note === "";
 }
 
+/** 動きを減らす設定か */
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** いちばん近い、縦にスクロールする箱（なければ null＝ページ全体） */
+function scrollParent(e: HTMLElement): HTMLElement | null {
+  for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === "auto" || o === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+
+/** 要素を、見える所の上から 1/3 の高さに動かす（印から行へ動いたとき、目の動く先をそろえる） */
+function scrollToThird(e: HTMLElement) {
+  const box = scrollParent(e);
+  const behavior: ScrollBehavior = reducedMotion() ? "auto" : "smooth";
+  const r = e.getBoundingClientRect();
+  if (box) {
+    const b = box.getBoundingClientRect();
+    box.scrollTo({ top: box.scrollTop + (r.top - b.top) - box.clientHeight / 3, behavior });
+  } else {
+    window.scrollTo({ top: window.scrollY + r.top - window.innerHeight / 3, behavior });
+  }
+}
+
+/**
+ * 行から印へ（逆引き）：ページの絵の欄の中だけを動かして、印を真ん中に出し、少しのあいだ光らせる（2026-11-06 本人）。
+ * ページ全体は動かさない（広い画面では、押した行が画面の外へ流れないように）。狭い画面で絵まで動かすのは select() がする
+ */
+const FLASH_MS = 1600;
+let flashing: { no: number; until: number } | null = null;
+function centerMark(no: number) {
+  const frame = document.getElementById(`mark-frame-${no}`);
+  if (!frame) return;
+  const box = ui.sheetWrap;
+  if (box.scrollHeight > box.clientHeight || box.scrollWidth > box.clientWidth) {
+    const r = frame.getBoundingClientRect();
+    const b = box.getBoundingClientRect();
+    box.scrollTo({
+      top: box.scrollTop + (r.top - b.top) - (box.clientHeight - r.height) / 2,
+      left: box.scrollLeft + (r.left - b.left) - (box.clientWidth - r.width) / 2,
+      behavior: reducedMotion() ? "auto" : "smooth",
+    });
+  }
+  // 光らせている間に印を描き直しても（絵の大きさが変わったときなど）、光が途中で消えないよう、終わる時刻で持つ
+  flashing = { no, until: performance.now() + FLASH_MS };
+  frame.classList.remove("is-flash");
+  void frame.offsetWidth; // もう一度光らせるため、形を一度読み直す
+  frame.classList.add("is-flash");
+  window.setTimeout(() => document.getElementById(`mark-frame-${no}`)?.classList.remove("is-flash"), FLASH_MS);
+}
+
 /** 縦に積む狭い画面か（結果の欄が上、ページの絵がずっと下にある形） */
 const stacked = () => getComputedStyle(ui.workspace).flexDirection === "column";
 
 async function select(r: Row) {
   if (r.page !== null && session) await showPage(r.page, r.hasRect ? r.no : null);
   markSelected(r.no);
+  // 行から印へ（逆引き）：押したときだけ、印を真ん中に出して光らせる（絵の大きさが変わって描き直すときは、動かさない）
+  if (r.hasRect) centerMark(r.no);
+  // 読み上げにも、どこへ動いたか（動かなかったか）を伝える。ファイル全体の指摘は、ページの絵に印がない
+  ui.markNote.textContent =
+    r.page === null
+      ? `${r.no} 番は、ファイル全体の指摘です。ページの絵に印はありません。`
+      : r.hasRect
+        ? `${r.no} 番の印を、ページ ${r.page} の絵の真ん中に出しました。`
+        : `ページ ${r.page} を出しました。${r.no} 番は、ページの中の場所が決まっていない指摘なので、印はありません。`;
   // 狭い画面では、ページの絵が結果のずっと下にあるので、押した所の枠まで動かす。絵の下に「一覧へ戻る」を出す
   if (r.hasRect && stacked()) {
     document.getElementById(`mark-frame-${r.no}`)?.scrollIntoView({ block: "center" });
     ui.backToList.dataset.no = String(r.no);
     ui.backToList.hidden = false;
   }
+}
+
+// 押している間だけ、ページの絵の上の印を消す（印の下の絵を見るため。2026-11-06 本人）。指・マウス・キーボード（Space・Enter）で使える
+{
+  const peek = (on: boolean) => {
+    ui.sheet.dataset.peek = String(on);
+    ui.marksPeek.setAttribute("aria-pressed", String(on));
+  };
+  ui.marksPeek.addEventListener("pointerdown", (e) => {
+    ui.marksPeek.setPointerCapture(e.pointerId);
+    peek(true);
+  });
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"] as const) ui.marksPeek.addEventListener(t, () => peek(false));
+  ui.marksPeek.addEventListener("keydown", (e) => {
+    if ((e.key === " " || e.key === "Enter") && !e.repeat) {
+      e.preventDefault();
+      peek(true);
+    }
+  });
+  ui.marksPeek.addEventListener("keyup", (e) => {
+    if (e.key === " " || e.key === "Enter") peek(false);
+  });
+  ui.marksPeek.addEventListener("blur", () => peek(false));
+  ui.marksPeek.addEventListener("contextmenu", (e) => e.preventDefault()); // 長押しでメニューを出さない
 }
 
 ui.backToList.addEventListener("click", () => {
@@ -1017,18 +1176,17 @@ function renderProperties(s: Session) {
     if (p.limited) body.append(make("p", "欄が多すぎるため、途中までしか並べていません。", "props-note"));
     if (!count) body.append(make("p", s.phase === "after" ? "文書情報と XMP に、値の入った欄は残っていません。" : "文書情報と XMP に、値の入った欄はありません。"));
   }
-  // その場で「消す」へ案内する（片付ける前で、片付けられるときだけ）
+  // その場で「消す」へ案内する（片付ける前で、片付けられるときだけ）。欄ごとの扱いは「整える内容」で選ぶ（6 の案 A）
   if (count && s.phase === "before" && !ui.sanitize.disabled) {
-    const go = make("button", "この欄を消す（「整える」へ）", "props-go btn-sub");
+    const go = make("button", "この欄を消す（「整える内容」へ）", "props-go btn-sub");
     go.type = "button";
     go.addEventListener("click", () => {
-      ui.actions.scrollIntoView({ block: "center", behavior: "smooth" });
-      ui.sanitize.focus({ preventScroll: true });
+      ui.sanitizeMore.open = true;
+      ui.sanitizeMore.scrollIntoView({ block: "start", behavior: "smooth" });
+      (ui.tidyProps.querySelector<HTMLInputElement>("input:checked") ?? ui.sanitizeMore.querySelector("summary"))?.focus({ preventScroll: true });
     });
-    body.append(go, make("p", "「整える」を押すと、文書情報と XMP の欄を、まとめて消した PDF を新しく作ります（元の PDF は変えません）。", "props-note"));
+    body.append(go, make("p", "「整える」を押すと、文書情報と XMP の欄を、まとめて消した PDF を新しく作ります（元の PDF は変えません）。欄ごとに「そのまま」「書き直す」も選べます。", "props-note"));
   }
-  ui.tidyProps = make("div", undefined, "tidy-props");
-  if (s.phase === "before") body.prepend(ui.tidyProps);
   ui.props.append(body);
   if (s.phase === "before") renderTidyEditor();
   // 最初は閉じた形で出す（値をそのまま出す所なので、開くのは利用者が決める）
@@ -1097,15 +1255,15 @@ function renderSummary(s: Session) {
   ui.actions.hidden = false;
   ui.sanitize.disabled = s.original === null || s.pdfProblem === "password";
   renderTidySummary();
-  // 説明は 1 行だけ。消す対象の列挙とプロパティの扱いは「整えると消すもの」を開いて読む（2026-11-05 本人の画面のレビュー B1）
+  renderKeepKinds(s);
+  // 説明は 1 行だけ。消す対象の列挙とプロパティの扱いは「整える内容」を開いて読み、選ぶ（2026-11-05 本人の画面のレビュー B1・2026-11-06 の 6）
   const password = s.pdfProblem === "password";
   ui.sanitizeNote.textContent = password
     ? "パスワードが要る PDF は、整えられません。"
     : v.hidden
     ? "見えない情報を消した PDF を新しく作ります。元の PDF は変えません。"
     : "見つかった所はありませんが、見えない情報を消した PDF を作れます。元の PDF は変えません。";
-  ui.sanitizeList.textContent =
-    "黒塗りの下の字・見えない字・作成者などの欄・XMP メタデータ・前の版の残り・添付ファイル・注釈とコメント・JavaScript などを消します。";
+  ui.sanitizeList.textContent = sanitizeListText();
   ui.sanitizeMore.hidden = password;
   // 「提出のためにファイルを小さくする」の入口から来たとき（B の #116）：上限まで小さくすることを、1 行の説明に足す
   if (shrinkLimit) ui.sanitizeNote.textContent += `整えて読み直したあとに、選んだ上限（${shrinkLimit.label}）まで小さくします。`;
@@ -1259,7 +1417,7 @@ async function loadPreflight(gen: number, bytes: Uint8Array) {
   }
 }
 
-/** プロパティの一覧の上に、8 つの項目ごとの「消す／そのまま／書き直す」を出す（既定は消す） */
+/** 「整える内容」の中（帯のすぐ上）に、8 つの項目ごとの「消す／そのまま／書き直す」を出す（既定は消す。6 の案 A） */
 function renderTidyEditor() {
   ui.tidyProps.replaceChildren();
   ui.tidyProps.hidden = !tidyPre;
@@ -1317,14 +1475,51 @@ function renderTidyEditor() {
   ui.tidyProps.append(list);
 }
 
+// ---------------------------------------------------------------- 整える種類（5 の案 B。2026-11-06 本人が決定。D168。src/ui/keep-model.ts）
+
+/** 「整える内容」の中に、見つかった種類ごとの印を出す。最初の印は keep-model.ts の defaultOn（高・確かめるを含む種類。例外あり） */
+function renderKeepKinds(s: Session) {
+  keepRows = s.phase === "before" ? buildKeepRows(s.view.rows, (p) => PATTERN_NAME[p] ?? p) : [];
+  keptKinds = initialKept(keepRows);
+  ui.tidyKindsList.replaceChildren(
+    ...keepRows.map((r) => {
+      const li = make("li", undefined, "tidy-kind");
+      const label = make("label", undefined, "tidy-kind-label");
+      const box = make("input");
+      box.type = "checkbox";
+      box.checked = !keptKinds.has(r.pattern);
+      box.disabled = !r.keepable;
+      box.addEventListener("change", () => {
+        if (box.checked) keptKinds.delete(r.pattern);
+        else keptKinds.add(r.pattern);
+        li.dataset.kept = String(!box.checked);
+        renderKeepSummary();
+      });
+      label.append(box, make("span", r.name, "tidy-kind-name"), make("span", keepUnits(`${r.count} か所（${tierCounts(r)}）`), "tidy-kind-count"));
+      li.append(label);
+      if (r.note) li.append(make("p", r.note, "props-note tidy-kind-note"));
+      li.dataset.kept = String(keptKinds.has(r.pattern));
+      if (!r.keepable) li.dataset.fixed = "true";
+      return li;
+    }),
+  );
+  ui.tidyKinds.hidden = keepRows.length === 0;
+  renderKeepSummary();
+}
+
+/** 外す種類があれば、「整える」の上に一言（「整える内容」を閉じていても読める） */
+function renderKeepSummary() {
+  const t = keptSummary(keepRows, keptKinds);
+  ui.keepSummary.textContent = t ? keepUnits(`外す種類：${t}。整えずに残します（「整える内容」で変えられます）。`) : "";
+  ui.keepSummary.hidden = !t;
+  // 消すものの一覧からも、外した種類を除く（「注釈も消します」と「注釈を外す」を並べない）
+  ui.sanitizeList.textContent = sanitizeListText(keptKinds);
+}
+
 /** 「整える」の近くに、プロパティをどうするかの一言を出す */
 function renderTidySummary() {
-  const chosen = PROPERTY_FIELDS.filter((f) => (propChoices[f.key]?.mode ?? "remove") !== "remove");
-  ui.tidySummary.textContent = !tidyPre
-    ? ""
-    : chosen.length
-      ? `プロパティ：${chosen.map((f) => `${f.label}を${MODE_LABEL[propChoices[f.key]!.mode]}`).join("・")}。ほかは消します（プロパティの一覧で変えられます）。`
-      : "プロパティは、すべて消します（プロパティの一覧で「そのまま」「書き直す」を選べます）。";
+  // 実際の選びの数を出す（押す前の確かめにも、同じ文を出す。src/ui/tidy-confirm.ts の propertySummary）
+  ui.tidySummary.textContent = tidyPre ? propertySummary(PROPERTY_FIELDS.map((f) => propChoices[f.key]?.mode ?? "remove")) : "";
 }
 
 /** PDF/A の印・電子署名があれば、整える前に問いかけて同意を取る（既定は外す）。同意の印を付けるまで「整える」は押せない */
@@ -1385,6 +1580,7 @@ function collectTidy(): { tidy: TidyChoices; bad: string[] } {
       ...(tidyPre ? { properties: edits } : {}),
       ...(tidyPre?.pdfa ? { pdfaMark: pick("consent-pdfa") } : {}),
       ...(tidyPre && tidyPre.signatures > 0 ? { signatures: pick("consent-sig") } : {}),
+      ...(keptKinds.size ? { keep: keepList(keptKinds) } : {}),
     },
     bad,
   };
@@ -1489,7 +1685,9 @@ function renderPicks() {
     }),
   );
   ui.picks.hidden = picks.length === 0;
-  for (const b of ui.groups.querySelectorAll<HTMLElement>("[data-candidate]")) syncCandidateButton(b, Number(b.dataset.candidate));
+  // 「黒塗りに加える」のボタンだけを直す。候補の行のボタン（.item）にも data-candidate="true" が付いているので、取り違えない
+  // （前は行のボタンの題が「黒塗りに加える」に書き換わっていた。2026-11-06）
+  for (const b of ui.groups.querySelectorAll<HTMLElement>(".pick-candidate[data-candidate]")) syncCandidateButton(b, Number(b.dataset.candidate));
   ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「整える」を押すと、見つかった所といっしょに黒塗りします。下の字・画像・注釈も消します）${picks.length >= MAX_REDACT_AREAS ? `。一度に選べるのは ${MAX_REDACT_AREAS} か所までです` : ""}`;
   if (s && s.phase === "before" && !ui.sanitize.disabled) {
     ui.sanitize.textContent = picks.length ? `整える（選んだ ${picks.length} か所も黒塗り）` : "整える";
@@ -1509,6 +1707,15 @@ function placePicks(s: Session, page: number) {
   if (!box || s.phase !== "before") return;
   picks.forEach((p, i) => {
     if (p.page !== page) return;
+    // 候補から加えた所は、候補の枠そのものに「選」を足す（同じ所に枠と札を 2 つ重ねない。前は「選 1」の札が候補の番号に重なっていた）
+    const frame = p.candidate !== undefined ? document.getElementById(`mark-frame-${p.candidate}`) : null;
+    if (frame) {
+      frame.classList.add("is-picked");
+      const no = frame.querySelector(".mark-no");
+      if (no) no.textContent = `${p.candidate}・選${i + 1}`;
+      document.getElementById(`mark-${p.candidate}`)?.setAttribute("aria-label", `番号 ${p.candidate}（自分で選んだ所 ${i + 1}。黒塗りに加えました）`);
+      return;
+    }
     const f = toFraction(box, p.rect);
     if (!f) return;
     const e = make("div", undefined, "mark mark-pick");
@@ -1609,6 +1816,8 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
 
   ui.cleanCount.textContent =
     c.left === null ? `整える前 ${c.before} か所 → 読み直せませんでした` : `整える前 ${c.before} か所 → 読み直したあと ${c.left} か所`;
+  // 外した種類（D168）の行は、読み直したあとの数に入れていないことを添える
+  if (c.kept > 0) ui.cleanCount.textContent += `（あなたが外した ${c.kept} か所は数えていません）`;
   ui.cleanCount.textContent = keepUnits(ui.cleanCount.textContent ?? "");
   ui.cleanCount.dataset.verdict = c.verdict;
   // 見えている個人情報らしい字（候補）は、見えない情報とは別の行で、前と後を同じ物差しで（黒塗りにするかは本人が決める）
@@ -1618,10 +1827,17 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.cleanCandidates.hidden = !c.candidatesBefore;
   ui.download.download = file.name;
   applySaveGate(saveGate(c));
+  // 確認が要る理由で、保存の上の文と印の字を分ける（外した種類だけなら「言い切れない」と言わない。D168）
+  const texts = saveTexts(c);
+  ui.saveNote.textContent = texts.note;
+  el<HTMLSpanElement>("save-confirm-text").textContent = texts.label;
   ui.downloadNote.textContent = keepUnits(`${file.name}（${file.pages} ページ・${formatBytes(file.bytes)}・${file.seconds}）。元の PDF は変えていません。`);
 
   ui.notDoneList.replaceChildren(...c.notDone.map((t) => make("li", t)));
   ui.notDone.hidden = c.notDone.length === 0;
+  // 本人が「整えない」を選んだ種類（D168）。残しているので、必ず並べる
+  ui.keptList.replaceChildren(...c.keptLines.map((t) => make("li", t)));
+  ui.kept.hidden = c.keptLines.length === 0;
 
   // 消したものは、見つかった種類・念のため消したもの・自分で選んだ所に分け、全部の合計は出さない。
   // 「3 か所見つかった」のに「5 件消した」と並ぶと、数が合わないように見えるため（2026-11-05 本人の画面のレビュー C2）
@@ -1670,12 +1886,13 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
 
 /** 型ごとの、片付ける前と読み直したあとの数（11/5 B の 6） */
 function renderBeforeAfter(before: ViewModel, after: ViewModel | null) {
-  const rows = beforeAfterCounts(before.coverage, after?.coverage ?? null);
+  const rows = beforeAfterCounts(before.coverage, after?.coverage ?? null, [...keptAtClean]);
   ui.beforeAfterList.replaceChildren(
     ...rows.map((r) => {
       const li = make("li");
       if (r.after) li.dataset.left = "true";
-      li.append(make("span", r.name, "ba-name"), make("span", `${r.before} → ${r.after === null ? "読み直せなかった" : r.after}`, "ba-count"));
+      if (r.kept) li.dataset.kept = "true";
+      li.append(make("span", r.name, "ba-name"), make("span", `${r.before} → ${r.after === null ? "読み直せなかった" : r.after}${r.kept ? "（外した）" : ""}`, "ba-count"));
       return li;
     }),
   );
@@ -1696,10 +1913,13 @@ async function runSanitize() {
   setStatus("整えています…");
   ui.progress.removeAttribute("value"); // どこまで進んだか分からないので、動いていることだけを示す
   ui.progress.hidden = false;
+  const bandLabel = ui.sanitize.textContent ?? "整える";
+  setBand("tidy");
   try {
     const { tidy, bad } = collectTidy();
     if (bad.length) {
       s.original = original;
+      clearBand(bandLabel);
       ui.sanitize.disabled = false;
       ui.progress.hidden = true;
       setStep(ui.stepClean, "now");
@@ -1707,6 +1927,8 @@ async function runSanitize() {
       setStatus(`${bad.join("・")}の日付の書き方が違います。${DATE_HINT}`, "problem");
       return;
     }
+    // 外した種類（D168）。整えたあとの画面で、外した印・行を見分けるために覚えておく
+    keptAtClean = new Set(tidy.keep ?? []);
     const areas = toAreas(picks);
     // 自分で黒塗りした PDF が読み直しで止められたら、選び直してもう一度片付けられるよう、元の写しを持っておく
     const retry = areas.length ? original.slice() : null;
@@ -1724,6 +1946,7 @@ async function runSanitize() {
     ui.stepVerifyNote.textContent = "読み直しています";
     setStatus("整えた PDF を、最初から検査し直しています…");
     ui.progress.value = 0;
+    setBand("verify");
 
     // 保存する PDF（Blob は中身を写して持つ）。絵を描く側にも写しを渡し、検査の Worker には元を渡し切る。
     // 保存のリンク（Blob の URL）は、ここでは作らない。読み直しが通ったあと（renderCleaned の saveGate）でだけ作る
@@ -1737,6 +1960,7 @@ async function runSanitize() {
       ui.progress.max = p.total;
       ui.progress.value = p.done;
       setStatus(`整えた PDF を、最初から検査し直しています…（${p.label}、${p.done + 1}/${p.total}）`);
+      setBand("verify", p);
     });
     const opened = await opening;
     ui.progress.hidden = true;
@@ -1752,6 +1976,7 @@ async function runSanitize() {
       notDone: out.notDone,
       decrypted: out.decrypted,
       ...(out.properties ? { properties: out.properties } : {}),
+      kept: [...keptAtClean],
     });
     const file = { name, bytes: byteLength, pages: out.pages, seconds: `${((out.elapsedMs + re.elapsedMs) / 1000).toFixed(1)} 秒` };
     if (afterSummary) {
@@ -1782,6 +2007,7 @@ async function runSanitize() {
         removed: out.removed,
         notDone: out.notDone,
         properties: clean.propertyLines,
+        ...(keptAtClean.size ? { kept: { patterns: [...keptAtClean], lines: clean.keptLines } } : {}),
         verdict: clean.headline,
         rules: (afterSummary ?? s.summary).rules.filter((r) => r.ruleVersion).map((r) => `${r.ruleId}@${r.ruleVersion}`),
       };
@@ -1795,12 +2021,88 @@ async function runSanitize() {
     if (gen === generation) cleanFailed("整える途中で問題が起きました。");
   } finally {
     busy = false;
+    if (gen === generation) clearBand(bandLabel);
   }
   // 提出のために小さくする入口：読み直しが通って、小さくする欄が出たときだけ、続けて小さくする
   if (gen === generation && shrinkLimit && !ui.compress.hidden) await shrinkToLimit(gen, shrinkLimit);
 }
 
-ui.sanitize.addEventListener("click", () => void runSanitize());
+// ---------------------------------------------------------------- 7：押す前の確かめ（画面全体のポップアップ）と、処理中の帯（2026-11-06 本人）
+
+/** 帯そのものを進み具合にする（字は段階と、読み直しの数。進んだ分は左から塗る） */
+function setBand(stage: "tidy" | "verify", verify?: { done: number; total: number }) {
+  ui.sanitize.dataset.busy = "true";
+  ui.sanitize.textContent = bandProgressText(stage, verify);
+  ui.sanitize.style.setProperty("--band-progress", String(bandProgressRatio(stage, verify)));
+}
+
+/** 進み具合の形をやめる。字が進み具合のままなら、押す前の字に戻す（止められたときに、別の字を入れていれば、それを残す） */
+function clearBand(label: string) {
+  delete ui.sanitize.dataset.busy;
+  ui.sanitize.style.removeProperty("--band-progress");
+  if ((ui.sanitize.textContent ?? "").startsWith("1 整え")) ui.sanitize.textContent = label;
+}
+
+const tidyDialog = el<HTMLDialogElement>("tidy-dialog");
+const tidyDialogTitle = el<HTMLHeadingElement>("tidy-dialog-title");
+const tidyDialogRun = el<HTMLButtonElement>("tidy-dialog-run");
+
+/** 「整える」を押したとき：何を何か所消すかをポップアップで確かめてから整える（ダイアログが使えないブラウザでは、そのまま整える） */
+function confirmSanitize() {
+  const s = session;
+  if (!s || busy || s.phase !== "before" || !s.original || ui.sanitize.disabled) return;
+  // 日付の書き方が違う項目は、確かめを開く前に知らせる（開いてから止めない）
+  const { bad } = collectTidy();
+  if (bad.length) {
+    setStatus(`${bad.join("・")}の日付の書き方が違います。${DATE_HINT}`, "problem");
+    return;
+  }
+  if (typeof tidyDialog.showModal !== "function") return void runSanitize();
+  const c = buildTidyConfirm({
+    tiers: s.view.tiers,
+    picks: picks.length,
+    properties: ui.tidySummary.textContent ?? "",
+    ...(shrinkLimit ? { shrink: shrinkLimit.label } : {}),
+    kept: keepRows.filter((r) => r.keepable && keptKinds.has(r.pattern)).map((r) => ({ pattern: r.pattern, name: r.name, count: r.count })),
+  });
+  tidyDialogTitle.textContent = c.title;
+  el<HTMLParagraphElement>("tidy-dialog-lead").textContent = keepUnits(c.lead);
+  const counts = el<HTMLParagraphElement>("tidy-dialog-counts");
+  counts.textContent = keepUnits(c.counts);
+  counts.hidden = c.counts === "";
+  el<HTMLUListElement>("tidy-dialog-notes").replaceChildren(...c.notes.map((t) => make("li", keepUnits(t))));
+  tidyDialogRun.textContent = c.run;
+  tidyDialog.returnValue = "";
+  tidyDialog.showModal();
+  tidyDialogTitle.focus();
+}
+
+ui.sanitize.addEventListener("click", confirmSanitize);
+tidyDialogRun.addEventListener("click", () => tidyDialog.close("run"));
+el<HTMLButtonElement>("tidy-dialog-cancel").addEventListener("click", () => tidyDialog.close());
+el<HTMLButtonElement>("tidy-dialog-close").addEventListener("click", () => tidyDialog.close());
+{
+  // 外側（::backdrop）を押したときもやめる。押し始めも離した所も外のときだけ（利用規約のダイアログと同じ）
+  const onBackdrop = (e: MouseEvent) => e.target === tidyDialog && isOutside(e.clientX, e.clientY, tidyDialog.getBoundingClientRect());
+  let downOutside = false;
+  tidyDialog.addEventListener("pointerdown", (e) => {
+    downOutside = onBackdrop(e);
+  });
+  tidyDialog.addEventListener("click", (e) => {
+    if (downOutside && onBackdrop(e)) tidyDialog.close();
+    downOutside = false;
+  });
+}
+// Esc はブラウザが閉じる（cancel → close）。「整える」を押したときだけ整え、ほかはフォーカスを帯へ戻す
+tidyDialog.addEventListener("close", () => {
+  if (tidyDialog.returnValue === "run") {
+    // 帯は押せない形になるので、フォーカスは結果の見出しへ（終わったら「整えた結果」の見出しへ移る）
+    ui.resultTitle.focus({ preventScroll: true });
+    void runSanitize();
+  } else if (ui.sanitize.isConnected) {
+    ui.sanitize.focus();
+  }
+});
 ui.saveConfirmBox.addEventListener("change", () => {
   if (ui.saveConfirmBox.checked) unlockDownload();
   else lockDownload();
