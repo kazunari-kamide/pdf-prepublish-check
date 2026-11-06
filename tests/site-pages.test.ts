@@ -290,7 +290,7 @@ describe("ライセンスの一覧（ブラウザに配るものだけ）", () =
     expect(zen.license).toContain("SIL Open Font License 1.1");
     expect(zen.copyright.join("\n")).toContain("The Zen Maru Gothic Project Authors");
     // 画面の書体は、本当に src/assets/fonts/ にあり、共通の @font-face（design/fonts.css）から読む
-    expect(read("design/fonts.css")).toMatch(/assets\/fonts\/NotoSansJP-subset\.woff2/);
+    expect(read("design/fonts.css")).toMatch(/assets\/fonts\/NotoSansJP-ui\.woff2/);
     expect(read("design/fonts.css")).toMatch(/assets\/fonts\/zen-maru-gothic\/ZenMaruGothic-Black-subset\.woff2/);
   });
 

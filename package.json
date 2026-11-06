@@ -35,6 +35,7 @@
     "fonts:build": "node design/fonts/build.mjs",
     "fonts:check": "node design/fonts/build.mjs --check",
     "fonts:headings": "node design/fonts/heading-chars.mjs",
+    "fonts:ui": "node design/fonts/ui-chars.mjs",
     "eval:blind": "node eval/blind/run.ts",
     "cli": "node cli/omamori.ts",
     "og:build": "node site-og-image.ts --write",
