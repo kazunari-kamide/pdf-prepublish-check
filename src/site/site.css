@@ -795,12 +795,10 @@ html:has(.site-cards) .site-band {
 }
 
 /* 表は、狭い画面では表の中だけを横に動かす（ページ全体は横にはみ出さない） */
+/* 地はページと同じ（色の面・外の枠・角の丸みを付けない。2026-11-06、本人の指摘） */
 .site-table-wrap {
   max-width: 100%;
   overflow-x: auto;
-  border: var(--bw-1) solid var(--line-default);
-  border-radius: var(--radius-l);
-  background: var(--surface-card);
 }
 
 /* 狭い画面で字が1字ずつ折れないよう、表に最低の幅を持たせる（はみ出す分は .site-table-wrap の中だけで横に動く） */
@@ -830,14 +828,21 @@ html:has(.site-cards) .site-band {
   vertical-align: top;
 }
 
+/* 左の端は、表の上の文と頭をそろえる（地も枠もないので、内側の余白を付けると字だけ右へずれて見える） */
+.site-table tr > :first-child {
+  padding-left: 0;
+}
+
+/* 見出しの行は、色の帯ではなく、太字と下の線で分ける。行は縞にせず、行の間の細い線 1 本だけ（2026-11-06） */
 .site-table thead th {
-  background: var(--surface-sunken);
+  font-weight: var(--fw-strong);
   border-bottom: var(--bw-1) solid var(--line-control);
   white-space: nowrap;
 }
 
-.site-table tbody tr:nth-child(even) > * {
-  background: var(--surface-subtle);
+/* 名前は / の後ろでだけ折る（@pdf-lib/standard-fonts が「@pdf-」「lib/standard-」と折れないように）。区切りごとの塊は折らない */
+.site-name-part {
+  white-space: nowrap;
 }
 
 .site-table tbody tr:last-child > * {
@@ -1452,13 +1457,6 @@ html:has(.site-cards) .site-band {
   border-radius: var(--radius-face);
   background: var(--face-beni);
   box-shadow: none;
-}
-
-/* 表：生成りの面の上の表（外の枠はやめる。行の区切りは上の決まりのまま） */
-.site-table-wrap {
-  border: 0;
-  border-radius: var(--radius-card);
-  background: var(--face-kinari);
 }
 
 /* 点検の一覧の段：生成りの面。知らせは生成りの面＋ｉの印（枠・左の太い線はやめる。design/sheet.md「案 C」のお知らせ・状態） */
