@@ -82,25 +82,22 @@ body.site {
   text-decoration-thickness: 2px;
 }
 
-/* 本文の中のリンク：太字＋黄のマーカー（字の下半分の淡い帯）。下線は引かない（色だけに頼らない。design/sheet.md「案 C」の強調・リンク） */
+/* 本文の中のリンク：太字＋下線（D166。黄のマーカーはやめた）。色は墨 900（白の地で 4.5:1 以上）。色だけに頼らず、下線で示す */
 .site-main :is(p, dd) a:not([class]),
 .site-section li > a:not([class]) {
   font-weight: var(--fw-strong);
-  text-decoration: none;
-  padding-inline: 0.08em;
-  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
 }
 
-/* 指を置いたとき：下線は足さず（マーカーと二重にしない）、帯を上へ広げて字の下半分まで塗る */
-.site-main :is(p, dd) a:not([class]):hover,
-.site-section li > a:not([class]):hover,
-.site-list-link:hover .site-list-title > span {
-  --marker-top: 30%;
+/* 指を置いたとき・フォーカスのとき：下線を太くする（形で示す。マーカーは使わない） */
+.site-main :is(p, dd) a:not([class]):is(:hover, :focus-visible),
+.site-section li > a:not([class]):is(:hover, :focus-visible) {
+  text-decoration-thickness: 3px;
 }
 
-/* 関係する記事の一覧の行：型の番号の札（白いピル）＋題。マーカーは題の字だけに引き、札にはかけない */
+/* 関係する記事の一覧の行：型の番号の札（白いピル）＋題 */
 /* 札の列は決まった幅（いちばん長い番号「P10」〜「P12」が入る幅）にして、どの行も題の左端をそろえる */
 .site .site-list-link {
   --list-tag-width: 3.2rem;
@@ -127,12 +124,20 @@ body.site {
   background: var(--surface-card);
 }
 
+/* 題の字には、下線もマーカーも引かない（D166）。押せることは、行の形（札＋題）と、指を置いたときの行の地の色で示す */
 .site-list-title > span {
   padding-inline: 0.08em;
-  background: linear-gradient(transparent var(--marker-top), var(--marker-ki) var(--marker-top), var(--marker-ki) var(--marker-bottom), transparent var(--marker-bottom));
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
 }
+
+/* 指を置いたとき・フォーカスのとき：行の地を薄い墨にする */
+.site .site-list-link {
+  border-radius: var(--radius-sm, 4px);
+}
+
+.site .site-list-link:is(:hover, :focus-visible) {
+  background: var(--surface-sunken);
+}
+
 
 .site :focus-visible {
   /* 1 色の線（黄と黒の 2 重にしない。2026-11-05 本人）。色・太さ・離し方は design/sheet.css（B の #107：墨 900・3px・3px） */

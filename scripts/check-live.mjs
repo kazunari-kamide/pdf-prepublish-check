@@ -11,7 +11,8 @@
 //   /check/・/check.html・前の /index.html は /check へ 301（htaccess.ts の CHECK_PAGE_RULES）
 // - サイトのページ（記事の一覧・記事1つ・タグのページ・プライバシー）も .html なしの場所で 200 で返り、同じヘッダーが付いている。.html 付きの場所は .html なしへ 301
 // - 検査のページが、外のサイトからスクリプトを読み込んでいない（アクセス解析のスクリプトは入れない。docs/no-network.md）
-// - https の応答に Strict-Transport-Security が付き、Cache-Control が HTML は no-cache・assets/ は 1 年（htaccess.ts）
+// - https の応答に Strict-Transport-Security が付き、Cache-Control が HTML は no-cache・assets/ と pdfjs/<版の印>/ は 1 年（htaccess.ts）。
+//   見つからない pdfjs/ の場所（404）は長く持たせない
 // - 見つからない場所は、404 で自前の 404 のページ（dist/404.html と同じ中身）を、同じヘッダーをつけて返す。assets/ を開いてもファイルの一覧は出ない
 // - .mjs が text/javascript、.wasm が application/wasm で返る（dist/ に .wasm がなければ、省いたと表示する）
 // - お問い合わせのページと送り先（contact-send.php）だけ、form-action 'self' の CSP（csp.ts の contactHeaders）。どちらも PHP がフォームを返し、
@@ -25,7 +26,7 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { checkHeaders, contactHeaders, securityHeaders } from "../csp.ts";
+import { contactHeaders, securityHeaders } from "../csp.ts";
 import { CACHE_ASSETS, CACHE_DEFAULT, CHECK_PAGE_FILE, CHECK_PATH, CONTACT_PAGE_FILE, CONTACT_SEND_FILE, HSTS, LICENSE_TEXTS_DIR, NOT_FOUND_PAGE, OFFICIAL_HOST, OLD_LICENSE_TEXTS_DIR } from "../htaccess.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -65,8 +66,7 @@ async function get(url, method = "GET") {
 }
 
 // ---- 検査のページ（/check）のヘッダー。つながるまで少し待つ（配信の直後のため）
-// 検査のページだけ、CSP の connect-src が 'self'（PDF.js が /pdfjs/ の部品を読むため。2026-11-06 本人が決定。csp.ts の checkHeaders）。
-// ほかのヘッダーは、ほかのページと同じ
+// 検査のページも、ほかのページと同じヘッダー（CSP の connect-src は 'none'。2026-11-06 の夕方に 'self' から戻した。D170）
 let top = null;
 for (let i = 0; i < 6 && !top; i++) {
   try {
@@ -78,7 +78,7 @@ for (let i = 0; i < 6 && !top; i++) {
 }
 if (top) {
   if (top.status !== 200) problems.push(`${checkUrl.href} が ${top.status} を返しました（200 のはず）`);
-  for (const [name, want] of Object.entries(checkHeaders)) {
+  for (const [name, want] of Object.entries(securityHeaders)) {
     const got = top.headers.get(name);
     if (got === null) problems.push(`ヘッダー ${name} がありません`);
     else if (got !== want) problems.push(`ヘッダー ${name} の値が違います（二重に付いている場合も、ここで止まります）\n      本番：${got}\n      期待：${want}`);
@@ -227,12 +227,30 @@ if (top) {
     }
   }
 }
+// PDF.js の部品（/pdfjs/<版の印>/。字の対応表 cmaps.mjs と画像を解く部品）も、assets/ と同じく 1 年そのまま使わせる（2026-11-06 D165）。
+// 場所に版の印が付くので、版が変われば場所も変わる。開いたあとに裏で読むので、2 回目からは通信で読まずに済む
+{
+  const parts = files.filter((f) => /^pdfjs\/[0-9a-f]{10}\//.test(f));
+  const pick = [parts.find((f) => f.endsWith("/cmaps.mjs")), parts.find((f) => f.includes("/wasm/"))].filter(Boolean);
+  if (!pick.length) problems.push("dist/ に pdfjs/<版の印>/ の部品が見つかりません（ビルドを確かめる）");
+  for (const part of pick) {
+    try {
+      const r = await get(new URL(part, base), "HEAD");
+      const cc = r.headers.get("cache-control");
+      if (r.status !== 200) problems.push(`${part} が ${r.status} を返しました`);
+      else if (cc !== CACHE_ASSETS) problems.push(`${part} の Cache-Control が ${cc ?? "（なし）"} です（${CACHE_ASSETS} のはず）`);
+      else ok.push(`${part.replace(/^(pdfjs\/[0-9a-f]{10}\/).*$/, "$1")}…（${part.split("/").pop()}）の Cache-Control（${CACHE_ASSETS}）`);
+    } catch (e) {
+      problems.push(`${part} を確かめられませんでした（${e?.message ?? e}）`);
+    }
+  }
+}
 
 // ---- 見つからないとき：自前の 404 のページを、404 で、同じヘッダーをつけて返す。フォルダの中身の一覧は出さない
 try {
   // .html なしの場所（今のサイトの形）と、.html 付きの場所（前の形。ファイルがないので 301 にせず 404）と、assets/ の中
   const missing = `this-page-does-not-exist-${Date.now()}`;
-  for (const where of [missing, `${missing}.html`, `articles/${missing}`, `assets/${missing}.html`]) {
+  for (const where of [missing, `${missing}.html`, `articles/${missing}`, `assets/${missing}.html`, `pdfjs/${missing}.mjs`]) {
     const r = await get(new URL(where, base));
     const body = Buffer.from(await r.arrayBuffer());
     const want = readFileSync(path.join(DIST, NOT_FOUND_PAGE.slice(1)));

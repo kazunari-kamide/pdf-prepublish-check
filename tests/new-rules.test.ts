@@ -225,6 +225,14 @@ describe("P3 他組織名の混入", () => {
     expect(orgNames("架空商事株式会社")).toEqual(["架空商事株式会社"]);
     expect(orgNames("企画課 市場 都合 Fictional sample report")).toEqual([]);
   });
+  it("1.0.1：題の頭の日付の切れ端を団体名に入れない（「9月架空町」と「9月 架空町」を同じ団体とみなす）", () => {
+    expect(orgNames("令和6年9月架空町議会定例会会議録")).toEqual(["架空町"]);
+    expect(orgNames("令和六年九月架空町議会定例会会議録")).toEqual(["架空町"]);
+    expect(orgNames("令和6年9月 架空町議会定例会会議録")).toEqual(["架空町"]);
+    expect(orgNames("第3号架空市")).toEqual(["架空市"]);
+    // 名前の中の「月」は残す（数のすぐあとの「年」だけを外す）
+    expect(orgNames("令和6年月宵町議会")).toEqual(["月宵町"]);
+  });
   it("字数だけを返す。本文に団体名が無ければ比べない", async () => {
     const r = await detectP3Orgs(await pdf(p3c.CASES, "p3-l01"));
     expect(r.findings).toEqual([{ pattern: "P3", source: "info", field: "Title", chars: 14 }]);

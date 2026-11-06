@@ -4,7 +4,7 @@
 // CSP の値をここに書き写さないのは、<meta> の CSP・vite preview のヘッダーと食い違わないようにするため。
 // npm run build で dist/.htaccess として出る（vite.config.ts）。dist/.htaccess を直接書き換えない。
 
-import { checkHeaders, contactHeaders, securityHeaders } from "./csp.ts";
+import { contactHeaders, securityHeaders } from "./csp.ts";
 
 /** 公式のドメイン（CLAUDE.md §11-6）。www つきや http で来たら、ここへ 301 で送る */
 export const OFFICIAL_HOST = "omamoripdf.com";
@@ -64,17 +64,16 @@ export function buildHtaccess(): string {
     "# 見つからないときは、自前のページを返す（下のヘッダーは always なので、404 の応答にも付く）",
     `ErrorDocument 404 ${NOT_FOUND_PAGE}`,
     "",
-    "# CSP などのヘッダー。サイトのページの <meta> の CSP と同じ値に、frame-ancestors 'none' を足したもの。",
-    "# 検査のページ（check.html）だけは、下の <FilesMatch> で connect-src を 'self' にする",
+    "# CSP などのヘッダー。検査のページ（check.html）とサイトのページの <meta> の CSP と同じ値に、frame-ancestors 'none' を足したもの",
     "<IfModule mod_headers.c>",
     ...headers,
     "  # HSTS は条件を付けずに付ける（配信先の前の nginx が https を受けるため、%{HTTPS} では見分けられない。",
     "  # ブラウザは http の応答の HSTS を使わない。http で来た要求は、下の 301 で https へ移す）",
     `  Header always set Strict-Transport-Security ${quoted("Strict-Transport-Security", HSTS)}`,
-    "  # キャッシュ：ふだんは毎回確かめさせ、名前にハッシュの付いた assets/ の、見つかった応答（200）だけ長く持たせる。",
+    "  # キャッシュ：ふだんは毎回確かめさせ、名前にハッシュの付いた assets/ と、場所に版の印の付いた pdfjs/<版の印>/ の、見つかった応答（200）だけ長く持たせる。",
     "  # 見つからない assets/ の応答（404）を長く持たせないため、状態も見る。順番に意味がある（あとの行が上書きする）",
     `  Header always set Cache-Control ${quoted("Cache-Control", CACHE_DEFAULT)}`,
-    `  Header always set Cache-Control ${quoted("Cache-Control", CACHE_ASSETS)} "expr=%{REQUEST_URI} =~ m#^/assets/# && %{REQUEST_STATUS} == 200"`,
+    `  Header always set Cache-Control ${quoted("Cache-Control", CACHE_ASSETS)} "expr=%{REQUEST_URI} =~ m#^/(assets|pdfjs)/# && %{REQUEST_STATUS} == 200"`,
     "</IfModule>",
     "",
     "# お問い合わせのページと送り先だけ、同じサイトへフォームを送れる CSP にする（form-action 'self'。ほかは上と同じ値）。",
@@ -82,16 +81,6 @@ export function buildHtaccess(): string {
     `<FilesMatch "^(${[CONTACT_PAGE_FILE, CONTACT_SEND_FILE].map((f) => f.replace(/\./g, "\\.")).join("|")})$">`,
     "  <IfModule mod_headers.c>",
     ...Object.entries(contactHeaders)
-      .filter(([k, v]) => securityHeaders[k] !== v)
-      .map(([k, v]) => `    Header always set ${k} ${quoted(k, v)}`),
-    "  </IfModule>",
-    "</FilesMatch>",
-    "",
-    "# 検査のページだけ、自分の配信先の /pdfjs/ の部品（cMap）を読める CSP にする（connect-src 'self'。ほかは上と同じ値。",
-    "# 2026-11-06 本人が決定）。外のサイトへの送り先は増やさない",
-    `<FilesMatch "^${CHECK_PAGE_FILE.replace(/\./g, "\\.")}$">`,
-    "  <IfModule mod_headers.c>",
-    ...Object.entries(checkHeaders)
       .filter(([k, v]) => securityHeaders[k] !== v)
       .map(([k, v]) => `    Header always set ${k} ${quoted(k, v)}`),
     "  </IfModule>",

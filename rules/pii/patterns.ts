@@ -453,6 +453,15 @@ function scanAddress(ctx: Ctx, opts: { columnHeader?: boolean } = {}) {
   }
 }
 
+/** 文の終わり方（ここで終わる並びは、名前ではなく文の切れ端） */
+const SENTENCE_END = /(ます|です|ました|でした|ません|ください|ございます|します|しました|たい|ている|ておる|である|だった)$/u;
+
+/**
+ * 漢字のあとに助詞 1 字だけが付いた並び（「朝霧律子は」）から、助詞を外す（0.1.6 から）。
+ * かなの名前（まこと・とも など）は、漢字のあとのかなが 2 字以上なので外さない
+ */
+const trimParticle = (value: string) => (new RegExp(`[${HAN}][はがをにへもや]$`, "u").test(value) ? value.slice(0, -1) : value);
+
 /** 氏名らしい並びかを確かめる。だめなら除く理由を、よければ null を返す（"skip" は何も数えない） */
 export function judgeName(raw: string, opts: { kanaOk?: boolean } = {}): ExcludeReason | "skip" | null {
   const s = raw.replace(/[\s　]+/g, " ").trim();
@@ -466,12 +475,20 @@ export function judgeName(raw: string, opts: { kanaOk?: boolean } = {}): Exclude
   // 語ごとに団体名かを見る（「企画課 内線」のように、団体名のあとに別の語が続く並び）
   if (s.split(" ").some(isOrganizationName)) return "organization";
   if (new RegExp(`^[\\p{Script=Hiragana}ー]+$`, "u").test(compact) && !opts.kanaOk) return "skip";
+  // 文の切れ端（0.1.6 から）：会議録の発言「質問します」など
+  if (SENTENCE_END.test(compact)) return "skip";
   if (!new RegExp(`^${NAME_CH}+$`, "u").test(compact)) return "skip";
   return null;
 }
 
+/**
+ * 名前の並びの終わり（0.1.6 から）：行の終わり・記号・空白、または呼び方（様・さん など）の前。
+ * 会議録の「○委員長 次に議案の説明を求めます」のように、語のあとに文が続くと、上限の 6 字で切れた文の頭を名前として拾っていたため
+ */
+const NAME_END = `(?=$|[^${HAN}${KANA}]|様|殿|さん|くん|ちゃん|君|氏)`;
+
 const NAME_LABEL_RE = new RegExp(
-  `(${alt([...NAME_LABELS_HIGH, ...NAME_LABELS_CHECK])})(?:[（(][^）)]{0,8}[）)])?[:：\\s\\t]+(${NAME_CH}{1,6}(?: ${NAME_CH}{1,6})?)`,
+  `(${alt([...NAME_LABELS_HIGH, ...NAME_LABELS_CHECK])})(?:[（(][^）)]{0,8}[）)])?[:：\\s\\t]+(${NAME_CH}{1,6}(?: ${NAME_CH}{1,6})?)${NAME_END}`,
   "gu",
 );
 
@@ -483,7 +500,7 @@ function scanNameByLabel(ctx: Ctx) {
     // あとの部分が見出しの語（「住所」など）なら外す
     const parts = value.split(" ");
     while (parts.length > 1 && (HEADING_WORDS.includes(parts[parts.length - 1]!) || ROLE_WORDS.includes(parts[parts.length - 1]!))) parts.pop();
-    value = parts.join(" ");
+    value = trimParticle(parts.join(" "));
     // 前に役職がつく並び（「会長 朝霧」など）は、役職を外して確かめる
     let roleFirst = false;
     for (const r of [...ROLE_WORDS].sort((a, b) => b.length - a.length)) {
@@ -509,14 +526,14 @@ function scanNameByLabel(ctx: Ctx) {
 }
 
 // 「担当」「担当者」は氏名を指す語（scanNameByLabel）で扱うので、ここでは外す（同じ所を2度数えない）
-const ROLE_NAME_RE = new RegExp(`(?<![${HAN}])(${alt(ROLE_WORDS.filter((r) => !NAME_LABELS_CHECK.includes(r)))})[ :：]+(${NAME_CH}{1,6}(?: ${NAME_CH}{1,6})?)`, "gu");
+const ROLE_NAME_RE = new RegExp(`(?<![${HAN}])(${alt(ROLE_WORDS.filter((r) => !NAME_LABELS_CHECK.includes(r)))})[ :：]+(${NAME_CH}{1,6}(?: ${NAME_CH}{1,6})?)${NAME_END}`, "gu");
 
 /** 役職のあとの名前（「会長 宵町 律」など）。公表された役職の人のことも多いので、確からしさは「確認」 */
 function scanNameByRole(ctx: Ctx, taken: Array<[number, number]>) {
   for (const m of ctx.norm.matchAll(ROLE_NAME_RE)) {
     const parts = m[2]!.split(" ");
     while (parts.length > 1 && (HEADING_WORDS.includes(parts[parts.length - 1]!) || ROLE_WORDS.includes(parts[parts.length - 1]!))) parts.pop();
-    const value = parts.join(" ");
+    const value = trimParticle(parts.join(" "));
     const start = m.index! + m[0].length - m[2]!.length;
     const end = start + value.length;
     if (taken.some(([a, b]) => start < b && a < end)) continue;

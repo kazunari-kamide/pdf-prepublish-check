@@ -240,19 +240,35 @@ describe("比べる処理の速さ（1.4.1）", () => {
     const block = (prefix: string, i: number) => `BT (${prefix}${String(i).padStart(6, "0")}zz) Tj ET`;
     const range = (n: number) => Array.from({ length: n }, (_, i) => i);
     const b = await makeBase();
-    const n = 40_000;
-    const old = range(n).map((i) => block("Q", i)).join("\n");
-    // 今の版：大きな中身のあとに、前の版の字がすべてある（前の版の字は、今の版にもすべてある）
-    const current = [...range(400_000).map((i) => block("R", i)), ...range(n).reverse().map((i) => block("Q", i))].join("\n");
-    const v1 = append(b.bytes, { objects: [[b.contents, stream(old)]], root: b.root, size: b.size });
-    const v2 = append(v1, { objects: [[b.contents, stream(current)]], root: b.root, size: b.size });
-    const t0 = performance.now();
-    const r = await detectP5Revisions(v2);
-    const ms = performance.now() - t0;
-    const content = r.findings.filter((f) => f.kind === "content").sort((x, y) => x.revision! - y.revision!);
-    // 1番目の版（Hello）は今の版にないので「違う」、2番目の版は字がすべて今の版にあるので「同じ」
-    expect(content.map((f) => f.compare)).toEqual(["differs", "same"]);
-    // 1つずつ探す作り（1.4.0）では、比べるだけで塊の数 × 今の版の長さに比例する時間がかかった
-    expect(ms).toBeLessThan(4_000);
-  }, 60_000);
+    /** 前の版の塊 n 個と、今の版（大きな中身 10n 個のあとに、前の版の字がすべてある）の 2 つの版を足した PDF */
+    const build = (n: number) => {
+      const old = range(n).map((i) => block("Q", i)).join("\n");
+      const current = [...range(n * 10).map((i) => block("R", i)), ...range(n).reverse().map((i) => block("Q", i))].join("\n");
+      const v1 = append(b.bytes, { objects: [[b.contents, stream(old)]], root: b.root, size: b.size });
+      return append(v1, { objects: [[b.contents, stream(current)]], root: b.root, size: b.size });
+    };
+    /** times 回測って、いちばん短い時間（ほかの処理の負荷で延びた回を除く） */
+    const fastest = async (bytes: Uint8Array, times: number) => {
+      let best = Infinity;
+      let report: Awaited<ReturnType<typeof detectP5Revisions>> | null = null;
+      for (let k = 0; k < times; k++) {
+        const t0 = performance.now();
+        report = await detectP5Revisions(bytes);
+        best = Math.min(best, performance.now() - t0);
+      }
+      return { ms: best, report: report! };
+    };
+    const small = await fastest(build(10_000), 3);
+    const large = await fastest(build(40_000), 2);
+    for (const { report } of [small, large]) {
+      const content = report.findings.filter((f) => f.kind === "content").sort((x, y) => x.revision! - y.revision!);
+      // 1番目の版（Hello）は今の版にないので「違う」、2番目の版は字がすべて今の版にあるので「同じ」
+      expect(content.map((f) => f.compare)).toEqual(["differs", "same"]);
+    }
+    // 大きさを 4 倍にしたときの時間の比で見る（機械の速さ・ほかの処理の負荷に左右されにくい。2026-11-06 から）。
+    // 1つずつ探す作り（1.4.0）は、塊の数 × 今の版の長さに比例するので、4 倍にすると約 16 倍になる。今の作りは約 4 倍
+    const ratio = large.ms / small.ms;
+    console.log(`p5 の比べ：1 万塊 ${Math.round(small.ms)} ms、4 万塊 ${Math.round(large.ms)} ms、比 ${ratio.toFixed(1)}`);
+    expect(ratio).toBeLessThan(8);
+  }, 120_000);
 });

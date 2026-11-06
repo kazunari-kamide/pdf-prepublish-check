@@ -15,8 +15,6 @@ const SCRIPT = path.join(ROOT, "scripts", "check-dist.mjs");
 const PDFJS = path.join(ROOT, "node_modules", "pdfjs-dist", "build");
 const CSP_OK = "default-src &#39;self&#39;; connect-src &#39;none&#39;; script-src &#39;self&#39;; form-action &#39;none&#39;";
 const CSP_OPEN = "default-src &#39;self&#39;; script-src &#39;self&#39;; form-action &#39;none&#39;";
-/** 検査のページの CSP（connect-src だけ 'self'。2026-11-06 本人が決定。csp.ts の withConnectSelf） */
-const checkCsp = (csp: string) => csp.replace("connect-src &#39;none&#39;", "connect-src &#39;self&#39;");
 /** お問い合わせのページの CSP（form-action だけ 'self'） */
 const contactCsp = (csp: string) => csp.replace("form-action &#39;none&#39;", "form-action &#39;self&#39;");
 /** お問い合わせの送り先の PHP の作りもの（check-dist が見る形だけ） */
@@ -43,11 +41,6 @@ ErrorDocument 404 /404.html
     Header always set Content-Security-Policy "${headerCsp.replace("form-action 'none'", "form-action 'self'")}"
   </IfModule>
 </FilesMatch>
-<FilesMatch "^check\\.html$">
-  <IfModule mod_headers.c>
-    Header always set Content-Security-Policy "${headerCsp.replace("connect-src 'none'", "connect-src 'self'")}"
-  </IfModule>
-</FilesMatch>
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ${CONTACT_REWRITE}
@@ -68,7 +61,7 @@ function fakeDist(
   mkdirSync(path.join(dir, "assets"));
   writeFileSync(
     path.join(dir, "check.html"),
-    `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${checkCsp(csp)}"><script type="module" src="/assets/index-Ab12Cd34.js"></script></head><body></body></html>`,
+    `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><script type="module" src="/assets/index-Ab12Cd34.js"></script></head><body></body></html>`,
   );
   writeFileSync(path.join(dir, "assets", "index-Ab12Cd34.js"), "console.log(1);\n");
   if (htaccess !== null) writeFileSync(path.join(dir, ".htaccess"), htaccess);
@@ -91,7 +84,7 @@ function run(dir: string) {
 }
 
 describe("check-dist の PDF.js の例外", () => {
-  it("pdfjs-dist と同じ写しで、検査のページの CSP の connect-src が 'self'（ほかのページは 'none'）なら通す", () => {
+  it("pdfjs-dist と同じ写しで、CSP に connect-src 'none' があれば通す（検査のページも 'none'。2026-11-06 D170）", () => {
     const r = run(fakeDist(CSP_OK, { "pdf.min-Aa11Bb22.mjs": { copy: "pdf.min.mjs" }, "pdf.worker.min-Cc33Dd44.mjs": { copy: "pdf.worker.min.mjs" } }));
     expect(r.out).toContain("例外として許したファイル");
     expect(r.code).toBe(0);
@@ -103,10 +96,10 @@ describe("check-dist の PDF.js の例外", () => {
     expect(r.out).toContain("pdf.min-Aa11Bb22.mjs に fetch( が入っています");
   });
 
-  it("検査のページの CSP の connect-src が 'self' でなければ（外のサイトも許す・決めていない）、写しでも止める", () => {
+  it("CSP に connect-src 'none' がなければ、写しでも止める", () => {
     const r = run(fakeDist(CSP_OPEN, { "pdf.min-Aa11Bb22.mjs": { copy: "pdf.min.mjs" } }));
     expect(r.code).toBe(1);
-    expect(r.out).toContain("check.html の CSP の connect-src が 'self' ではありません");
+    expect(r.out).toContain("CSP に connect-src 'none' がありません");
     expect(r.out).toContain("pdf.min-Aa11Bb22.mjs に fetch( が入っています");
   });
 
@@ -118,43 +111,71 @@ describe("check-dist の PDF.js の例外", () => {
   });
 });
 
-describe("check-dist の PDF.js の部品（/pdfjs/。src/render/pdfjs-parts.ts）", () => {
+describe("check-dist の PDF.js の部品（/pdfjs/<版の印>/。src/render/pdfjs-parts.ts）", () => {
   const PARTS = path.join(ROOT, "node_modules", "pdfjs-dist");
-  /** 決めた部品を全部、pdfjs-dist から dist/pdfjs/ に写す */
-  function withParts(dir: string): string {
+  const HASH = "0123456789";
+  const bcmaps = () => readdirSync(path.join(PARTS, "cmaps")).filter((n) => n.endsWith(".bcmap")).sort();
+  /** 決めた部品を全部、pdfjs-dist から dist/pdfjs/<版の印>/ に写し、字の対応表をまとめたモジュールも置く（vite.config.ts と同じ形） */
+  function withParts(dir: string, edit: (bundle: Record<string, string>) => void = () => {}): string {
+    const base = path.join(dir, "pdfjs", HASH);
     for (const [sub, names] of [
       ["wasm", readdirSync(path.join(PARTS, "wasm")).filter((n) => /^(jbig2|openjpeg)_nowasm_fallback\.js$|^LICENSE_(PDFJS_)?(JBIG2|OPENJPEG)$/.test(n))],
-      ["cmaps", readdirSync(path.join(PARTS, "cmaps")).filter((n) => n.endsWith(".bcmap") || n === "LICENSE")],
+      ["cmaps", ["LICENSE"]],
     ] as const) {
-      mkdirSync(path.join(dir, "pdfjs", sub), { recursive: true });
-      for (const n of names) copyFileSync(path.join(PARTS, sub, n), path.join(dir, "pdfjs", sub, n));
+      mkdirSync(path.join(base, sub), { recursive: true });
+      for (const n of names) copyFileSync(path.join(PARTS, sub, n), path.join(base, sub, n));
     }
+    const bundle = Object.fromEntries(bcmaps().map((n) => [n, readFileSync(path.join(PARTS, "cmaps", n)).toString("base64")]));
+    edit(bundle);
+    writeFileSync(path.join(base, "cmaps.mjs"), `// 作りもの\nexport default ${JSON.stringify(bundle)};\n`);
     return dir;
   }
 
   it("決めた部品が pdfjs-dist と同じ写しでそろっていれば通し、画像を解く部品の fetch は例外として許す", () => {
     const r = run(withParts(fakeDist(CSP_OK, {})));
-    expect(r.out).toContain("pdfjs/wasm/jbig2_nowasm_fallback.js（pdfjs-dist@");
+    expect(r.out).toContain(`pdfjs/${HASH}/wasm/jbig2_nowasm_fallback.js（pdfjs-dist@`);
     expect(r.code).toBe(0);
   });
 
-  it("1 バイトでも変えた部品・置かないと決めた書体（標準の書体）・足りない部品は止める", () => {
-    const dir = withParts(fakeDist(CSP_OK, {}));
-    writeFileSync(path.join(dir, "pdfjs", "cmaps", "90ms-RKSJ-H.bcmap"), "x");
-    mkdirSync(path.join(dir, "pdfjs", "standard_fonts"));
-    copyFileSync(path.join(PARTS, "standard_fonts", "LiberationSans-Regular.ttf"), path.join(dir, "pdfjs", "standard_fonts", "LiberationSans-Regular.ttf"));
-    rmSync(path.join(dir, "pdfjs", "cmaps", "Add-H.bcmap"));
+  it("1 バイトでも変えた部品・置かないと決めた書体（標準の書体）・足りない部品・中身の違う字の対応表は止める", () => {
+    const dir = withParts(fakeDist(CSP_OK, {}), (b) => {
+      b["90ms-RKSJ-H.bcmap"] = Buffer.from("x").toString("base64");
+    });
+    const base = path.join(dir, "pdfjs", HASH);
+    writeFileSync(path.join(base, "wasm", "LICENSE_JBIG2"), "x");
+    mkdirSync(path.join(base, "standard_fonts"));
+    copyFileSync(path.join(PARTS, "standard_fonts", "LiberationSans-Regular.ttf"), path.join(base, "standard_fonts", "LiberationSans-Regular.ttf"));
+    rmSync(path.join(base, "wasm", "LICENSE_OPENJPEG"));
     const r = run(dir);
     expect(r.code).toBe(1);
-    expect(r.out).toContain("pdfjs/cmaps/90ms-RKSJ-H.bcmap が、pdfjs-dist のファイルと違います");
-    expect(r.out).toContain("pdfjs/standard_fonts/LiberationSans-Regular.ttf は、配信に入れると決めた PDF.js の部品ではありません");
-    expect(r.out).toContain("PDF.js の部品のうち 1 個が dist/ にありません（cmaps/Add-H.bcmap）");
+    expect(r.out).toContain(`pdfjs/${HASH}/wasm/LICENSE_JBIG2 が、pdfjs-dist のファイルと違います`);
+    expect(r.out).toContain(`pdfjs/${HASH}/standard_fonts/LiberationSans-Regular.ttf は、配信に入れると決めた PDF.js の部品ではありません`);
+    expect(r.out).toContain("PDF.js の部品のうち 1 個が dist/ にありません（wasm/LICENSE_OPENJPEG）");
+    expect(r.out).toContain(`pdfjs/${HASH}/cmaps.mjs の字の対応表のうち 1 個が、pdfjs-dist のファイルと違います（90ms-RKSJ-H.bcmap）`);
   });
 
-  it(".htaccess に検査のページの CSP（connect-src 'self'）がなければ止める", () => {
-    const r = run(fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK).replace(/<FilesMatch "\^check[\s\S]*?<\/FilesMatch>\n/, "")));
+  it("版の印のフォルダが 1 つでない・10 字の 16 進数でないときは止める", () => {
+    const dir = withParts(fakeDist(CSP_OK, {}));
+    mkdirSync(path.join(dir, "pdfjs", "old"), { recursive: true });
+    writeFileSync(path.join(dir, "pdfjs", "old", "x.js"), "1;\n");
+    const r = run(dir);
     expect(r.code).toBe(1);
-    expect(r.out).toContain(".htaccess に、検査のページの CSP（<FilesMatch>。connect-src 'self'）がありません");
+    expect(r.out).toContain("pdfjs/ の下のフォルダが、版の印（10 字の 16 進数）1 つだけではありません");
+  });
+
+  it(".htaccess に connect-src 'self' があれば止める（検査のページだけ別の CSP にする <FilesMatch> は、もう置かない。D170）", () => {
+    const self = fakeHtaccess(CSP_OK).replace(
+      "<IfModule mod_rewrite.c>",
+      `<FilesMatch "^check\.html$">
+  <IfModule mod_headers.c>
+    Header always set Content-Security-Policy "default-src 'self'; connect-src 'self'"
+  </IfModule>
+</FilesMatch>
+<IfModule mod_rewrite.c>`,
+    );
+    const r = run(fakeDist(CSP_OK, {}, self));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(".htaccess に connect-src 'self' があります（どのページも 'none' のはず）");
   });
 });
 
@@ -168,7 +189,7 @@ describe("check-dist の .htaccess（docs/deploy.md）", () => {
   it("ヘッダーの CSP が <meta> と食い違えば止める", () => {
     const r = run(fakeDist(CSP_OK, {}, fakeHtaccess(CSP_OK, "default-src 'self'; connect-src 'self'; script-src 'self'; frame-ancestors 'none'")));
     expect(r.code).toBe(1);
-    expect(r.out).toContain(".htaccess の CSP が、<meta> の CSP（connect-src 'none'。＋ frame-ancestors 'none'）と食い違っています");
+    expect(r.out).toContain(".htaccess の CSP が、<meta> の CSP（＋ frame-ancestors 'none'）と食い違っています");
   });
 
   it("ErrorDocument の 404 のページ・HSTS がなければ止める", () => {
