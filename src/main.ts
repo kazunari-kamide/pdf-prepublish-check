@@ -27,7 +27,7 @@ import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET
 import type { CompressPreset, SizeLimit } from "./ui/compress-model";
 import { buildCleanView, cleanedFileName, PATTERN_NAME, SAVE_NOTE, saveGate, saveTexts, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
-import { buildView, tierOf, type Group, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { buildView, kindSummary, shortHeadline, tierOf, type Group, type PageMarks, type Row, type ViewModel } from "./ui/model";
 import { uniqueFills, type Fraction } from "./ui/mark-fills";
 import { isOfficialHost, UNOFFICIAL_NOTE } from "./ui/official";
 import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, SPLIT_STEP_PX } from "./ui/compact";
@@ -39,6 +39,7 @@ import { keepUnits } from "./ui/text";
 import { sampleFile, wantsSample, withoutSample } from "./ui/sample";
 import { beforeAfterCounts, buildProcessReport, sha256Hex, type ProcessReportInput } from "./ui/process-report";
 import { fullContent, maskContent, REVEAL_LABEL, REVEAL_NOTE, showsWhole } from "./ui/reveal";
+import { buildGlance } from "./ui/props-glance";
 import { setupTermsDialog } from "./ui/terms-dialog";
 import { isOutside } from "./ui/terms-click";
 import { bandProgressRatio, bandProgressText, buildTidyConfirm, propertySummary, sanitizeListText } from "./ui/tidy-confirm";
@@ -119,8 +120,20 @@ const ui = {
   notDone: el<HTMLDivElement>("not-done"),
   notDoneList: el<HTMLUListElement>("not-done-list"),
   removed: el<HTMLDivElement>("removed"),
-  cleanMore: el<HTMLDetailsElement>("clean-more"),
-  cleanTools: el<HTMLDetailsElement>("clean-tools"),
+  cleanMore: el<HTMLDivElement>("clean-more"),
+  compressSlot: el<HTMLDivElement>("compress-slot"),
+  compressHome: el<HTMLDivElement>("compress-home"),
+  resultFace: el<HTMLDivElement>("result-face"),
+  resultEyebrow: el<HTMLParagraphElement>("result-eyebrow"),
+  resultWhy: el<HTMLParagraphElement>("result-why"),
+  kinds: el<HTMLOListElement>("kinds"),
+  kindsMore: el<HTMLParagraphElement>("kinds-more"),
+  propsGlance: el<HTMLDivElement>("props-glance"),
+  more: el<HTMLDetailsElement>("more"),
+  candidateSlot: el<HTMLDivElement>("candidate-slot"),
+  tidyBand: el<HTMLDivElement>("tidy-band"),
+  tidyBandText: el<HTMLParagraphElement>("tidy-band-text"),
+  tidyBandRun: el<HTMLButtonElement>("tidy-band-run"),
   removedGroups: el<HTMLDivElement>("removed-groups"),
   cleanNotes: el<HTMLUListElement>("clean-notes"),
   cleanScope: el<HTMLParagraphElement>("clean-scope"),
@@ -435,8 +448,9 @@ async function runCompress(preset?: CompressPreset): Promise<{ size: number; cha
  */
 async function shrinkToLimit(gen: number, limit: SizeLimit) {
   if (!cleanedBlob) return;
-  // 小さくする所は「そのほかの操作」の開け閉めの中にある（#117）。入口で上限を選んだときは、結果が隠れないように開く
-  ui.cleanTools.open = true;
+  // 小さくする所はふだん「詳しく見る」の中にある。入口で上限を選んだときは、結果が隠れないように「詳しく見る」の外（保存のすぐ下）へ移す
+  // （#117 の考えを案 A でも保つ。動画の S16 で「上限以下になった」を映すため。2026-11-07 本人が承認）
+  placeCompress(true);
   let size = cleanedBlob.size;
   let compressed = false;
   const tried: CompressPreset["id"][] = [];
@@ -463,9 +477,13 @@ async function shrinkToLimit(gen: number, limit: SizeLimit) {
 
 function clearResults() {
   stopThumbs();
-  for (const part of [ui.noticeList, ui.groups, ui.coverageSlot, ui.thumbs, ui.marks]) part.replaceChildren();
+  for (const part of [ui.noticeList, ui.groups, ui.candidateSlot, ui.coverageSlot, ui.thumbs, ui.marks, ui.kinds, ui.propsGlance]) part.replaceChildren();
   for (const part of [ui.notices, ui.actions, ui.pickTools, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props, ui.ruleset, ui.backToList]) part.hidden = true;
-  for (const part of [ui.sanitizeMore, ui.cleanMore, ui.cleanTools]) part.open = false;
+  for (const part of [ui.resultEyebrow, ui.resultWhy, ui.kinds, ui.kindsMore, ui.propsGlance, ui.more, ui.cleanMore]) part.hidden = true;
+  for (const part of [ui.sanitizeMore, ui.more]) part.open = false;
+  ui.resultFace.hidden = false;
+  delete ui.resultFace.dataset.after;
+  delete ui.status.dataset.quiet;
   ui.caption.textContent = "";
   delete ui.workspace.dataset.thumbs;
 }
@@ -496,6 +514,8 @@ function reset() {
   ui.keptList.replaceChildren();
   ui.kept.hidden = true;
   ui.clean.hidden = true;
+  ui.tidyBand.hidden = true;
+  placeCompress(false);
   ui.filebar.hidden = true;
   ui.progress.hidden = true;
   ui.resultTitle.textContent = "種類ごとの結果";
@@ -671,20 +691,57 @@ function renderGroups(s: Session) {
   if (s.view.rows.some((r) => r.content)) {
     ui.groups.append(make("p", `見つけた字の中身は、頭の数文字だけを出し、残りは伏せます（3 字以下は、そのまま出します）。「中身を見る」で全部を出します（この端末のブラウザの中だけで、どこにも送りません）。${REVEAL_NOTE}`, "reveal-note"));
   }
-  // 深刻度の段（高 → 確かめる → 中 → 低 → 個人情報の候補）。中・低・候補は最初は閉じる（2026-11-06 本人が決定）。
-  // 段の中は種類ごと。番号は model が並べた順に振ってある
+  // 1 件ずつの一覧（「詳しく見る」の中）。並びは深刻度の段の順（高 → 確かめる → 中 → 低）で、段の中は種類ごと。番号は model が並べた順。
+  // 段の見出しは出さない（各行の「▲ 高」などの札で分かる。2026-11-07 本人が決定）。段は data-tier で持つ（色と形のため）。
+  // 個人情報の候補は、「自分で黒塗りする所を選ぶ」の隣に置く（2026-11-07 本人が決定）
   for (const t of s.view.tiers) {
-    const tier = make("details", undefined, "tier");
-    tier.dataset.tier = t.key;
-    tier.id = `tier-${t.key}`;
-    tier.open = t.open;
-    const sum = make("summary", undefined, "tier-head");
-    sum.append(make("span", t.label, "tier-name"), make("span", t.note, "tier-note"), make("span", keepUnits(`${t.count} 件`), "tier-count"));
-    tier.append(sum);
-    for (const g of t.groups) tier.append(renderGroup(s, g));
-    ui.groups.append(tier);
+    const slot = t.key === "candidate" ? ui.candidateSlot : ui.groups;
+    for (const g of t.groups) {
+      const box = renderGroup(s, g);
+      box.dataset.tier = t.key;
+      slot.append(box);
+    }
   }
   renderCoverage(s);
+}
+
+/**
+ * 要点の一覧（結果の欄の上。案 A）：同じ種類は 1 行にまとめ、5 種類を超えた分は「詳しく見る」の中だけ（2026-11-07 本人が決定）。
+ * 押すと「詳しく見る」を開き、その種類の最初の行を選ぶ（ページの絵の印とつながる）
+ */
+function renderKinds(s: Session) {
+  const k = kindSummary(s.view);
+  const first = k.shown[0];
+  ui.resultWhy.textContent = first ? first.why : "";
+  ui.resultWhy.hidden = !first;
+  ui.kinds.replaceChildren(
+    ...k.shown.map((row) => {
+      const li = make("li");
+      const btn = make("button", undefined, "kind");
+      btn.type = "button";
+      btn.dataset.sev = row.sev;
+      const count = keepUnits(row.check && row.check < row.count ? `${row.count} か所（うち確かめる ${row.check}）` : `${row.count} か所`);
+      btn.append(make("span", row.sevLabel, `kind-sev sev-${row.sev}`), make("span", row.title, "kind-title"), make("span", keepUnits(`${row.where}・${count}`), "kind-where"));
+      btn.setAttribute("aria-label", `${row.sevLabel.replace(/^\S+ /, "")}：${row.title}。${row.where}・${count}。詳しく見る`);
+      btn.addEventListener("click", () => {
+        const r = s.view.rows.find((x) => x.no === row.firstNo);
+        if (!r) return;
+        openMoreFor(r.no);
+        void select(r);
+        const item = document.getElementById(`item-${r.no}`);
+        item?.focus({ preventScroll: true });
+        item?.scrollIntoView({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
+      });
+      li.append(btn);
+      return li;
+    }),
+  );
+  ui.kinds.hidden = k.shown.length === 0;
+  const extra: string[] = [];
+  if (k.moreKinds) extra.push(`ほかに ${k.moreKinds} 種類（${k.moreCount} か所）あります。「詳しく見る」の中に並べています。`);
+  if (s.view.candidates && s.phase === "before") extra.push(`見えている個人情報らしい字が ${s.view.candidates} か所あります。黒塗りにするかは、「詳しく見る」の中で選べます。`);
+  ui.kindsMore.textContent = keepUnits(extra.join(""));
+  ui.kindsMore.hidden = extra.length === 0;
 }
 
 /** 1 つの段の中の、1 つの種類（見出しと項目） */
@@ -722,10 +779,15 @@ function renderGroup(s: Session, g: Group): HTMLElement {
   }
 }
 
-/** 項目が閉じた段の中にあれば、その段を開く（ページの絵の番号を押したとき） */
-function openTierOf(no: number) {
-  const tier = document.getElementById(`item-${no}`)?.closest<HTMLDetailsElement>("details.tier");
-  if (tier && !tier.open) tier.open = true;
+/** 1 件ずつの一覧は「詳しく見る」の中にあるので、閉じていれば開く（ページの絵の番号を押したとき・要点の一覧を押したとき） */
+function openMoreFor(no: number) {
+  if (document.getElementById(`item-${no}`)?.closest("details.more") && !ui.more.open) ui.more.open = true;
+}
+
+/** 小さくする所の置き場：ふだんは「詳しく見る」の中。入口で上限を選んだときは、保存のすぐ下（「詳しく見る」の外） */
+function placeCompress(outside: boolean) {
+  const home = outside ? ui.compressSlot : ui.compressHome;
+  if (ui.compress.parentElement !== home) home.append(ui.compress);
 }
 
 /** 見た所・見なかった所：P1〜P12 と新しい型を1行ずつ、毎回並べる（調べていない理由も） */
@@ -949,7 +1011,7 @@ function placeMarks(s: Session, page: number) {
     ui.marks.append(frame);
     mark.addEventListener("click", () => {
       if (picking) return; // 選んでいる間は、枠を押しても動かない（ドラッグを邪魔しない）
-      openTierOf(m.no);
+      openMoreFor(m.no);
       const item = document.getElementById(`item-${m.no}`);
       // 結果の行を、見える所の上から 1/3 の高さに出す（「nearest」だと画面の下の端に付き、帯に隠れることがあった。2026-11-06 本人）
       if (item) {
@@ -1203,10 +1265,39 @@ function propRows(list: Array<{ key: string; value: string; truncated: boolean }
   return dl;
 }
 
+/**
+ * 結果の欄の「プロパティに入っていた情報」（案 A）：欄の名前と、値の頭の 2 字だけ（2026-11-07 本人が決定）。
+ * 整える前だけ出す。全部の値は「詳しく見る」の中のプロパティの一覧で
+ */
+function renderPropsGlance(s: Session) {
+  const p = s.summary.properties;
+  ui.propsGlance.replaceChildren();
+  ui.propsGlance.hidden = s.phase !== "before" || !p;
+  if (s.phase !== "before" || !p) return;
+  const g = buildGlance(p, (k) => (k in INFO_LABEL ? INFO_LABEL[k]! : null));
+  if (g.empty) {
+    ui.propsGlance.dataset.empty = "true";
+    ui.propsGlance.append(make("p", "プロパティ（作成者・タイトルなどの欄）は、空でした。", "glance-empty"));
+    return;
+  }
+  delete ui.propsGlance.dataset.empty;
+  ui.propsGlance.append(make("h3", "プロパティに入っていた情報", "glance-head"), make("p", "ファイルの「プロパティ」を開くと、誰でも見られます。", "glance-why"));
+  const dl = make("dl", undefined, "glance-list");
+  for (const r of g.rows) {
+    const row = make("div", undefined, "glance-row");
+    row.append(make("dt", r.label), make("dd", r.value));
+    dl.append(row);
+  }
+  ui.propsGlance.append(dl);
+  const tail = [g.more ? `ほか ${g.more} 欄` : "", g.xmp ? `作ったときの記録（XMP）にも ${g.xmp} 欄` : ""].filter(Boolean).join("・");
+  ui.propsGlance.append(make("p", `${tail ? `${tail}。` : ""}値は頭の 2 字だけを出し、残りは伏せています（全部は「詳しく見る」のプロパティの一覧で）。${REVEAL_NOTE}`, "glance-note"));
+}
+
 /** 文書情報と XMP のすべての欄を、値ごと出す。団体名らしい語に印を付け、「片付ける」へ案内する */
 function renderProperties(s: Session) {
   const p = s.summary.properties;
   ui.props.replaceChildren();
+  renderPropsGlance(s);
   if (p === undefined) {
     ui.props.hidden = true;
     return;
@@ -1216,7 +1307,7 @@ function renderProperties(s: Session) {
   summary.append(
     make("span", p ? `プロパティの一覧（文書情報 ${p.info.length} 欄・XMP ${p.xmp.length} 欄）` : "プロパティの一覧（読めませんでした）"),
     // 閉じていても読める一言（値をそのまま出す所なので、画面共有・画面の撮影の前に閉じてもらう）
-    make("span", "開くと欄の値を、頭の数文字だけ出します。画面を共有・撮影する前は、閉じておいてください。", "props-warn"),
+    make("span", "開くと、すべての欄の名前と値の頭の数文字を出します。画面を共有・撮影する前は、閉じておいてください。", "props-warn"),
   );
   ui.props.append(summary);
   const body = make("div", undefined, "props-body");
@@ -1245,6 +1336,7 @@ function renderProperties(s: Session) {
     const go = make("button", "この欄を消す（「整える内容」へ）", "props-go btn-sub");
     go.type = "button";
     go.addEventListener("click", () => {
+      ui.more.open = true;
       ui.sanitizeMore.open = true;
       ui.sanitizeMore.scrollIntoView({ block: "start", behavior: "smooth" });
       (ui.tidyProps.querySelector<HTMLInputElement>("input:checked") ?? ui.sanitizeMore.querySelector("summary"))?.focus({ preventScroll: true });
@@ -1282,9 +1374,13 @@ function renderInspection(s: Session) {
   for (const n of v.notices) ui.noticeList.append(make("li", n));
   ui.notices.hidden = v.notices.length === 0;
   renderGroups(s);
+  renderKinds(s);
   renderProperties(s);
   renderRuleset(s);
-  ui.scopeNote.hidden = s.view.clean && s.phase === "before";
+  // 整えたあとは、整えた結果の欄に同じ意味の一言（「すべてを見つけるものではありません」）があるので出さない
+  ui.scopeNote.hidden = (s.view.clean && s.phase === "before") || s.phase === "after";
+  // 細かい情報は「詳しく見る」の中（案 A）。最初は閉じた形で出す
+  ui.more.hidden = false;
 
   renderThumbs(s);
   ui.workspace.dataset.thumbs = ui.thumbs.hidden ? "none" : "some";
@@ -1305,6 +1401,11 @@ function renderInspection(s: Session) {
 function renderSummary(s: Session) {
   const v = s.view;
   setStatus(v.headline, v.tone);
+  // 大きな見出しは短く（何か所・何が）。くわしい文（確かめる所・候補の数）は、状態の文が読み上げに伝える（案 A）
+  ui.resultEyebrow.textContent = v.hidden ? "見つかりました" : "";
+  ui.resultEyebrow.hidden = !v.hidden;
+  ui.resultTitle.textContent = v.hidden ? shortHeadline(v) : "種類ごとの結果";
+  if (v.hidden) ui.status.dataset.quiet = "true";
   setStep(ui.stepCheck, "done");
   // 数は「見た目では分からない情報」だけ（見えている候補は入れない。見出しと同じ物差し）
   ui.stepCheckNote.textContent = v.hidden
@@ -1325,7 +1426,7 @@ function renderSummary(s: Session) {
   ui.sanitizeNote.textContent = password
     ? "パスワードが要る PDF は、整えられません。"
     : v.hidden
-    ? "見えない情報を消した PDF を新しく作ります。元の PDF は変えません。"
+    ? "見えない情報を消した PDF を、新しく作ります。元の PDF は変えません。"
     : "見つかった所はありませんが、見えない情報を消した PDF を作れます。元の PDF は変えません。";
   ui.sanitizeList.textContent = sanitizeListText();
   ui.sanitizeMore.hidden = password;
@@ -1349,9 +1450,10 @@ function renderSummary(s: Session) {
   ui.scopeNote.hidden = v.clean;
   // 何も見つからないときは、「整える」を主のボタンから第 2 の形に下げる（公開してよいのか、整えるべきかで迷わせない）
   ui.sanitize.dataset.weight = v.clean ? "sub" : "main";
-  ui.sanitize.textContent = v.clean ? "念のため整える（プロパティなどを消した写しを作る）" : "整える";
+  ui.sanitize.textContent = v.clean ? "念のため整える（プロパティなどを消した写しを作る）" : sanitizeLabel();
 
   renderInspection(s);
+  syncTidyBand();
   // 押したボタン（見本の PDF で試す など）が隠れてフォーカスが行き場を失ったときは、結果の見出しへ移す
   const a = document.activeElement;
   if (!a || a === document.body || (a instanceof HTMLElement && a.offsetParent === null)) ui.resultTitle.focus();
@@ -1583,8 +1685,10 @@ function renderKeepKinds(s: Session) {
 /** 外す種類があれば、「整える」の上に一言（「整える内容」を閉じていても読める） */
 function renderKeepSummary() {
   const t = keptSummary(keepRows, keptKinds);
-  ui.keepSummary.textContent = t ? keepUnits(`外す種類：${t}。整えずに残します（「整える内容」で変えられます）。`) : "";
+  ui.keepSummary.textContent = t ? keepUnits(`外す種類：${t}。整えずに残します（「詳しく見る」の「整える内容」で変えられます）。`) : "";
   ui.keepSummary.hidden = !t;
+  if (session?.phase === "before" && ui.sanitize.dataset.weight !== "sub" && ui.sanitize.dataset.busy !== "true") ui.sanitize.textContent = sanitizeLabel();
+  syncTidyBand();
   // 消すものの一覧からも、外した種類を除く（「注釈も消します」と「注釈を外す」を並べない）
   ui.sanitizeList.textContent = sanitizeListText(keptKinds);
 }
@@ -1740,6 +1844,46 @@ ui.sheet.addEventListener("keydown", (e) => {
   placeAt(keyDraftEl, k);
 });
 
+/** 大きなボタンの字：何か所を整えるか（見えない情報＋自分で選んだ所。外す種類は除く） */
+function sanitizeLabel(): string {
+  const s = session;
+  if (!s) return "整える";
+  const kept = keepRows.filter((r) => r.keepable && keptKinds.has(r.pattern)).reduce((n, r) => n + r.count, 0);
+  const n = Math.max(0, s.view.hidden - kept) + picks.length;
+  return n ? `${n} か所を整える` : "整える";
+}
+
+/**
+ * 「整える」のボタンが画面の外にあるときだけ、欄の下に帯を出す（案 B の帯。2026-11-07 本人）。
+ * 整える前で、主のボタン（第 2 の形の「念のため整える」でない）が押せるときだけ。整えている間・整えたあとは出さない
+ */
+let sanitizeInView = true;
+function syncTidyBand() {
+  const s = session;
+  const show =
+    !!s &&
+    s.phase === "before" &&
+    ui.workspace.dataset.state === "result" &&
+    !ui.actions.hidden &&
+    !ui.sanitize.disabled &&
+    ui.sanitize.dataset.weight !== "sub" &&
+    ui.sanitize.dataset.busy !== "true" &&
+    !sanitizeInView;
+  if (show) {
+    const label = ui.sanitize.textContent ?? "整える";
+    const n = /^(\d+) か所/.exec(label)?.[1];
+    ui.tidyBandText.textContent = keepUnits(n ? `${n} か所が残っています` : "見えない情報を消した PDF を作れます");
+    ui.tidyBandRun.textContent = label;
+  }
+  ui.tidyBand.hidden = !show;
+}
+if (typeof IntersectionObserver === "function") {
+  new IntersectionObserver((entries) => {
+    for (const e of entries) sanitizeInView = e.isIntersecting;
+    syncTidyBand();
+  }).observe(ui.sanitize);
+}
+
 function renderPicks() {
   const s = session;
   ui.pickList.replaceChildren(
@@ -1760,11 +1904,10 @@ function renderPicks() {
   ui.picks.hidden = picks.length === 0;
   // 「黒塗りに加える」のボタンだけを直す。候補の行のボタン（.item）にも data-candidate="true" が付いているので、取り違えない
   // （前は行のボタンの題が「黒塗りに加える」に書き換わっていた。2026-11-06）
-  for (const b of ui.groups.querySelectorAll<HTMLElement>(".pick-candidate[data-candidate]")) syncCandidateButton(b, Number(b.dataset.candidate));
+  for (const b of ui.more.querySelectorAll<HTMLElement>(".pick-candidate[data-candidate]")) syncCandidateButton(b, Number(b.dataset.candidate));
   ui.pickCount.textContent = `選んだ所 ${picks.length} か所（「整える」を押すと、見つかった所といっしょに黒塗りします。下の字・画像・注釈も消します）${picks.length >= MAX_REDACT_AREAS ? `。一度に選べるのは ${MAX_REDACT_AREAS} か所までです` : ""}`;
-  if (s && s.phase === "before" && !ui.sanitize.disabled) {
-    ui.sanitize.textContent = picks.length ? `整える（選んだ ${picks.length} か所も黒塗り）` : "整える";
-  }
+  if (s && s.phase === "before" && !ui.sanitize.disabled && ui.sanitize.dataset.weight !== "sub") ui.sanitize.textContent = sanitizeLabel();
+  syncTidyBand();
 }
 
 function clearPicks() {
@@ -1865,13 +2008,14 @@ function redactBlocked(s: Session, retry: Uint8Array | null, leftovers: Paramete
   ui.redactLeft.hidden = v.lines.length === 0;
   s.original = retry;
   ui.sanitize.disabled = retry === null;
-  ui.sanitize.textContent = picks.length ? `整える（選んだ ${picks.length} か所も黒塗り）` : "整える";
+  ui.sanitize.textContent = sanitizeLabel();
   ui.pickTools.hidden = retry === null;
 }
 
 function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages: number; seconds: string }) {
   ui.workspace.dataset.phase = "after";
   ui.actions.hidden = true;
+  ui.tidyBand.hidden = true;
   ui.pickTools.hidden = true;
   // 通ったときは、上の文で「0 件」を言わず、下の「整える前 N か所 → 読み直したあと 0 か所」だけにする（2026-11-05 本人の画面のレビュー C1）。
   // 残っている・言い切れないときは、上の文がそれを知らせるので残す
@@ -1945,13 +2089,21 @@ function renderCleaned(c: CleanView, file: { name: string; bytes: number; pages:
   ui.cleanScope.textContent = c.scope;
   ui.cleanScope.hidden = c.scope === "";
   ui.clean.hidden = false;
+  // 消したものの一覧・前と後の数・報告書・小さくするは、「詳しく見る」の中（案 A）
+  ui.cleanMore.hidden = false;
+  ui.cleanTitle.textContent = c.verdict === "clean" ? "整えた PDF には、残っていません" : "整えた結果";
 
   ui.clean.dataset.verdict = c.verdict;
   // 片付けた結果の見出しへ移す（キーボード・読み上げで、次にすること（保存）がすぐ分かるように）
   ui.cleanTitle.focus();
   // 「全部緑」は、片付けた結果の欄（緑の枠）が示す。同じ文を重ねない
   ui.verified.hidden = true;
-  ui.resultTitle.textContent = "読み直した結果（種類ごと）";
+  // 読み直しで残っている所がなければ、上の面は状態の文だけにする（整えた結果の欄が主役。案 A）。残っていれば、その所を要点の一覧で出す
+  const leftRows = session?.phase === "after" ? session.view.hidden : 0;
+  ui.resultFace.dataset.after = leftRows ? "left" : "clean";
+  ui.resultEyebrow.hidden = true;
+  ui.resultTitle.textContent = leftRows ? "読み直したあとも残っている所" : "読み直した結果";
+  if (leftRows) ui.status.dataset.quiet = "true";
   ui.fileName.textContent = file.name;
   ui.fileName.title = file.name;
   ui.fileFacts.textContent = keepUnits(`整えた PDF・${file.pages} ページ・${formatBytes(file.bytes)}`);
@@ -2106,6 +2258,7 @@ async function runSanitize() {
 function setBand(stage: "tidy" | "verify", verify?: { done: number; total: number }) {
   ui.sanitize.dataset.busy = "true";
   ui.sanitize.textContent = bandProgressText(stage, verify);
+  syncTidyBand();
   ui.sanitize.style.setProperty("--band-progress", String(bandProgressRatio(stage, verify)));
 }
 
@@ -2114,6 +2267,7 @@ function clearBand(label: string) {
   delete ui.sanitize.dataset.busy;
   ui.sanitize.style.removeProperty("--band-progress");
   if ((ui.sanitize.textContent ?? "").startsWith("1 整え")) ui.sanitize.textContent = label;
+  syncTidyBand();
 }
 
 const tidyDialog = el<HTMLDialogElement>("tidy-dialog");
@@ -2131,28 +2285,50 @@ function confirmSanitize() {
     return;
   }
   if (typeof tidyDialog.showModal !== "function") return void runSanitize();
+  const p = s.summary.properties;
   const c = buildTidyConfirm({
     tiers: s.view.tiers,
     picks: picks.length,
     properties: ui.tidySummary.textContent ?? "",
     ...(shrinkLimit ? { shrink: shrinkLimit.label } : {}),
     kept: keepRows.filter((r) => r.keepable && keptKinds.has(r.pattern)).map((r) => ({ pattern: r.pattern, name: r.name, count: r.count })),
+    kinds: s.view.groups.map((g) => ({ name: g.label, count: g.rows.filter((r) => !r.candidate).length })),
+    propsFilled: p ? p.info.length + p.xmp.length : null,
   });
   tidyDialogTitle.textContent = c.title;
   el<HTMLParagraphElement>("tidy-dialog-lead").textContent = keepUnits(c.lead);
-  const counts = el<HTMLParagraphElement>("tidy-dialog-counts");
-  counts.textContent = keepUnits(c.counts);
-  counts.hidden = c.counts === "";
-  el<HTMLUListElement>("tidy-dialog-notes").replaceChildren(...c.notes.map((t) => make("li", keepUnits(t))));
+  el<HTMLUListElement>("tidy-dialog-items").replaceChildren(
+    ...c.items.map((it) => {
+      const li = make("li");
+      li.append(make("span", "✓", "tidy-dialog-check"), make("span", undefined, "tidy-dialog-item"));
+      li.lastElementChild!.append(make("b", keepUnits(it.head)), make("span", keepUnits(it.text)));
+      li.firstElementChild!.setAttribute("aria-hidden", "true");
+      return li;
+    }),
+  );
+  el<HTMLParagraphElement>("tidy-dialog-tech-text").textContent = c.tech;
+  el<HTMLDetailsElement>("tidy-dialog-tech").open = false;
+  const notes = el<HTMLUListElement>("tidy-dialog-notes");
+  notes.replaceChildren(...c.notes.map((t) => make("li", keepUnits(t))));
+  notes.hidden = c.notes.length === 0;
+  el<HTMLParagraphElement>("tidy-dialog-hint").textContent = c.hint;
   tidyDialogRun.textContent = c.run;
   tidyDialog.returnValue = "";
   tidyDialog.showModal();
   tidyDialogTitle.focus();
 }
 
-ui.sanitize.addEventListener("click", confirmSanitize);
+/** 確かめの窓を開いたボタン（「整える」のボタンか、画面の下の帯のボタン）。やめたとき、そこへフォーカスを戻す */
+let tidyOpener: HTMLButtonElement = ui.sanitize;
+ui.sanitize.addEventListener("click", () => {
+  tidyOpener = ui.sanitize;
+  confirmSanitize();
+});
+ui.tidyBandRun.addEventListener("click", () => {
+  tidyOpener = ui.tidyBandRun;
+  confirmSanitize();
+});
 tidyDialogRun.addEventListener("click", () => tidyDialog.close("run"));
-el<HTMLButtonElement>("tidy-dialog-cancel").addEventListener("click", () => tidyDialog.close());
 el<HTMLButtonElement>("tidy-dialog-close").addEventListener("click", () => tidyDialog.close());
 {
   // 外側（::backdrop）を押したときもやめる。押し始めも離した所も外のときだけ（利用規約のダイアログと同じ）
@@ -2166,14 +2342,15 @@ el<HTMLButtonElement>("tidy-dialog-close").addEventListener("click", () => tidyD
     downOutside = false;
   });
 }
-// Esc はブラウザが閉じる（cancel → close）。「整える」を押したときだけ整え、ほかはフォーカスを帯へ戻す
+// Esc はブラウザが閉じる（cancel → close）。「整える」を押したときだけ整え、ほかはフォーカスを「整える」のボタンへ戻す
 tidyDialog.addEventListener("close", () => {
   if (tidyDialog.returnValue === "run") {
-    // 帯は押せない形になるので、フォーカスは結果の見出しへ（終わったら「整えた結果」の見出しへ移る）
+    // ボタンは押せない形になるので、フォーカスは結果の見出しへ（終わったら「整えた結果」の見出しへ移る）
     ui.resultTitle.focus({ preventScroll: true });
     void runSanitize();
-  } else if (ui.sanitize.isConnected) {
-    ui.sanitize.focus();
+  } else {
+    // 帯から開いたときは帯へ戻す（帯がもう消えていれば、「整える」のボタンへ）
+    (tidyOpener === ui.tidyBandRun && !ui.tidyBand.hidden ? ui.tidyBandRun : ui.sanitize).focus();
   }
 });
 ui.saveConfirmBox.addEventListener("change", () => {

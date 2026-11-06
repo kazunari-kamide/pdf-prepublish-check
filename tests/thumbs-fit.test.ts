@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// /check の縮小したページの列が、開いた直後（列が窓の上に貼り付く前）も、「整える」の帯の下に隠れないことの決まりを確かめる（2026-11-06）。
-// 前は、列の高さが「貼り付いたあとの位置」で決めてあり、開いた直後は列の下の数枚が帯の下に入っていた。
-// 実際の位置の測りは、手元の headless の Chrome で行った（1280 幅：列の下の端 956px → 817px、帯の上の端 835px）。
+// /check の縮小したページの列が、開いた直後（列が窓の上に貼り付く前）も、窓の下の端からはみ出さないことの決まりを確かめる（2026-11-06）。
+// 前は、列の高さが「貼り付いたあとの位置」で決めてあり、開いた直後は列の下の数枚が窓の外（当時は「整える」の帯の下）に入っていた。
+// 2026-11-07 の案 A で、下の端に固定していた帯をやめたので、帯の高さは引かない。
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -12,14 +12,14 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const css = readFileSync(path.join(ROOT, "src", "style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const main = readFileSync(path.join(ROOT, "src", "main.ts"), "utf8");
 
-const FIT = /\.workspace\[data-state="result"\] \.thumbs \{\s*max-height: calc\(100dvh - max\(var\(--thumbs-top, var\(--sp-4\)\), var\(--sp-4\)\) - var\(--sp-4\) - var\(--band-space\)\);\s*\}/;
+const FIT = /\.workspace\[data-state="result"\] \.thumbs \{\s*max-height: calc\(100dvh - max\(var\(--thumbs-top, var\(--sp-4\)\), var\(--sp-4\)\) - var\(--sp-4\)\);\s*\}/;
 
 describe("縮小したページの列の高さ", () => {
-  it("列の高さは、今の列の上の端（--thumbs-top）から帯の上までに収める", () => {
+  it("列の高さは、今の列の上の端（--thumbs-top）から窓の下の端までに収める", () => {
     expect(css).toMatch(FIT);
   });
 
-  it("帯の高さを引く前の決まり（ページの絵の欄と共通）より後にあり、狭い画面の「高さの上限なし」より前にある", () => {
+  it("ページの絵の欄と共通の決まりより後にあり、狭い画面の「高さの上限なし」より前にある", () => {
     const fit = css.search(FIT);
     const shared = css.search(/\.workspace\[data-state="result"\] \.stage,\r?\n\.workspace\[data-state="result"\] \.thumbs \{/);
     const narrow = css.indexOf("@container page (max-width: 50rem)");
@@ -27,6 +27,10 @@ describe("縮小したページの列の高さ", () => {
     expect(fit).toBeGreaterThan(shared);
     expect(narrow).toBeGreaterThan(fit);
     expect(css.slice(narrow)).toMatch(/\.workspace\[data-state="result"\] \.thumbs \{\s*position: static;\s*max-height: none;/);
+  });
+
+  it("下の端に固定していた「整える」の帯の高さ（--band-space）は、もう使わない（案 A）", () => {
+    expect(css).not.toContain("--band-space");
   });
 
   it("ページの絵の欄（.stage）には、送るたびに変わる高さを使わない（変わるたびにページを描き直してしまうため）", () => {

@@ -31,15 +31,15 @@ export function cleanContent(raw: string): string {
 }
 
 /** 頭の数文字だけを出し、残りを「●」で伏せる */
-export function maskContent(raw: string): string {
+export function maskContent(raw: string, maxDots = MAX_DOTS): string {
   const c = chars(cleanContent(raw));
   if (!c.length) return "";
   // 3 字以下は伏せない（showsWhole）。ここに来るのは 4 字以上
   if (c.length <= SHOW_WHOLE_MAX) return c.join("");
   const head = HEAD_CHARS;
   const rest = c.length - head;
-  const dots = DOT.repeat(Math.min(rest, MAX_DOTS));
-  return c.slice(0, head).join("") + dots + (rest > MAX_DOTS ? "…" : "");
+  const dots = DOT.repeat(Math.min(rest, maxDots));
+  return c.slice(0, head).join("") + dots + (rest > maxDots ? "…" : "");
 }
 
 /** 伏せずに全部を出す短さか（空のときは false） */
