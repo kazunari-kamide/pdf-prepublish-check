@@ -24,12 +24,14 @@ import {
   type Hit,
   type PiiType,
 } from "./patterns.ts";
-import { TooManyOperations, extractText, pageContent, type ExtractSettings, type Glyph, type Rect } from "./text.ts";
+import { TooManyOperations, extractText, pageContent, type Direction, type ExtractSettings, type Glyph, type Rect } from "./text.ts";
 
 export const RULE_ID = "pii";
 // 0.1.2：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
 // 0.1.3：設定 includeText を足す（渡したときだけ、見つけた字そのものを 1 件ごとに返す。既定は返さない）
-export const RULE_VERSION = "0.1.5";
+// 0.1.6：会議録の発言の頭・助詞つきの並びを名前として拾わない。縦書きかは、書体の縦書きの書き方で決める（横向きの表を縦書きとしない）
+// 0.1.7：横向きの表（/Rotate と回した中身）でも、表の列の見出しから値を確かめる
+export const RULE_VERSION = "0.1.7";
 
 export { PII_TYPES, type PiiType, type Confidence, type Basis, type ExcludeReason };
 export type { Rect };
@@ -134,6 +136,29 @@ const overlapRatio = (a: Rect, b: Rect) => {
   return small > 0 ? (w * h) / small : 0;
 };
 
+/**
+ * 候補の字が縦書きか（0.1.6 から）。縦書きの書体で描いた字が半分を超えるとき。
+ * 前は字の進む向き（下・上）で決めていたため、横向きの表（/Rotate と回した中身）の字まで「縦書き」と出ていた
+ */
+function isVerticalRange(line: Line, start: number, end: number): boolean {
+  const idx = new Set(line.map.slice(start, end).filter((i) => i >= 0));
+  if (!idx.size) return false;
+  let v = 0;
+  for (const i of idx) if (line.glyphs[i]?.vertical) v++;
+  return v * 2 > idx.size;
+}
+
+/**
+ * 箱を、行が右へ進む向き（画面で横書きに見える向き）の座標に直す（0.1.7 から）。比べるのは同じ向きの欄どうしなので、平行移動は要らない。
+ * vu（上へ進む。/Rotate 90 の横向きの表）は 90 度、v（下へ進む。/Rotate 270）は −90 度、hl（左へ進む。/Rotate 180）は 180 度回す
+ */
+function upright(r: Rect, dir: Direction): Rect {
+  const f = (x: number, y: number): [number, number] => (dir === "vu" ? [y, -x] : dir === "v" ? [-y, x] : dir === "hl" ? [-x, -y] : [x, y]);
+  const a = f(r[0], r[1]);
+  const b = f(r[2], r[3]);
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+}
+
 type Segment = { line: Line; start: number; end: number; rect: Rect; text: string };
 
 /** 行を、区切り（\t。表の別の欄）で欄に分ける */
@@ -175,7 +200,7 @@ export function scanGlyphs(glyphs: Glyph[], settings: PiiSettings = DEFAULT_SETT
     }
     const text = line.text.slice(offset + h.start, offset + h.end);
     const chars = [...text].filter((c) => c.trim() !== "").length;
-    const f: PageResult["findings"][number] = { type: h.type, rect, confidence: h.confidence, basis: h.basis, chars, vertical: line.dir === "v" || line.dir === "vu" };
+    const f: PageResult["findings"][number] = { type: h.type, rect, confidence: h.confidence, basis: h.basis, chars, vertical: isVerticalRange(line, offset + h.start, offset + h.end) };
     if (opts.includeText) f.text = text;
     findings.push(f);
   };
@@ -187,28 +212,35 @@ export function scanGlyphs(glyphs: Glyph[], settings: PiiSettings = DEFAULT_SETT
     for (const e of r.excluded) excluded.push({ reason: e.reason });
   }
 
-  // 2. 表の列（横書きだけ）：上に「氏名」「住所」などの見出しがある欄を、その型の値として確かめる
-  const segs = segmentsOf(lines.filter((l) => l.dir === "h"));
-  const headers = segs.map((s) => ({ s, kind: columnKindOf(s.text) })).filter((x): x is { s: Segment; kind: ColumnKind } => x.kind !== null);
-  if (headers.length) {
-    for (const seg of segs) {
-      if (columnKindOf(seg.text) !== null) continue;
-      let best: { kind: ColumnKind; dist: number } | null = null;
-      for (const h of headers) {
-        const dist = h.s.rect[1] - seg.rect[3];
-        if (dist < -seg.line.size * 0.2 || dist > settings.columnHeaderMaxDistance) continue; // 見出しは上にある
-        const ox = Math.min(h.s.rect[2], seg.rect[2]) - Math.max(h.s.rect[0], seg.rect[0]);
-        const minW = Math.min(h.s.rect[2] - h.s.rect[0], seg.rect[2] - seg.rect[0]);
-        if (ox <= 0 || ox < minW * 0.5) continue;
-        if (!best || dist < best.dist) best = { kind: h.kind, dist };
-      }
-      if (!best) continue;
-      const r = scanCell(seg.text, best.kind, seg.line.text);
-      for (const hit of r.hits) push(seg.line, hit, seg.start);
-      for (const e of r.excluded) excluded.push({ reason: e.reason });
-    }
+  // 2. 表の列（横書きの書体の行だけ）：上に「氏名」「住所」などの見出しがある欄を、その型の値として確かめる。
+  //    横向きの表（/Rotate と回した中身）は、行の向きごとに、画面での向き（行が右へ進む向き）の座標に直して同じ決まりで見る（0.1.7 から）
+  for (const dir of ["h", "vu", "v", "hl"] as const) {
+    const segs = segmentsOf(lines.filter((l) => l.dir === dir && !isVerticalRange(l, 0, l.text.length))).map((s) => ({ ...s, rect: upright(s.rect, dir) }));
+    scanColumns(segs);
   }
   return { findings, excluded };
+
+  function scanColumns(segs: Segment[]) {
+    const headers = segs.map((s) => ({ s, kind: columnKindOf(s.text) })).filter((x): x is { s: Segment; kind: ColumnKind } => x.kind !== null);
+    if (headers.length) {
+      for (const seg of segs) {
+        if (columnKindOf(seg.text) !== null) continue;
+        let best: { kind: ColumnKind; dist: number } | null = null;
+        for (const h of headers) {
+          const dist = h.s.rect[1] - seg.rect[3];
+          if (dist < -seg.line.size * 0.2 || dist > settings.columnHeaderMaxDistance) continue; // 見出しは上にある
+          const ox = Math.min(h.s.rect[2], seg.rect[2]) - Math.max(h.s.rect[0], seg.rect[0]);
+          const minW = Math.min(h.s.rect[2] - h.s.rect[0], seg.rect[2] - seg.rect[0]);
+          if (ox <= 0 || ox < minW * 0.5) continue;
+          if (!best || dist < best.dist) best = { kind: h.kind, dist };
+        }
+        if (!best) continue;
+        const r = scanCell(seg.text, best.kind, seg.line.text);
+        for (const hit of r.hits) push(seg.line, hit, seg.start);
+        for (const e of r.excluded) excluded.push({ reason: e.reason });
+      }
+    }
+  }
 }
 
 function extractSettings(s: PiiSettings): ExtractSettings {

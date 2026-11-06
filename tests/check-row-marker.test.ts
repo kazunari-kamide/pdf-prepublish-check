@@ -20,7 +20,11 @@ describe("検出の行の題のマーカー", () => {
     expect(css).toMatch(/\.items > li:has\(> \.item\.is-selected\) \{[^}]*box-shadow: inset 0 0 0 var\(--bw-2\) var\(--danger\)/);
   });
 
-  it("本文のリンクのマーカーは残す", () => {
-    expect(css).toMatch(/\.terms-note a,[^{]*\{[^}]*--marker-ki/);
+  it("本文のリンクは、マーカーでなく下線（D166）", () => {
+    // リンクの決まり（.terms-note a から始まる 2 つ）の中だけを見る。「確かめる」の段の色は --marker-ki を使うので、CSS 全体では見ない
+    const linkRules = css.match(/\.terms-note a[,:][^{]*\{[^}]*\}/g) ?? [];
+    expect(linkRules).toHaveLength(2);
+    expect(linkRules[0]).toMatch(/text-decoration-line: underline/);
+    for (const rule of linkRules) expect(rule).not.toMatch(/--marker-ki|linear-gradient/);
   });
 });

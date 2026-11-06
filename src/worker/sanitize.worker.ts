@@ -15,21 +15,40 @@ import type { ImageCodec } from "../../sanitize/types.ts";
  * CCITT・JBIG2・JPEG 2000 を解く部品は、配信の中の /pdfjs/wasm/ に置いたもの（pdfjs-dist の写し）を読む（2026-11-06。src/render/pdfjs-parts.ts）。
  * 読み込めなかったときは、道具なしで片付ける。
  */
+let libPromise: Promise<PdfjsLike | undefined> | null = null;
+/** PDF.js と、その Worker の部品を、この Worker の中に 1 回だけ読み込む（温め・片付け・検査で同じものを使う） */
+function pdfjsLib(): Promise<PdfjsLike | undefined> {
+  libPromise ??= Promise.all([import(/* @vite-ignore */ pdfjsUrl) as Promise<PdfjsLike>, import(/* @vite-ignore */ pdfjsWorkerUrl)])
+    .then(([lib]) => lib)
+    .catch(() => undefined);
+  return libPromise;
+}
+
 async function imageCodec(): Promise<ImageCodec | undefined> {
-  try {
-    const [lib] = await Promise.all([
-      import(/* @vite-ignore */ pdfjsUrl) as Promise<PdfjsLike>,
-      import(/* @vite-ignore */ pdfjsWorkerUrl),
-    ]);
-    return createPdfjsImageCodec(lib, offscreenCanvasJpegEncoder);
-  } catch {
-    return undefined;
-  }
+  const lib = await pdfjsLib();
+  return lib ? createPdfjsImageCodec(lib, offscreenCanvasJpegEncoder) : undefined;
+}
+
+/** 温める：PDF.js を読み込み、小さな見本の画像を 1 回解かせて、画像を解く部品も読み込んでおく（src/render/warm-pdf.ts） */
+async function warm(): Promise<boolean> {
+  const lib = await pdfjsLib();
+  if (!lib) return false;
+  return warmPdfjs(lib as unknown as Parameters<typeof warmPdfjs>[0], {
+    isOffscreenCanvasSupported: false,
+    isImageDecoderSupported: false,
+    useWorkerFetch: false,
+    useWasm: false,
+    wasmUrl: PDFJS_WASM_URL,
+    disableFontFace: true,
+    stopAtErrors: false,
+    verbosity: 0,
+  });
 }
 import { createPdfjsImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import { rulesCheck } from "../../sanitize/redact-check.ts";
 import { inspectAll } from "../inspect/inspect.ts";
 import { PDFJS_WASM_URL } from "../render/pdfjs-parts.ts";
+import { warmPdfjs } from "../render/warm-pdf.ts";
 import { compressJob, preflightJob, sanitizeJob } from "../sanitize/job.ts";
 import type { SanitizeRequest, SanitizeResponse } from "../sanitize/protocol.ts";
 
@@ -51,8 +70,8 @@ function transferable(b: Uint8Array): ArrayBuffer {
 async function inspectCheck() {
   let ctx = {};
   try {
-    const lib = (await import(/* @vite-ignore */ pdfjsUrl)) as Parameters<typeof createPdfjsImageDecoder>[0];
-    ctx = { imageDecoder: createPdfjsImageDecoder(lib, { jbig2Url: PDFJS_WASM_URL }) };
+    const lib = (await pdfjsLib()) as Parameters<typeof createPdfjsImageDecoder>[0] | undefined;
+    ctx = lib ? { imageDecoder: createPdfjsImageDecoder(lib, { jbig2Url: PDFJS_WASM_URL }) } : {};
   } catch {
     ctx = {};
   }
@@ -61,6 +80,10 @@ async function inspectCheck() {
 
 scope.onmessage = async (e) => {
   const req = e.data;
+  if (req?.type === "warm") {
+    scope.postMessage({ type: "warm-done", id: req.id, ok: await warm() });
+    return;
+  }
   if (!req || !(req.buffer instanceof ArrayBuffer)) return;
   try {
     const codec = await imageCodec();

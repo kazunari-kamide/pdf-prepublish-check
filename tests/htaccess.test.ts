@@ -50,9 +50,9 @@ describe(".htaccess の守り（HSTS・埋め込み・キャッシュ・404）",
     expect(text).not.toMatch(/^\s*Options\b/m);
   });
 
-  it("キャッシュ：ふだんは no-cache、assets/ の 200 の応答だけ 1 年。あとの行が上書きする順", () => {
+  it("キャッシュ：ふだんは no-cache、assets/ と pdfjs/<版の印>/ の 200 の応答だけ 1 年。あとの行が上書きする順", () => {
     const def = text.indexOf(`Header always set Cache-Control "${CACHE_DEFAULT}"`);
-    const assets = text.indexOf(`Header always set Cache-Control "${CACHE_ASSETS}" "expr=%{REQUEST_URI} =~ m#^/assets/# && %{REQUEST_STATUS} == 200"`);
+    const assets = text.indexOf(`Header always set Cache-Control "${CACHE_ASSETS}" "expr=%{REQUEST_URI} =~ m#^/(assets|pdfjs)/# && %{REQUEST_STATUS} == 200"`);
     expect(CACHE_DEFAULT).toBe("no-cache");
     expect(CACHE_ASSETS).toBe("max-age=31536000, immutable");
     expect(def).toBeGreaterThan(0);

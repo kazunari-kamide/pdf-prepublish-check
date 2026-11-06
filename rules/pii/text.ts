@@ -25,6 +25,8 @@ export type Glyph = {
   /** 字の箱。ページの既定の座標（ポイント、左下が原点、/Rotate はかけない） */
   rect: Rect;
   dir: Direction;
+  /** 縦書きの書体（CMap の名前が -V で終わる、または /WMode が 1）で描いた字か（0.1.6 から）。進む向きが下でも、回した横書きの字はここが false */
+  vertical: boolean;
   /** 字の大きさ（ポイント。行をまとめるときの目安） */
   size: number;
 };
@@ -192,7 +194,7 @@ export function extractText(ctx: PDFContext, content: Uint8Array, resources: PDF
         const ys = corners.map((c) => c[1]);
         const rect: Rect = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
         const size = Math.hypot(trm[2], trm[3]) || Math.hypot(trm[0], trm[1]);
-        out.glyphs.push({ text: g.text, rect, dir: directionOf(adv), size });
+        out.glyphs.push({ text: g.text, rect, dir: directionOf(adv), vertical: !!f.vertical, size });
       }
     };
 

@@ -55,6 +55,7 @@ describe("解く入口", () => {
     const doc = await PDFDocument.create();
     const s = PDFRawStream.of(doc.context.obj({ Filter: "FlateDecode" }), await deflatedZeros(300 * MB));
     const t0 = Date.now();
+    const t0p = performance.now();
     let err: unknown;
     try {
       decodeStream(s);
@@ -63,11 +64,15 @@ describe("解く入口", () => {
     }
     expect(err).toBeInstanceOf(InflateLimitError);
     expect((err as InflateLimitError).scope).toBe("stream");
+    const first = performance.now() - t0p;
     expect(inflatedBytes(doc.context)).toBe(0);
-    // 2 回目は解かずにすぐ止める
-    const t1 = Date.now();
+    // 2 回目は解かずにすぐ止める。1 回目（上限まで解いた時間）との比で見る（機械の速さ・ほかの処理の負荷に左右されにくい。2026-11-06 から）。
+    // 解き直す作りに戻ると、2 回目も 1 回目と同じくらいかかる
+    const t1 = performance.now();
     expect(() => decodeStream(s)).toThrow(InflateLimitError);
-    expect(Date.now() - t1).toBeLessThan(50);
+    const second = performance.now() - t1;
+    console.log(`解く入口：1 回目 ${Math.round(first)} ms、2 回目 ${second.toFixed(2)} ms`);
+    expect(second).toBeLessThan(first / 10);
     expect(Date.now() - t0).toBeLessThan(BOMB_TIMEOUT);
     expect(maxRss()).toBeLessThan(MAX_RSS_BYTES);
   }, BOMB_TIMEOUT);
