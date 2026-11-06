@@ -24,7 +24,7 @@ import {
 import { decodeStream, isInflateLimitError, rethrowIfInflateLimit } from "../shared/inflate-limit.ts";
 import { operations, type Op, type Tok } from "../shared/content-lexer.ts";
 import type { EncryptionSummary } from "../shared/decrypt.ts";
-import { readFont, type FontInfo } from "../shared/fonts.ts";
+import { glyphAdvance, glyphExtent, readFont, tjShift, type FontInfo } from "../shared/fonts.ts";
 import { expectedTextOf } from "./remap.ts";
 import { loadPdf } from "../shared/load.ts";
 import { darkFractionOf, readImagePixels, type PixelRead } from "../p6-text/images.ts";
@@ -38,7 +38,7 @@ const MAX_PATTERN_TILES = 64;
 export const RULE_ID = "p7-hidden";
 // 1.4.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
 // 1.5.0：字の報告ごとに、読める本文か（readable）を付ける。表の体裁・罫線・飾りのような、まとまって出る型と分けるため（実物の PDF で「高」の誤検知が多かった。2026-11-05）
-export const RULE_VERSION = "1.6.0";
+export const RULE_VERSION = "1.7.0";
 
 export type P7Reason =
   | "hidden_layer"
@@ -488,17 +488,13 @@ class PageScanner {
       const f = g.font;
       if (!f) return;
       for (const gl of f.decode(bytes)) {
-        const w0 = gl.width;
         const trm = mul([g.size * g.th, 0, 0, g.size, 0, g.rise], mul(tm, g.ctm));
-        const corners: Array<[number, number]> = [
-          apply(trm, 0, f.descent),
-          apply(trm, w0, f.descent),
-          apply(trm, 0, f.ascent),
-          apply(trm, w0, f.ascent),
-        ];
+        // 字の箱と送りは P6 と同じ（rules/shared/fonts.ts。1.7.0 から縦書きも。前は縦の列の字を右へ送り、隣の列と重ねていた）
+        const { x0, x1, y0, y1 } = glyphExtent(f, gl.width);
+        const corners: Array<[number, number]> = [apply(trm, x0, y0), apply(trm, x1, y0), apply(trm, x0, y1), apply(trm, x1, y1)];
         const rect = boxOf(corners);
-        const [bx, by] = apply(trm, 0, f.descent);
-        const [tx, ty] = apply(trm, 0, f.ascent);
+        const [bx, by] = apply(trm, 0, y0);
+        const [tx, ty] = apply(trm, 0, y1);
         const height = Math.hypot(tx - bx, ty - by);
         const isSpace = gl.isSpace;
         const fillPaint = { alpha: g.ca, lum: g.fill };
@@ -522,10 +518,13 @@ class PageScanner {
           paints,
           hScale: yLen > 0 ? xLen / yLen : 1,
           origin,
-          dir: xLen > 0 ? [trm[0] / xLen, trm[1] / xLen] : [1, 0],
+          // 字の進む向き：横書きは文字空間の右、縦書きは下（行・列を 1 件にまとめるとき、重ね描きを比べるときに使う）
+          dir: f.vertical
+            ? yLen > 0 ? [-trm[2] / yLen, -trm[3] / yLen] : [0, -1]
+            : xLen > 0 ? [trm[0] / xLen, trm[1] / xLen] : [1, 0],
         });
-        const adv = (w0 * g.size + g.tc + (gl.isWordSpace ? g.tw : 0)) * g.th;
-        tm = mul([1, 0, 0, 1, adv, 0], tm);
+        const [ax, ay] = glyphAdvance(f, gl, g.size, g.tc, g.tw, g.th);
+        tm = mul([1, 0, 0, 1, ax, ay], tm);
       }
     };
 
@@ -706,7 +705,10 @@ class PageScanner {
           const opNo = this.textOps++;
           for (const el of arr) {
             if (el.t === "str") showText(el.v, opNo);
-            else if (el.t === "num") tm = mul([1, 0, 0, 1, (-el.v / 1000) * g.size * g.th, 0], tm);
+            else if (el.t === "num") {
+              const [sx, sy] = tjShift(g.font, el.v, g.size, g.th); // 縦書きは下へ詰める・空ける（1.7.0 から）
+              tm = mul([1, 0, 0, 1, sx, sy], tm);
+            }
           }
           break;
         }

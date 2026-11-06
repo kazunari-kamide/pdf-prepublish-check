@@ -54,6 +54,40 @@ export type FontInfo = {
   vertical?: { vy: number; w1: number };
 };
 
+/**
+ * 1字の箱（字の空間。em に字の大きさをかける前）。P6 と P7 で同じものを使う（2026-11-06。前は P7 だけ縦書きを見ず、縦の列の字を横に並べていた）。
+ * 横書き：原点から右へ幅、上下は descent〜ascent。
+ * 縦書き：縦の原点（字の上の真ん中）から、横は幅の半分ずつ左右に、縦は原点から下へ（PDF 1.7 §9.7.4.3）
+ */
+export function glyphExtent(font: FontInfo, width: number): { x0: number; x1: number; y0: number; y1: number } {
+  const v = font.vertical;
+  return v
+    ? { x0: -width / 2, x1: width / 2, y0: font.descent - v.vy, y1: font.ascent - v.vy }
+    : { x0: 0, x1: width, y0: font.descent, y1: font.ascent };
+}
+
+/**
+ * 1字を描いたあとの送り（文字空間。[横, 縦]）。横書きは右へ（字の幅＋Tc＋Tw）×Th、縦書きは下へ（w1×字の大きさ − Tc）。
+ * 縦書きの Tw と W2 の字ごとの値は見ない（P6 の 1.x からの扱い。限界は rules/p6-text/README.md）
+ */
+export function glyphAdvance(
+  font: FontInfo,
+  g: Pick<Glyph, "width" | "isWordSpace">,
+  size: number,
+  charSpacing: number,
+  wordSpacing: number,
+  hScale: number,
+): [number, number] {
+  if (font.vertical) return [0, font.vertical.w1 * size - charSpacing];
+  return [(g.width * size + charSpacing + (g.isWordSpace ? wordSpacing : 0)) * hScale, 0];
+}
+
+/** TJ の数（千分の 1 em）での送り。横書きは左へ詰める（右へ空ける）、縦書きは下へ詰める・空ける */
+export function tjShift(font: FontInfo | null | undefined, value: number, size: number, hScale: number): [number, number] {
+  if (font?.vertical) return [0, (-value / 1000) * size];
+  return [(-value / 1000) * size * hScale, 0];
+}
+
 const DEFAULT_ASCENT = 0.8;
 const DEFAULT_DESCENT = -0.2;
 /** 幅が分からない字に使う幅（em） */
