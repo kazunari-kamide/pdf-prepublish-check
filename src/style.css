@@ -752,17 +752,85 @@ body:has(.terms-dialog[open]) {
   width: min(36rem, calc(100vw - 2rem));
 }
 
-.tidy-dialog-counts {
-  font-weight: 700;
+/* 消すもの（ふだんの言い方の 3 行）。印は飾りなので読み上げない（aria-hidden） */
+.tidy-dialog-items {
+  list-style: none;
+  margin: var(--sp-2) 0;
+  padding: 0;
 }
 
+.tidy-dialog-items > li {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-top: var(--bw-1) solid var(--line-hair);
+}
+
+.tidy-dialog-items > li:first-child {
+  border-top: 0;
+}
+
+.tidy-dialog-check {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.15rem;
+  border-radius: var(--radius-full);
+  background: var(--face-beni);
+  color: var(--danger);
+  font-weight: 700;
+  font-size: var(--fs-small);
+}
+
+.tidy-dialog-item b {
+  display: block;
+}
+
+.tidy-dialog-item span {
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.tidy-dialog-tech {
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.tidy-dialog-tech summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--target-min);
+  cursor: pointer;
+}
+
+.tidy-dialog-tech p {
+  margin: var(--sp-1) 0 0;
+}
+
+.tidy-dialog-notes {
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--space-4);
+  font-size: var(--fs-small);
+}
+
+/* 押すボタンは右下。左に「消すのは、新しく作る PDF だけです」（2026-11-07 本人：「やめる」は置かない） */
 .tidy-dialog-actions {
   display: flex;
   flex-wrap: wrap;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--sp-3);
   padding: var(--space-3) var(--space-5);
   border-top: 1px solid var(--color-line);
+}
+
+.tidy-dialog-hint {
+  margin: 0 auto 0 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
 }
 
 /* 狭い画面でも「閉じる」を縦に折らない（題のほうを折る） */
@@ -1328,7 +1396,7 @@ body:has(.terms-dialog[open]) {
   background: var(--face-kinari);
 }
 
-.result-face:has(.group[data-status="found"]) {
+.result-face:has(> .kinds:not([hidden])) {
   background: var(--face-beni);
 }
 
@@ -1336,13 +1404,260 @@ body:has(.terms-dialog[open]) {
   background: var(--face-midori);
 }
 
-/* 面の中のまとまり（お知らせ・種類・範囲の一文・自分で選ぶ・整える）は、白の 2px の線で区切る */
-.result-face > .notices,
-.result-face > .groups > .group,
-.result-face > .scope-note,
-.result-face > .pick-tools,
-.result-face > .actions {
-  border-top: var(--face-line);
+/* 結果の欄（案 A。2026-11-07 本人が承認）：見出し → なぜの 1 文 → 要点の一覧 → プロパティの中身 → 大きなボタン。
+   面の中は区切りの線を引かず、白い囲み（一覧・プロパティ）と余白で分ける */
+/* 大きな見出し（何か所・何が）。丸ゴシックの見出しの書体で、ふだんの節の見出しより一段大きく */
+.results #result-title,
+.results #clean-title {
+  font-size: var(--text-h1);
+  line-height: var(--leading-head);
+  margin: 0 0 var(--sp-2);
+}
+
+.result-eyebrow {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--fs-small);
+  color: var(--danger);
+}
+
+.clean .result-eyebrow {
+  color: var(--midori-800);
+}
+
+.result-why {
+  margin: 0 0 var(--sp-3);
+  color: var(--text-muted);
+}
+
+/* 要点の一覧：同じ種類は 1 行（深刻度の札・題・場所と数）。押すと「詳しく見る」の中のその行へ */
+.kinds {
+  list-style: none;
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  background: var(--surface-page);
+  border-radius: var(--radius-panel);
+  border: var(--bw-1) solid var(--line-hair);
+}
+
+.kinds > li + li {
+  border-top: var(--bw-1) solid var(--line-hair);
+}
+
+.kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--sp-2) var(--sp-4);
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kind:hover {
+  background: var(--face-kinari);
+}
+
+.kind-sev {
+  flex: none;
+  padding: 0 var(--sp-2);
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.kind-sev.sev-high {
+  color: var(--danger);
+}
+
+.kind-title {
+  flex: 1 1 12em;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.kind-where {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.kinds-more {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-small);
+}
+
+/* プロパティに入っていた情報（値は頭の 2 字だけ。2026-11-07 本人が決定） */
+.props-glance {
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-page);
+  border-radius: var(--radius-panel);
+  border: var(--bw-1) solid var(--line-hair);
+}
+
+.props-glance[data-empty="true"] {
+  padding-block: var(--sp-2);
+}
+
+.glance-head {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.glance-why,
+.glance-note,
+.glance-empty {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.glance-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(11em, 100%), 1fr));
+  gap: 0 var(--sp-4);
+  margin: var(--sp-2) 0;
+}
+
+.glance-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  min-width: 0;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+  border-bottom: var(--bw-1) dotted var(--line-hair);
+}
+
+.glance-row dt {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+.glance-row dd {
+  min-width: 0;
+  margin: 0 0 0 auto;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* 整えたあと、残っている所がないとき：上の面は状態の文だけ（主役は整えた結果の欄） */
+.result-face[data-after="clean"] {
+  padding-block: 0;
+  background: none;
+}
+
+.result-face[data-after="clean"] > :not(#status):not(#progress) {
+  display: none;
+}
+
+.result-face[data-after="clean"] > #status:empty {
+  display: none;
+}
+
+/* 詳しく見る（案 A）：細かい情報は全部この中。閉じていても、何が入っているかが分かるように summary を大きめに */
+.more {
+  margin-top: var(--sp-3);
+}
+
+.more > summary {
+  min-height: var(--target-min);
+  padding-block: var(--sp-2);
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  cursor: pointer;
+}
+
+.more-body > * + * {
+  margin-top: var(--sp-3);
+}
+
+.more .group {
+  padding-top: var(--sp-1);
+}
+
+.more .group-head {
+  font-size: var(--fs-small);
+}
+
+/* 「整える」のボタンが画面の外にあるときだけ出す帯（案 B の帯。2026-11-07 本人）。
+   右の欄の最後に置き、画面の下に貼り付ける（sticky なので幅は右の欄と同じ）。白い地・上に紅の 2px の線・欄と同じ角。
+   紅の塗りはボタンだけにして、広告の場所ではなく欄の続きに見せる。ボタンが見えたら消す（src/main.ts の syncTidyBand） */
+.tidy-band {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+  min-height: 4.5rem;
+  padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4);
+  background: var(--surface-page);
+  border: var(--bw-1) solid var(--line-hair);
+  border-top: var(--bw-2) solid var(--danger);
+  border-bottom: 0;
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  box-shadow: var(--shadow-panel);
+}
+
+.tidy-band[hidden] {
+  display: none;
+}
+
+.tidy-band-text {
+  margin: 0;
+  font-weight: 700;
+}
+
+.tidy-band-run {
+  min-height: var(--button-height);
+  padding: var(--sp-2) var(--sp-5);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--danger);
+  color: var(--text-on-strong);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tidy-band-run::after {
+  content: " →";
+}
+
+.tidy-band-run:hover {
+  background: var(--beni-800);
+}
+
+/* 窓の高さが字の大きさに比べて低いとき（字だけ大きくした・横向き・低い窓）は、帯を出さない。帯が画面の多くを隠すため
+   （前の固定の帯も、字を大きくしたときは貼り付けなかった）。media query の rem はブラウザの標準の字の大きさで測るので、
+   字の設定を大きくするほど早く効く（標準 16px なら高さ 640px 未満、32px なら 1280px 未満） */
+@media not (min-height: 40rem) {
+  .tidy-band {
+    display: none;
+  }
+}
+
+.clean-limit-note {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
 }
 
 .results:focus {
@@ -1736,7 +2051,7 @@ progress {
 }
 
 /* 紅でない段（確かめる・中・低・候補）の選んだ行は、墨の線にする（紅にすると、どの段の行も「高」に見えるため。2026-11-06） */
-.tier:not([data-tier="high"]) .items > li:has(> .item.is-selected) {
+.group:not([data-tier="high"]) .items > li:has(> .item.is-selected) {
   box-shadow: inset 0 0 0 var(--bw-2) var(--line-strong);
 }
 
@@ -1852,61 +2167,6 @@ progress {
   background: var(--face-kinari);
 }
 
-/*
- * 深刻度の段（details.tier）：段の見出しは、印と名前・意味の一言・件数。中・低・候補は最初は閉じる。
- * 段の間は、結果の面の中の白の 2px の線（面・枠を重ねない）
- */
-.tier {
-  border-top: var(--bw-2) solid var(--surface-page);
-}
-
-.groups > .tier:first-child {
-  border-top: 0;
-}
-
-.results .tier > summary.tier-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: first baseline;
-  gap: 0 var(--sp-3);
-  min-height: var(--target-min);
-  padding-block: var(--sp-3) var(--sp-2);
-  cursor: pointer;
-}
-
-.tier-name {
-  font-weight: 700;
-  font-size: var(--fs-h3);
-}
-
-.tier-note {
-  flex: 1 1 10em;
-  min-width: 0;
-  font-size: var(--fs-small);
-  color: var(--text-muted);
-}
-
-.tier-count {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.tier[data-tier="high"] .tier-name,
-.tier[data-tier="high"] .tier-count {
-  color: var(--danger);
-}
-
-/* 段の中の種類の見出しは、段の見出しより一段小さく */
-.tier .group {
-  padding-top: var(--sp-1);
-}
-
-.tier .group-head {
-  font-size: var(--fs-small);
-}
-
-
 .item-page {
   color: var(--color-muted);
 }
@@ -1967,19 +2227,19 @@ progress {
   padding-top: var(--sp-2);
 }
 
-/* 「整える」（案 C）：結果の面の下の端いっぱいの紅の帯。左右と下は面の余白の分だけ外へ出し、下の角は面の角に合わせる。
-   フォーカスの線は、外に出すと面の外で切れて見えにくいので、内側に引く（design/sheet.md「案 C」のフォーカス） */
+/* 「整える」（案 A。2026-11-07 本人が承認）：一覧とプロパティを読み終えた目線の先に置く、欄の幅いっぱいの大きなボタン。
+   下の端に固定していた帯（#146）はやめた（広告の場所に見えて、目線の外に行くため） */
 .actions #sanitize {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--sp-3);
-  width: calc(100% + 2 * var(--face-pad));
-  min-height: calc(var(--button-height-large) + var(--sp-2));
-  margin: var(--sp-3) calc(-1 * var(--face-pad)) calc(-1 * var(--face-pad));
-  padding: var(--sp-3) var(--face-pad);
+  width: 100%;
+  min-height: var(--button-height-large);
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-2) var(--sp-4);
   border: 0;
-  border-radius: 0 0 var(--radius-face) var(--radius-face);
+  border-radius: var(--radius-control);
   background: var(--danger);
   color: var(--text-on-strong);
   font-weight: 700;
@@ -1997,8 +2257,7 @@ progress {
 }
 
 .actions #sanitize:focus-visible {
-  outline-offset: calc(-1 * (var(--bw-focus) + var(--focus-gap)));
-  outline-color: var(--text-on-strong);
+  outline-offset: var(--focus-gap);
 }
 
 /* 何も見つからないとき：「念のため整える」は第 2 の形（帯にしない・生成りの地・墨の字・ふつうの大きさ。2026-11-05 夜のレビュー 7）。
@@ -2066,52 +2325,26 @@ progress {
   font-size: var(--text-small);
 }
 
-/*
- * 1：結果が出ている間、「整える」の帯を画面の下に固定する（2026-11-06 本人：「固定で常に画面内に」）。
- * 帯の部品の場所（結果の欄の中・注意書きのあと）は変えないので、キーボードで移る順と読み上げは今のまま。
- * 帯が隠す分は空ける：ページの下の余白・ページの絵の欄（上に貼り付けている）の高さ・スクロールで見せる位置（scroll-padding）。
- * 何も見つからないときの「念のため整える」（第 2 の形）は固定しない
- */
-:root {
-  --band-space: 0px;
+.actions .sanitize-note {
+  text-align: center;
+  color: var(--text-muted);
 }
 
-html:has(.workspace[data-state="result"] .actions:not([hidden]) #sanitize:not([data-weight="sub"])) {
-  --band-space: calc(var(--button-height-large) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
-  scroll-padding-bottom: var(--band-space);
+/* 何も見つからないとき（「念のため整える」は左寄せの第 2 の形）は、説明も左にそろえる */
+.actions #sanitize[data-weight="sub"] ~ .sanitize-note {
+  text-align: left;
 }
 
-body {
-  padding-bottom: var(--band-space);
-}
-
-.workspace[data-state="result"] .actions:not([hidden]) #sanitize:not([data-weight="sub"]) {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 50;
-  box-sizing: border-box;
-  width: auto;
-  min-height: var(--band-space);
-  margin: 0;
-  padding: var(--sp-3) max(var(--sp-5), env(safe-area-inset-right, 0px)) calc(var(--sp-3) + env(safe-area-inset-bottom, 0px)) max(var(--sp-5), env(safe-area-inset-left, 0px));
-  border-radius: 0;
-  box-shadow: 0 -10px 24px rgb(43 42 40 / 14%);
-}
-
-/* 上に貼り付けているページの絵の欄と縮小したページの列は、帯の高さの分だけ短くする（ページの絵の下の端・印を隠さない） */
+/* 上に貼り付けているページの絵の欄と縮小したページの列の高さ（案 A で、下の端に固定していた「整える」の帯をやめたので、帯の分は空けない）。
+   --thumbs-top は、今の列の上の端の位置（src/main.ts の fitThumbsToWindow が、送ったとき・窓の大きさが変わったときに入れる）。
+   ページの絵の欄（.stage）は、高さが変わるたびにページを描き直してしまうので、上の端の位置では変えない */
 .workspace[data-state="result"] .stage,
 .workspace[data-state="result"] .thumbs {
-  max-height: calc(100dvh - 2 * var(--sp-4) - var(--band-space));
+  max-height: calc(100dvh - 2 * var(--sp-4));
 }
 
-/* 縮小したページの列は、上に貼り付く前（開いた直後で、窓を送る前）も、列の下の端を帯の上に収める（2026-11-06）。
-   --thumbs-top は、今の列の上の端の位置（src/main.ts の fitThumbsToWindow が、送ったとき・窓の大きさが変わったときに入れる）。
-   貼り付いたあとは、上の端が --sp-4 なので、上の決まりと同じ高さになる。
-   ページの絵の欄（.stage）は変えない（高さが変わるたびに、ページを描き直してしまうため） */
 .workspace[data-state="result"] .thumbs {
-  max-height: calc(100dvh - max(var(--thumbs-top, var(--sp-4)), var(--sp-4)) - var(--sp-4) - var(--band-space));
+  max-height: calc(100dvh - max(var(--thumbs-top, var(--sp-4)), var(--sp-4)) - var(--sp-4));
 }
 
 /* ---------------------------------------------------------------- 第 2 の形のボタン（枠だけ）：1 つの部品（2026-11-05 夜のレビュー 10）
@@ -2658,9 +2891,6 @@ body {
   .clean {
     --face-pad: var(--gut);
   }
-  .actions #sanitize {
-    border-radius: 0;
-  }
   .drop {
     padding: var(--sp-6) var(--gut);
   }
@@ -2910,18 +3140,6 @@ body {
   .picks li {
     overflow-wrap: anywhere;
     word-break: normal;
-  }
-  /* 「整える」の帯は、ここでは画面の下に固定しない（字を大きくすると帯が画面の半分ほどになり、読む所を隠すため）。
-     結果の面の下の端の、もとの置き場に戻す（.actions #sanitize と同じ形）。
-     static でなく relative にする：整えている間の進み具合（::before。position: absolute）が、帯の中に収まるように */
-  .workspace[data-state="result"] .actions:not([hidden]) #sanitize:not([data-weight="sub"]) {
-    position: relative;
-    z-index: auto;
-    width: calc(100% + 2 * var(--face-pad));
-    min-height: calc(var(--button-height-large) + var(--sp-2));
-    margin: var(--sp-3) calc(-1 * var(--face-pad)) calc(-1 * var(--face-pad));
-    padding: var(--sp-3) var(--face-pad);
-    box-shadow: none;
   }
 }
 

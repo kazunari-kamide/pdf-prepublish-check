@@ -148,13 +148,17 @@ describe("外した種類の、読み直しと結果", () => {
 describe("押す前の確かめ・種類ごとの数の表・報告書に「外した」", () => {
   it("押す前の確かめ：整える数から除き、外す種類を 1 行で並べる", () => {
     const c = buildTidyConfirm({ tiers: before.tiers, picks: 0, properties: "", kept: [{ pattern: "P8", name: PATTERN_NAME.P8!, count: 2 }] });
-    expect(c.lead).toContain(`見えない情報 ${before.hidden - 2} か所を消した`);
-    expect(c.counts).toContain("（うち外す 2 か所）");
+    expect(c.items[0]!.head).toBe(`見つかった ${before.hidden - 2} か所`);
+    expect(c.items[0]!.text).toContain("うち外す 2 か所は消しません");
     expect(c.notes[0]).toBe(`外す（整えずに残す）：${PATTERN_NAME.P8} 2 か所。整えた PDF に残ります。`);
     expect(c.run).toBe(`${before.hidden - 2} か所を整える`);
-    // 「注釈とコメントも消します」と「注釈を外す」を並べない
-    expect(c.notes.at(-1)).not.toContain("注釈とコメント");
-    expect(c.notes.at(-1)).toContain("JavaScript");
+    // 「書き込みのメモも消します」と「注釈を外す」を並べない（専門の名前の対応からも除く）
+    const hidden = c.items.at(-1)!;
+    expect(hidden.head).toBe("見えない所にしまわれた情報");
+    expect(hidden.text).not.toContain("書き込みのメモ");
+    expect(hidden.text).toContain("開くと動く仕掛け");
+    expect(c.tech).not.toContain("注釈とコメント");
+    expect(c.tech).toContain("JavaScript");
   });
 
   it("消すものの一覧も、外した種類を除く", () => {

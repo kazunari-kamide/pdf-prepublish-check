@@ -274,3 +274,85 @@ export function buildView(summary: InspectSummary): ViewModel {
   ].sort((a, b) => a - b);
   return { verdict, headline, tone, rows, hidden, candidates, groups, tiers, heavyPages, notices, noTextNotices, unchecked, coverage, pages, clean, caveats: scopeCaveats(summary.rules) };
 }
+
+// ---------------------------------------------------------------- 結果の欄の要点（案 A。2026-11-07 本人が承認）
+
+/** 要点の一覧に並べる種類の数の上限。これを超えた種類は「詳しく見る」の中だけに並べる（2026-11-07 本人が決定） */
+export const KIND_LIMIT = 5;
+
+/** 要点の一覧の 1 行（同じ種類は 1 行にまとめる。2026-11-07 本人が決定） */
+export type KindRow = {
+  pattern: string;
+  /** 行の題（同じ種類の題がそろっていればその題、違えば種類の名前でまとめる） */
+  title: string;
+  /** 深刻度の札（印つき。色だけにしない） */
+  sevLabel: string;
+  /** 深刻度（色と形のため）。確かめる所だけの種類は check */
+  sev: Severity | "check";
+  count: number;
+  /** そのうち確かめる所の数 */
+  check: number;
+  /** 場所の一言（「ページ 1」「ページ 1、3」「ファイル全体」） */
+  where: string;
+  /** なぜ危ないかの 1 文（いちばん重い行のもの） */
+  why: string;
+  /** その種類の最初の行の番号（押したとき、「詳しく見る」の中のその行を開く） */
+  firstNo: number;
+};
+
+export type KindSummary = {
+  /** 上限までの種類（並びは一覧の番号の順＝深刻度の順） */
+  shown: KindRow[];
+  /** 上限を超えた種類の数と、その中の所の数 */
+  moreKinds: number;
+  moreCount: number;
+};
+
+const SEV_TEXT: Record<Severity | "check", string> = { high: "▲ 高", medium: "■ 中", low: "● 低", check: "？ 確かめる" };
+
+/** 見えない情報（候補を除く）を、種類ごとに 1 行にまとめる */
+export function kindSummary(view: Pick<ViewModel, "rows" | "groups">, limit = KIND_LIMIT): KindSummary {
+  const label = new Map(view.groups.map((g) => [g.pattern, g.label]));
+  const byKind = new Map<string, Row[]>();
+  for (const r of view.rows) {
+    if (r.candidate) continue;
+    const list = byKind.get(r.pattern) ?? [];
+    list.push(r);
+    byKind.set(r.pattern, list);
+  }
+  const rows: KindRow[] = [...byKind.entries()].map(([pattern, list]) => {
+    const sure = list.filter((r) => !r.check);
+    const top = (sure.length ? sure : list).reduce((a, b) => (SEVERITY_ORDER[b.severity] < SEVERITY_ORDER[a.severity] ? b : a));
+    const sev: KindRow["sev"] = sure.length ? top.severity : "check";
+    const titles = new Set(list.map((r) => r.title));
+    const pages = [...new Set(list.map((r) => r.page).filter((p): p is number => p !== null))];
+    const whole = list.some((r) => r.page === null);
+    const where = [pages.length ? `ページ ${pagesText(pages)}` : "", whole ? "ファイル全体" : ""].filter(Boolean).join("・");
+    return {
+      pattern,
+      title: titles.size === 1 ? list[0]!.title : `${label.get(pattern) ?? "見えない情報"}が見つかりました`,
+      sevLabel: SEV_TEXT[sev],
+      sev,
+      count: list.length,
+      check: list.length - sure.length,
+      where,
+      why: top.why,
+      firstNo: list[0]!.no,
+    };
+  });
+  // 並び：深刻度（確かめるは高の次）→ 一覧の番号の順
+  const rank = (k: KindRow) => (k.sev === "high" ? 0 : k.sev === "check" ? 1 : k.sev === "medium" ? 2 : 3);
+  rows.sort((a, b) => rank(a) - rank(b) || a.firstNo - b.firstNo);
+  const shown = rows.slice(0, limit);
+  const rest = rows.slice(limit);
+  return { shown, moreKinds: rest.length, moreCount: rest.reduce((n, k) => n + k.count, 0) };
+}
+
+/** 結果の欄の大きな見出し（短く。くわしい文は状態の文 headline が読み上げで伝える） */
+export function shortHeadline(view: Pick<ViewModel, "rows" | "hidden" | "verdict" | "headline">): string {
+  if (view.hidden) {
+    const sure = view.rows.filter((r) => !r.candidate && !r.check).length;
+    return sure ? `${view.hidden} か所に、見えない情報が残っています` : `見えない情報が残っているかもしれない所が、${view.hidden} か所あります`;
+  }
+  return view.headline;
+}

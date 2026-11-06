@@ -157,7 +157,7 @@ try {
       if (r.cleaned.count) console.log(`  読み直し：${r.cleaned.count}`);
       if (r.cleaned.limit) {
         console.log(`  上限まで小さくする：${r.cleaned.limit.text}`);
-        console.log(`  「そのほかの操作」：${r.cleaned.limit.toolsOpen ? "開いている" : "閉じている"}`);
+        console.log(`  小さくする所：${r.cleaned.limit.outside ? "「詳しく見る」の外（保存のすぐ下）に出ている" : "「詳しく見る」の中に隠れている"}`);
         console.log(`  上の文：${r.cleaned.limit.status || "（なし）"}`);
         console.log(`  前後の数：${r.cleaned.limit.cleanCount}`);
       }
@@ -414,7 +414,8 @@ async function checkOne(c, pdf) {
         for (let i = 0; i < 900 && (await evaluate("document.getElementById('compress-limit').hidden")); i++) await sleep(200);
         cleaned.limit = {
           text: await evaluate("document.getElementById('compress-limit').hidden ? '（上限の一文が出ませんでした）' : document.getElementById('compress-limit').textContent"),
-          toolsOpen: await evaluate("document.getElementById('clean-tools').open"),
+          // 上限を選んで入ったときは、小さくする所を「詳しく見る」の外（保存のすぐ下）へ移す（案 A。動画の S16）
+          outside: await evaluate("document.getElementById('compress').parentElement?.id === 'compress-slot'"),
           status: await evaluate("document.getElementById('status').textContent"),
           cleanCount: await evaluate("document.getElementById('clean-count').textContent"),
         };

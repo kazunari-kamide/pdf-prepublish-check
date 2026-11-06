@@ -44,21 +44,21 @@ npm run fonts:check   # 作り直したものが、リポジトリのものと1�
 
 | ファイル | 字 | 大きさ | SHA-256 |
 |---|---|---|---|
-| `NotoSansJP-ui.woff2` | 1078 | 347,264 バイト | `cd6d61859a0df0b954490d97a39b77a2f76f482e50297b5b9766d77d8197bbee` |
+| `NotoSansJP-ui.woff2` | 1083 | 348,836 バイト | `f9a28be7651365912997cfe6c6fcecb278b1413b3b002f080a71c191e62451e1` |
 | `NotoSansJP-r01.woff2` | 284 | 50,892 バイト | `d112b75a166d20452c60d99c20ee341755f13a3679cd06190e06d4d302cd7f46` |
 | `NotoSansJP-r02.woff2` | 512 | 128,340 バイト | `870d54231608649f6c421f015724c67de29346bd98a5612780db405fdf0751b2` |
-| `NotoSansJP-r03.woff2` | 540 | 144,788 バイト | `55b38eb9e6fb007eeed06470110dbd22f828b06c9969a6d617d69e703b031241` |
-| `NotoSansJP-r04.woff2` | 562 | 163,060 バイト | `652e20d9d8e6f13581ac2d1f6e8c7ee2d644989910170590e27645b7bef2c48b` |
+| `NotoSansJP-r03.woff2` | 539 | 144,748 バイト | `bf920edd89df9dfb2a218c9ebb4a0fd094a61ea0fff6e6eb150671168093955f` |
+| `NotoSansJP-r04.woff2` | 561 | 162,956 バイト | `6dbc8203a22af73926cc6a6ee277509938da0d41373dbd59b6d88d3aa29ab208` |
 | `NotoSansJP-r05.woff2` | 525 | 148,584 バイト | `32601ee2f2744520ff3b60c96a1e2c104ff44c3daf6e2e2115b121b36142269c` |
 | `NotoSansJP-r06.woff2` | 566 | 174,104 バイト | `5f102531c34a8bfc784607bebc51b0d4ec1bf545fd6a9c78bf0725cc470bffc8` |
 | `NotoSansJP-r07.woff2` | 574 | 185,312 バイト | `003e15da8ca1d74164ebfda62903e370089c089125d1f0bada28d7e02d8a734f` |
 | `NotoSansJP-r08.woff2` | 556 | 184,768 バイト | `d837b34f5ddb78af6b5f9491decb7204e85a00ddc630f2d828d0b24d1a1e9316` |
 | `NotoSansJP-r09.woff2` | 599 | 186,364 バイト | `0b5672ce5fd534a6917811b676bbff0e67379ce11f6751bdb4e31e38d860b315` |
-| `NotoSansJP-r10.woff2` | 542 | 166,772 バイト | `52d571ec7adc6a303317a71489d6fd345cef4a55ad50bca33beef6c6d05ef0f0` |
-| `NotoSansJP-r11.woff2` | 567 | 180,104 バイト | `ff4c4ca95e68f319e53c3f38d69d6c019694b7206dfa4dc058eb5e6f6843ea05` |
+| `NotoSansJP-r10.woff2` | 541 | 166,480 バイト | `0280b641814bf8bfa6558000cfbdd7799df54cc5202532bda78a7e54a4872bf4` |
+| `NotoSansJP-r11.woff2` | 565 | 180,020 バイト | `64872aaf93887bf8ed6a5eda690c8315a23e7ac433ce252580dc56518e61b85f` |
 | `NotoSansJP-r12.woff2` | 584 | 213,136 バイト | `08f4c86a8e0468f00bbedda4f109f5daa9bce964afc1655f9dc5df370fdf165f` |
 
-- 合わせて 2,273,488 バイト（1 つのファイルのときより 193,424 バイト多い。全部の塊を読むことは、ふつうはない）。
+- 合わせて 2,274,540 バイト（2026-11-07。結果の画面の案 A で画面の字が 5 字増え、画面の字の塊と、その字が入っていた残りの塊を作り直した。1 つのファイルとの比べは、2026-11-06 の測りで 193,424 バイト多い。全部の塊を読むことは、ふつうはない）。
 - 2026-11-06、同じ PC で2回作り、1バイトも違わなかった（`npm run fonts:check`）。ほかの OS で同じになるかは、まだ確かめていない。
 
 ## ライセンスの決まりをどう守るか（SIL OFL 1.1）
