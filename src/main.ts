@@ -41,6 +41,7 @@ import { setupTermsDialog } from "./ui/terms-dialog";
 import { isOutside } from "./ui/terms-click";
 import { bandProgressRatio, bandProgressText, buildTidyConfirm, propertySummary, sanitizeListText } from "./ui/tidy-confirm";
 import { buildKeepRows, initialKept, keepList, keptCount, keptSummary, tierCounts, type KeepRow } from "./ui/keep-model";
+import { createThumbQueue, type ThumbQueue } from "./ui/thumb-queue";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -160,9 +161,18 @@ const ui = {
   coverageSlot: el<HTMLDivElement>("coverage-slot"),
 };
 
-/** 縮小したページの絵を描く数の上限。超えた分は番号だけ出す【仮の値】 */
-const MAX_THUMB_IMAGES = 60;
+/** 縮小したページの絵の幅（CSS のピクセル）。枠の幅が取れないときの目安 */
 const THUMB_WIDTH = 96;
+/** 縮小したページは、列に見えたものから描く（先頭から何枚、という上限は置かない。2026-11-06 朝） */
+let thumbQueue: ThumbQueue | null = null;
+let thumbObserver: IntersectionObserver | null = null;
+
+function stopThumbs() {
+  thumbQueue?.stop();
+  thumbObserver?.disconnect();
+  thumbQueue = null;
+  thumbObserver = null;
+}
 const SHEET_MAX_WIDTH = 900;
 
 type Session = {
@@ -450,6 +460,7 @@ async function shrinkToLimit(gen: number, limit: SizeLimit) {
 }
 
 function clearResults() {
+  stopThumbs();
   for (const part of [ui.noticeList, ui.groups, ui.coverageSlot, ui.thumbs, ui.marks]) part.replaceChildren();
   for (const part of [ui.notices, ui.actions, ui.pickTools, ui.verified, ui.thumbs, ui.sheetWrap, ui.renderNote, ui.scopeNote, ui.props, ui.ruleset, ui.backToList]) part.hidden = true;
   for (const part of [ui.sanitizeMore, ui.cleanMore, ui.cleanTools]) part.open = false;
@@ -772,29 +783,78 @@ function renderThumbs(s: Session) {
     ui.thumbs.append(btn);
   }
   ui.thumbs.hidden = false;
+  fitThumbsToWindow();
 }
 
-/** 縮小した絵は、大きなページのあとに、1枚ずつ順に描く（重いページは描かない） */
-async function drawThumbImages(s: Session) {
-  if (!s.pdf) return;
-  let drawn = 0;
-  for (const btn of ui.thumbs.querySelectorAll<HTMLButtonElement>(".thumb")) {
-    if (s.generation !== generation || session !== s || s.pdf.stopped) return;
-    const n = Number(btn.id.slice("thumb-".length));
-    const pic = btn.querySelector<HTMLSpanElement>(".thumb-pic");
-    if (!pic || s.heavy.has(n) || drawn >= MAX_THUMB_IMAGES) continue;
+/**
+ * 縮小したページの列の、今の上の端の位置を CSS に渡す（src/style.css の --thumbs-top）。
+ * 開いた直後は列が窓の上に貼り付く前なので、上の決まりの高さのままだと、列の下の数枚が「整える」の帯の下に隠れていた（2026-11-06）
+ */
+function fitThumbsToWindow() {
+  if (ui.thumbs.hidden) return;
+  ui.thumbs.style.setProperty("--thumbs-top", `${Math.round(ui.thumbs.getBoundingClientRect().top)}px`);
+}
+let fitThumbsFrame = 0;
+const fitThumbsSoon = () => {
+  if (fitThumbsFrame) return;
+  fitThumbsFrame = requestAnimationFrame(() => {
+    fitThumbsFrame = 0;
+    fitThumbsToWindow();
+  });
+};
+window.addEventListener("scroll", fitThumbsSoon, { passive: true });
+window.addEventListener("resize", fitThumbsSoon);
+// 列より上の部品（お知らせ・手順など）の高さが変わり、送らずに列が上下したときも測り直す
+new ResizeObserver(fitThumbsSoon).observe(document.body);
+
+/**
+ * 縮小した絵は、大きなページのあとに、列に見えたものから 1 枚ずつ描く（重いページは描かない）。
+ * 描いた絵は小さな画像（data: の PNG）にして置き、canvas は捨てる（何百ページあっても、canvas のメモリを持ち続けない）。
+ * 枠の縦横比は、描いたページの縦横比にそろえる（横長のページが枠からはみ出さないように）
+ */
+function drawThumbImages(s: Session) {
+  stopThumbs();
+  const pdf = s.pdf;
+  if (!pdf) return;
+  const alive = () => s.generation === generation && session === s && !pdf.stopped;
+  const queue = createThumbQueue(async (n) => {
+    if (!alive()) return false;
+    const pic = document.getElementById(`thumb-${n}`)?.querySelector<HTMLSpanElement>(".thumb-pic");
+    if (!pic || s.heavy.has(n)) return true;
     const canvas = make("canvas");
-    canvas.setAttribute("aria-hidden", "true");
     try {
-      await s.pdf.render(n, canvas, THUMB_WIDTH);
-      if (s.generation !== generation || session !== s) return;
-      pic.replaceChildren(canvas);
-      pic.style.aspectRatio = "";
-      drawn++;
+      await pdf.render(n, canvas, pic.clientWidth || THUMB_WIDTH);
     } catch {
-      return; // 時間の上限か、読めないページ。残りは番号だけ
+      return false; // 時間の上限か、読めないページ。残りは番号だけ
     }
-  }
+    if (!alive()) return false;
+    const img = make("img");
+    img.alt = "";
+    img.decoding = "async";
+    img.src = canvas.toDataURL("image/png");
+    pic.style.aspectRatio = `${canvas.width} / ${canvas.height}`;
+    pic.replaceChildren(img);
+    canvas.width = 0;
+    canvas.height = 0;
+    return true;
+  });
+  // 縦に並ぶ列（広い画面）は列の中のスクロールで、狭い画面では窓のスクロールで見える。どちらも窓を基準に見張れば、
+  // 列の外に隠れた所は「見えていない」になる（画面の幅が変わっても見張り方を変えずに済む）。
+  // 見えたページのあと 2 枚も待ちに入れ、送ったときに白い枠が見えにくいようにする
+  const observer = new IntersectionObserver((entries) => {
+    const seen: number[] = [];
+    for (const e of entries) {
+      const n = Number((e.target as HTMLElement).id.slice("thumb-".length));
+      if (e.isIntersecting) {
+        queue.want(n);
+        seen.push(n);
+      } else queue.unwant(n);
+    }
+    for (const n of seen) for (const next of [n + 1, n + 2]) if (document.getElementById(`thumb-${next}`)) queue.want(next);
+  });
+  for (const btn of ui.thumbs.querySelectorAll<HTMLButtonElement>(".thumb")) observer.observe(btn);
+  thumbQueue = queue;
+  thumbObserver = observer;
 }
 
 // ---------------------------------------------------------------- 真ん中：大きなページ
