@@ -368,7 +368,7 @@ describe("検査のページ（check.html）", () => {
     expect(html).not.toContain("このパソコンのブラウザ");
     expect(html).toContain("この端末のブラウザの中だけで読みます。");
     const sample = html.match(/<p class="sample" id="sample-row">[\s\S]*?<\/p>/)![0];
-    expect(sample).toContain(`<a class="about-more" href="${ABOUT_PATH}#lp-remains"><span>どんなものが残る？</span></a>`);
+    expect(sample).toContain(`<a class="about-more" href="${ABOUT_PATH}#lp-remains">どんなものが残る？</a>`);
   });
 
   it("提出のために小さくする入口：見本のすぐ下に、開けて選ぶ上限（既定は「選ばない」＝ふつうの検査）", () => {
