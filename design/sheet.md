@@ -293,8 +293,9 @@
 | 部品 | クラス | もとにした部品 | 決まり |
 |---|---|---|---|
 | フォームの上の注意 | `.site-form-warn` | お知らせの「注意」 | ▲（字でも示す）・`--danger-bg` の地・紅の線（左を太く）・太字。送れなかったときの理由も同じ形 |
-| 欄 | `.site-form-field` | 記事の検索の欄（`.site-search input`） | 名前は太字の `label`（種類は `fieldset` と `legend`）。必ず書くか・いつ書くかは名前の後ろに補足の色で（`.site-form-need`）。枠は `--line-control` の 2px、高さ 44px 以上 |
-| 種類を選ぶ行 | `.site-form-choices` | 点検の一覧の行（`.site-checks`） | 本物のラジオボタンで、44px の高さの行全体が押せる。選んだ行は字を太くする（色だけにしない）。補足（`.site-form-hint`）は名前の下 |
+| 欄 | `.site-form-field` | 記事の検索の欄（`.site-search input`） | 名前は太字の `label`。必ず書くか・いつ書くかは名前の後ろに補足の色で（`.site-form-need`）。枠は `--line-control` の 2px、高さ 44px 以上 |
+| 種類を選ぶ欄 | `.site-form-kind` の `select` | サイトの選ぶ欄（`.site select`） | 本物の `select`（2026-11-06 にラジオボタンの行から替えた）。先頭は値の空な「選んでください」で、`required`。幅は欄いっぱい、高さ 44px 以上 |
+| 種類ごとの案内 | `.site-form-guide` | 補足（`.site-form-hint`） | 選んだ種類の案内だけを、選ぶ欄のすぐ下に、生成りの面（`--face-kinari`）で出す。頭に種類の名前を太字で（色だけで示さない）。出し分けは CSS の `:has`（スクリプトは使わない）。`:has` が効かないブラウザでは 4 つとも出す。弱点を選んだときは、メールアドレスの欄の補足も「（必ず書く）」に替える |
 | 送るボタン | `.site-form-submit` | 検査のページへのつなぎ（`.site-cta-link`）の形 | 墨の地に白の字、高さ `--button-height`（紅は検査のページへのボタンだけなので、色は墨のまま） |
 | 人には見えない欄 | `.site-form-trap` | — | 画面の外に出し、`aria-hidden` で読み上げからも外す。Tab でも止まらない（`tabindex="-1"`） |
 

@@ -1348,52 +1348,52 @@ html:has(.site-cards) .site-band {
   color: var(--text-muted);
 }
 
-.site-section .site-form-choices {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* お問い合わせの種類：選ぶ欄（2026-11-06 にラジオボタンの行から替えた。design/sheet.md） */
+.site .site-form-kind select {
+  width: 100%;
+  min-height: 48px;
+}
+
+/* 種類ごとの案内：生成りの面。頭に種類の名前を太字で（色だけで示さない） */
+.site-section .site-form-guide {
   max-width: none;
-  border: var(--bw-1) solid var(--line-default);
-  border-radius: var(--radius-m);
-  background: var(--surface-card);
-}
-
-.site-form-choices li {
   margin: 0;
-}
-
-.site-form-choices li + li {
-  border-top: var(--bw-1) solid var(--line-hair);
-}
-
-.site-form-choices label {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--sp-3);
-  min-height: 44px;
   padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-card);
+  background: var(--face-kinari);
+  color: var(--text-strong);
 }
 
-.site-form-choices label:hover {
-  background: var(--surface-subtle);
-}
-
-.site-form-choices input {
-  width: 1.4rem;
-  height: 1.4rem;
-  min-height: 0;
-  margin: 0.2rem 0 0;
-  padding: 0;
-  accent-color: var(--surface-strong);
-}
-
-/* 選んだ種類は、字を太くする（色だけで示さない） */
-.site-form-choices input:checked + span {
+.site-form-guide-name {
   font-weight: var(--fw-strong);
 }
 
-.site-form-choices .site-form-hint {
-  font-weight: normal;
+/* メールアドレスの欄の「（必ず書く）」は、弱点を選んだときだけ（下の @supports） */
+.site-form-need-security {
+  display: none;
+}
+
+/*
+ * 選んだ種類の案内だけを見せる（スクリプトは使わない）。:has が効かないブラウザでは、ここに入らず、4 つの案内がすべて見え、
+ * メールアドレスの添え書きは「（返事がほしいときだけ）」のまま（欄の下の補足に「弱点のときは必ず」がある）
+ */
+@supports selector(:has(*)) {
+  .site-form-guide {
+    display: none;
+  }
+  .site-form-kind:has(option[value="question"]:checked) .site-form-guide[data-kind="question"],
+  .site-form-kind:has(option[value="bug"]:checked) .site-form-guide[data-kind="bug"],
+  .site-form-kind:has(option[value="security"]:checked) .site-form-guide[data-kind="security"],
+  .site-form-kind:has(option[value="other"]:checked) .site-form-guide[data-kind="other"] {
+    display: block;
+  }
+  .site-form:has(option[value="security"]:checked) .site-form-need-optional {
+    display: none;
+  }
+  .site-form:has(option[value="security"]:checked) .site-form-need-security {
+    display: inline;
+    color: var(--text-strong);
+  }
 }
 
 /* 「送る」のボタン：墨の地（紅は検査のページへのボタンだけ）。ふくらみと影。ホバーで浮き、押すと沈む */
@@ -1513,21 +1513,6 @@ html:has(.site-cards) .site-tag {
   border: 0;
   border-radius: var(--radius-card);
   background: var(--face-beni);
-}
-
-/* 種類を選ぶ行：生成りの面 1 枚。行の間は白の 2px の線 */
-.site-section .site-form-choices {
-  border: 0;
-  border-radius: var(--radius-card);
-  background: var(--face-kinari);
-}
-
-.site-form-choices li + li {
-  border-top: 2px solid var(--surface-card);
-}
-
-.site-form-choices label:hover {
-  background: var(--page-kinari);
 }
 
 /* 送るボタン：墨の地（紅は検査のページへのボタンだけ）。高さ 56px・角 16px。ふくらみと影はやめる */
