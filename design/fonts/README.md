@@ -24,10 +24,10 @@ npm run fonts:check   # 作り直したものが、リポジトリのものと1�
 ```
 
 - 道具：npm の `subset-font` 2.9.0（BSD-3-Clause。中で harfbuzz を使う）。版は `package-lock.json` で固定する。開発用で、dist/ には入らない。
-- 字：Shift_JIS で書ける字（JIS X 0208 の字・半角の英数と記号・半角カナ）と、画面で使う記号（✓▲■●◐○－⊘？→… など。`build.mjs` の `EXTRA`）。合わせて 7,488 字。ない字は、端末の書体で出る（`design/tokens.css` の `--font-body` の2つ目から）。
+- 字：Shift_JIS で書ける字（JIS X 0208 の字・半角の英数と記号・半角カナ）と、画面で使う記号（✓▲▶■●◐○－⊘？→… など。`build.mjs` の `EXTRA`。▶ は 2026-11-06 に足した）。合わせて 7,489 字。ない字は、端末の書体で出る（`design/tokens.css` の `--font-body` の2つ目から）。
 - 太さ：画面で使う 400〜700 だけを残す（可変のまま、範囲を狭める）。
 - name の欄の 0〜14（著作権・ライセンス・ライセンスの URL など）は残す。
-- できたもの：`src/assets/fonts/NotoSansJP-subset.woff2`（2,079,464 バイト、SHA-256 `9d1a45d799b824e99ee1bdf3ac39bf49b9c9ad320d5ab15411cf3306cb57c9e6`）と、`OFL.txt` の写し。ビルドで dist/assets/ に入る。
+- できたもの：`src/assets/fonts/NotoSansJP-subset.woff2`（2,080,064 バイト、SHA-256 `1dcf969ed697f70b03917d2790e08733057d8f9650844a6abf4dc5b7ae99dddd`）と、`OFL.txt` の写し。ビルドで dist/assets/ に入る。
 - 2026-11-05、同じ PC で2回作り、1バイトも違わなかった（`npm run fonts:check`）。ほかの OS で同じになるかは、まだ確かめていない。
 
 ## ライセンスの決まりをどう守るか（SIL OFL 1.1）
@@ -65,16 +65,16 @@ npm run fonts:build     # 書体を作り直す（見出しの書体は、一覧
 npm run fonts:check     # 1 バイトも違わないかを確かめる
 ```
 
-- 字：`heading-chars.txt` の字だけ。中身は、いつも入れる字（半角の英数と記号・ひらがな・カタカナ・よく使う記号）と、ビルドしたページの h1〜h3 の字。2026-11-05 夜は 471 字。
+- 字：`heading-chars.txt` の字だけ。中身は、いつも入れる字（半角の英数と記号・ひらがな・カタカナ・よく使う記号）と、ビルドしたページの h1〜h3 の字と、検査のページで画面のスクリプトが作る h3（種類の見出し）に出うる字。2026-11-05 夜は 471 字、2026-11-06 に 16 字（検出ルールの名前の漢字 13 字と、見出しの前の印「ｉ」「▶」「▼」）を足して 487 字。このうち「▶」は Zen Maru Gothic に字がないので、本文の書体（Noto Sans JP。`build.mjs` の `EXTRA` に入れた）で出る。
 - 一覧はリポジトリに入れる。同じ一覧と同じ元からは、同じファイルができる（`fonts:check` で確かめる）。
 - **ビルドのたびに**、h1〜h3 の字が一覧にあるかを `scripts/check-dist.mjs` が確かめ、漏れていたら止める（漏れた字は本文の書体で出てしまうため）。止まったら、上の順に作り直す。
-- 画面のスクリプトが後から作る見出し（検査のページの結果など）の漢字は、一覧にないことがある。そのときは本文の書体で出る（字は消えない）。
+- 画面のスクリプトが後から作る見出し（検査のページの種類の見出し `.group-head`）は、ビルドした HTML には出ないので、`check-dist.mjs` では確かめられない。代わりに `tests/heading-chars.test.ts` が、作る元（検出ルールの名前 `src/inspect/rules.ts` の `RULES`・`src/main.ts` の `make("h3", "…")`・`src/style.css` の見出しの前の印）から字を集め、一覧から漏れていないかを確かめる。漏れていたら、その字を `heading-chars.txt` に足し、`npm run fonts:build` で作り直す（見つける段で型が増えたときなど）。
 - できたもの（`src/assets/fonts/zen-maru-gothic/`）：
 
 | ファイル | 字 | 大きさ | SHA-256 |
 |---|---|---|---|
-| `ZenMaruGothic-Bold-subset.woff2` | 471 | 71,084 バイト | `408ed3ee94da8aa75e9af6c84df3d8b29fcc65e588ffe49274586a0639c05c5c` |
-| `ZenMaruGothic-Black-subset.woff2` | 471 | 69,756 バイト | `c29df92339cbafd9989168e91e0123b7bbed2fd6f64b8dc831cb0e4565c4ba9b` |
+| `ZenMaruGothic-Bold-subset.woff2` | 487 | 73,808 バイト | `7064cacb9d0dcab6a1030efb95bd5d67c18126efdb7925f4a8d81585743d576c` |
+| `ZenMaruGothic-Black-subset.woff2` | 487 | 72,268 バイト | `b096b93b60c6050c62d7061adc4f6af1de6dcd81784a0c8f262e6b93d10386b3` |
 
 - 比べたもの（2026-11-05 夜に測った）：Shift_JIS の 7,488 字で作ると、Bold 1,580,972 バイト・Black 1,560,284 バイト（2 つで 3,141,256 バイト）。見出しの字だけにすると、2 つで 140,840 バイト（約 22 分の 1）。
 - 2026-11-05 夜、同じ PC で 2 回作り、1 バイトも違わなかった。
