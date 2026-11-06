@@ -342,6 +342,36 @@ describe("check-dist のサイトのページ（site.ts）", () => {
     expect(r2.out).toContain("assets/omamori-3d-abcdef0123.js に、字を HTML として解釈させる書き方か eval があります");
   });
 
+  it("about の 3D の飾り：同じ読み込み役 1 つと、about-3d の描画だけを通す。検索のスクリプトは通さない（2026-11-06 本人が承認）", () => {
+    const loader = '<script type="module" src="/assets/site-3d-0123456789.js"></script>';
+    const hero = '<div class="lp-hero-art" data-scene="/assets/about-3d-abcdef0123.js"></div>';
+    const good = withPages({ "about.html": page(CSP_OK, `${hero}${loader}`) });
+    writeFileSync(path.join(good, "assets", "site-3d-0123456789.js"), "export const x = 1;\n");
+    writeFileSync(path.join(good, "assets", "about-3d-abcdef0123.js"), "export async function mount() { return true; }\n");
+    const r1 = run(good);
+    expect(r1.out).not.toContain("問題：");
+    expect(r1.code).toBe(0);
+    expect(r1.out).toContain("about.html（3D の描画（読み込み役があとから読む） assets/about-3d-abcdef0123.js");
+
+    // about に検索のスクリプト・about が記事の一覧の描画（omamori-3d）を指す・描画に eval
+    const bad = withPages({
+      "about.html": page(CSP_OK, `<div data-scene="/assets/omamori-3d-abcdef0123.js"></div>${loader}<script type="module" src="/assets/article-search-0123456789.js"></script>`),
+    });
+    writeFileSync(path.join(bad, "assets", "site-3d-0123456789.js"), "export const x = 1;\n");
+    writeFileSync(path.join(bad, "assets", "article-search-0123456789.js"), "export const y = 1;\n");
+    const r2 = run(bad);
+    expect(r2.code).toBe(1);
+    expect(r2.out).toContain("about.html にスクリプトがあります");
+    expect(r2.out).toContain("about.html の data-scene が");
+
+    const evil = withPages({ "about.html": page(CSP_OK, `${hero}${loader}`) });
+    writeFileSync(path.join(evil, "assets", "site-3d-0123456789.js"), "export const x = 1;\n");
+    writeFileSync(path.join(evil, "assets", "about-3d-abcdef0123.js"), "new Function(location.hash)();\n");
+    const r3 = run(evil);
+    expect(r3.code).toBe(1);
+    expect(r3.out).toContain("assets/about-3d-abcdef0123.js に、字を HTML として解釈させる書き方か eval があります");
+  });
+
   it("検索エンジンの確認のファイルは、決まった1行のときだけ通す", () => {
     const good = run(withPages({ "google0123abcd.html": "google-site-verification: google0123abcd.html\n" }));
     expect(good.code).toBe(0);

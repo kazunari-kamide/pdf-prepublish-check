@@ -167,9 +167,10 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
   }
   const inlineScript = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/\bsrc=/.test(m[1]) || m[2].trim() !== "");
   if (inlineScript.length) problems.push(`${rel} に直接書いたスクリプトが ${inlineScript.length} か所あります`);
-  // サイトのページ（検査のページ以外）はスクリプトを持たない。例外は記事の一覧のページだけで、次の 2 つ（それぞれ 1 つまで）：
-  // - 検索のスクリプト（2026-11-05 本人が決定。src/site/article-search.js。題・説明・タグをページの中で探すだけで、通信しない）
-  // - 3D の飾りの読み込み役（2026-11-05 本人が承認。src/site/site-3d.js。手が空いてから、同じサイトの 3D の描画を import() で読む）
+  // サイトのページ（検査のページ以外）はスクリプトを持たない。例外は次の 2 ページだけ（それぞれ 1 つまで）：
+  // - 記事の一覧：検索のスクリプト（2026-11-05 本人が決定。src/site/article-search.js。題・説明・タグをページの中で探すだけで、通信しない）と、
+  //   3D の飾りの読み込み役（2026-11-05 本人が承認。src/site/site-3d.js。手が空いてから、同じサイトの 3D の描画を import() で読む）
+  // - about：同じ 3D の飾りの読み込み役だけ（2026-11-06 本人が承認。描画は about-3d-<ハッシュ>.js）
   // 読み込み役が読む 3D の描画（data-scene）も、dist/ にあるか・HTML として解釈させる書き方や eval がないかを同じく見る
   if (rel !== CHECK_PAGE_FILE) {
     const scripts = [...text.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
@@ -177,12 +178,16 @@ for (const f of files.filter((x) => x.endsWith(".html"))) {
       { re: /^<script type="module" src="\/assets\/article-search-[0-9a-f]{10}\.js">$/, label: "検索のスクリプト" },
       { re: /^<script type="module" src="\/assets\/site-3d-[0-9a-f]{10}\.js">$/, label: "3D の飾りの読み込み役" },
     ];
-    const allowed = rel === "articles/index.html" ? scripts.filter((s) => kinds.some((k) => k.re.test(s))) : [];
+    const pageKinds = rel === "articles/index.html" ? kinds : rel === "about.html" ? kinds.slice(1) : [];
+    const allowed = scripts.filter((s) => pageKinds.some((k) => k.re.test(s)));
     const twice = kinds.some((k) => allowed.filter((s) => k.re.test(s)).length > 1);
-    if (scripts.length !== allowed.length || twice) problems.push(`${rel} にスクリプトがあります（サイトのページで許すのは、記事の一覧のページの検索のスクリプトと 3D の飾りの読み込み役、1 つずつだけ）`);
+    if (scripts.length !== allowed.length || twice) problems.push(`${rel} にスクリプトがあります（サイトのページで許すのは、記事の一覧のページの検索のスクリプトと 3D の飾りの読み込み役、about の 3D の飾りの読み込み役、1 つずつだけ）`);
     const srcs = allowed.map((s) => ({ src: s.match(/src="\/([^"]+)"/)[1], label: kinds.find((k) => k.re.test(s)).label }));
-    const scene = rel === "articles/index.html" ? text.match(/data-scene="\/(assets\/omamori-3d-[0-9a-f]{10}\.js)"/) : null;
-    if (/data-scene=/.test(text) && !scene) problems.push(`${rel} の data-scene が、/assets/omamori-3d-<ハッシュ>.js を指していません`);
+    const scene =
+      rel === "articles/index.html" ? text.match(/data-scene="\/(assets\/omamori-3d-[0-9a-f]{10}\.js)"/)
+      : rel === "about.html" ? text.match(/data-scene="\/(assets\/about-3d-[0-9a-f]{10}\.js)"/)
+      : null;
+    if (/data-scene=/.test(text) && !scene) problems.push(`${rel} の data-scene が、/assets/omamori-3d-<ハッシュ>.js（about は about-3d-<ハッシュ>.js）を指していません`);
     if (scene) srcs.push({ src: scene[1], label: "3D の描画（読み込み役があとから読む）" });
     for (const { src, label } of srcs) {
       if (!existsSync(path.join(DIST, src))) problems.push(`${rel} が読み込む ${src} が、dist/ にありません`);
