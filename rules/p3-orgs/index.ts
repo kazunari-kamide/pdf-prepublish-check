@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール P3（他組織名の混入）1.0.0。
+// 検出ルール P3（他組織名の混入）1.0.1。
 // 文書情報・文書全体の XMP の題などにある団体名らしい語が、本文に出てくる団体名と違うものを返す。
 // ほかの団体の書類をひな形にして作ったとき、題や作成者欄に元の団体の名前が残る型。値は返さない（字数だけ）。
 //
@@ -21,7 +21,7 @@ import { xmpValues } from "../p2-parts/index.ts";
 import { orgMarks } from "../props/index.ts";
 
 export const RULE_ID = "p3-orgs";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.0.1";
 
 const INFO_FIELDS = ["Title", "Subject", "Author", "Keywords"] as const;
 const XMP_FIELDS = ["dc:title", "dc:description", "dc:creator", "pdf:Keywords"] as const;
@@ -59,12 +59,30 @@ export type DetectOptions = { includeValues?: boolean };
 /** 比べるための形（NFKC・小文字・空白をつめる） */
 const norm = (s: string) => s.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 
+/** 日付・回の字の前に来る数（漢数字） */
+const KANJI_NUM = /[〇一二三四五六七八九十百元]/u;
+/**
+ * 団体名の頭についた日付の切れ端を外す（1.0.1 から）。「令和6年9月架空町議会」は、数字の手前で切れて「月架空町」になる。
+ * 本文で「9月 架空町議会」と間があくと「架空町」になり、同じ団体なのに名前が合わなかったため。
+ * 外すのは、頭にある年・月・日・号・回か、漢数字のすぐあとの年・月・日・号・回まで（「九月架空町」→「架空町」）。
+ */
+export function stripDatePrefix(word: string): string {
+  const chars = [...word];
+  let cut = 0;
+  for (let i = 0; i < chars.length - 2; i++) {
+    if (!/[年月日号回]/u.test(chars[i]!)) continue;
+    // 頭の 1 字（前は数字など、並びの外）か、漢数字のすぐあと。「令和6年月宵町」は「年」だけ外して「月宵町」を残す
+    if (i === 0 || KANJI_NUM.test(chars[i - 1]!)) cut = i + 1;
+  }
+  return chars.slice(cut).join("");
+}
+
 /** 字の中の団体名らしい語（比べる形にしたもの） */
 export function orgNames(text: string): string[] {
   const out = new Set<string>();
   const chars = [...text];
   for (const m of orgMarks(text)) {
-    const w = chars.slice(m.start, m.end).join("");
+    const w = stripDatePrefix(chars.slice(m.start, m.end).join(""));
     if (JA_PLACE.test(w) || JA_COMPANY.test(w)) out.add(norm(w));
   }
   for (const m of text.matchAll(EN_ORG)) out.add(norm(`${m[1]} ${m[2]!.replace(/\.$/, "")}`));

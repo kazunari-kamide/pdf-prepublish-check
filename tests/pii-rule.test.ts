@@ -47,7 +47,7 @@ function makeFont(doc: PDFDocument, chars: string[], vertical: boolean, withToUn
 }
 
 /** 行の並びから、1ページ（または複数ページ）の PDF を作る */
-async function makePdf(pages: Line[][], opts: { toUnicode?: boolean; form?: Line[] } = {}): Promise<Uint8Array> {
+async function makePdf(pages: Line[][], opts: { toUnicode?: boolean; form?: Line[]; rotate?: number; cm?: string } = {}): Promise<Uint8Array> {
   const doc = await PDFDocument.create({ updateMetadata: false });
   const all = [...pages.flat(), ...(opts.form ?? [])];
   const chars = [...new Set(all.flatMap((l) => [...l.text]))];
@@ -58,7 +58,10 @@ async function makePdf(pages: Line[][], opts: { toUnicode?: boolean; form?: Line
   for (const lines of pages) {
     const page = doc.addPage([595, 842]);
     const res: Record<string, unknown> = { Font: { FH: h.ref, FV: v.ref } };
-    let content = ops(lines);
+    let content = opts.cm ? `q ${opts.cm} cm
+${ops(lines)}
+Q` : ops(lines);
+    if (opts.rotate) page.node.set(PDFName.of("Rotate"), doc.context.obj(opts.rotate));
     if (opts.form) {
       const form = doc.context.register(
         doc.context.stream(ops(opts.form), { Type: "XObject", Subtype: "Form", BBox: [0, 0, 595, 842], Resources: { Font: { FH: h.ref, FV: v.ref } } }),
@@ -280,6 +283,30 @@ describe("PDF から探す", () => {
     );
   });
 
+  it("表：横向きの表（/Rotate と回した中身。画面では横書き）でも、列の見出しの下の欄を、その型として見る（0.1.7 から）", async () => {
+    const row = (y: number, cells: string[]) => cells.map((text, i) => ({ text, x: [60, 160, 340, 480][i]!, y, size: 8 }));
+    const table = [
+      ...row(560, ["氏名", "住所", "電話番号", "生年月日"]),
+      ...row(545, ["朝霧澄香", "みどり市あおば町1-2-3", "0255-07-3146", "平成3年4月18日"]),
+      ...row(530, ["宵町律", "そらの町うみべ12番地5", "080-0627-3915", "昭和62年5月3日"]),
+    ];
+    const summary = async (opts: { rotate?: number; cm?: string }) =>
+      (await detectPii(await makePdf([table], opts))).findings.map((f) => `${f.type}:${f.confidence}:${f.basis}:${f.vertical}`).sort();
+    const flat = await summary({});
+    expect(flat.filter((s) => s.endsWith(":column_header:false"))).toHaveLength(7);
+    // 縦長の紙に /Rotate 90・270・180 をかけ、中身を逆に回して描く（表計算ソフトの横向きの印刷など）
+    for (const opts of [
+      { rotate: 90, cm: "0 1 -1 0 595 0" },
+      { rotate: 270, cm: "0 -1 1 0 0 842" },
+      { rotate: 180, cm: "-1 0 0 -1 595 842" },
+    ]) {
+      expect(await summary(opts), `Rotate ${opts.rotate}`).toEqual(flat);
+    }
+    // 箱はページの既定の座標のまま（/Rotate 90 では、名前の箱は縦に長い）
+    const r90 = await detectPii(await makePdf([table], { rotate: 90, cm: "0 1 -1 0 595 0" }));
+    for (const f of r90.findings.filter((f) => f.type === "name")) expect(f.rect[3] - f.rect[1]).toBeGreaterThan(f.rect[2] - f.rect[0]);
+  });
+
   it("部品（Form XObject）の中の字も読む", async () => {
     const pdf = await makePdf([[{ text: "本文", x: 100, y: 700 }]], { form: [{ text: "生年月日 平成3年4月18日", x: 100, y: 600 }] });
     const r = await detectPii(pdf);
@@ -379,4 +406,38 @@ describe("速さ", () => {
     expect(r.counts.total).toBe(0);
     expect(ms).toBeLessThan(30_000);
   }, 60_000);
+});
+
+// 2026-11-06：誤検知 3 種の直し（合成の見本。名前・団体名・住所はすべて架空）
+describe("誤検知の直し（2026-11-06）", () => {
+  it("a. 会議録の発言の頭を、役職の語のあとの名前として拾わない", () => {
+    expect(types("○委員長 次に議案の説明を求めます。")).toEqual([]);
+    expect(types("○議長 ただいまから本日の会議を開きます。")).toEqual([]);
+    expect(types("委員 質問します。")).toEqual([]);
+    expect(types("申請者 次のとおり申請します")).toEqual([]);
+    // 名前はこれまでどおり見つける（助詞 1 字は外す。かなの名前は外さない）
+    expect(types("委員長 朝霧律子は")).toEqual(["name:朝霧律子:check"]);
+    expect(types("会長 宵町 律")).toEqual(["name:宵町 律:check"]);
+    expect(types("申請者 宵町まこと")).toEqual(["name:宵町まこと:high"]);
+    expect(types("保護者 宵町とも")).toEqual(["name:宵町とも:high"]);
+    expect(types("氏名：朝霧 律子（あさぎり りつこ）")).toEqual(["name:朝霧 律子:high"]);
+  });
+
+  it("c. 横向きの表（/Rotate と回した中身）の住所を「縦書き」としない", async () => {
+    const line = { text: "住所 架空県架空郡架空町大字1856-7", x: 40, y: 500 };
+    // 表計算ソフトの横向きの印刷によくある形：縦長の紙に /Rotate 90、中身を 90 度回して描く（画面では横書き）
+    for (const [rotate, cm] of [
+      [90, "0 1 -1 0 595 0"],
+      [270, "0 -1 1 0 0 842"],
+    ] as const) {
+      const r = await detectPii(await makePdf([[line]], { rotate, cm }));
+      expect(r.findings.map((f) => [f.type, f.vertical])).toEqual([["address", false]]);
+    }
+    // 回していない横書きも、縦書きとしない
+    const flat = await detectPii(await makePdf([[line]]));
+    expect(flat.findings.map((f) => [f.type, f.vertical])).toEqual([["address", false]]);
+    // 本当の縦書き（Identity-V）は、これまでどおり縦書き
+    const v = await detectPii(await makePdf([[{ ...line, x: 500, y: 800, vertical: true }]]));
+    expect(v.findings.map((f) => [f.type, f.vertical])).toEqual([["address", true]]);
+  });
 });
