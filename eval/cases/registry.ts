@@ -36,6 +36,8 @@ import * as fgc from "./font-glyphs-cff.ts";
 import { detectFontGlyphsCff } from "../../rules/font-glyphs-cff/index.ts";
 import * as xt from "./xmp-thumbnail.ts";
 import { detectXmpThumbnail } from "../../rules/xmp-thumbnail/index.ts";
+import * as bs from "./barcode-scan.ts";
+import { detectBarcodeScan } from "../../rules/barcode-scan/index.ts";
 
 export type TypeCases = {
   /** 型の番号と、画面の名前 */
@@ -65,6 +67,7 @@ export const TYPES: TypeCases[] = [
   { pattern: "P6", label: "白い注釈の下の図形", ruleId: "p6-text（図形の層）", cases: p6v.CASES, keys: async (b) => p6v.keysOf(await p6v.detect(b)) },
   { pattern: "P7", label: "CFF の書体に残った字形", ruleId: "font-glyphs-cff", cases: fgc.CASES, keys: async (b) => fgc.keysOf(await detectFontGlyphsCff(b)) },
   { pattern: "P2", label: "XMP の縮小画像", ruleId: "xmp-thumbnail", cases: xt.CASES, keys: async (b) => xt.keysOf(await detectXmpThumbnail(b)) },
+  { pattern: "P6", label: "黒塗りのそばの記号", ruleId: "barcode-scan", cases: bs.CASES, keys: async (b) => bs.keysOf(await detectBarcodeScan(b)) },
 ];
 
 export type Score = {
