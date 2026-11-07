@@ -403,6 +403,12 @@ async function probeOnlyRun(env: ReturnType<typeof readEnv>, o: Record<string, s
         墨消し: red.boxes, 墨消しのページ: red.pagesWithBoxes, 近くに棒の並び: red.boxesWithBarsNearby,
         棒の本数の最大: near.length ? Math.max(...near.map((n) => n.bars)) : 0, 高さの種類の最大: near.length ? Math.max(...near.map((n) => n.heightKinds)) : 0,
         同じ書式の組: red.sameLayout.similarPairs, 食い違い: red.sameLayout.mismatches, "■の続き": red.maskRuns.runs,
+        // 原因を調べるための、落とした理由ごとの数（数だけ）
+        落とした理由: red.diag ? {
+          暗いかたまりの候補: red.diag.candidates, 小さい: red.diag.small, 大きすぎ: red.diag.large, 線を外して見直して残った: red.diag.refined,
+          暗さが足りない: red.diag.dark, 白い字: red.diag.whiteText, ばらつき: red.diag.uneven, グラフの棒: red.diag.chart,
+          画像があるのに白く描かれたページ: red.diag.pagesBlank, 紙の明るさ: red.diag.paperMin === null ? null : `${red.diag.paperMin}〜${red.diag.paperMax}`,
+        } : null,
       });
     }
     rows.push(row);
@@ -413,6 +419,7 @@ async function probeOnlyRun(env: ReturnType<typeof readEnv>, o: Record<string, s
   const total = {
     件数: rows.length, 止まった: rows.filter((r) => r.止まった).length, 墨消しのある: count("墨消し"), 墨消し: sum("墨消し"),
     近くに棒の並びのある: count("近くに棒の並び"), 食い違いのある: count("食い違い"), "■の続きのある": count("■の続き"), 途中まで: rows.filter((r) => r.途中まで).length,
+    白く描かれたページのある: rows.filter((r) => ((r.落とした理由 as any)?.画像があるのに白く描かれたページ ?? 0) > 0).length,
   };
   writeFileSync(join(runDir, "probe-only.json"), JSON.stringify({ runId, total, rows }, null, 1));
   console.log(`[${local()}] 合計 ${JSON.stringify(total)}`);

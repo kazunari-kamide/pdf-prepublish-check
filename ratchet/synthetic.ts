@@ -2,7 +2,7 @@
 //
 // 道具を確かめるための「架空の束」を作る（実物の公開 PDF は使わない）。
 // 採点の材料（fixtures/・proposals/blind/ など）はループに読ませないので、ここでその場で新しく作る（CLAUDE.md §2-5）。
-// 中身はすべて架空。墨消し漏れの見本（s20〜s25）は ratchet/synthetic-redaction.ts。壊れた PDF と、欄の中に Claude への指示を埋めた PDF も入れて、止まらないこと・従わないことを確かめる。
+// 中身はすべて架空。墨消し漏れの見本（s20〜s29）は ratchet/synthetic-redaction.ts。壊れた PDF と、欄の中に Claude への指示を埋めた PDF も入れて、止まらないこと・従わないことを確かめる。
 //
 //   npm run ratchet:synthetic -- <書き出すフォルダ>
 

@@ -22,7 +22,7 @@ import { parseReadme, readCatalog, ruleDirOf, shortCatalog } from "../ratchet/ca
 import { countCaught, patternOfKey, ruleIdOfKey } from "../ratchet/known.ts";
 import { JUDGE_PROMPT, KNOWN_GUIDE, REFUTE_PROMPT, SKIM_PROMPT, writePrompt } from "../ratchet/prompts.ts";
 import { choosePages, dropChartBars, maskRunsOf, probeRedaction, type RedactionClues } from "../ratchet/redaction.ts";
-import { BARS, customerBarcode, decorPdf, sameFormPdf, scannedStatementPdf, statementPdf } from "../ratchet/synthetic-redaction.ts";
+import { BARS, ccittScanPdf, customerBarcode, decorPdf, realisticScanPdf, ROUGH, sameFormPdf, scannedStatementPdf, statementPdf } from "../ratchet/synthetic-redaction.ts";
 
 const t = (key: string, found: number, expected: number, fp = 0, extra: Partial<TypeScore> = {}): TypeScore => ({
   key, source: key.startsWith("rubric") ? "rubric" : "cases", expected, found, falsePositiveRate: fp ? fp / 10 : 0, falsePositives: fp,
@@ -466,6 +466,33 @@ describe("墨消しの手がかり（下読みに渡す数と形）", () => {
     const r = await clues(await sameFormPdf());
     expect(r.pagesRendered).toBe(2); // 塗りの無いページも、比べる相手として画像にする
     expect(r.sameLayout).toEqual({ similarPairs: 1, mismatches: 1, examples: [{ withBox: 1, without: 2 }] });
+  }, 60_000);
+
+  // 2026-11-07、実物のスキャン 3 件で墨消しを 0 件と数えた反省から足した見本
+  it("実物に近いスキャン（傾き・紙の色・灰色の塗り・点・JPEG・罫線と字に触れる塗り）でも、塗りと、その下の棒の並びを見つける", async () => {
+    for (const look of [{}, ROUGH]) {
+      const r = await clues(await realisticScanPdf("leak", look));
+      expect(r.boxes).toBeGreaterThanOrEqual(3); // 住所・宛名・表の中の金額
+      expect(r.diag.refined).toBeGreaterThanOrEqual(1); // 罫線を外して見直して見つけた
+      const near = r.pages.flatMap((p) => p.nearby);
+      expect(near.some((n) => n.bars >= 60 && n.heightKinds === 4 && n.side === "below")).toBe(true); // 傾いていても、高さは 4 種類
+    }
+    const covered = await clues(await realisticScanPdf("covered"));
+    expect(covered.boxes).toBeGreaterThanOrEqual(3);
+    expect(covered.boxesWithBarsNearby).toBe(0);
+  }, 120_000);
+
+  it("白黒の FAX 形式（CCITT G4）のスキャンも描いて数える（解く部品の場所を PDF.js に渡す）", async () => {
+    const r = await clues(await ccittScanPdf());
+    expect(r.boxes).toBe(1);
+    expect(r.diag.pagesBlank).toBe(0);
+  }, 60_000);
+
+  it("落とした理由ごとの数を返す（数だけ）", async () => {
+    const r = await clues(await decorPdf());
+    expect(r.diag.chart).toBe(5);
+    expect(r.diag.candidates).toBeGreaterThan(r.diag.kept);
+    expect(Object.values(r.diag).every((v) => v === null || typeof v === "number")).toBe(true);
   }, 60_000);
 
   it("飾り（幅いっぱいの帯・白い字の載った見出し・グラフの棒）は、墨消しに数えない", async () => {
