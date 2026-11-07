@@ -1174,10 +1174,14 @@ const crossPage = defineRule<CrossPageReport>({
       page: f.page,
       rect: f.rect,
     })),
-  notices: (r) =>
-    r.uncheckedPages.length
-      ? [{ kind: "partial", message: "このページの画像は読み解けなかったため、ほかのページの黒く塗った所とは比べていません。", pages: r.uncheckedPages }]
-      : [],
+  notices: (r) => [
+    ...(r.uncheckedPages.length
+      ? [{ kind: "partial" as const, message: "このページの画像は読み解けなかったため、ほかのページの黒く塗った所とは比べていません。", pages: r.uncheckedPages }]
+      : []),
+    ...(r.texturedPages.length
+      ? [{ kind: "partial" as const, message: "このページは、写真に撮った紙のように地に模様があるため、ほかのページの黒く塗った所とは比べていません。", pages: r.texturedPages }]
+      : []),
+  ],
 });
 
 /** 画面で使う検出ルール。一覧には、この並びで出す */

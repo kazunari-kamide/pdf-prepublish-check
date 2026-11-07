@@ -27,6 +27,9 @@ const FORM_A = [
 ];
 /** 名前の欄を塗る四角（様式 a の 1 番目の欄） */
 const NAME_BOX: Rect = { x: 96, y: 66, w: 168, h: 26 };
+/** 名前の欄を、大きめに塗った四角と、短く・少しずらして塗った四角（どちらも欄の中身は覆う。欄の中身は x 104〜250 まで） */
+const WIDE_NAME_BOX: Rect = { x: 90, y: 60, w: 180, h: 36 };
+const SHORT_NAME_BOX: Rect = { x: 101, y: 68, w: 154, h: 20 };
 
 function drawPage(o: PageSpec): Uint8Array {
   const W = PW * PX;
@@ -77,10 +80,12 @@ function drawPage(o: PageSpec): Uint8Array {
 }
 
 /** 架空の書類のスキャンを、ページごとに画素で描いて PDF にする */
-async function scanPdf(pages: PageSpec[]): Promise<Uint8Array> {
+async function scanPdf(pages: PageSpec[], rotate?: 90 | 180 | 270): Promise<Uint8Array> {
   const doc = await PDFDocument.create({ updateMetadata: false });
   for (const p of pages) {
     const page = doc.addPage([PW, PH]);
+    // 見せるときだけ回すページ（/Rotate）。画像と座標は回す前のまま
+    if (rotate) page.node.set(PDFName.of("Rotate"), doc.context.obj(rotate));
     const img = doc.context.flateStream(drawPage(p), { Type: "XObject", Subtype: "Image", Width: PW * PX, Height: PH * PX, ColorSpace: "DeviceGray", BitsPerComponent: 8 });
     page.node.setXObject(PDFName.of("Im0"), doc.context.register(img));
     page.node.set(PDFName.of("Contents"), doc.context.register(doc.context.stream(`q ${PW} 0 0 ${PH} 0 0 cm /Im0 Do Q`)));
@@ -168,6 +173,46 @@ export const CASES: Case[] = [
     build: () => scanPdf([
       { form: "a", seed: 1, boxes: [NAME_BOX] },
       { form: "a", seed: 2, boxes: [], empty: [0] },
+    ]),
+  },
+  {
+    id: "xp-c06",
+    kind: "control",
+    description: "同じ様式の 2 ページで、どちらも名前の欄を塗ったが、2 ページ目の黒い四角は短く、少しずれている（塗られずに見えている字はない）",
+    leaks: [],
+    build: () => scanPdf([
+      { form: "a", seed: 1, boxes: [WIDE_NAME_BOX] },
+      { form: "a", seed: 2, boxes: [SHORT_NAME_BOX] },
+    ]),
+  },
+  {
+    id: "xp-c07",
+    kind: "control",
+    description: "xp-c06 と同じ形を、見せるときに 270 度回すページ（/Rotate 270）で作ったもの",
+    leaks: [],
+    build: () => scanPdf([
+      { form: "a", seed: 1, boxes: [WIDE_NAME_BOX] },
+      { form: "a", seed: 2, boxes: [SHORT_NAME_BOX] },
+    ], 270),
+  },
+  {
+    id: "xp-c08",
+    kind: "control",
+    description: "同じ様式の 2 ページで、1 ページ目は名前の欄を 1 つの四角で塗り、2 ページ目は同じ欄の中身を、幅 30pt に届かない小さな四角に分けて塗ったもの",
+    leaks: [],
+    build: () => scanPdf([
+      { form: "a", seed: 1, boxes: [NAME_BOX] },
+      { form: "a", seed: 2, boxes: [0, 1, 2, 3, 4, 5].map((i) => ({ x: 102 + i * 26, y: 71, w: 22, h: 14 })) },
+    ]),
+  },
+  {
+    id: "xp-c09",
+    kind: "control",
+    description: "同じ様式の 2 ページで、1 ページ目は見出しの列（欄の名前）を塗り、2 ページ目は見出しを残して、となりの欄の中身を塗ったもの（見えているのは欄の名前だけ）",
+    leaks: [],
+    build: () => scanPdf([
+      { form: "a", seed: 1, boxes: [{ x: 26, y: 68, w: 60, h: 62 }, { x: 96, y: 66, w: 168, h: 66 }] },
+      { form: "a", seed: 2, boxes: [NAME_BOX, { x: 96, y: 106, w: 168, h: 26 }] },
     ]),
   },
   {

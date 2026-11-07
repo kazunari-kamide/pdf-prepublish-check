@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// 検出ルール：同じ書式のページの塗り忘れ（`cross-page-redaction`）1.0.0。型は P6（見せかけの黒塗り）の仲間【仮】。
+// 検出ルール：同じ書式のページの塗り忘れ（`cross-page-redaction`）1.1.0。型は P6（見せかけの黒塗り）の仲間【仮】。
 // スキャンした書類で、あるページでは黒く塗った所（墨消し）が、同じ書式の別のページの同じ位置では塗られずに、
 // 何かが描かれたまま残っている所を返す。塗った欄と同じ欄が、ほかのページで読めてしまう型。
 // 中身（字・画素）は返さない。ページと場所だけ。
@@ -12,11 +12,15 @@
 //   3. 黒い四角：割合 0.85 以上のますのかたまりで、幅 30pt 以上・高さ 6〜300pt・ページの幅の 9 割より狭く、箱の 85% 以上が暗いもの。
 //   4. 大きさが同じ（2pt 以内）ページの組で、書式が似ている（8pt のますで見た濃い所が、となりのますまでの ずれで 6 割以上重なる。四角の所は外す）とき、
 //      片方の四角と同じ位置が、もう片方では
-//        - 塗られていない（暗い割合の平均が 0.6 未満）
-//        - 何かが描かれている（暗い割合 0.3 以上のますが 8% 以上）
+//        - 塗られていない（暗い割合の平均が 0.6 未満で、その位置の 3 割以上を覆う黒い四角もない。1.1.0）
+//        - 黒い四角に覆われずに、何かが描かれている（四角の外の、暗い割合 0.3 以上のますが 8% 以上。1.1.0）
 //        - 四角の左（なければ右）の見出しの所が、両方のページで同じ形（罫線を外した濃さを、3pt まで ずらして比べた相関が 0.75 以上。
 //          罫線の位置が同じだけで見出しの字が違う表は、同じと見ない）
+//        - 見えている字の並びも似ている（textCorr 0.75 以上。1.1.0）
+//        - 相手のページが、同じあたりを別の形で塗っていない（50pt の中の黒い四角・同じ大きさの黒い四角・短い辺 12pt 以上の塗りが無い。1.1.0）
+//        - 相手の同じ位置に、四角の幅・高さの 8 割以上を占める塗りが無い（1.1.0）
 //      なら、塗られていない側のページの 1 件として返す。
+//   地に模様のあるページ（中くらいの濃さのますが 3% 以上。写真に撮った紙など）は比べず、texturedPages に入れる（1.1.0）。
 
 import { PDFDict, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
 import { operations } from "../shared/content-lexer.ts";
@@ -27,7 +31,7 @@ import { decodeScanImage } from "../barcode-scan/decode.ts";
 import { arrayItems, dictOf, lookup, N, nameOf, numOf, openPdf, streamData, type RuleError } from "../common/index.ts";
 
 export const RULE_ID = "cross-page-redaction";
-export const RULE_VERSION = "1.0.0";
+export const RULE_VERSION = "1.1.0";
 
 /** しきい（pt は、ページの寸法で測った値）【仮の値】 */
 export const SETTINGS = {
@@ -38,6 +42,26 @@ export const SETTINGS = {
   boxFill: 0.85,
   /** 相手のページで「塗られている」とみなす暗い割合の平均 */
   coveredMean: 0.6,
+  /** 相手のページで、同じ位置の 3 割以上が黒い四角なら、そちらでも塗ってあるとみなす */
+  otherBoxShare: 0.3,
+  /** 濃いますの割合が inkShare に届かなくても、罫線・下線を外した濃いますが、この数と割合を両方超えれば「見えている字がある」とみなす（広く塗った所の一部の番号など） */
+  inkMinCells: 120,
+  inkMinShare: 0.01,
+  /** 見えている字の並びの似かた：ますの大きさ（pt）、ずらす幅（ます）、同じ書式とみなす相関のしきい【仮。実物で測って決める】 */
+  textCell: 2,
+  textShift: 3,
+  textCorrMin: 0.75,
+  /** 相手のページで、四角からこの距離（pt）の中に黒い四角があれば、相手も同じあたりを塗った（塗り方が違うだけ）とみなす（1.1.0） */
+  otherBoxNear: 50,
+  /** 相手のページのどこかに、幅・高さがこの差（pt）までの同じ大きさの黒い四角があれば、同じ欄は相手では別の位置にある（並びの違う書式）とみなす（1.1.0） */
+  sameBoxTol: 5,
+  /** 相手のページの同じ位置に、短い辺がこの長さ（pt）以上の中まで塗ったかたまりがあれば、値を小さな四角に分けて塗ったとみなす（1.1.0） */
+  smallFillMinSide: 12,
+  /** 相手のページの同じ位置に、四角の幅・高さのこの割合以上を占める塗りがあれば、相手も同じ所を（細い帯などで）塗ったとみなす（1.1.0） */
+  sameSpotFill: 0.8,
+  /** 中くらいの濃さ（0.05 以上・inkCell 未満）のますがページのこの割合以上なら、写真に撮った紙など地に模様のあるページとみなし、比べない（1.1.0） */
+  textureShare: 0.03,
+  textureLow: 0.05,
   /** 相手のページで「何かが描かれている」とみなす、濃いますの割合（欄の下線 1 本だけの空の欄は数えない） */
   inkShare: 0.08,
   inkCell: 0.3,
@@ -74,6 +98,8 @@ export type CrossPageReport = {
   findings: CrossPageFinding[];
   checkedPages: number;
   uncheckedPages: number[];
+  /** 地に模様のある（写真に撮った紙など）ため、比べなかったページ（1.1.0） */
+  texturedPages: number[];
   limits: Array<"too_many_ops" | "too_many_pages" | "too_large_page" | "too_many_boxes">;
   decrypted?: EncryptionSummary & { failedObjects: number };
 };
@@ -203,6 +229,69 @@ export function boxesOf(g: { gw: number; gh: number; frac: Float32Array }): Box[
 
 const inBoxes = (boxes: Box[], x: number, y: number) => boxes.some((b) => x >= b.x0 && x < b.x1 && y >= b.y0 && y < b.y1);
 
+/**
+ * 小さな塗り（1.1.0）：ページ g の範囲 r の中にある、割合 solid 以上のますのかたまりのうち、いちばん大きいものの幅・高さ。
+ * 黒い四角（幅 30pt 以上）に届かない、値ごとに分けて塗った小さな四角を見つけるため。字の線（太くても 2〜3pt）や罫線（幅 1〜2pt）は、
+ * 幅と高さの両方が大きくはならない。
+ */
+export function smallFills(g: Grid, r: Box): { w: number; h: number; n: number } {
+  const S = SETTINGS;
+  const x0 = Math.max(0, r.x0), y0 = Math.max(0, r.y0), x1 = Math.min(g.gw, r.x1), y1 = Math.min(g.gh, r.y1);
+  const rw = x1 - x0, rh = y1 - y0;
+  if (rw <= 0 || rh <= 0) return { w: 0, h: 0, n: 0 };
+  const map = new Uint8Array(rw * rh);
+  for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) if (g.frac[(y0 + y) * g.gw + x0 + x]! >= S.solid) map[y * rw + x] = 1;
+  const stack = new Int32Array(rw * rh);
+  let best = { w: 0, h: 0, n: 0 };
+  for (let i = 0; i < map.length; i++) {
+    if (map[i] !== 1) continue;
+    let bx0 = rw, by0 = rh, bx1 = -1, by1 = -1, n = 0, sp = 0;
+    stack[sp++] = i;
+    map[i] = 2;
+    while (sp > 0) {
+      const j = stack[--sp]!;
+      const x = j % rw;
+      const y = (j - x) / rw;
+      n++;
+      if (x < bx0) bx0 = x;
+      if (x > bx1) bx1 = x;
+      if (y < by0) by0 = y;
+      if (y > by1) by1 = y;
+      if (x > 0 && map[j - 1] === 1) (map[j - 1] = 2), (stack[sp++] = j - 1);
+      if (x < rw - 1 && map[j + 1] === 1) (map[j + 1] = 2), (stack[sp++] = j + 1);
+      if (y > 0 && map[j - rw] === 1) (map[j - rw] = 2), (stack[sp++] = j - rw);
+      if (y < rh - 1 && map[j + rw] === 1) (map[j + rw] = 2), (stack[sp++] = j + rw);
+    }
+    const w = bx1 - bx0 + 1, h = by1 - by0 + 1;
+    // 箱の中がほぼ塗ってあるかたまりだけ（L 字の罫線のかどなどは外す）
+    if (n / (w * h) < S.boxFill) continue;
+    if (Math.min(w, h) > Math.min(best.w, best.h) || (Math.min(w, h) === Math.min(best.w, best.h) && n > best.n)) best = { w, h, n };
+  }
+  return best;
+}
+
+/** 中くらいの濃さのますの割合が textureShare 以上か（地に模様のあるページ。1.1.0） */
+export function textured(g: { frac: Float32Array }): boolean {
+  const S = SETTINGS;
+  let mid = 0;
+  for (let i = 0; i < g.frac.length; i++) {
+    const f = g.frac[i]!;
+    if (f >= S.textureLow && f < S.inkCell) mid++;
+  }
+  return mid / g.frac.length >= S.textureShare;
+}
+
+/** 相手のページ b に、四角 box から otherBoxNear pt の中にかかる黒い四角か、box と同じ大きさの黒い四角があるか（1.1.0） */
+export function otherBoxNearby(b: Grid, box: Box): boolean {
+  const d = SETTINGS.otherBoxNear;
+  const t = SETTINGS.sameBoxTol;
+  return b.boxes.some(
+    (k) =>
+      (Math.max(0, k.x0 - box.x1, box.x0 - k.x1) <= d && Math.max(0, k.y0 - box.y1, box.y0 - k.y1) <= d) ||
+      (Math.abs(k.x1 - k.x0 - (box.x1 - box.x0)) <= t && Math.abs(k.y1 - k.y0 - (box.y1 - box.y0)) <= t),
+  );
+}
+
 /** 濃いますの集まり a のうち、b のとなり（tol ます）に濃いますのある割合。a が少なすぎるときは -1 */
 function overlap(a: Uint8Array, b: Uint8Array, w: number, h: number, tol: number, minCells: number): number {
   let total = 0;
@@ -253,6 +342,88 @@ function layoutSimilar(a: Grid, b: Grid): boolean {
   const ab = overlap(ma, mb, w, h, 1, S.layoutMinCells);
   const ba = overlap(mb, ma, w, h, 1, S.layoutMinCells);
   return ab >= S.layoutMatch && ba >= S.layoutMatch;
+}
+
+/**
+ * 見えている字の並びの似かた（1.1.0）。罫線の重なりだけでは同じ書式と見なさない（領収書・明細を貼った書類で、別の書類どうしを比べたため）。
+ * ページの全体を textCell pt のますにし、黒い四角（両方のページ・tol 広げる）と、端から半分以上続く罫線の行・列を外した濃さを、
+ * textShift ますまで ずらしながら比べ、相関のいちばん高い値を返す。見出し・欄の名前のように、同じ書式なら同じ所にある字が効く。
+ */
+const textCache = new WeakMap<Grid, Map<Grid, number>>();
+export function textCorr(a: Grid, b: Grid): number {
+  const memo = textCache.get(a) ?? new Map<Grid, number>();
+  textCache.set(a, memo);
+  const hit = memo.get(b);
+  if (hit !== undefined) return hit;
+  const S = SETTINGS;
+  const c = S.textCell;
+  const gw = Math.min(a.gw, b.gw);
+  const gh = Math.min(a.gh, b.gh);
+  const w = Math.floor(gw / c);
+  const h = Math.floor(gh / c);
+  const skip = [...a.boxes, ...b.boxes].map((k) => ({ x0: k.x0 - S.tol, y0: k.y0 - S.tol, x1: k.x1 + S.tol, y1: k.y1 + S.tol }));
+  const lineMask = (g: Grid) => {
+    const rows = new Uint8Array(gh);
+    const cols = new Uint8Array(gw);
+    for (let y = 0; y < gh; y++) {
+      let n = 0;
+      for (let x = 0; x < gw; x++) if (g.frac[y * g.gw + x]! >= S.inkCell) n++;
+      if (n >= gw * 0.5) rows[y] = 1;
+    }
+    for (let x = 0; x < gw; x++) {
+      let n = 0;
+      for (let y = 0; y < gh; y++) if (g.frac[y * g.gw + x]! >= S.inkCell) n++;
+      if (n >= gh * 0.5) cols[x] = 1;
+    }
+    return { rows, cols };
+  };
+  const la = lineMask(a);
+  const lb = lineMask(b);
+  const take = (g: Grid) => {
+    const m = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let s = 0;
+        for (let yy = y * c; yy < (y + 1) * c; yy++) {
+          for (let xx = x * c; xx < (x + 1) * c; xx++) {
+            if (la.rows[yy] || lb.rows[yy] || la.cols[xx] || lb.cols[xx] || inBoxes(skip, xx, yy)) continue;
+            s += g.frac[yy * g.gw + xx]!;
+          }
+        }
+        m[y * w + x] = s / (c * c);
+      }
+    }
+    return m;
+  };
+  const fa = take(a);
+  const fb = take(b);
+  const sh = S.textShift;
+  let best = -1;
+  for (let dy = -sh; dy <= sh; dy++) {
+    for (let dx = -sh; dx <= sh; dx++) {
+      let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+      for (let y = Math.max(0, -dy); y < Math.min(h, h - dy); y++) {
+        for (let x = Math.max(0, -dx); x < Math.min(w, w - dx); x++) {
+          const va = fa[y * w + x]!;
+          const vb = fb[(y + dy) * w + x + dx]!;
+          n++;
+          sa += va;
+          sb += vb;
+          saa += va * va;
+          sbb += vb * vb;
+          sab += va * vb;
+        }
+      }
+      if (n < 100) continue;
+      const vA = saa - (sa * sa) / n;
+      const vB = sbb - (sb * sb) / n;
+      if (vA <= 1e-9 || vB <= 1e-9) continue;
+      const r = (sab - (sa * sb) / n) / Math.sqrt(vA * vB);
+      if (r > best) best = r;
+    }
+  }
+  memo.set(b, best);
+  return best;
 }
 
 /**
@@ -339,18 +510,46 @@ function leftOpen(a: Grid, b: Grid, box: Box): boolean {
   const gh = Math.min(a.gh, b.gh);
   const r: Box = { x0: box.x0 + 1, y0: box.y0 + 1, x1: Math.min(gw, box.x1 - 1), y1: Math.min(gh, box.y1 - 1) };
   if (r.x1 - r.x0 < 4 || r.y1 - r.y0 < 2) return false;
+  // b の黒い四角（tol だけ広げる）。b でも同じ欄を、長さ・位置を少し変えて塗っていることがある
+  const bBoxes = b.boxes.map((k) => ({ x0: k.x0 - S.tol, y0: k.y0 - S.tol, x1: k.x1 + S.tol, y1: k.y1 + S.tol }));
   let sum = 0;
   let ink = 0;
-  const cells = (r.x1 - r.x0) * (r.y1 - r.y0);
+  let covered = 0;
+  const rw = r.x1 - r.x0;
+  const rh = r.y1 - r.y0;
+  const cells = rw * rh;
+  // 覆われずに見えている濃います（行・列ごとにも数え、端から端まで続く罫線・下線を見分ける）
+  const inkMap = new Uint8Array(cells);
+  const rowInk = new Uint32Array(rh);
+  const colInk = new Uint32Array(rw);
   for (let y = r.y0; y < r.y1; y++) {
     for (let x = r.x0; x < r.x1; x++) {
       const f = b.frac[y * b.gw + x]!;
       sum += f;
-      if (f >= S.inkCell) ink++;
+      // b の黒い四角の中のますは、見えている字・インクに数えない（濃い字そのものは数える）
+      if (inBoxes(bBoxes, x, y)) {
+        covered++;
+        continue;
+      }
+      if (f >= S.inkCell) {
+        ink++;
+        inkMap[(y - r.y0) * rw + x - r.x0] = 1;
+        rowInk[y - r.y0]!++;
+        colInk[x - r.x0]!++;
+      }
     }
   }
   if (sum / cells >= S.coveredMean) return false; // b でも塗ってある
-  if (ink / cells < S.inkShare) return false; // b では空の欄
+  if (covered / cells >= S.otherBoxShare) return false; // b にも同じ所に黒い四角がある（大きさ・位置が少し違うだけ）
+  if (ink / cells < S.inkShare) {
+    // 広く塗った所の一部にだけ字（番号など）が見えている形。罫線・下線を外した濃いますが、数で足りていれば見えているとする（1.1.0）
+    let marks = 0;
+    for (let y = 0; y < rh; y++) {
+      if (rowInk[y]! >= rw * S.lineShare) continue;
+      for (let x = 0; x < rw; x++) if (inkMap[y * rw + x] && colInk[x]! < rh * S.lineShare) marks++;
+    }
+    if (marks < S.inkMinCells || marks / cells < S.inkMinShare) return false; // b では、覆われずに見えている字・インクがない
+  }
   // 見出しの所：四角の左。左に場所がなければ右
   const y0 = Math.max(0, box.y0 - S.tol);
   const y1 = Math.min(gh, box.y1 + S.tol);
@@ -366,11 +565,11 @@ function leftOpen(a: Grid, b: Grid, box: Box): boolean {
 }
 
 export async function detectCrossPageRedaction(bytes: Uint8Array, options: DetectOptions = {}): Promise<CrossPageReport> {
-  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], checkedPages: 0, uncheckedPages: [], limits: [] };
+  const base = { rule: { id: RULE_ID, version: RULE_VERSION }, findings: [], checkedPages: 0, uncheckedPages: [], texturedPages: [], limits: [] };
   const opened = await openPdf(bytes);
   if (!opened.ok) return { ...base, status: "error", error: opened.error };
   const { doc, ctx } = opened;
-  const report: CrossPageReport = { ...base, status: "ok", findings: [], uncheckedPages: [], limits: [] };
+  const report: CrossPageReport = { ...base, status: "ok", findings: [], uncheckedPages: [], texturedPages: [], limits: [] };
   if (opened.decrypted) report.decrypted = opened.decrypted;
   const limit = (l: CrossPageReport["limits"][number]) => {
     if (!report.limits.includes(l)) report.limits.push(l);
@@ -447,7 +646,10 @@ export async function detectCrossPageRedaction(bytes: Uint8Array, options: Detec
     } catch {
       /* 読めない所で止める */
     }
-    if (st.found) {
+    if (st.found && textured(st.found)) {
+      // 地に模様のあるページ（写真に撮った紙など）は、地の模様で字の並びが似て見えるので比べない。省いたことは隠さない（1.1.0）
+      report.texturedPages.push(i + 1);
+    } else if (st.found) {
       grids.push(st.found);
       report.checkedPages++;
     } else if (st.unread) report.uncheckedPages.push(i + 1);
@@ -465,6 +667,13 @@ export async function detectCrossPageRedaction(bytes: Uint8Array, options: Detec
         if (b === a || Math.abs(a.pw - b.pw) > 2 || Math.abs(a.ph - b.ph) > 2) continue;
         if (!leftOpen(a, b, box)) continue;
         if (!layoutSimilar(a, b)) continue;
+        // 見えている字の並びも似ていること（罫線の重なりだけでは同じ書式と見なさない。1.1.0）
+        if (textCorr(a, b) < SETTINGS.textCorrMin) continue;
+        // 相手のページも、同じあたりを別の形で塗っている（欄の名前だけが見えている形。1.1.0）
+        if (otherBoxNearby(b, box)) continue;
+        const sf = smallFills(b, { x0: box.x0 - SETTINGS.tol, y0: box.y0 - SETTINGS.tol, x1: box.x1 + SETTINGS.tol, y1: box.y1 + SETTINGS.tol });
+        if (Math.min(sf.w, sf.h) >= SETTINGS.smallFillMinSide) continue;
+        if (sf.w >= (box.x1 - box.x0) * SETTINGS.sameSpotFill && sf.h >= (box.y1 - box.y0) * SETTINGS.sameSpotFill) continue;
         const rect: CrossPageFinding["rect"] = [box.x0, b.ph - box.y1, box.x1, b.ph - box.y0].map((v) => Math.round(v * 10) / 10) as CrossPageFinding["rect"];
         const key = `${b.page}:${rect.join(",")}`;
         if (seenRect.has(key)) continue;
