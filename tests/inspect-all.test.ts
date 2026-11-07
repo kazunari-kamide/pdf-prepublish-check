@@ -27,6 +27,7 @@ describe("登録したルール", () => {
       "alt-text",
       "extras",
       "font-glyphs",
+      "font-glyphs-cff",
       "p1-info",
       "p10-exif",
       "p11-forms",
