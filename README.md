@@ -169,7 +169,7 @@ PDF は、画面に見えている中身のほかに、いろいろな情報を�
 ## ほかの入口
 
 - **コマンドの道具（`cli/`）**：フォルダごとまとめて確かめます。PDF のほか、写真（JPEG・PNG・WebP・HEIC）と今の Office（docx・xlsx・pptx）も調べます。型・数・場所だけを出し、通信しません。使い方は [docs/cli.md](docs/cli.md)。
-- **Claude Code のスキル（`.claude/skills/omamori-check/`）**：あなたの Claude に「提出前にこの PDF を確かめて」と頼むと、手元で上のコマンドの道具を動かし、型・数・場所だけを伝えます。PDF の中身や字は、会話に入れません。こちらのサービスは何も受け取りません。使う前に、あなたの Claude のデータの設定（会話が改善に使われるか）を確かめてください。
+- **Claude Code のスキル（`.claude/skills/omamori-check/`）**：あなたの Claude に「提出前にこの PDF を確かめて」と頼むと、手元で上のコマンドの道具を動かし、型・数・場所だけを伝えます。PDF の中身や字は、会話に入れません。こちらのサービスは何も受け取りません。使う前に、あなたの Claude のデータの設定（会話が改善に使われるか）を確かめてください。コマンドの道具を入れられない環境でも、型ごとの「どこを見るか・どう確かめるか・正しい直し方」をまとめた資料（[`reference/types.md`](.claude/skills/omamori-check/reference/types.md)）を、自分の環境のエージェントに持ち込めます。
 - **通信を数える拡張機能（`extension/`）**：お守りPDF のページが、PDF を入れたあとに送ったデータの大きさと要求の数を、検査器の外側から数えて見せます。入れ方は [extension/README.md](extension/README.md)。
 
 ## 通信について
