@@ -13,6 +13,7 @@ import { PDFJS_WASM_URL } from "../render/pdfjs-parts";
 import { warmPdfjs } from "../render/warm-pdf";
 import { precheck } from "../inspect/precheck";
 import type { InspectRequest, InspectResponse } from "../inspect/protocol";
+import type { UnderProbe } from "../../rules/redacted-text-elsewhere/index.ts";
 
 /**
  * 画像を解く道具（PDF.js）。JPEG の画像の画素を読み、P6 の画像の層を、この Worker の中で調べられるようにする。
@@ -52,6 +53,13 @@ async function warm(): Promise<boolean> {
   });
 }
 
+/**
+ * 塗った下の字（redacted-text-elsewhere）。整える前の検査（after でない検査）で覚え、整えたあと・小さくしたあとの読み直し（after）で使う。
+ * この Worker の中だけに置き、画面にもネットワークにも出さない。ファイルが変わると Worker ごと作り直すので、前のファイルの字は残らない
+ * （src/worker-slot.ts）
+ */
+let underProbes: UnderProbe[] = [];
+
 type WorkerScope = {
   onmessage: ((e: MessageEvent<InspectRequest>) => void) | null;
   postMessage(message: InspectResponse): void;
@@ -78,7 +86,11 @@ scope.onmessage = async (e) => {
       (done, total, label) => scope.postMessage({ type: "progress", id: req.id, done, total, label }),
       undefined,
       // 見つけた字の中身も返す（画面の中だけで使い、伏せて出す。2026-11-05 本人が決めた。src/ui/reveal.ts）
-      { ...(decoder ? { imageDecoder: decoder } : {}), withContents: true },
+      {
+        ...(decoder ? { imageDecoder: decoder } : {}),
+        withContents: true,
+        ...(req.after ? { underProbes } : { onUnderProbes: (p: UnderProbe[]) => (underProbes = p) }),
+      },
     );
     scope.postMessage({ type: "result", id: req.id, precheck: checked, summary });
   } catch {

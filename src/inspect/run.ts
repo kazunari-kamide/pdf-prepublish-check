@@ -21,12 +21,14 @@ export function inspectInWorker(
   buffer: ArrayBuffer,
   onProgress: (p: InspectProgress) => void = () => {},
   timeoutMs: number = WORKER_TIMEOUT_MS,
+  /** 整えたあと・小さくしたあとの読み直しのとき true（整える前に覚えた、塗った下の字でも探す） */
+  after = false,
 ): Promise<InspectOutcome> {
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
   return slot.job<InspectOutcome>({
     // ArrayBuffer は渡し切る（コピーしない）。渡したあと、画面の側からは読めなくなる
-    request: (id) => ({ message: { type: "inspect", id, buffer }, transfer: [buffer] }),
+    request: (id) => ({ message: { type: "inspect", id, buffer, ...(after ? { after: true } : {}) }, transfer: [buffer] }),
     handle: (raw) => {
       const res = raw as unknown as InspectResponse;
       if (res.type === "progress") {

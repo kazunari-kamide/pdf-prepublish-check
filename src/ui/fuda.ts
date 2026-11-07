@@ -29,6 +29,7 @@ const SHORT: Record<string, string> = {
   "XMP の縮小画像": "縮小図",
   黒塗りのそばの記号: "記号",
   同じ書式のページの塗り残し: "塗り残し",
+  "塗った字が、ほかの所に出ている": "ほかにも", // redacted-text-elsewhere（2026-11-08）
 };
 
 export const FUDA_MAX = 4;
