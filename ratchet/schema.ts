@@ -53,6 +53,8 @@ export const CANDIDATES: Schema = obj({
       whyMissed: str(400),
       /** 根拠になった束の中の件数（番号 b01 などの数だけ） */
       evidenceCount: int(0, 1000),
+      /** 根拠にした束の番号（b01 など）。その回に下読みした番号だけを受け付ける（ratchet/evidence.ts） */
+      evidenceIds: { type: "array", maxItems: 60, items: str(8) },
       /** 作る合成 PDF の案（架空の中身だけ） */
       fixturePlan: str(600),
     }),
