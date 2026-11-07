@@ -46,6 +46,25 @@ describe("要点の一覧（同じ種類は 1 行）", () => {
     expect(k.shown[0]).toMatchObject({ title: "文書情報が見つかりました", sevLabel: "■ 中", count: 2, where: "ファイル全体" });
   });
 
+  it("同じ型（P6）を見るルールが複数あるとき、題がそろわない行の見出しは、当たっていないルールの名前にしない（2026-11-08）", () => {
+    // main の並び（p6-text・barcode-scan・cross-page-redaction）。当たったのは p6-text の 2 種類の題だけ
+    const p6 = [item({}), item({ title: "黒い四角の下に、字が残っています", rect: [10, 30, 20, 40] })];
+    const main = buildView(summary([rule("P6", "見せかけの黒塗り", p6), rule("P6", "黒塗りのそばの記号", []), rule("P6", "同じ書式のページの塗り残し", [])]));
+    expect(kindSummary(main).shown[0]!.title).toBe("見せかけの黒塗りが見つかりました");
+    // p6-text と redacted-text-elsewhere が同じページに当たった形（rte-l03）
+    const mixed = buildView(
+      summary([
+        rule("P6", "見せかけの黒塗り", [item({ title: "黒い四角の下に、字が残っています" })]),
+        rule("P6", "塗った字が、ほかの所に出ている", [item({ title: "黒く塗った所の字が、ほかの所に塗られずに出ています", confidence: "check" })]),
+        rule("P6", "同じ書式のページの塗り残し", []),
+      ]),
+    );
+    expect(kindSummary(mixed).shown[0]!.title).toBe("見せかけの黒塗りが見つかりました");
+    // 当たったのが 1 つのルールの別々の題なら、そのルールの名前
+    const one = buildView(summary([rule("P6", "見せかけの黒塗り", []), rule("P6", "同じ書式のページの塗り残し", [item({ title: "a" }), item({ title: "b", rect: [10, 30, 20, 40] })])]));
+    expect(kindSummary(one).shown[0]!.title).toBe("同じ書式のページの塗り残しが見つかりました");
+  });
+
   it("並びは深刻度の順。確かめる所だけの種類は「？ 確かめる」で、高の次", () => {
     const v = buildView(
       summary([
