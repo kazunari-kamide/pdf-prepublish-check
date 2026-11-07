@@ -21,6 +21,8 @@ import { CANDIDATES, REFUTE, SKIM, validate, WRITE_REPORT } from "../ratchet/sch
 import { parseReadme, readCatalog, ruleDirOf, shortCatalog } from "../ratchet/catalog.ts";
 import { countCaught, patternOfKey, ruleIdOfKey } from "../ratchet/known.ts";
 import { JUDGE_PROMPT, KNOWN_GUIDE, REFUTE_PROMPT, SKIM_PROMPT, writePrompt } from "../ratchet/prompts.ts";
+import { choosePages, dropChartBars, maskRunsOf, probeRedaction, type RedactionClues } from "../ratchet/redaction.ts";
+import { BARS, customerBarcode, decorPdf, sameFormPdf, scannedStatementPdf, statementPdf } from "../ratchet/synthetic-redaction.ts";
 
 const t = (key: string, found: number, expected: number, fp = 0, extra: Partial<TypeScore> = {}): TypeScore => ({
   key, source: key.startsWith("rubric") ? "rubric" : "cases", expected, found, falsePositiveRate: fp ? fp / 10 : 0, falsePositives: fp,
@@ -414,6 +416,80 @@ describe("dry-run の PR を出す（--publish）", () => {
   });
 });
 
+describe("墨消しの手がかり（下読みに渡す数と形）", () => {
+  it("架空のカスタマバーコードは、仕様どおりの 67 本で、チェックデジットで合計が 19 の倍数になる", () => {
+    const bars = customerBarcode("9990000", "9-9-9");
+    expect(bars).toHaveLength(2 + 20 * 3 + 3 + 2);
+    expect(bars.slice(0, 2)).toEqual([1, 3]);
+    expect(bars.slice(-2)).toEqual([3, 1]);
+    // バーの組み合わせから字に戻し、チェック用の数の合計を確かめる
+    const back = Object.fromEntries(Object.entries(BARS).map(([c, b]) => [b, c]));
+    const chars = Array.from({ length: 21 }, (_, i) => back[bars.slice(2 + i * 3, 5 + i * 3).join("")]!);
+    expect(chars.slice(0, 7).join("")).toBe("9990000");
+    expect(chars.slice(7, 12).join("")).toBe("9-9-9");
+    expect(chars.slice(12, 20).every((c) => c === "CC4")).toBe(true);
+    const v = (c: string) => (/^\d$/.test(c) ? Number(c) : c === "-" ? 10 : 10 + Number(c.slice(2)));
+    expect(chars.reduce((a, c) => a + v(c), 0) % 19).toBe(0);
+  });
+
+  const clues = async (bytes: Uint8Array) => {
+    const r = await probeRedaction(bytes);
+    if ("failed" in r) throw new Error(r.failed);
+    return r as RedactionClues;
+  };
+
+  it("宛名と住所を塗り、その下のバーコードを残した明細：四角の近くに棒の並び（67 本・高さ 4 種類）を見つける", async () => {
+    for (const bytes of [await statementPdf("leak"), await scannedStatementPdf("leak")]) {
+      const r = await clues(bytes);
+      expect(r.boxes).toBeGreaterThanOrEqual(2);
+      expect(r.boxesWithBarsNearby).toBeGreaterThanOrEqual(1);
+      const near = r.pages.flatMap((p) => p.nearby);
+      expect(near.some((n) => n.bars === 67 && n.heightKinds === 4 && n.side === "below")).toBe(true);
+    }
+  }, 60_000);
+
+  it("対照（バーコードも塗った・バーコードが無い）では、棒の並びは出ない", async () => {
+    for (const kind of ["covered", "none"] as const) {
+      const r = await clues(await statementPdf(kind));
+      expect(r.boxes).toBeGreaterThanOrEqual(2);
+      expect(r.boxesWithBarsNearby).toBe(0);
+    }
+  }, 60_000);
+
+  it("スキャン風だけ、文字の層の「■」の続きを数える（字そのものは返さない）", async () => {
+    expect((await clues(await scannedStatementPdf("leak"))).maskRuns.runs).toBeGreaterThanOrEqual(1);
+    expect((await clues(await statementPdf("leak"))).maskRuns.runs).toBe(0);
+    expect(maskRunsOf("■■ と ■ ■ ■ と ■ だけ")).toEqual({ runs: 2, longest: 3 });
+  }, 60_000);
+
+  it("同じ書式の 2 ページで、片方だけ欄を塗ったとき：食い違いを 1 つ数える", async () => {
+    const r = await clues(await sameFormPdf());
+    expect(r.pagesRendered).toBe(2); // 塗りの無いページも、比べる相手として画像にする
+    expect(r.sameLayout).toEqual({ similarPairs: 1, mismatches: 1, examples: [{ withBox: 1, without: 2 }] });
+  }, 60_000);
+
+  it("飾り（幅いっぱいの帯・白い字の載った見出し・グラフの棒）は、墨消しに数えない", async () => {
+    expect((await clues(await decorPdf())).boxes).toBe(0);
+    const bar = (x: number, h: number) => ({ x0: x, y0: 500 - h, x1: x + 30, y1: 500 });
+    expect(dropChartBars([bar(0, 60), bar(50, 120), bar(100, 90)])).toEqual([]);
+    expect(dropChartBars([bar(0, 12), bar(50, 12), bar(100, 12)])).toHaveLength(3); // 同じ高さの塗りの並び（名前の列を塗ったものなど）は残す
+  }, 60_000);
+
+  it("60 ページを超えたら、塗りの多いページから選ぶ。重いページと塗りの無いページは選ばない", () => {
+    const scores = Array.from({ length: 100 }, (_, i) => ({ page: i + 1, score: i % 10 === 0 ? 0 : i, heavy: i === 99 }));
+    const chosen = choosePages(scores);
+    expect(chosen).toHaveLength(60);
+    expect(chosen).not.toContain(100);
+    expect(chosen).not.toContain(1);
+    expect(Math.min(...chosen)).toBeGreaterThan(30);
+  });
+
+  it("下読みの指示に、墨消しの観点を入れる（答えの形は書き込みすぎない）", () => {
+    expect(SKIM_PROMPT).toContain("別の形（たとえば機械で読む記号）や別の所（同じ書式のほかのページ）");
+    expect(SKIM_PROMPT).not.toMatch(/バーコード|郵便/);
+  });
+});
+
 describe("今あるルールの一覧（判断・反証に全部渡す）", () => {
   it("README から、地の文の要点と、表の種類（kind）を取る。コードと見出しは取らない", () => {
     const r = parseReadme([
@@ -531,7 +607,7 @@ describe("構造の要約（値は伏せる）", () => {
 
 describe("node でそのまま動く", () => {
   // npm run ratchet は node の型の取り除き（strip-only）で動く。vitest では通っても、node では読めない書き方がある
-  it.each(["bundle", "catalog", "claude", "config", "gate", "known", "metrics", "prbody", "probe", "prompts", "publish", "rejections", "schema", "synthetic"])("ratchet/%s.ts", (name) => {
+  it.each(["bundle", "catalog", "claude", "config", "gate", "known", "metrics", "prbody", "probe", "prompts", "publish", "redaction", "rejections", "schema", "synthetic", "synthetic-redaction"])("ratchet/%s.ts", (name) => {
     const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(join(process.cwd(), "ratchet", `${name}.ts`)).href)})`], { encoding: "utf8" });
     expect(r.stderr).not.toMatch(/ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX|SyntaxError/);
     expect(r.status).toBe(0);

@@ -2,13 +2,14 @@
 //
 // 道具を確かめるための「架空の束」を作る（実物の公開 PDF は使わない）。
 // 採点の材料（fixtures/・proposals/blind/ など）はループに読ませないので、ここでその場で新しく作る（CLAUDE.md §2-5）。
-// 中身はすべて架空。壊れた PDF と、欄の中に Claude への指示を埋めた PDF も入れて、止まらないこと・従わないことを確かめる。
+// 中身はすべて架空。墨消し漏れの見本（s20〜s25）は ratchet/synthetic-redaction.ts。壊れた PDF と、欄の中に Claude への指示を埋めた PDF も入れて、止まらないこと・従わないことを確かめる。
 //
 //   npm run ratchet:synthetic -- <書き出すフォルダ>
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFString, StandardFonts, rgb } from "pdf-lib";
+import { REDACTION_BUNDLE } from "./synthetic-redaction.ts";
 
 type Make = { name: string; build: () => Promise<Uint8Array> };
 
@@ -82,7 +83,7 @@ export const BUNDLE: Make[] = [
 export async function writeBundle(dir: string): Promise<string[]> {
   mkdirSync(dir, { recursive: true });
   const out: string[] = [];
-  for (const m of BUNDLE) {
+  for (const m of [...BUNDLE, ...REDACTION_BUNDLE]) {
     const p = join(dir, m.name);
     writeFileSync(p, await m.build());
     out.push(m.name);

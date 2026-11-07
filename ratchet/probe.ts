@@ -4,6 +4,7 @@
 // - 今のルールの判定は、コマンドの道具（cli/omamori.ts check）の結果から、型・深刻度・見出し・ページだけを取る。
 // - 構造は pdf-lib で数える：文書情報の欄（名前と字数）、カタログの欄、名前の木、フォームの欄の数、ページごとの注釈・画像・書体の数、
 //   オブジェクトの種類ごとの数、増分更新の数、XMP の要素の名前（値は取らない）、レイヤー、暗号化。
+// - 墨消しの手がかり（ratchet/redaction.ts）は、ページを画像にするので別の子のプロセスで数え、打ち切っても構造の要約は残す。
 // - 壊れた・巨大な・細工した PDF でも止まらないように、呼ぶ側が子のプロセスで動かし、時間で打ち切る（runProbe）。
 //
 // 子のプロセスとして：node ratchet/probe.ts <PDF のパス>   → 標準出力に JSON を 1 つ
@@ -13,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, PDFStream } from "pdf-lib";
+import type { RedactionClues } from "./redaction.ts";
 
 export type Probe = {
   bytes: number;
@@ -31,6 +33,8 @@ export type Probe = {
   objectTypes: Record<string, number>;
   /** 今のルールの判定（コマンドの道具の結果から、型・深刻度・見出し・ページだけ） */
   rules: { stage: string | null; items: Array<{ pattern: string; ruleId: string; severity: string; title: string; page: number | null }> };
+  /** 墨消しの手がかり（ratchet/redaction.ts。数と形だけ）。調べられなければ failed */
+  redaction: RedactionClues | { failed: string } | null;
   notes: string[];
 };
 
@@ -60,7 +64,7 @@ export function xmpElementNames(xml: string): string[] {
   return [...set].sort();
 }
 
-export async function probeStructure(bytes: Uint8Array): Promise<Omit<Probe, "rules">> {
+export async function probeStructure(bytes: Uint8Array): Promise<Omit<Probe, "rules" | "redaction">> {
   const notes: string[] = [];
   const head = new TextDecoder("latin1").decode(bytes.subarray(0, 16));
   const pdfVersion = /%PDF-(\d\.\d)/.exec(head)?.[1] ?? null;
@@ -68,7 +72,7 @@ export async function probeStructure(bytes: Uint8Array): Promise<Omit<Probe, "ru
   const base = {
     bytes: bytes.length, pdfVersion, encrypted: false, eofCount, info: [], catalogKeys: [], nameTrees: [], acroFormFields: 0,
     ocgCount: 0, xmp: null, pages: 0, pageSummary: [], objectTypes: {}, notes,
-  } as Omit<Probe, "rules">;
+  } as Omit<Probe, "rules" | "redaction">;
   let doc: PDFDocument;
   try {
     doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
@@ -190,15 +194,27 @@ function runNode(args: string[], timeoutMs: number): Promise<{ code: number | nu
 }
 
 /** 1 件を、子のプロセスで調べる。時間を超えたら打ち切り、「調べきれなかった」と書く（省いたことを隠さない） */
-export async function runProbe(path: string, timeoutMs = 120_000): Promise<Probe | { failed: string }> {
+export async function runProbe(path: string, timeoutMs = 120_000, opts: { rules?: boolean } = {}): Promise<Probe | { failed: string }> {
   const s = await runNode([join(here, "probe.ts"), path], timeoutMs);
   if (s.timedOut) return { failed: "構造を数えるのに時間がかかりすぎた" };
-  let structure: Omit<Probe, "rules">;
+  let structure: Omit<Probe, "rules" | "redaction">;
   try {
     structure = JSON.parse(s.stdout);
   } catch {
     return { failed: "構造を数えられなかった" };
   }
+  // 墨消しの手がかりは、別の子のプロセスで数える（画像にするので重い。打ち切っても、構造の要約は残す）
+  const r = await runNode([join(here, "redaction.ts"), path], timeoutMs);
+  let redaction: Probe["redaction"] = null;
+  if (r.timedOut) redaction = { failed: "墨消しの手がかりを数えるのに時間がかかりすぎた" };
+  else {
+    try {
+      redaction = JSON.parse(r.stdout);
+    } catch {
+      redaction = { failed: "墨消しの手がかりを数えられなかった" };
+    }
+  }
+  if (opts.rules === false) return { ...structure, rules: { stage: null, items: [] }, redaction };
   const c = await runNode([join(root, "cli/omamori.ts"), "check", "--format", "json", "--fail-on", "never", "--timeout", String(Math.floor(timeoutMs / 1000)), path], timeoutMs + 10_000);
   let rules: Probe["rules"] = { stage: null, items: [] };
   if (c.timedOut) structure.notes.push("今のルールの判定が時間内に終わらなかった");
@@ -209,7 +225,7 @@ export async function runProbe(path: string, timeoutMs = 120_000): Promise<Probe
       structure.notes.push("今のルールの判定を読めなかった");
     }
   }
-  return { ...structure, rules };
+  return { ...structure, rules, redaction };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
