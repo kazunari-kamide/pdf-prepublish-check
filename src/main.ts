@@ -14,7 +14,7 @@ import type { InspectOutcome } from "./inspect/protocol";
 import type { PageBox, InspectSummary } from "./inspect/report";
 import { inspectInWorker } from "./inspect/run";
 import { fromFraction, toFraction, viewSize } from "./inspect/view";
-import { PdfView, RenderTimeout } from "./render/pdf-view";
+import { PdfView, RenderSuperseded, RenderTimeout } from "./render/pdf-view";
 import { MAX_REDACT_AREAS } from "./sanitize/areas";
 import { compressInWorker, preflightInWorker, sanitizeInWorker } from "./sanitize/run";
 import { loadPartsAfterDisplay, resetParts, waitParts } from "./parts";
@@ -1115,6 +1115,8 @@ async function showPage(page: number, selectNo: number | null) {
       if (session !== s || s.current !== page) return;
       ui.sheet.dataset.drawn = "true";
     } catch (e) {
+      // あとから同じページを描き直す頼みが来て、この描画をやめた（描き直す側が、絵と知らせの文を決める）
+      if (e instanceof RenderSuperseded) return;
       if (session !== s || s.current !== page) return;
       clear();
       note =

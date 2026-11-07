@@ -137,6 +137,16 @@ const LOAD_OPTIONS = {
 
 export class RenderTimeout extends Error {}
 
+/**
+ * 同じ canvas に、あとから別の描く頼みが来たため、この描画をやめた（呼ぶ側は、画面に何もせずに抜ける）。
+ * PDF.js は、描いている途中の canvas にもう 1 つ描かせると断る。前は、断られた側が canvas を 1×1 に戻し、
+ * そのあとで先の描画が「描けた」になって、ページが灰色のまま残った（JPEG 2000 のように、解くのに時間がかかる画像のページ。2026-11-07）
+ */
+export class RenderSuperseded extends Error {}
+
+/** canvas ごとの、いま描いている頼み（新しい頼みが来たら、前の描画を取り消し、終わるのを待ってから描く） */
+const drawing = new WeakMap<HTMLCanvasElement, { task: RenderTask | null; done: Promise<void> }>();
+
 export class PdfView {
   private broken = false;
   private constructor(
@@ -177,6 +187,38 @@ export class PdfView {
    */
   async render(pageNo: number, canvas: HTMLCanvasElement, cssWidth: number, timeoutMs = RENDER_TIMEOUT_MS): Promise<void> {
     if (this.broken) throw new RenderTimeout();
+    let release = () => {};
+    const mine = { task: null as RenderTask | null, done: new Promise<void>((r) => (release = r)) };
+    const before = drawing.get(canvas);
+    drawing.set(canvas, mine);
+    const superseded = () => drawing.get(canvas) !== mine;
+    try {
+      // 同じ canvas に描いている途中の頼みがあれば、取り消して、終わるのを待つ（2 つを重ねて描かせない）
+      if (before) {
+        before.task?.cancel();
+        await before.done;
+      }
+      if (superseded()) throw new RenderSuperseded();
+      await this.draw(pageNo, canvas, cssWidth, timeoutMs, mine, superseded);
+    } catch (e) {
+      // あとの頼みに取り消された（PDF.js の RenderingCancelledException など）ときは、どれも「やめた」として返す
+      if (superseded() && !(e instanceof RenderTimeout)) throw new RenderSuperseded();
+      throw e;
+    } finally {
+      if (!superseded()) drawing.delete(canvas);
+      release();
+    }
+  }
+
+  private async draw(
+    pageNo: number,
+    canvas: HTMLCanvasElement,
+    cssWidth: number,
+    timeoutMs: number,
+    mine: { task: RenderTask | null },
+    superseded: () => boolean,
+  ): Promise<void> {
+    if (this.broken) throw new RenderTimeout();
     let task: RenderTask | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
@@ -192,12 +234,15 @@ export class PdfView {
     });
     try {
       const page = await Promise.race([this.doc.getPage(pageNo), timeout]);
+      // ページを読むあいだに、あとの頼みが来ていたら、canvas の大きさを変えずにやめる
+      if (superseded()) throw new RenderSuperseded();
       const base = page.getViewport({ scale: 1 });
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
       const viewport = page.getViewport({ scale: (cssWidth / base.width) * ratio });
       canvas.width = Math.max(1, Math.floor(viewport.width));
       canvas.height = Math.max(1, Math.floor(viewport.height));
       task = page.render({ canvas, viewport });
+      mine.task = task;
       await Promise.race([task.promise, timeout]);
     } finally {
       clearTimeout(timer);
