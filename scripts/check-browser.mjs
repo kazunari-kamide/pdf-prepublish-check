@@ -47,6 +47,9 @@ const DEFAULT_PDFS = [
   "fixtures/p6/p6-h01-heavy-page.pdf",
   "fixtures/p6/p6-n01-text-removed.pdf",
   "fixtures/p5/p5-25-encrypted-user-password.pdf",
+  // JPEG 2000 の画像だけの 1 ページ（合成。scripts/samples/make-jpx-scan.py）。画像を解くのに時間がかかり、
+  // 1 ページ目を描いている途中で描き直しの頼みが来る。前は canvas が 1×1 のまま「描けた」になった（2026-11-07）
+  "scripts/samples/jpx-scan-synthetic.pdf",
 ];
 
 const args = process.argv.slice(2);
@@ -150,7 +153,7 @@ try {
   for (const r of results) {
     console.log(`\n■ ${r.name}`);
     console.log(`  状態：${r.status}`);
-    console.log(`  ページの絵：${r.drawn}${r.dark === null || r.dark === undefined ? "" : `（暗い点 ${r.dark}%）`}`);
+    console.log(`  ページの絵：${r.drawn}${r.dark === null || r.dark === undefined ? "" : `（暗い点 ${r.dark}%）`}${r.sheetSize ? `・${r.sheetSize.join("×")}` : ""}`);
     for (const n of r.notices ?? []) console.log(`  お知らせ：${n}`);
     if (r.cleaned) {
       console.log(`  片付け：${r.cleaned.status}`);
@@ -204,6 +207,7 @@ try {
   const notReady = tried.filter((r) => r.partsReady === false).length;
   console.log(`PDF を入れた後：同じサイトへの要求 ${afterSame} 件（0 のはず）${notReady ? `。部品を読み終わらなかった回 ${notReady} 回` : ""}`);
   const notSaved = results.filter((r) => r.cleaned && r.cleaned.ok === false);
+  const blankDrawn = results.filter((r) => r.drawn === "描けた" && (!r.sheetSize || r.sheetSize[0] <= 1 || r.sheetSize[1] <= 1));
   console.log(`\n合計：PDF ${results.length} 件、外への要求 ${outside} 件、CSP で止められた要求 ${blocked} 件`);
   if (selfTest) {
     // 点検では、外への要求を捕まえられていれば成功
@@ -221,6 +225,9 @@ try {
     exitCode = 1;
   } else if (pageProblems.length) {
     console.error(`失敗：サイトのページが開けないか、console にエラーが出ました（${pageProblems.map((p) => p.path).join("、")}）。`);
+    exitCode = 1;
+  } else if (blankDrawn.length) {
+    console.error(`失敗：ページの絵が「描けた」なのに、絵の大きさが 1×1 のままでした（${blankDrawn.map((r) => r.name).join("、")}）。`);
     exitCode = 1;
   } else if (notSaved.length) {
     console.error(`失敗：片付けた PDF を保存できませんでした（${notSaved.map((r) => r.name).join("、")}）。`);
@@ -401,6 +408,8 @@ async function checkOne(c, pdf) {
       await sleep(500);
       dark = await darkNow();
     }
+    // 「描けた」なのに canvas が 1×1（描いたあとで消された）になっていないかを見る（2026-11-07）
+    const sheetSize = await evaluate("(() => { const c = document.getElementById('sheet-canvas'); return c ? [c.width, c.height] : null; })()");
     const notices = await evaluate("[...document.querySelectorAll('#notice-list li')].map((li) => li.textContent)");
 
     let shot = null;
@@ -432,6 +441,7 @@ async function checkOne(c, pdf) {
       status,
       drawn,
       dark,
+      sheetSize,
       notices,
       all,
       same: all.filter((u) => u.startsWith(origin + "/")).map((u) => u.slice(origin.length)),
