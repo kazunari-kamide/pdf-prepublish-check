@@ -31,6 +31,7 @@ import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/
 import { detectUnusedImages, type UnusedImageReport } from "../../rules/unused-images/index.ts";
 import { detectP2Parts, type P2PartsFinding, type P2PartsReport } from "../../rules/p2-parts/index.ts";
 import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
+import { detectXmpThumbnail, type XmpThumbnailReport } from "../../rules/xmp-thumbnail/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import { INFLATE_LIMIT_MESSAGE, isInflateLimitError } from "../../rules/shared/inflate-limit.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
@@ -1085,5 +1086,27 @@ const fontGlyphs = defineRule<FontGlyphReport>({
     })),
 });
 
+// ---------------------------------------------------------------- 文書全体の XMP の縮小画像
+
+const xmpThumbnail = defineRule<XmpThumbnailReport>({
+  id: "xmp-thumbnail",
+  label: "XMP の縮小画像",
+  pattern: "P2",
+  detect: (b) => detectXmpThumbnail(b),
+  // いまのページとは比べていないので、いつも「確かめてください」（中）【仮】
+  items: (r) =>
+    r.findings.map((f): Item => ({
+      pattern: "P2",
+      severity: "medium", // 【仮】
+      confidence: "check",
+      title: "埋め込まれた作成の記録（XMP）に、縮小画像が残っています",
+      why: "ページを差し替えたり黒塗りしたりしても、縮小画像は前の見た目のまま残ることがあります。取り出すと見られます。確かめてください。",
+      detail: [f.width && f.height ? `${f.width}×${f.height} 画素` : "", formatSize(f.bytes)].filter(Boolean).join("／"),
+      page: null,
+      rect: null,
+    })),
+  notices: (r) => (r.limits.length ? [{ kind: "partial", message: "埋め込まれた作成の記録が大きすぎる・読めないため、調べていません。", pages: [] }] : []),
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, p4, p9, p8, p11, p12, p10, pii];
+export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, xmpThumbnail, p4, p9, p8, p11, p12, p10, pii];

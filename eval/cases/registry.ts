@@ -32,6 +32,8 @@ import * as ui from "./unused-images.ts";
 import { detectUnusedImages } from "../../rules/unused-images/index.ts";
 import * as p7i from "./p7-images.ts";
 import * as p6v from "./p6-vector.ts";
+import * as xt from "./xmp-thumbnail.ts";
+import { detectXmpThumbnail } from "../../rules/xmp-thumbnail/index.ts";
 
 export type TypeCases = {
   /** 型の番号と、画面の名前 */
@@ -59,6 +61,7 @@ export const TYPES: TypeCases[] = [
   { pattern: "P5", label: "描かれていない画像", ruleId: "unused-images", cases: ui.CASES, keys: async (b) => ui.keysOf(await detectUnusedImages(b)) },
   { pattern: "P7", label: "見えない所に置いた画像", ruleId: "p7-hidden（画像）", cases: p7i.CASES, keys: async (b) => p7i.keysOf(await p7i.detect(b)) },
   { pattern: "P6", label: "白い注釈の下の図形", ruleId: "p6-text（図形の層）", cases: p6v.CASES, keys: async (b) => p6v.keysOf(await p6v.detect(b)) },
+  { pattern: "P2", label: "XMP の縮小画像", ruleId: "xmp-thumbnail", cases: xt.CASES, keys: async (b) => xt.keysOf(await detectXmpThumbnail(b)) },
 ];
 
 export type Score = {
