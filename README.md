@@ -136,6 +136,9 @@ PDF は、画面に見えている中身のほかに、いろいろな情報を�
 
 利用者の PDF は、このループに一切入りません。検査器は Claude なしで動きます。
 
+- **Claude の呼び方**：ループ（`npm run ratchet`）は、運営の Claude API（Messages API）で下読み・判断・反証を呼び、ルールと見本を書く段は Claude Code（`claude -p`）で動かします。これまでの 3 回の実行は、どの段も `claude -p` でした。詳しくは [`docs/ratchet.md`](docs/ratchet.md)。
+- **定時に回す設定**：毎日 5:00・20:00 に、手元の束だけを、費用の上限 5 ドルで回す設定があります（[`ratchet/schedule.json`](ratchet/schedule.json)、手順は [`docs/ratchet-schedule.md`](docs/ratchet-schedule.md)）。まだ定時で回したことはありません。
+
 ## ほかの入口
 
 - **コマンドの道具（`cli/`）**：フォルダごとまとめて確かめます。PDF のほか、写真（JPEG・PNG・WebP・HEIC）と今の Office（docx・xlsx・pptx）も調べます。型・数・場所だけを出し、通信しません。使い方は [docs/cli.md](docs/cli.md)。
