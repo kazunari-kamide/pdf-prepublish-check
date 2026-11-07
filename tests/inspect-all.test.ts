@@ -44,6 +44,7 @@ describe("登録したルール", () => {
       "pii",
       "props-diff",
       "unused-images",
+      "xmp-thumbnail",
     ]);
   });
 });
