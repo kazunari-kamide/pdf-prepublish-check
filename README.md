@@ -136,7 +136,7 @@ PDF は、画面に見えている中身のほかに、いろいろな情報を�
 
 利用者の PDF は、このループに一切入りません。検査器は Claude なしで動きます。
 
-- **Claude の呼び方**：ループ（`npm run ratchet`）は、運営の Claude API（Messages API）で下読み・判断・反証を呼び、ルールと見本を書く段は Claude Code（`claude -p`）で動かします。ルールを育てた実物の回（実物の束での 3 回と、3 回目の候補をルール書きからやり直した 1 回）は、どれも `claude -p` で呼びました。Claude API で呼んだのは、2026-11-07 の試しの 1 回だけです。詳しくは [`docs/ratchet.md`](docs/ratchet.md)。
+- **Claude の呼び方**：ループ（`npm run ratchet`）は、運営の Claude API（Messages API）で下読み・判断・反証を呼び、ルールと見本を書く段は Claude Code（`claude -p`）で動かします。ルールを育てた実物の回（実物の束での 3 回と、3 回目の候補をルール書きからやり直した 1 回）は、どれも `claude -p` で呼びました。Claude API では、2026-11-07 に試しの 1 回を最後まで回しました（候補は 0 件）。詳しくは [`docs/ratchet.md`](docs/ratchet.md)。
 - **これまでの結果**：ループが出した PR は 4 本です。人が確かめて、3 本をマージし（#175・#176・#182）、1 本を理由を書いて閉じました（#177。根拠にした件数と、実物の束にかけて当たった数が合わなかったため）。
 - **定時に回す設定**：毎日 5:00・20:00 に、手元の束だけを、費用の上限 5 ドルで回す設定があります（[`ratchet/schedule.json`](ratchet/schedule.json)、手順は [`docs/ratchet-schedule.md`](docs/ratchet-schedule.md)）。まだ定時で回したことはありません。
 
