@@ -12,7 +12,7 @@ import { markDone, markStarted, readExclude, selectBundle, sha256File, type Stat
 import { buildArgs, Caller, wrapData, type Runner } from "../ratchet/claude.ts";
 import { limitsFrom, readEnv, viaFrom } from "../ratchet/config.ts";
 import Anthropic from "@anthropic-ai/sdk";
-import { costOf, errorDetail, maxTokensFor, readApiKey, realApiSend, toApiSchema, type ApiRequest, type ApiSend } from "../ratchet/api.ts";
+import { apiCheck, costOf, errorDetail, keyShape, mask, maxTokensFor, readApiKey, realApiSend, toApiSchema, type ApiRequest, type ApiSend } from "../ratchet/api.ts";
 import { scheduleArgs } from "../ratchet/schedule.ts";
 import { checkDiff, compareMetrics } from "../ratchet/gate.ts";
 import type { Metrics, TypeScore } from "../ratchet/metrics.ts";
@@ -931,7 +931,7 @@ describe("Claude API（Messages API）で呼ぶ", () => {
   it("キーは ANTHROPIC_API_KEY からだけ読み、無ければ名前だけを出して止める。エラーの文にキーを出さない", async () => {
     expect(() => readApiKey({})).toThrow(/環境変数がありません：ANTHROPIC_API_KEY/);
     expect(() => readApiKey({ ANTHROPIC_AUTH_TOKEN: "t" })).toThrow(/ANTHROPIC_API_KEY/);
-    expect(readApiKey({ ANTHROPIC_API_KEY: "sk-ant-架空" })).toBe("sk-ant-架空");
+    expect(readApiKey({ ANTHROPIC_API_KEY: "sk-ant-kasou" })).toBe("sk-ant-kasou");
     await expect(realApiSend({})({ model: "m", text: "t", schema: SKIM, maxTokens: 10, timeoutMs: 10 })).rejects.toThrow(/ANTHROPIC_API_KEY/);
     const e = new Anthropic.AuthenticationError(401, { type: "error", error: { type: "authentication_error", message: "invalid x-api-key sk-ant-架空" } }, "invalid x-api-key sk-ant-架空", new Headers());
     expect(errorDetail(e)).toMatch(/^API 401/);
@@ -959,5 +959,65 @@ describe("Claude API（Messages API）で呼ぶ", () => {
     expect(s.times).toEqual(["05:00", "20:00"]);
     expect(raw).not.toMatch(/sk-ant|ANTHROPIC_API_KEY=|[A-Za-z]:\\|https?:\/\//);
     expect(scheduleArgs(s)).toEqual(["--via", "api", "--run-budget", "5", "--bundle", String(s.bundle)]);
+  });
+});
+
+describe("Claude API で呼べなかった理由を残す（2026-11-07 夜、手動の 1 回が下読みの最初で止まった件）", () => {
+  const KEY = "sk-ant-api03-KASOU0123456789";
+  const env = { ANTHROPIC_API_KEY: KEY };
+  const req: ApiRequest = { model: "claude-haiku-5-5", text: "t", schema: SKIM, maxTokens: 100, timeoutMs: 5000 };
+  const json = (status: number, type: string, message: string) => async () =>
+    new Response(JSON.stringify({ type: "error", error: { type, message } }), { status, headers: { "content-type": "application/json", "request-id": "req_kasou" } });
+
+  it("API の答えが 4xx なら、状態番号・エラーの型・API の説明・request-id を返す（キーは伏せる）", async () => {
+    const r = await realApiSend(env, { fetch: json(401, "authentication_error", `invalid x-api-key ${KEY}`), maxRetries: 0 })(req);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.detail).toMatch(/^API 401 authentication_error 「invalid x-api-key 〈キーを伏せた〉」 request-id req_kasou$/);
+    expect(r.detail).not.toContain(KEY);
+    const b = await realApiSend(env, { fetch: json(400, "invalid_request_error", "Your credit balance is too low"), maxRetries: 0 })(req);
+    expect(!b.ok && b.detail).toMatch(/API 400 invalid_request_error 「Your credit balance is too low」/);
+  });
+
+  it("送る前に落ちた・つながらないときは、原因の種類を返す", async () => {
+    const r = await realApiSend(env, { fetch: async () => { throw new TypeError("fetch failed"); }, maxRetries: 0 })(req);
+    expect(!r.ok && r.detail).toMatch(/^API につながらない（TypeError/);
+  });
+
+  it("うまくいかなかった呼び出しの理由を、呼び出しの記録（summary.json の callErrors）に残す", async () => {
+    const c = new Caller({ skim: 2, judge: 1, write: 1, runBudgetUsd: null }, async () => ({ code: 0, stdout: "", stderr: "" }), { api: realApiSend(env, { fetch: json(404, "not_found_error", "model: claude-haiku-5-5"), maxRetries: 0 }) });
+    const r = await c.call({ role: "skim", model: "claude-haiku-5-5", prompt: "p", schema: SKIM, cwd: "." });
+    expect(!r.ok && r.error).toBe("呼べなかった");
+    expect(c.errors).toEqual([{ role: "skim", via: "api", error: "呼べなかった", detail: "API 404 not_found_error 「model: claude-haiku-5-5」 request-id req_kasou" }]);
+  });
+
+  it("キーの前後の空白は落とし、見出しに入れられない字があれば呼ぶ前に何字目かだけを出して止める", () => {
+    expect(readApiKey({ ANTHROPIC_API_KEY: ` ${KEY}\r\n` })).toBe(KEY);
+    expect(() => readApiKey({ ANTHROPIC_API_KEY: `“${KEY}”` })).toThrow(/キーに使えない字があります（1 字目/);
+    expect(() => readApiKey({ ANTHROPIC_API_KEY: "sk-ant-ａ" })).toThrow(/8 字目/);
+    expect(() => readApiKey({ ANTHROPIC_API_KEY: "  " })).toThrow(/環境変数がありません/);
+  });
+
+  it("キーの様子は、値を出さずに長さと形だけを出す", () => {
+    const s = keyShape({ ANTHROPIC_API_KEY: `${KEY}\n` });
+    expect(s).toBe(`ANTHROPIC_API_KEY：${KEY.length} 字、sk-ant- で始まる：はい、前後の空白：あった（落とす）、使えない字：0 個`);
+    expect(s).not.toContain("KASOU");
+    expect(keyShape({})).toBe("ANTHROPIC_API_KEY：ない");
+    expect(mask(`x ${KEY} y sk-ant-other`, [KEY])).toBe("x 〈キーを伏せた〉 y 〈キーを伏せた〉");
+  });
+
+  it("API の確かめ（npm run ratchet:api-check）は、モデルの情報を読むだけで、使えるか・なぜ使えないかを出す", async () => {
+    const seen: string[] = [];
+    const fetch = async (url: string | URL | Request) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.endsWith("/claude-opus-5-5")) return new Response(JSON.stringify({ type: "model", id: "claude-opus-5-5", display_name: "x", created_at: "2026-01-01T00:00:00Z" }), { status: 200, headers: { "content-type": "application/json" } });
+      return json(403, "permission_error", "not allowed")();
+    };
+    const lines = await apiCheck(["claude-haiku-5-5", "claude-opus-5-5", "claude-opus-5-5"], env, { fetch: fetch as typeof globalThis.fetch });
+    expect(lines[0]).toMatch(/^ANTHROPIC_API_KEY：\d+ 字/);
+    expect(lines.slice(1)).toEqual(["claude-haiku-5-5：API 403 permission_error 「not allowed」 request-id req_kasou", "claude-opus-5-5：使える（claude-opus-5-5）"]);
+    expect(seen.every((u) => u.startsWith("https://api.anthropic.com/v1/models/"))).toBe(true);
+    expect(await apiCheck(["m"], {})).toEqual(["ANTHROPIC_API_KEY：ない", "環境変数がありません：ANTHROPIC_API_KEY"]);
   });
 });

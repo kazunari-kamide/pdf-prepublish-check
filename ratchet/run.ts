@@ -142,6 +142,8 @@ async function main() {
     // 呼び方と、役ごとに実際に使った呼び方・モデル ID。API を使ったときは effort と使った量も
     outcome.via = caller.via;
     outcome.models = caller.used;
+    // うまくいかなかった呼び出しの理由（HTTP の状態番号・エラーの型・API の説明。キーは伏せてある）
+    if (caller.errors.length) outcome.callErrors = caller.errors;
     if (Object.values(caller.used).some((u) => u?.via === "api")) {
       outcome.effort = API_EFFORT;
       outcome.apiUsage = caller.usage;
@@ -190,7 +192,7 @@ async function main() {
       const r = await caller.call<Refute>({ role: "refute", model: MODELS.refute, prompt: REFUTE_PROMPT, data: { candidate: c, basis: [], knownRules: known, currentRules: [], rejections: [] }, schema: REFUTE, cwd: emptyDir, budgetUsd: limits.perCallBudgetUsd });
       const row = r.ok ? { pattern: c.pattern, title: c.title, nearestRule: c.nearestRule, keep: r.value.keep, reason: r.value.reason, explanation: r.value.explanation } : { pattern: c.pattern, title: c.title, error: r.error };
       rows.push(row);
-      log("反証した", r.ok ? { 型: c.pattern, 残す: r.value.keep, 理由: r.value.reason } : { 型: c.pattern, 止まった: r.error });
+      log("反証した", r.ok ? { 型: c.pattern, 残す: r.value.keep, 理由: r.value.reason } : { 型: c.pattern, 止まった: r.error, 詳しく: r.detail });
     }
     outcome.refuteOnly = rows;
     return finish(null);
@@ -296,7 +298,10 @@ async function main() {
       if (r.error === "形が合わない") {
         dropped++;
         log("形が合わない答えを捨てた", { 番号: it.id, 段: "下読み" });
-      } else return `下読みで止まった（${r.error}）`;
+      } else {
+        log("下読みで止まった", { 番号: it.id, 理由: r.error, 詳しく: r.detail });
+        return `下読みで止まった（${r.error}：${r.detail}）`;
+      }
     } else {
       for (const s of r.value.suspicions) if (!s.alreadyReported) suspicions.push({ id: it.id, pattern: s.pattern, signal: s.signal });
     }
@@ -315,7 +320,10 @@ async function main() {
   const j = await caller.call<{ candidates: Candidate[] }>({
     role: "judge", model: MODELS.judge, prompt: JUDGE_PROMPT, data: { suspicions, knownRules: known, currentRules: [...rulesSeen].sort(), rejections }, schema: CANDIDATES, cwd: emptyDir, budgetUsd: limits.perCallBudgetUsd,
   });
-  if (!j.ok) return `候補を出す段で止まった（${j.error}）`;
+  if (!j.ok) {
+    log("候補を出す段で止まった", { 理由: j.error, 詳しく: j.detail });
+    return `候補を出す段で止まった（${j.error}：${j.detail}）`;
+  }
   const candidates = j.value.candidates;
   log("候補を出した", { 候補: candidates.length });
 
@@ -332,7 +340,7 @@ async function main() {
     const r = await caller.call<Refute>({ role: "refute", model: MODELS.refute, prompt: REFUTE_PROMPT, data: { candidate: c, basis, knownRules: known, currentRules: [...rulesSeen].sort(), rejections }, schema: REFUTE, cwd: emptyDir, budgetUsd: limits.perCallBudgetUsd });
     if (!r.ok) {
       if (r.error === "形が合わない") continue;
-      log("反証の段で止まった", { 理由: r.error });
+      log("反証の段で止まった", { 理由: r.error, 詳しく: r.detail });
       break;
     }
     // 判断の中身（型・題・反証の理由と説明）を記録に残す。PDF の中身は入れていない（スキーマとプロンプトで、型と構造の言葉だけにしてある）
@@ -386,7 +394,7 @@ async function main() {
         : { candidate: c, gate: { reasons: gate!.reasons, declined: gate!.declined, table: gate!.table.filter((r) => r.change !== "同じ"), evidence: hits ? { total: hits.total, hit: hits.hit, failed: hits.failed, shape: evidenceShape } : null } };
       const w: CallResult<WriteReport> = await caller.call<WriteReport>({ role: "write", model: MODELS.write, prompt: first ? writePrompt() : fixPrompt(), data, schema: WRITE_REPORT, cwd: dir, editTools: true, budgetUsd: limits.perCallBudgetUsd, timeoutMs: 40 * 60_000 });
       if (!w.ok) {
-        stop = `ルールを書く段で止まった（${w.error}）`;
+        stop = `ルールを書く段で止まった（${w.error}：${w.detail}）`;
         break;
       }
       if (w.denials > 0) {
@@ -565,7 +573,7 @@ function publishRun(runId: string, env: ReturnType<typeof readEnv>): void {
 
 main().catch((e) => {
   // 例外の文に中身やパスが混ざりうるので、種類だけを出す（こちらで書いた「環境変数がありません」だけは、変数の名前なので出す）
-  const own = e instanceof Error && /^(環境変数がありません|作業の木を作れなかった|回の番号の形が違う|その回の記録が無い)/.test(e.message);
+  const own = e instanceof Error && /^(環境変数がありません|ANTHROPIC_API_KEY に、キーに使えない字|作業の木を作れなかった|回の番号の形が違う|その回の記録が無い)/.test(e.message);
   console.error(`止まりました（${own ? e.message : e instanceof Error ? e.constructor.name : "不明"}）`);
   process.exitCode = 1;
 });

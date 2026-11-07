@@ -45,7 +45,8 @@
     "thumbs:draw": "node site-thumbs-draw.ts",
     "eval:redact": "vitest run tests/redact-eval.test.ts --silent=false",
     "eval:compress": "vitest run tests/compress-eval.test.ts --silent=false",
-    "ratchet:scheduled": "node ratchet/schedule.ts"
+    "ratchet:scheduled": "node ratchet/schedule.ts",
+    "ratchet:api-check": "node ratchet/api.ts --check"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "1.6.0",

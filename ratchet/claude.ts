@@ -105,6 +105,8 @@ export class Caller {
   used: Partial<Record<Role, { via: Via; model: string }>> = {};
   /** API が返した使った量の合計 */
   usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+  /** 呼べなかった・断った・形が合わないなど、うまくいかなかった呼び出しの理由（新しい 20 件。キーは伏せてある。summary.json に残す） */
+  errors: Array<{ role: Role; via: Via; error: string; detail: string }> = [];
   private limits: { skim: number; judge: number; write: number; runBudgetUsd: number | null };
   private runner: Runner;
   private api: ApiSend;
@@ -143,9 +145,9 @@ export class Caller {
     const via = this.viaFor(o);
     this.used[o.role] = { via, model: o.model };
     const stdin = o.data === undefined ? o.prompt : `${o.prompt}\n\n${wrapData(o.data)}`;
-    if (via === "api") return this.callApi<T>(o, stdin);
-    const r = await this.runner(buildArgs(o), stdin, o.cwd, o.timeoutMs ?? 15 * 60_000);
-    return this.parse<T>(r, o.schema);
+    const res = via === "api" ? await this.callApi<T>(o, stdin) : this.parse<T>(await this.runner(buildArgs(o), stdin, o.cwd, o.timeoutMs ?? 15 * 60_000), o.schema);
+    if (!res.ok) this.errors = [...this.errors, { role: o.role, via, error: res.error, detail: res.detail }].slice(-20);
+    return res;
   }
 
   private addUsage(model: string, u: ApiUsage | null): number {
