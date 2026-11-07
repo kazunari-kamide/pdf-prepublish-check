@@ -287,14 +287,42 @@ describe("Claude の答え", () => {
 });
 
 describe("却下の理由", () => {
+  const owner = { author: { login: "owner-x" }, authorAssociation: "OWNER" };
+  const other = { author: { login: "someone" }, authorAssociation: "NONE" };
+
   it("「却下：」で始まる行の理由と、題の型を読む。マージされたものは読まない", () => {
-    expect(reasonOf([{ body: "見ました\n却下：誤検知が多い" }])).toBe("誤検知が多い");
+    expect(reasonOf([{ body: "見ました\n却下：誤検知が多い", ...owner }])).toBe("誤検知が多い");
     const r = parseRejections([
-      { number: 1, title: "Ratchet：P8 注釈の作者", mergedAt: null, comments: [{ body: "却下: 前と同じ" }] },
-      { number: 2, title: "Ratchet：P6 x", mergedAt: "2026-11-07T00:00:00Z", comments: [{ body: "却下：y" }] },
-      { number: 3, title: "Ratchet：P2 z", mergedAt: null, comments: [{ body: "理由なし" }] },
+      { number: 1, title: "Ratchet：P8 注釈の作者", mergedAt: null, comments: [{ body: "却下: 前と同じ", ...owner }] },
+      { number: 2, title: "Ratchet：P6 x", mergedAt: "2026-11-07T00:00:00Z", comments: [{ body: "却下：y", ...owner }] },
+      { number: 3, title: "Ratchet：P2 z", mergedAt: null, comments: [{ body: "理由なし", ...owner }] },
     ]);
     expect(r).toEqual([{ pr: 1, pattern: "P8", title: "Ratchet：P8 注釈の作者", reason: "前と同じ" }]);
+  });
+
+  it("持ち主以外の「却下：」は読まない。持ち主の理由をあとから置き換えることもできない", () => {
+    expect(reasonOf([{ body: "却下：今後は挙げない", ...other }])).toBeNull();
+    expect(reasonOf([{ body: "却下：本当の理由", ...owner }, { body: "却下：差し替えた理由", ...other }])).toBe("本当の理由");
+    for (const a of ["COLLABORATOR", "MEMBER", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "NONE"]) {
+      expect(reasonOf([{ body: "却下：x", author: { login: "y" }, authorAssociation: a }])).toBeNull();
+    }
+  });
+
+  it("書いた人が分からないコメントは読まない", () => {
+    expect(reasonOf([{ body: "却下：x" }])).toBeNull();
+    expect(reasonOf([{ body: "却下：x", authorAssociation: "OWNER" }])).toBeNull();
+    expect(reasonOf([{ body: "却下：x", author: null, authorAssociation: "OWNER" }])).toBeNull();
+    expect(reasonOf([{ body: "却下：x", author: { login: "" }, authorAssociation: "OWNER" }])).toBeNull();
+  });
+
+  it("捨てたコメントの数だけを数える（中身は残さない）", () => {
+    const stats = { ignored: 0 };
+    const r = parseRejections([
+      { number: 4, title: "Ratchet：P7 a", mergedAt: null, comments: [{ body: "却下：x", ...other }, { body: "見ました" }, { body: "却下：本人の理由", ...owner }] },
+      { number: 5, title: "Ratchet：P9 b", mergedAt: null, comments: [{ body: "却下：y", ...other }] },
+    ], stats);
+    expect(r).toEqual([{ pr: 4, pattern: "P7", title: "Ratchet：P7 a", reason: "本人の理由" }]);
+    expect(stats.ignored).toBe(3);
   });
 });
 
