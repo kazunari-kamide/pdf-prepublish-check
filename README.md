@@ -20,7 +20,7 @@ PDF を公開・提出する前に、作った本人が自分で確かめるた�
 **Claude の使い方**：検査器の中では、Claude は動きません。Claude を使うのは、検査のルールを育てるループ（Ratchet）だけです。
 - Claude が、事前に集めた公開 PDF を読み、今のルールで捕まらない漏れ方を挙げます。別の Claude が反証します。
 - 残った候補は、Claude がルールと合成のテスト用 PDF にします。ルールとは別に作った検証器が採点し、基準を満たしたものだけが PR になります。
-- マージするかは人が決めます。これまでの PR は 4 本で、3 本をマージし、1 本は理由を書いて却下しました（[下の「検査のルールの育て方」](#検査のルールの育て方)）。
+- マージするかは人が決めます。これまでの PR は 4 本で、3 本をマージし、1 本は理由を書いて却下しました（[下の「検査のルールの育て方」](#検査のルールの育て方)、どこでどう使ったかの表は[「Claude をどこでどう使ったか」](#claude-をどこでどう使ったか)）。
 
 ## 使い方：見つける → 整える → 消えたことを確かめる
 
@@ -151,6 +151,20 @@ PDF は、画面に見えている中身のほかに、いろいろな情報を�
 - **これまでの結果**：ループが出した PR は 4 本です。人が確かめて、3 本をマージし（#175・#176・#182）、1 本を理由を書いて閉じました（#177。根拠にした件数と、実物の束にかけて当たった数が合わなかったため）。
   - #182（黒塗りのそばに塗られず残った、郵便のバーコードのような記号）は、3 回目の候補をルール書きからやり直したものです。根拠にした実物 53 件のうち 7 件で当たり、当たった 7 件は人が画像で確かめました。別の束 100 件では、当たったのは 1 件（下調べで見つけた本物と同じ PDF）で、残り 99 件は 0 件でした。
 - **定時に回す設定**：毎日 5:00・20:00 に、手元の束だけを、費用の上限 5 ドルで回す設定があります（[`ratchet/schedule.json`](ratchet/schedule.json)、手順は [`docs/ratchet-schedule.md`](docs/ratchet-schedule.md)）。まだ定時で回したことはありません（タスクスケジューラへの登録もしていません）。
+
+### Claude をどこでどう使ったか
+
+| 目的 | 選んだもの | 理由 | 出どころ |
+|---|---|---|---|
+| 下読み（束の PDF を 1 件ずつ見て、疑いを挙げる） | Haiku 5.5 | 件数が多いので、安いモデルで多くを読む | [`ratchet/config.ts`](ratchet/config.ts)・[`ratchet/api.ts`](ratchet/api.ts) |
+| 判断（疑いを束ねて候補にする）と反証 | Opus 5.5。反証は、候補を出した呼び出しとは別の呼び出しで、候補ごとに「もう捕まる・漏れではない・再現できない」を確かめる | 判断の誤りが PR の質を決めるので、強いモデルにし、出した側とは別に反証させる | [`ratchet/config.ts`](ratchet/config.ts)・[`ratchet/run.ts`](ratchet/run.ts)・[`.claude/workflows/ratchet.md`](.claude/workflows/ratchet.md) |
+| ルールと見本（合成 PDF・正解データの案）を書く | Claude Code（`claude -p`。Opus 5.5） | ファイルを読み書きする道具が要るため。渡すのは読み書きの道具だけで、コマンドとウェブは渡さない | [`ratchet/claude.ts`](ratchet/claude.ts)・[`.claude/workflows/ratchet.md`](.claude/workflows/ratchet.md) |
+| 採点する側を守る | 権限の拒否（deny）と、フック（`guard-writes.mjs`） | 合格基準・検証器・正解データを、ルールを書く Claude に書き換えさせないため。止められないことも書いてある | [`.claude/settings.json`](.claude/settings.json)・[`.claude/hooks/guard-writes.mjs`](.claude/hooks/guard-writes.mjs)・[`docs/write-guard.md`](docs/write-guard.md) |
+| Claude が書いたルールを、実物の PDF にかける | Node の権限の仕組み（`--permission`）の中で動かす。書き込み・子のプロセスは許さない | 合成の見本だけで通り、実物で当たらないルールを止めるため（#177 と 3 回目の最初の版で起きた） | [`ratchet/evidence.ts`](ratchet/evidence.ts)・[`docs/ratchet.md`](docs/ratchet.md) §3.4 |
+| 1 回分の段取りを残す | Node のスクリプトと、その説明の文書 | 段ごとの呼び方・道具・上限を、人が読んで確かめられるようにするため | [`ratchet/run.ts`](ratchet/run.ts)・[`.claude/workflows/ratchet.md`](.claude/workflows/ratchet.md) |
+| 利用者が、自分の Claude で検査を頼む | Claude Code のスキル `omamori-check` | 検査は手元のコマンドの道具で動かし、Claude に返すのは型・数・場所だけにするため。こちらのサービスは何も受け取らない | [`.claude/skills/omamori-check/SKILL.md`](.claude/skills/omamori-check/SKILL.md) |
+
+**Claude Code で何が可能になったか**：検査器と、それとは別の読み方の検証器、コマンドの道具、ルールを育てるループの道具（`ratchet/`）を、一人で、期間中にこのリポジトリで作りました。そのループで、事前に集めた公開 PDF から漏れ方を見つけ、ルールにし、別に作った採点で確かめて PR にする回し方を、実物の束で回しました。出てきた PR 4 本は人が確かめて 3 本を入れ、1 本を却下しました。合成の見本だけで通って実物では当たらないルールが出たことも、回した結果から分かったので、歯止め（根拠の実物で当たること）を足しました。
 
 ## ほかの入口
 
