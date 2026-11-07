@@ -8,6 +8,7 @@
 //   OMAMORI_RATCHET_CORPUS=<束のフォルダ> OMAMORI_RATCHET_STATE=<記録のフォルダ> [OMAMORI_RATCHET_EXCLUDE=<除く sha256 の一覧>] \
 //     npm run ratchet -- [--pr] [--bundle 50] [--max-candidates 3] [--fix-attempts 3] [--run-budget <ドル>] [--call-budget <ドル>]
 //     道具の確かめ：--from-candidates <JSON>（ルール書きから）・--refute-only <JSON>（反証の段だけ。束は読まない）
+//     墨消しの手がかりの数だけ：--probe-only [--limit N]（Claude は呼ばない。束の記録は変えない）
 //     dry-run を人が見たあと：--publish <回の番号>（残したブランチと pr-N.md を、作り直さずに PR にする。ratchet/publish.ts）
 //
 // 画面とログに出すのは、件数・時刻・エラーの種類・番号（b01 など）だけ。束のパス・ファイル名・PDF の中身は出さない。
@@ -16,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { listPdfs, loadState, markDone, markStarted, readExclude, saveState, selectBundle } from "./bundle.ts";
+import { listPdfs, loadState, markDone, markStarted, readExclude, saveState, selectBundle, sha256File } from "./bundle.ts";
 import { publishOne, publishTargets, realRun, type PublishResult } from "./publish.ts";
 import { Caller, type CallResult } from "./claude.ts";
 import { limitsFrom, MODELS, readEnv } from "./config.ts";
@@ -104,6 +105,7 @@ async function main() {
   const doPr = o.pr === "true";
   const env = readEnv();
   if (o.publish) return publishRun(o.publish, env);
+  if (o["probe-only"]) return probeOnlyRun(env, o);
   const limits = limitsFrom(o);
   const started = new Date();
   const runId = o["run-id"] ?? started.toISOString().replace(/[-:]/g, "").slice(0, 13).replace("T", "-");
@@ -369,6 +371,58 @@ async function main() {
   outcome.results = results;
   finish(null);
   }
+}
+
+/**
+ * 束のフォルダの PDF に、下読みの手がかり（probe）だけをかけて、墨消しの手がかりの数を出す（--probe-only。2026-11-07 本人の指定）。
+ * Claude は呼ばない。今のルールの判定もしない。読んだ記録（state）は変えない。採点用の実データは sha256 で除く。
+ * 画面と記録に出すのは、番号（p001 など。sha256 の順）と数と形だけ。パス・ファイル名・sha256 は出さない。
+ */
+async function probeOnlyRun(env: ReturnType<typeof readEnv>, o: Record<string, string | undefined>): Promise<void> {
+  const runId = `probe-${new Date().toISOString().replace(/[-:]/g, "").slice(0, 13).replace("T", "-")}`;
+  const runDir = join(env.state, "runs", runId);
+  mkdirSync(runDir, { recursive: true });
+  const exclude = readExclude(env.exclude);
+  const items = listPdfs(env.corpus).map((p) => ({ p, h: sha256File(p) })).filter((x) => !exclude.has(x.h)).sort((a, b) => (a.h < b.h ? -1 : 1));
+  const limit = o.limit ? Math.max(1, Number(o.limit) || 1) : items.length;
+  const rows: Array<Record<string, unknown>> = [];
+  const local = () => new Date().toLocaleTimeString("ja-JP", { hour12: false });
+  console.log(`[${local()}] 墨消しの手がかりを数える ${JSON.stringify({ 件数: Math.min(limit, items.length), 除いた: exclude.size ? "採点用の一覧で除いた" : "なし" })}`);
+  for (const [i, it] of items.slice(0, limit).entries()) {
+    const id = `p${String(i + 1).padStart(3, "0")}`;
+    const t = Date.now();
+    const pr = await runProbe(it.p, 120_000, { rules: false });
+    const red = "failed" in pr ? null : pr.redaction;
+    const row: Record<string, unknown> = { id, 秒: Math.round((Date.now() - t) / 1000) };
+    if ("failed" in pr) row.止まった = pr.failed;
+    else if (!red || "failed" in red) Object.assign(row, { ページ: pr.pages, 止まった: red ? red.failed : "手がかりが無い" });
+    else {
+      const near = red.pages.flatMap((p) => p.nearby);
+      Object.assign(row, {
+        ページ: red.pagesTotal, 画像にした: red.pagesRendered, 重くて省いた: red.pagesSkippedHeavy, 途中まで: red.partial,
+        墨消し: red.boxes, 墨消しのページ: red.pagesWithBoxes, 近くに棒の並び: red.boxesWithBarsNearby,
+        棒の本数の最大: near.length ? Math.max(...near.map((n) => n.bars)) : 0, 高さの種類の最大: near.length ? Math.max(...near.map((n) => n.heightKinds)) : 0,
+        同じ書式の組: red.sameLayout.similarPairs, 食い違い: red.sameLayout.mismatches, "■の続き": red.maskRuns.runs,
+        // 原因を調べるための、落とした理由ごとの数（数だけ）
+        落とした理由: red.diag ? {
+          暗いかたまりの候補: red.diag.candidates, 小さい: red.diag.small, 大きすぎ: red.diag.large, 線を外して見直して残った: red.diag.refined,
+          暗さが足りない: red.diag.dark, 白い字: red.diag.whiteText, ばらつき: red.diag.uneven, グラフの棒: red.diag.chart,
+          画像があるのに白く描かれたページ: red.diag.pagesBlank, 紙の明るさ: red.diag.paperMin === null ? null : `${red.diag.paperMin}〜${red.diag.paperMax}`,
+        } : null,
+      });
+    }
+    rows.push(row);
+    console.log(`[${local()}] ${JSON.stringify(row)}`);
+  }
+  const sum = (k: string) => rows.reduce((a, r) => a + (typeof r[k] === "number" ? (r[k] as number) : 0), 0);
+  const count = (k: string) => rows.filter((r) => typeof r[k] === "number" && (r[k] as number) > 0).length;
+  const total = {
+    件数: rows.length, 止まった: rows.filter((r) => r.止まった).length, 墨消しのある: count("墨消し"), 墨消し: sum("墨消し"),
+    近くに棒の並びのある: count("近くに棒の並び"), 食い違いのある: count("食い違い"), "■の続きのある": count("■の続き"), 途中まで: rows.filter((r) => r.途中まで).length,
+    白く描かれたページのある: rows.filter((r) => ((r.落とした理由 as any)?.画像があるのに白く描かれたページ ?? 0) > 0).length,
+  };
+  writeFileSync(join(runDir, "probe-only.json"), JSON.stringify({ runId, total, rows }, null, 1));
+  console.log(`[${local()}] 合計 ${JSON.stringify(total)}`);
 }
 
 /** dry-run で残した PR を、作り直さずに出す（--publish <回の番号>。ratchet/publish.ts） */
