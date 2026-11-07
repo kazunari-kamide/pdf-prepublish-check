@@ -34,6 +34,7 @@ import { detectP2Parts, type P2PartsFinding, type P2PartsReport } from "../../ru
 import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
 import { detectXmpThumbnail, type XmpThumbnailReport } from "../../rules/xmp-thumbnail/index.ts";
 import { detectBarcodeScan, type BarcodeReport } from "../../rules/barcode-scan/index.ts";
+import { detectCrossPageRedaction, type CrossPageReport } from "../../rules/cross-page-redaction/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import { INFLATE_LIMIT_MESSAGE, isInflateLimitError } from "../../rules/shared/inflate-limit.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
@@ -1154,5 +1155,30 @@ const barcodeScan = defineRule<BarcodeReport>({
       : [],
 });
 
+// ---------------------------------------------------------------- 同じ書式のページの塗り忘れ（スキャンの画像の中）
+
+const crossPage = defineRule<CrossPageReport>({
+  id: "cross-page-redaction",
+  label: "同じ書式のページの塗り残し",
+  pattern: "P6",
+  detect: (b, ctx) => detectCrossPageRedaction(b, ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}),
+  // 中身は読まず、形を比べるだけなので、いつも「確かめてください」（中）【仮】
+  items: (r) =>
+    r.findings.map((f): Item => ({
+      pattern: "P6",
+      severity: "medium", // 【仮】
+      confidence: "check",
+      title: "ほかのページで黒く塗った所と同じ所が、このページでは塗られていません",
+      why: "同じ書式のページで、同じ欄を塗り忘れると、塗った情報がこのページで読めてしまいます。確かめてください。",
+      detail: `黒く塗ったページ：${f.redactedPage}`,
+      page: f.page,
+      rect: f.rect,
+    })),
+  notices: (r) =>
+    r.uncheckedPages.length
+      ? [{ kind: "partial", message: "このページの画像は読み解けなかったため、ほかのページの黒く塗った所とは比べていません。", pages: r.uncheckedPages }]
+      : [],
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, barcodeScan, p7, altText, fontGlyphs, fontGlyphsCff, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, xmpThumbnail, p4, p9, p8, p11, p12, p10, pii];
+export const RULES: RuleEntry[] = [p6, barcodeScan, crossPage, p7, altText, fontGlyphs, fontGlyphsCff, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, xmpThumbnail, p4, p9, p8, p11, p12, p10, pii];

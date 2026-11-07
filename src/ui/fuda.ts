@@ -28,6 +28,7 @@ const SHORT: Record<string, string> = {
   描かれていない画像: "残り画像", // 11/5 D（P5 unused-images）
   "XMP の縮小画像": "縮小図",
   黒塗りのそばの記号: "記号",
+  同じ書式のページの塗り残し: "塗り残し",
 };
 
 export const FUDA_MAX = 4;
