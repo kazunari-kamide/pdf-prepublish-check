@@ -31,6 +31,7 @@ import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/
 import { detectUnusedImages, type UnusedImageReport } from "../../rules/unused-images/index.ts";
 import { detectP2Parts, type P2PartsFinding, type P2PartsReport } from "../../rules/p2-parts/index.ts";
 import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
+import { detectXmpDerived, type XmpDerivedKind, type XmpDerivedReport } from "../../rules/xmp-derived/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import { INFLATE_LIMIT_MESSAGE, isInflateLimitError } from "../../rules/shared/inflate-limit.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
@@ -1085,5 +1086,33 @@ const fontGlyphs = defineRule<FontGlyphReport>({
     })),
 });
 
+// ---------------------------------------------------------------- XMP の元の文書・素材の一覧
+
+const XMP_DERIVED_FIELD: Record<XmpDerivedKind, string> = {
+  derived: "元の文書",
+  ingredients: "素材の一覧",
+  manifest: "リンクした素材の一覧",
+};
+
+const xmpDerived = defineRule<XmpDerivedReport>({
+  id: "xmp-derived",
+  label: "XMP に残る元のファイル",
+  pattern: "P2",
+  detect: (b, ctx) => detectXmpDerived(b, values(ctx)),
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P2",
+      severity: "low", // 【仮】
+      title: "埋め込まれた作成の記録（XMP）に、元の文書や素材のファイルの名前が残っています",
+      why: "元にしたファイルや、組み込んだ画像などの名前から、作った人や作業の中身が分かることがあります。確かめてください。",
+      detail: [`欄：${XMP_DERIVED_FIELD[f.kind] ?? "欄"}`, `ファイルの名前 ${f.files} 件`, `${f.chars}字`].join("／"),
+      page: null,
+      rect: null,
+      ...contentOf(f.values?.join("\n")),
+      field: f.field,
+    })),
+  notices: (r) => (r.limits.length ? [{ kind: "partial", message: "埋め込まれた作成の記録が大きすぎる・読めないため、調べていません。", pages: [] }] : []),
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, p4, p9, p8, p11, p12, p10, pii];
+export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, xmpDerived, p4, p9, p8, p11, p12, p10, pii];
