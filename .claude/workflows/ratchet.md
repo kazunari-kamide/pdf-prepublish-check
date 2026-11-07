@@ -4,7 +4,7 @@
 docs/ratchet.md §3 の「1 回分を回す道具」の段取り。人が 1 回起こすと、PR を出したところで止まる。マージはしない。
 
 - 段取りは Workflow のスクリプト（`*.js`）ではなく、Node のスクリプト `ratchet/run.ts` に置いた。このファイルは、その段取りの説明。
-- 呼び方（2026-11-07 夜 本人の決定）：既定は `--via api`。下読み・判断・反証を Claude API（Messages API。`ratchet/api.ts`）で呼び、ルール書きは `claude -p`。`--via cli` で、どの段も `claude -p` にする（1〜3 回目はこの呼び方）。api のときはキーを環境変数 `ANTHROPIC_API_KEY` からだけ読む。
+- 呼び方（2026-11-07 夜 本人の決定）：既定は `--via api`。下読み・判断・反証を Claude API（Messages API。`ratchet/api.ts`）で呼び、ルール書きは `claude -p`。`--via cli` で、どの段も `claude -p` にする（1〜3 回目と、3 回目の候補のやり直し〈#182〉はこの呼び方。API では 2026-11-07 に試しの 1 回を最後まで回した〈候補 0〉）。api のときはキーを環境変数 `ANTHROPIC_API_KEY` からだけ読む。
 - 定時に回す設定（`ratchet/schedule.json`・`scripts/ratchet-schedule.ps1`・`docs/ratchet-schedule.md`）はある。まだ定時で回したことはない（タスクも登録していない）。
 
 ## 起こし方
