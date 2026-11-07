@@ -7,7 +7,7 @@
 import { basename } from "node:path";
 import type { GateResult } from "./gate.ts";
 
-export type Candidate = { id: string; pattern: string; title: string; nearestRule: string; whyMissed: string; evidenceCount: number; fixturePlan: string };
+export type Candidate = { id: string; pattern: string; title: string; nearestRule: string; whyMissed: string; evidenceCount: number; fixturePlan: string; evidenceIds?: string[] };
 
 export type PrInput = {
   date: string;
@@ -20,7 +20,16 @@ export type PrInput = {
   counts: { read: number; skipped: number; suspicions: number; candidates: number; refuted: number };
   calls: Record<string, number>;
   costUsd: number;
+  /** 根拠の実物にかけた件数（ratchet/evidence.ts）。loose は、根拠の番号でなく人が渡した一覧で確かめたとき。null は確かめていない */
+  evidence?: { total: number; hit: number; loose: boolean } | null;
 };
+
+/** 根拠の実物の結果の 1 文（件数だけ） */
+export function evidenceLine(e: PrInput["evidence"]): string {
+  if (!e) return "確かめていない（根拠の実物を渡していない）";
+  const s = `根拠 ${e.total} 件のうち ${e.hit} 件で当たった`;
+  return e.loose ? `${s}（根拠の番号が記録に無い回なので、人が渡した ${e.total} 件の一覧で確かめた。本来の「候補が挙げた根拠」よりゆるい）` : s;
+}
 
 const md = (s: string) => s.replaceAll("|", "／").replaceAll("\n", " ");
 
@@ -49,6 +58,7 @@ export function renderPrBody(p: PrInput): string {
     `| 型 | 前 | 後 | 変化 |`,
     `|---|---|---|---|`,
     ...g.table.filter((r) => r.change !== "同じ").map((r) => `| ${md(r.key)} | ${md(r.before)} | ${md(r.after)} | ${r.change} |`),
+    ...(p.evidence !== undefined ? [`| 根拠の実物（新しいルール \`${md(p.write.ruleId)}\`） | — | ${p.evidence ? `${p.evidence.total} 件のうち ${p.evidence.hit} 件で当たった` : "確かめていない"} | 新しい |`] : []),
     ``,
     `変わらなかった型：${g.table.filter((r) => r.change === "同じ").length} 個`,
     ``,
@@ -56,6 +66,7 @@ export function renderPrBody(p: PrInput): string {
     ``,
     `- 良くなった所：${g.improved.length ? g.improved.join("、") : "なし"}`,
     `- 下がった所：${g.declined.length ? g.declined.join("、") : "なし"}`,
+    ...(p.evidence !== undefined ? [`- 根拠の実物：${evidenceLine(p.evidence)}`] : []),
     `- 判定：${g.pass ? "通った（どれも下がらず、1 つ以上良くなった）" : `通らない（${g.reasons.join("、")}）`}`,
     `- 直した回数：${p.attempts} 回（上限 3 回）`,
     ``,

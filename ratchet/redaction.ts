@@ -32,11 +32,15 @@ export type RedactionClues = {
   /** 四角のあるページ（20 ページまで）。位置と大きさはページに対する割合（小数 2 けた） */
   pages: Array<{
     page: number;
+    /** そのページの描き方。image：画像があり、図形の塗りの命令がほとんど無い（スキャンなど）。drawn：図形や字で描いたページ */
+    source: "image" | "drawn";
     boxes: Array<{ x: number; y: number; w: number; h: number }>;
     nearby: Array<{ bars: number; heightKinds: number; pitchCv: number; gapPt: number; side: "above" | "below" | "beside" }>;
   }>;
   /** 近くに「棒の並び」が塗られずに残っている四角の数 */
   boxesWithBarsNearby: number;
+  /** 画像のページ（isImagePage）の数。重くないページの全部について数える */
+  imagePages: number;
   sameLayout: { similarPairs: number; mismatches: number; examples: Array<{ withBox: number; without: number }> };
   maskRuns: { runs: number; longest: number; pages: number[] };
   /** 原因を調べるための、落とした理由ごとの数（数だけ）。pagesBlank は、画像があるのに白く描かれたページ */
@@ -413,7 +417,15 @@ const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
 export const LIMITS = { maxPages: 60, maxHiResPages: 20, maxBoxesPerPage: 10, heavyContentBytes: 3_000_000, lowScale: 150 / 72, highScale: 3, bandPt: 72, deadlineMs: 75_000 };
 
 /** 作りで、塗りのありそうなページを選ぶ（塗りの命令・画像・注釈の数）。重すぎるページは除く */
-export async function pageScores(bytes: Uint8Array): Promise<{ scores: Array<{ page: number; score: number; heavy: boolean; images: number }> } | null> {
+export type PageScore = { page: number; score: number; heavy: boolean; images: number; imageXObjects: number; fills: number };
+
+/** 画像のページとみなす、ページの内容の図形の塗りの命令の数の上限（未満なら画像のページ）。架空のバーコードを図形で描くと 67 を超える */
+export const IMAGE_PAGE_MAX_FILLS = 10;
+
+/** 画像のページ：画像（/Image）があり、ページの内容に図形の塗りの命令がほとんど無い（スキャンなど）。中の絵柄は画素でしか見えない */
+export const isImagePage = (s: { heavy: boolean; imageXObjects: number; fills: number }) => !s.heavy && s.imageXObjects > 0 && s.fills < IMAGE_PAGE_MAX_FILLS;
+
+export async function pageScores(bytes: Uint8Array): Promise<{ scores: PageScore[] } | null> {
   let doc: PDFDocument;
   try {
     doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
@@ -423,26 +435,36 @@ export async function pageScores(bytes: Uint8Array): Promise<{ scores: Array<{ p
   const ctx = doc.context;
   const deref = (v: unknown) => (v instanceof PDFRef ? ctx.lookup(v) : v);
   const scores = doc.getPages().map((p, i) => {
-    let score = 0, raw = 0, images = 0;
+    let score = 0, raw = 0, images = 0, imageXObjects = 0, fills = 0;
     try {
       const c = deref(p.node.get(PDFName.of("Contents")));
       const streams = (c instanceof PDFArray ? c.asArray().map(deref) : [c]).filter((s): s is PDFRawStream => s instanceof PDFRawStream);
       for (const s of streams) raw += s.getContents().length;
-      if (raw > LIMITS.heavyContentBytes) return { page: i + 1, score: 0, heavy: true, images };
+      if (raw > LIMITS.heavyContentBytes) return { page: i + 1, score: 0, heavy: true, images, imageXObjects, fills };
       for (const s of streams) {
         const text = new TextDecoder("latin1").decode(decodePDFRawStream(s).decode());
         // 図形の塗りの命令（f・f*・F・b・b*・B・B*）の数。文字だけのページは 0 になり、画像にしない
-        score += text.match(/(?:^|\s)(?:f\*?|F|[bB]\*?)(?=\s|$)/g)?.length ?? 0;
+        const n = text.match(/(?:^|\s)(?:f\*?|F|[bB]\*?)(?=\s|$)/g)?.length ?? 0;
+        (score += n), (fills += n);
       }
       const res = deref(p.node.get(PDFName.of("Resources")));
       const xo = res instanceof PDFDict ? deref(res.get(PDFName.of("XObject"))) : null;
-      if (xo instanceof PDFDict) for (const [, v] of xo.entries()) if (deref(v) instanceof PDFStream) (score += 3), images++;
+      if (xo instanceof PDFDict) for (const [, v] of xo.entries()) {
+        const x = deref(v);
+        if (!(x instanceof PDFStream)) continue;
+        (score += 3), images++;
+        const sub = x.dict.get(PDFName.of("Subtype"));
+        // 図形の入れ物（/Form）の中の塗りは数えていないので、/Form があるページは画像のページにしない
+        if (sub instanceof PDFName && sub.decodeText() === "Image") imageXObjects++;
+        else fills += IMAGE_PAGE_MAX_FILLS;
+      }
       const an = deref(p.node.get(PDFName.of("Annots")));
       if (an instanceof PDFArray) score += 3 * an.size();
     } catch {
       score += 1; // 数えられなくても、画像にはしてみる
+      fills += IMAGE_PAGE_MAX_FILLS; // 描き方は分からないので、画像のページには数えない
     }
-    return { page: i + 1, score, heavy: false, images };
+    return { page: i + 1, score, heavy: false, images, imageXObjects, fills };
   });
   return { scores };
 }
@@ -473,7 +495,7 @@ export async function probeRedaction(bytes: Uint8Array, limits = LIMITS): Promis
   const out: RedactionClues = {
     pagesTotal: sc.scores.length, pagesRendered: 0, pagesSkippedHeavy: sc.scores.filter((s) => s.heavy).length,
     partial: sc.scores.filter((s) => !s.heavy && s.score > 0).length > chosen.length,
-    boxes: 0, pagesWithBoxes: 0, pages: [], boxesWithBarsNearby: 0, sameLayout: { similarPairs: 0, mismatches: 0, examples: [] }, maskRuns: { runs: 0, longest: 0, pages: [] },
+    boxes: 0, pagesWithBoxes: 0, pages: [], boxesWithBarsNearby: 0, imagePages: sc.scores.filter(isImagePage).length, sameLayout: { similarPairs: 0, mismatches: 0, examples: [] }, maskRuns: { runs: 0, longest: 0, pages: [] },
     diag: { ...emptyDiag(), pagesBlank: 0, paperMin: null, paperMax: null },
   };
   const render = async (pageNo: number, scale: number): Promise<Gray> => {
@@ -531,7 +553,8 @@ export async function probeRedaction(bytes: Uint8Array, limits = LIMITS): Promis
 
   // b：四角の多いページから、高い解像度で、四角の上下の範囲を見る
   for (const l of [...withBoxes].sort((a, b) => b.boxes.length - a.boxes.length).slice(0, limits.maxHiResPages)) {
-    const entry: RedactionClues["pages"][number] = { page: l.page, boxes: [], nearby: [] };
+    const ps = sc.scores[l.page - 1];
+    const entry: RedactionClues["pages"][number] = { page: l.page, source: ps && isImagePage(ps) ? "image" : "drawn", boxes: [], nearby: [] };
     const W = l.img.w / l.scale, H = l.img.h / l.scale;
     entry.boxes = l.boxes.slice(0, limits.maxBoxesPerPage).map((b) => ({ x: round(b.x0 / W, 2), y: round(b.y0 / H, 2), w: round((b.x1 - b.x0) / W, 2), h: round((b.y1 - b.y0) / H, 2) }));
     if (late()) { out.partial = true; out.pages.push(entry); continue; }

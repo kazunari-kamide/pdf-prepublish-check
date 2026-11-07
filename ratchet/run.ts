@@ -8,6 +8,8 @@
 //   OMAMORI_RATCHET_CORPUS=<束のフォルダ> OMAMORI_RATCHET_STATE=<記録のフォルダ> [OMAMORI_RATCHET_EXCLUDE=<除く sha256 の一覧>] \
 //     npm run ratchet -- [--pr] [--bundle 50] [--max-candidates 3] [--fix-attempts 3] [--run-budget <ドル>] [--call-budget <ドル>]
 //     道具の確かめ：--from-candidates <JSON>（ルール書きから）・--refute-only <JSON>（反証の段だけ。束は読まない）
+//     前の回の候補をルール書きからやり直す：--from-run <回の番号>（記録の summary.json から候補を作る。束は読まない）
+//       根拠の実物：その回の bundle.json と候補の根拠の番号から探す。古い回で残っていなければ --evidence-list <sha256 の一覧>（ゆるい確かめ）
 //     墨消しの手がかりの数だけ：--probe-only [--limit N]（Claude は呼ばない。束の記録は変えない）
 //     dry-run を人が見たあと：--publish <回の番号>（残したブランチと pr-N.md を、作り直さずに PR にする。ratchet/publish.ts）
 //
@@ -27,6 +29,7 @@ import { findLeaks, prTitle, renderPrBody, type Candidate } from "./prbody.ts";
 import { catalogIn, shortCatalog } from "./catalog.ts";
 import { caughtByMain } from "./known.ts";
 import { runProbe } from "./probe.ts";
+import { candidatesFromRun, withEvidenceIds, docShape, evidenceIdsFor, evidenceReason, forbiddenInDiff, hitsOnEvidence, listDir, readShaList, resolveShas, shapeOf, type DocShape, type EvidenceHits, type EvidenceShape } from "./evidence.ts";
 import { fixPrompt, JUDGE_PROMPT, REFUTE_PROMPT, SKIM_PROMPT, writePrompt } from "./prompts.ts";
 import { LABEL, loadRejections } from "./rejections.ts";
 import { CANDIDATES, REFUTE, SKIM, validate, WRITE_REPORT } from "./schema.ts";
@@ -36,6 +39,9 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 type Skim = { suspicions: Array<{ pattern: string; signal: string; alreadyReported: boolean }> };
 type Refute = { keep: boolean; reason: string; explanation: string };
 type WriteReport = { ruleId: string; changedFiles: string[]; summary: string; discarded: string; alreadyCovered: string };
+/** 候補の根拠の実物（パスはこの回の中だけで使う。記録・画面・PR には件数と形だけ） */
+type Evidence = { files: string[]; shape: EvidenceShape; loose: boolean };
+type Kept = { c: Candidate; refute: Refute; ev: Evidence | null };
 
 function opts(argv: string[]): Record<string, string | undefined> {
   const o: Record<string, string | undefined> = {};
@@ -131,6 +137,24 @@ async function main() {
     log("終わり", { 止まった理由: stopReason ?? "なし", 呼び出し: caller.calls, 費用ドル: outcome.costUsd, 分: outcome.minutes });
   };
 
+  /** 根拠の手がかりの形を、Claude を呼ばずに数える（墨消しの手がかりだけ。今のルールの判定はしない） */
+  async function shapesOf(paths: string[]): Promise<Array<DocShape | null>> {
+    const out: Array<DocShape | null> = [];
+    for (const p of paths) out.push(docShape(await runProbe(p, 120_000, { rules: false })));
+    return out;
+  }
+
+  /** 人が渡した sha256 の一覧（--evidence-list）から、根拠の実物を探す。束のフォルダと、一覧のファイルと同じフォルダを見る */
+  async function evidenceFromList(file: string, exclude: Set<string>): Promise<Evidence | string> {
+    if (!existsSync(file)) return "根拠の一覧のファイルが無い";
+    const { shas, bad } = readShaList(file);
+    if (!shas.length) return "根拠の一覧に sha256 が無い";
+    const r = resolveShas(shas, [env.corpus, listDir(file)], exclude);
+    log("根拠の一覧から実物を探した", { 一覧: shas.length, 形の違う行: bad, 見つかった: r.files.length, 見つからない: r.missing, 採点用で除いた: r.excluded });
+    if (!r.files.length) return "根拠の一覧の実物が見つからない";
+    return { files: r.files, shape: shapeOf(await shapesOf(r.files)), loose: true };
+  }
+
   // main を別の作業の木に出す（今あるルールの一覧と、歯止めの「前」の数の両方に使う）。
   // 一覧は、束で当たったルールだけでなく、main にあるものを全部渡す（2026-11-07 の 1 回目の反省）
   git(REPO, ["fetch", "-q", "origin"]);
@@ -145,7 +169,7 @@ async function main() {
 
   // 反証の段だけを、渡した候補で回す（--refute-only <JSON>）。束は読まない。道具の確かめのため
   if (o["refute-only"]) {
-    const j = JSON.parse(readFileSync(o["refute-only"], "utf8"));
+    const j = withEvidenceIds(JSON.parse(readFileSync(o["refute-only"], "utf8")));
     if (validate(CANDIDATES, j).length) return finish("渡された候補の形が合わない");
     const rows: unknown[] = [];
     for (const c of (j as { candidates: Candidate[] }).candidates) {
@@ -161,22 +185,53 @@ async function main() {
   // 候補を人が渡すとき（--from-candidates <JSON>）：束を読む・下読み・候補・反証を省き、ルール書きから始める。
   // 道具の確かめと、撮影のやり直しのため。PR の本文には、省いたことを書く
   const fromFile = o["from-candidates"];
+  const fromRun = o["from-run"];
   let files: string[] = [];
   let read = 0;
   let skipped = 0;
   let suspicionCount = 0;
   let candidateCount = 0;
   let refuted = 0;
-  let kept: Array<{ c: Candidate; refute: Refute }> = [];
-  if (fromFile) {
-    const j = JSON.parse(readFileSync(fromFile, "utf8"));
+  let kept: Kept[] = [];
+  if (fromFile || fromRun) {
+    let j: unknown;
+    let prevDir: string | null = null;
+    if (fromRun) {
+      if (!/^[0-9A-Za-z-]{1,40}$/.test(fromRun)) return finish("回の番号の形が違う");
+      prevDir = join(env.state, "runs", fromRun);
+      const sumFile = join(prevDir, "summary.json");
+      if (!existsSync(sumFile)) return finish("その回の記録が無い");
+      const prev = JSON.parse(readFileSync(sumFile, "utf8"));
+      j = { candidates: candidatesFromRun(prev, (n) => (existsSync(join(prevDir!, `pr-${n}.md`)) ? readFileSync(join(prevDir!, `pr-${n}.md`), "utf8") : null)) };
+    } else {
+      // 根拠の番号の無い、前の形の JSON も受け付ける
+      j = withEvidenceIds(JSON.parse(readFileSync(fromFile!, "utf8")));
+    }
     const errs = validate(CANDIDATES, j);
     if (errs.length) return finish("渡された候補の形が合わない");
-    kept = (j as { candidates: Candidate[] }).candidates.slice(0, limits.maxCandidates).map((c) => ({ c, refute: { keep: true, reason: "残す", explanation: "人が渡した候補（束を読む・反証の段は省いた）" } }));
+    const given = (j as { candidates: Candidate[] }).candidates.slice(0, limits.maxCandidates);
+    if (!given.length) return finish("渡された候補が無い");
+    // 根拠の実物：人が渡した一覧（--evidence-list）か、前の回の bundle.json と根拠の番号から探す
+    const exclude = readExclude(env.exclude);
+    const shared = o["evidence-list"] ? await evidenceFromList(o["evidence-list"], exclude) : null;
+    if (typeof shared === "string") return finish(shared);
+    const bundleFile = prevDir ? join(prevDir, "bundle.json") : null;
+    const bundle: Array<{ id: string; sha256: string }> | null = bundleFile && existsSync(bundleFile) ? JSON.parse(readFileSync(bundleFile, "utf8")).items : null;
+    for (const c of given) {
+      let ev: Evidence | null = shared;
+      if (!ev && bundle && c.evidenceIds?.length) {
+        const ids = new Set(c.evidenceIds);
+        const r = resolveShas(bundle.filter((b) => ids.has(b.id)).map((b) => b.sha256), [env.corpus], exclude);
+        ev = { files: r.files, shape: shapeOf(await shapesOf(r.files)), loose: false };
+        log("根拠の実物を探した", { 型: c.pattern, 根拠: ids.size, 見つかった: r.files.length, 見つからない: r.missing, 採点用で除いた: r.excluded });
+      }
+      kept.push({ c, refute: { keep: true, reason: "残す", explanation: "人が渡した候補（束を読む・反証の段は省いた）" }, ev });
+    }
+    files = [...new Set(kept.flatMap((k) => k.ev?.files ?? []))];
     candidateCount = kept.length;
-    outcome.counts = { fromCandidates: kept.length };
-    outcome.candidates = kept.map(({ c }) => ({ pattern: c.pattern, title: c.title }));
-    log("渡された候補を使う", { 候補: kept.length });
+    outcome.counts = { fromCandidates: kept.length, ...(fromRun ? { fromRun } : {}) };
+    outcome.candidates = kept.map(({ c, ev }) => ({ pattern: c.pattern, title: c.title, evidence: ev ? { total: ev.files.length, loose: ev.loose, shape: ev.shape } : null }));
+    log("渡された候補を使う", { 候補: kept.length, 根拠の実物: kept.map((k) => (k.ev ? k.ev.files.length : "なし")) });
   } else {
     const d = await discover();
     if (typeof d === "string") return finish(d);
@@ -196,6 +251,9 @@ async function main() {
   if (!sel.items.length) return "読む PDF が残っていない";
   state = markStarted(state, sel);
   saveState(env.state, state);
+  // 番号と sha256 の対応を、この回の記録に残す（パス・ファイル名は残さない）。あとで根拠の実物を sha256 から探し直すため
+  writeFileSync(join(runDir, "bundle.json"), JSON.stringify({ runId, items: sel.items.map((i) => ({ id: i.id, sha256: i.sha256 })) }, null, 1));
+  const shapes = new Map<string, DocShape | null>();
 
   // 2. 下読み（軽いモデルで呼び出しが多いので、一覧は短い形で渡す）
   const shortKnown = shortCatalog(catalog!);
@@ -218,6 +276,7 @@ async function main() {
       continue;
     }
     for (const r of p.rules.items) rulesSeen.add(`${r.pattern}:${r.ruleId}`);
+    shapes.set(it.id, docShape(p));
     const r = await caller.call<Skim>({ role: "skim", model: MODELS.skim, prompt: SKIM_PROMPT, data: { id: it.id, probe: p, knownRules: shortKnown }, schema: SKIM, cwd: emptyDir, budgetUsd: limits.perCallBudgetUsd });
     if (!r.ok) {
       if (r.error === "形が合わない") {
@@ -231,6 +290,8 @@ async function main() {
     state = markDone(state, it.sha256);
     saveState(env.state, state);
   }
+  // 番号ごとの根拠の手がかりの形（数だけ）。あとでルール書きからやり直すときに使う
+  writeFileSync(join(runDir, "probes.json"), JSON.stringify(Object.fromEntries(shapes), null, 1));
   outcome.counts = { read, skipped, suspicions: suspicions.length, dropped };
   log("下読みが終わった", { 読んだ: read, 省いた: skipped, 疑い: suspicions.length, 捨てた答え: dropped });
   if (!suspicions.length) return "疑いが挙がらなかった";
@@ -245,7 +306,9 @@ async function main() {
   log("候補を出した", { 候補: candidates.length });
 
   // 4. 反証
-  const kept: Array<{ c: Candidate; refute: Refute }> = [];
+  const kept: Kept[] = [];
+  const readIds = new Set(shapes.keys());
+  const pathOf = new Map(sel.items.map((i) => [i.id, i.path]));
   let refuted = 0;
   const refuteReasons: Record<string, number> = {};
   const judged: unknown[] = [];
@@ -259,8 +322,15 @@ async function main() {
       break;
     }
     // 判断の中身（型・題・反証の理由と説明）を記録に残す。PDF の中身は入れていない（スキーマとプロンプトで、型と構造の言葉だけにしてある）
-    judged.push({ pattern: c.pattern, title: c.title, nearestRule: c.nearestRule, whyMissed: c.whyMissed, evidenceCount: c.evidenceCount, keep: r.value.keep, reason: r.value.reason, explanation: r.value.explanation });
-    if (r.value.keep) kept.push({ c, refute: r.value });
+    // 根拠の番号：その回に下読みした番号だけ。空なら、同じ型の疑いを出した番号（反証の根拠と同じ決め方）
+    const ids = evidenceIdsFor(c, readIds, suspicions);
+    c.evidenceIds = ids;
+    judged.push({ id: c.id, pattern: c.pattern, title: c.title, nearestRule: c.nearestRule, whyMissed: c.whyMissed, evidenceCount: c.evidenceCount, evidenceIds: ids, fixturePlan: c.fixturePlan, keep: r.value.keep, reason: r.value.reason, explanation: r.value.explanation });
+    if (r.value.keep) {
+      const ev: Evidence = { files: ids.map((id) => pathOf.get(id)!).filter(Boolean), shape: shapeOf(ids.map((id) => shapes.get(id) ?? null)), loose: false };
+      log("根拠の番号", { 型: c.pattern, 根拠: ids.length, 形: ev.shape });
+      kept.push({ c, refute: r.value, ev });
+    }
     else {
       refuted++;
       refuteReasons[r.value.reason] = (refuteReasons[r.value.reason] ?? 0) + 1;
@@ -283,18 +353,23 @@ async function main() {
   // 6. ルールと見本 → 歯止め（届かなければ、上限の回数まで直す）
   const results: unknown[] = [];
   let n = 0;
-  for (const { c, refute } of kept) {
+  for (const { c, refute, ev } of kept) {
     n++;
     const branch = `claude/ratchet-${runId}-${n}`;
     const dir = join(work, `c${n}`);
     addWorktree(dir, branch);
     let report: WriteReport | null = null;
     let gate: GateResult | null = null;
+    let hits: EvidenceHits | null = null;
     let attempts = 0;
     let stop: string | null = null;
+    // 根拠の形（数だけ）。ルール書きに渡す。根拠の番号・パスは渡さない
+    const evidenceShape = ev ? ev.shape : null;
     for (;;) {
       const first: boolean = report === null;
-      const data: unknown = first ? { candidate: c, refute, knownRules: known } : { candidate: c, gate: { reasons: gate!.reasons, declined: gate!.declined, table: gate!.table.filter((r) => r.change !== "同じ") } };
+      const data: unknown = first
+        ? { candidate: c, refute, knownRules: known, evidenceShape }
+        : { candidate: c, gate: { reasons: gate!.reasons, declined: gate!.declined, table: gate!.table.filter((r) => r.change !== "同じ"), evidence: hits ? { total: hits.total, hit: hits.hit, failed: hits.failed, shape: evidenceShape } : null } };
       const w: CallResult<WriteReport> = await caller.call<WriteReport>({ role: "write", model: MODELS.write, prompt: first ? writePrompt() : fixPrompt(), data, schema: WRITE_REPORT, cwd: dir, editTools: true, budgetUsd: limits.perCallBudgetUsd, timeoutMs: 40 * 60_000 });
       if (!w.ok) {
         stop = `ルールを書く段で止まった（${w.error}）`;
@@ -322,8 +397,27 @@ async function main() {
       gate = cand
         ? compareMetrics(base, cand, browser, caught)
         : { pass: false, reasons: [`変えたファイルの確かめで止めた（${bad.length} か所：${bad.slice(0, 5).join("、")}）`], improved: [], declined: [], table: [] };
+      // 根拠の実物で当たるか（今の歯止めを全部通ったあと。2026-11-07 本人の承認）。数えるのは書いたルールの報告だけ
+      hits = null;
+      if (gate.pass && ev) {
+        const forbidden = forbiddenInDiff(dir, d.entries);
+        if (forbidden.length) {
+          gate = { ...gate, pass: false, reasons: [`根拠の実物にかける前の確かめで止めた（通信などの字：${forbidden.slice(0, 5).join("、")}）`] };
+        } else {
+          const ruleIds = [...new Set([report.ruleId, ...(cand?.ruleIds ?? []).filter((id) => !(base.ruleIds ?? []).includes(id))])];
+          hits = hitsOnEvidence({ candDir: dir, files: ev.files, ruleIds });
+          const why = evidenceReason(hits);
+          if (why) gate = { ...gate, pass: false, reasons: [why] };
+        }
+        log("根拠の実物にかけた", { 候補: n, 回: attempts, 根拠: hits?.total ?? ev.files.length, 当たった: hits?.hit ?? null, 止まった: hits?.failed ?? null, ゆるい一覧: ev.loose });
+      } else if (gate.pass) log("根拠の実物が無いので、確かめていない", { 候補: n });
       log("歯止めにかけた", { 候補: n, 回: attempts, 通った: gate.pass, 理由: gate.reasons.slice(0, 5) });
       if (gate.pass) break;
+      if (hits && hits.total === 0) {
+        // 根拠の実物が 1 件も見つからない。直させても変わらない
+        stop = "根拠の実物が見つからない";
+        break;
+      }
       if (gate.alreadyCaught) {
         // 直させても、main が捕まえることは変わらない（合成 PDF を main から逃げる形に変えさせない）
         stop = "すでに捕まる（main の検査器が、新しい型の隠しありを全部報告した）";
@@ -335,16 +429,17 @@ async function main() {
       }
       attempts++;
     }
-    const res: Record<string, unknown> = { candidate: n, pattern: c.pattern, attempts, pass: gate?.pass ?? false, stop, ruleId: report?.ruleId ?? null, summary: report?.summary ?? null, discarded: report?.discarded ?? null, changedFiles: report?.changedFiles ?? [] };
+    const res: Record<string, unknown> = { candidate: n, pattern: c.pattern, attempts, pass: gate?.pass ?? false, stop, ruleId: report?.ruleId ?? null, summary: report?.summary ?? null, discarded: report?.discarded ?? null, changedFiles: report?.changedFiles ?? [], evidence: hits ? { total: hits.total, hit: hits.hit, failed: hits.failed, loose: ev?.loose ?? false } : null };
     if (gate?.pass && report) {
       git(dir, ["add", "-A"]);
       const msg = `Ratchet：${c.pattern} の検出ルール ${report.ruleId} を足す\n\n${report.summary}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`;
       const body = renderPrBody({
         date: started.toISOString().slice(0, 16).replace("T", " "), runId, candidate: c, refute, write: report, gate, attempts,
         counts: { read, skipped, suspicions: suspicionCount, candidates: candidateCount, refuted }, calls: caller.calls, costUsd: caller.costUsd,
+        evidence: hits ? { total: hits.total, hit: hits.hit, loose: ev?.loose ?? false } : null,
       });
       const title = prTitle({ candidate: c } as any);
-      const leaks = findLeaks(`${title}\n${body}\n${msg}`, { secrets: [env.corpus, env.state, env.exclude ?? ""], files });
+      const leaks = findLeaks(`${title}\n${body}\n${msg}`, { secrets: [env.corpus, env.state, env.exclude ?? "", o["evidence-list"] ? listDir(o["evidence-list"]) : ""], files });
       const bodyFile = join(runDir, `pr-${n}.md`);
       if (leaks.length) {
         res.stop = `本文に出してはいけない字が混ざった（${leaks.join("、")}）。PR にしない`;

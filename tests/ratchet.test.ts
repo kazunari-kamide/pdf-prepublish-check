@@ -20,6 +20,7 @@ import { parseRejections, reasonOf } from "../ratchet/rejections.ts";
 import { CANDIDATES, REFUTE, SKIM, validate, WRITE_REPORT } from "../ratchet/schema.ts";
 import { parseReadme, readCatalog, ruleDirOf, shortCatalog } from "../ratchet/catalog.ts";
 import { countCaught, patternOfKey, ruleIdOfKey } from "../ratchet/known.ts";
+import { candidatesFromRun, docShape, evidenceIdsFor, evidenceReason, forbiddenInDiff, hitsOnEvidence, permissionArgv, readShaList, resolveShas, shapeOf, withEvidenceIds, type RunCheck } from "../ratchet/evidence.ts";
 import { JUDGE_PROMPT, KNOWN_GUIDE, REFUTE_PROMPT, SKIM_PROMPT, writePrompt } from "../ratchet/prompts.ts";
 import { choosePages, dropChartBars, maskRunsOf, probeRedaction, type RedactionClues } from "../ratchet/redaction.ts";
 import { BARS, ccittScanPdf, customerBarcode, decorPdf, realisticScanPdf, ROUGH, sameFormPdf, scannedStatementPdf, statementPdf } from "../ratchet/synthetic-redaction.ts";
@@ -565,7 +566,7 @@ describe("今あるルールの一覧（判断・反証に全部渡す）", () =
   });
 
   it("候補には nearestRule が要り、ルール書きの報告には alreadyCovered が要る", () => {
-    const c = { id: "c1", pattern: "P12", title: "t", whyMissed: "w", evidenceCount: 1, fixturePlan: "f" };
+    const c = { id: "c1", pattern: "P12", title: "t", whyMissed: "w", evidenceCount: 1, evidenceIds: ["b01"], fixturePlan: "f" };
     expect(validate(CANDIDATES, { candidates: [c] }).length).toBeGreaterThan(0);
     expect(validate(CANDIDATES, { candidates: [{ ...c, nearestRule: "p12-actions：しおりの動作を見ていない" }] })).toEqual([]);
     const w = { ruleId: "x", changedFiles: [], summary: "s", discarded: "d" };
@@ -574,7 +575,8 @@ describe("今あるルールの一覧（判断・反証に全部渡す）", () =
   });
 
   it("1 回目の 3 件（架空の形にした候補）は、いまの候補の形に合う", () => {
-    const j = JSON.parse(readFileSync(join(process.cwd(), "ratchet/testdata/known-misses.json"), "utf8"));
+    // 前の形（根拠の番号が無い）なので、人が渡す候補と同じく空の番号を足してから確かめる
+    const j = withEvidenceIds(JSON.parse(readFileSync(join(process.cwd(), "ratchet/testdata/known-misses.json"), "utf8")));
     expect(validate(CANDIDATES, j)).toEqual([]);
     expect(j.candidates.map((c: { pattern: string }) => c.pattern)).toEqual(["P12", "P9", "P7"]);
   });
@@ -634,7 +636,7 @@ describe("構造の要約（値は伏せる）", () => {
 
 describe("node でそのまま動く", () => {
   // npm run ratchet は node の型の取り除き（strip-only）で動く。vitest では通っても、node では読めない書き方がある
-  it.each(["bundle", "catalog", "claude", "config", "gate", "known", "metrics", "prbody", "probe", "prompts", "publish", "redaction", "rejections", "schema", "synthetic", "synthetic-redaction"])("ratchet/%s.ts", (name) => {
+  it.each(["bundle", "catalog", "claude", "config", "evidence", "gate", "known", "metrics", "prbody", "probe", "prompts", "publish", "redaction", "rejections", "schema", "synthetic", "synthetic-redaction"])("ratchet/%s.ts", (name) => {
     const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(join(process.cwd(), "ratchet", `${name}.ts`)).href)})`], { encoding: "utf8" });
     expect(r.stderr).not.toMatch(/ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX|SyntaxError/);
     expect(r.status).toBe(0);
@@ -649,5 +651,199 @@ describe("設定", () => {
   it("既定の上限は本人の決定の値", () => {
     const l = limitsFrom({});
     expect([l.bundleSize, l.fixAttempts, l.maxCandidates, l.skimCalls, l.judgeCalls, l.writeCalls]).toEqual([50, 3, 3, 50, 10, 9]);
+  });
+});
+
+describe("根拠の実物で当たるか（歯止め。2026-11-07 本人の承認）", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const tmp = () => {
+    const d = mkdtempSync(join(tmpdir(), "ratchet-ev-"));
+    dirs.push(d);
+    return d;
+  };
+
+  it("根拠の番号は、その回に下読みした番号だけ。空なら、同じ型の疑いを出した番号を使う", () => {
+    const read = new Set(["b01", "b02", "b03"]);
+    const sus = [{ id: "b02", pattern: "NEW" }, { id: "b03", pattern: "NEW" }, { id: "b01", pattern: "P2" }, { id: "b99", pattern: "NEW" }];
+    expect(evidenceIdsFor({ pattern: "NEW", evidenceIds: ["b03", "b77", "b03"] }, read, sus)).toEqual(["b03"]);
+    expect(evidenceIdsFor({ pattern: "NEW", evidenceIds: ["b77"] }, read, sus)).toEqual(["b02", "b03"]);
+    expect(evidenceIdsFor({ pattern: "P9" }, read, sus)).toEqual([]);
+  });
+
+  it("候補の形に根拠の番号が要る。前の形の JSON には空の番号を足して受け付ける", () => {
+    const c = { id: "c1", pattern: "NEW", title: "t", nearestRule: "なし", whyMissed: "w", evidenceCount: 1, fixturePlan: "f" };
+    expect(validate(CANDIDATES, { candidates: [c] }).length).toBeGreaterThan(0);
+    expect(validate(CANDIDATES, withEvidenceIds({ candidates: [{ ...c }] }))).toEqual([]);
+  });
+
+  it("かける前に、変えたファイルの通信・子のプロセスなどの字で止める。注・テスト・合成 PDF の道具は見ない", () => {
+    const files: Record<string, string> = {
+      "rules/x/index.ts": `export const a = 1;\nconst r = await fetch("https://example.invalid");`,
+      "rules/y/index.ts": `// fetch や node:fs のことを書いた注\n/* WebSocket */\nexport const b = 2;`,
+      "rules/z/index.ts": `import { readFileSync } from "node:fs";`,
+      "rules/w/index.ts": `import { make } from "../../eval/cases/p8.ts";`,
+      "rules/v/index.ts": `const m = await import(name);`,
+      "src/inspect/rules.ts": `import { X } from "../../rules/x/index.ts";`,
+      "tests/x.test.ts": `import { spawnSync } from "node:child_process";`,
+      "eval/cases/x.ts": `import { readFileSync } from "node:fs";`,
+    };
+    const got = forbiddenInDiff("R", Object.keys(files).map((path) => ({ status: "A", path })), (p) => files[p.replaceAll("\\", "/").replace(/^R\//, "")]!);
+    expect(got).toEqual(["rules/x/index.ts（fetch）", "rules/z/index.ts（node: の読み込み）", "rules/w/index.ts（検査器の外のフォルダの読み込み）", "rules/v/index.ts（形の決まらない import()）"]);
+  });
+
+  it("検査器は権限の仕組みで動かす。読めるのは作業の木・node_modules・その 1 件だけで、書き込みと子のプロセスは許さない", () => {
+    const a = permissionArgv(join("C:", "cand"), join("C:", "corpus", "x.pdf"), 60);
+    expect(a[0]).toBe("--permission");
+    expect(a).toContain(`--allow-fs-read=${join("C:", "corpus", "x.pdf")}`);
+    expect(a.some((x) => x.startsWith("--allow-fs-write") || x === "--allow-child-process" || x === "--allow-addons" || x === "--allow-wasi")).toBe(false);
+    expect(a.filter((x) => x.startsWith("--allow-fs-read=")).some((x) => x.endsWith(join("C:", "corpus")))).toBe(false);
+  });
+
+  it("数えるのは書いたルールの報告だけ。0 件なら通さず、1 件でも当たれば通す。理由は件数だけ", () => {
+    const out: Record<string, string[]> = { a: ["p6-text"], b: ["new-rule", "p1-info"], c: [] };
+    const run: RunCheck = ({ argv }) => {
+      const f = argv[argv.length - 1]!;
+      return { status: 0, stdout: f === "broken" ? "{" : JSON.stringify({ files: [{ items: (out[f] ?? []).map((ruleId) => ({ ruleId })) }] }) };
+    };
+    const one = hitsOnEvidence({ candDir: "cand", files: ["a", "b", "c"], ruleIds: ["new-rule"], run });
+    expect(one).toEqual({ total: 3, hit: 1, failed: 0 });
+    expect(evidenceReason(one)).toBeNull();
+    const none = hitsOnEvidence({ candDir: "cand", files: ["a", "c", "broken"], ruleIds: ["new-rule"], run });
+    expect(none).toEqual({ total: 3, hit: 0, failed: 1 });
+    expect(evidenceReason(none)).toBe("根拠の実物で当たらない（根拠 3 件のうち 0 件。検査器が止まった 1 件を含む）");
+    expect(evidenceReason({ total: 2, hit: 0, failed: 2 })).toMatch(/^根拠の実物で確かめられなかった/);
+    expect(evidenceReason({ total: 0, hit: 0, failed: 0 })).toMatch(/^根拠の実物が見つからない/);
+  });
+
+  /** 偽物の検査器（cli/omamori.ts）を置いた作業の木。中身は渡した字 */
+  const fakeCand = (cli: string) => {
+    const d = tmp();
+    mkdirSync(join(d, "cli"), { recursive: true });
+    mkdirSync(join(d, "node_modules"), { recursive: true });
+    writeFileSync(join(d, "cli", "omamori.ts"), cli);
+    return d;
+  };
+
+  it("権限の仕組みの中では、検査器は書き込み・子のプロセス・ほかのファイルの読み込みができない（本物の node で）", () => {
+    const outside = join(tmp(), "outside.txt");
+    writeFileSync(outside, "x");
+    const cand = fakeCand([
+      `import { readFileSync, writeFileSync } from "node:fs";`,
+      `import { spawnSync } from "node:child_process";`,
+      `const items = [];`,
+      `const tryIt = (id, f) => { try { f(); items.push({ ruleId: id + "-ok" }); } catch { items.push({ ruleId: id + "-blocked" }); } };`,
+      `const file = process.argv[process.argv.length - 1];`,
+      `tryIt("read-pdf", () => readFileSync(file));`,
+      `tryIt("write", () => writeFileSync(file + ".out", "x"));`,
+      `tryIt("child", () => { const r = spawnSync(process.execPath, ["-e", "1"]); if (r.error) throw r.error; });`,
+      `tryIt("read-other", () => readFileSync(${JSON.stringify(outside)}));`,
+      `process.stdout.write(JSON.stringify({ files: [{ items }] }));`,
+    ].join("\n"));
+    const pdf = join(tmp(), "e.pdf");
+    writeFileSync(pdf, "%PDF-1.4");
+    const count = (id: string) => hitsOnEvidence({ candDir: cand, files: [pdf], ruleIds: [id] }).hit;
+    expect(count("read-pdf-ok")).toBe(1);
+    expect(count("write-blocked")).toBe(1);
+    expect(count("child-blocked")).toBe(1);
+    expect(count("read-other-blocked")).toBe(1);
+  });
+
+  it("3 回目と同じ形：図形の棒だけを見るルールは、線の見本では当たり、スキャン風の見本（s26）では 0 件で止まる", async () => {
+    // 図形の塗りの命令が 60 を超えたら報告する、偽物のルール（3 回目の barcode-redact と同じ見方）
+    const cand = fakeCand([
+      `import { readFileSync } from "node:fs";`,
+      `import { inflateSync } from "node:zlib";`,
+      `const buf = readFileSync(process.argv[process.argv.length - 1]);`,
+      `const s = buf.toString("latin1");`,
+      `let fills = 0;`,
+      `for (const m of s.matchAll(/stream\\r?\\n/g)) {`,
+      `  const start = m.index + m[0].length;`,
+      `  const end = s.indexOf("endstream", start);`,
+      `  let text;`,
+      `  try { text = inflateSync(buf.subarray(start, end)).toString("latin1"); } catch { text = s.slice(start, end); }`,
+      `  fills += text.match(/(?:^|\\s)(?:f\\*?|F|[bB]\\*?)(?=\\s|$)/g)?.length ?? 0;`,
+      `}`,
+      `process.stdout.write(JSON.stringify({ files: [{ items: fills > 60 ? [{ ruleId: "barcode-vector" }] : [] }] }));`,
+    ].join("\n"));
+    const d = tmp();
+    const vec = join(d, "vec.pdf");
+    const scan = join(d, "scan.pdf");
+    writeFileSync(vec, await statementPdf("leak"));
+    writeFileSync(scan, await realisticScanPdf("leak"));
+    expect(hitsOnEvidence({ candDir: cand, files: [vec], ruleIds: ["barcode-vector"] }).hit).toBe(1);
+    const h = hitsOnEvidence({ candDir: cand, files: [scan], ruleIds: ["barcode-vector"] });
+    expect(evidenceReason(h)).toBe("根拠の実物で当たらない（根拠 1 件のうち 0 件）");
+  }, 60_000);
+
+  it("根拠の形：スキャン風の見本は画像のページ、線の見本は図形のページとして数える（数だけ）", async () => {
+    const scan = await probeRedaction(await realisticScanPdf("leak"));
+    const vec = await probeRedaction(await statementPdf("leak"));
+    const s1 = docShape({ redaction: scan as RedactionClues });
+    const s2 = docShape({ redaction: vec as RedactionClues });
+    expect(s1).toMatchObject({ image: true, boxesOnDrawn: 0, barsOnDrawn: 0 });
+    expect(s1!.barsOnImage).toBeGreaterThan(0);
+    expect(s2).toMatchObject({ image: false, boxesOnImage: 0, barsOnImage: 0 });
+    expect(s2!.barsOnDrawn).toBeGreaterThan(0);
+    const shape = shapeOf([s1, s2, null]);
+    expect(shape).toMatchObject({ total: 3, unknown: 1, imageDocs: 1, drawnDocs: 1 });
+    expect(JSON.stringify(shape)).not.toMatch(/[A-Za-z]:[\\/]|\.pdf/);
+  }, 60_000);
+
+  it("sha256 の一覧から、束のフォルダの PDF を探す。採点用の実データは除く", () => {
+    const d = tmp();
+    const shas: string[] = [];
+    for (const n of ["a", "b", "c"]) {
+      writeFileSync(join(d, `${n}.pdf`), `%PDF-1.4 ${n}`);
+      shas.push(sha256File(join(d, `${n}.pdf`)));
+    }
+    const list = join(tmp(), "list.txt");
+    writeFileSync(list, `# 根拠\n${shas[0]}\n${shas[1]!.toUpperCase()}  # 大文字も\nnot-a-sha\n${shas[2]}\n${"0".repeat(64)}\n`);
+    const { shas: got, bad } = readShaList(list);
+    expect(got.length).toBe(4);
+    expect(bad).toBe(1);
+    const r = resolveShas(got, [d], new Set([shas[2]!]));
+    expect(r.files.length).toBe(2);
+    expect(r).toMatchObject({ missing: 1, excluded: 1 });
+  });
+
+  it("前の回の記録から、反証を通った候補を作り直す（古い回は id・作る見本の案を補う）", () => {
+    const summary = {
+      candidates: [
+        { pattern: "P2", title: "落とした候補", nearestRule: "p2-xmp", whyMissed: "w", evidenceCount: 5, keep: false },
+        { pattern: "NEW", title: "墨消しの近くに残る機械で読む記号", nearestRule: "なし", whyMissed: "見ていない", evidenceCount: 19, keep: true },
+      ],
+    };
+    const got = candidatesFromRun(summary, (n) => (n === 1 ? "## x\n- 作った合成 PDF：架空の明細と、塗った欄の下の棒の並び\n" : null));
+    expect(got).toHaveLength(1);
+    expect(got[0]).toMatchObject({ id: "c1", pattern: "NEW", evidenceCount: 19, evidenceIds: [], fixturePlan: "架空の明細と、塗った欄の下の棒の並び" });
+    expect(validate(CANDIDATES, { candidates: got })).toEqual([]);
+  });
+
+  it("PR の本文と採点表に「根拠 N 件のうち M 件」を書く。ゆるい一覧のときはそう書く", () => {
+    const base = {
+      date: "2026-11-07 05:00", runId: "r", attempts: 1,
+      candidate: { id: "c1", pattern: "NEW", title: "t", nearestRule: "なし", whyMissed: "w", evidenceCount: 3, fixturePlan: "f" },
+      refute: { reason: "残す", explanation: "e" },
+      write: { ruleId: "new-rule", summary: "s", discarded: "d" },
+      gate: { pass: true, reasons: [], improved: [], declined: [], table: [] },
+      counts: { read: 49, skipped: 0, suspicions: 4, candidates: 2, refuted: 1 }, calls: {}, costUsd: 1,
+    };
+    const strict = renderPrBody({ ...base, evidence: { total: 19, hit: 4, loose: false } });
+    expect(strict).toContain("- 根拠の実物：根拠 19 件のうち 4 件で当たった");
+    expect(strict).toContain("| 根拠の実物（新しいルール `new-rule`） | — | 19 件のうち 4 件で当たった | 新しい |");
+    expect(renderPrBody({ ...base, evidence: { total: 53, hit: 1, loose: true } })).toContain("人が渡した 53 件の一覧で確かめた");
+    expect(renderPrBody({ ...base, evidence: null })).toContain("- 根拠の実物：確かめていない");
+    expect(renderPrBody(base)).not.toContain("根拠の実物");
+  });
+
+  it("判断の段には根拠の番号を、ルール書きの段には「根拠の実物で当たること」と画素で見ることを指示する", () => {
+    expect(JUDGE_PROMPT).toContain("evidenceIds");
+    const w = writePrompt();
+    expect(w).toContain("根拠の実物で当たること");
+    expect(w).toContain("evidenceShape");
+    expect(w).toContain("画素を見るルール");
   });
 });
