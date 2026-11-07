@@ -13,7 +13,8 @@ import { buildArgs, Caller, wrapData, type Runner } from "../ratchet/claude.ts";
 import { limitsFrom, readEnv } from "../ratchet/config.ts";
 import { checkDiff, compareMetrics } from "../ratchet/gate.ts";
 import type { Metrics, TypeScore } from "../ratchet/metrics.ts";
-import { findLeaks, renderPrBody } from "../ratchet/prbody.ts";
+import { findLeaks, prTitle, renderPrBody } from "../ratchet/prbody.ts";
+import { publishOne, publishTargets, titleFromBody, type Run } from "../ratchet/publish.ts";
 import { summarizeCli, xmpElementNames } from "../ratchet/probe.ts";
 import { parseRejections, reasonOf } from "../ratchet/rejections.ts";
 import { CANDIDATES, REFUTE, SKIM, validate, WRITE_REPORT } from "../ratchet/schema.ts";
@@ -320,6 +321,99 @@ describe("PR の本文と、出してはいけない字", () => {
   });
 });
 
+describe("dry-run の PR を出す（--publish）", () => {
+  const prInput = (title: string) => ({
+    date: "2026-11-07 05:00", runId: "r", attempts: 1,
+    candidate: { id: "c1", pattern: "P7", title, nearestRule: "p7-x：足りない", whyMissed: "見ていない", evidenceCount: 3, fixturePlan: "架空" },
+    refute: { reason: "残す", explanation: "まだ捕まらない" },
+    write: { ruleId: "p7-y", summary: "足した", discarded: "案" },
+    gate: { pass: true, reasons: [], improved: [], declined: [], table: [] },
+    counts: { read: 50, skipped: 0, suspicions: 1, candidates: 1, refuted: 0 }, calls: { skim: 1, judge: 1, refute: 1, write: 1 }, costUsd: 1,
+  });
+
+  it("本文から、dry-run と同じ題を読む（題に括弧があっても）", () => {
+    for (const t of ["フォントの字形", "埋め込みの字形（CFF）に残る字"]) {
+      const p = prInput(t);
+      expect(titleFromBody(renderPrBody(p as any))).toBe(prTitle(p as any));
+    }
+    expect(titleFromBody(["## 何の型か", "", "形が違う"].join("\n"))).toBeNull();
+  });
+
+  it("歯止めを通り、本文があり、まだ出していないものだけを選ぶ", () => {
+    expect(publishTargets({ results: [
+      { candidate: 1, pass: true, body: "x" },
+      { candidate: 2, pass: false, stop: "届かなかった" },
+      { candidate: 3, pass: true, stop: "本文に出してはいけない字が混ざった" },
+      { candidate: 4, pass: true, body: "x", pr: "https://example.invalid/pull/1" },
+    ] })).toEqual([1]);
+    expect(publishTargets({})).toEqual([]);
+    // 前の --publish で出したものは選ばない（止まったものは、もう一度選ぶ）
+    expect(publishTargets({
+      results: [1, 2].map((n) => ({ candidate: n, pass: true, body: "x" })),
+      published: [{ results: [{ candidate: 1, pr: 42, stop: null }, { candidate: 2, pr: null, stop: "npm test が通らない" }] }],
+    })).toEqual([2]);
+  });
+
+  const dirs: string[] = [];
+  afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+
+  /** 架空の作業の木と記録。git・npm・gh は偽物（何も外に出さない） */
+  function setup(opts: { body?: string; merge?: number; test?: number } = {}) {
+    const repo = mkdtempSync(join(tmpdir(), "ratchet-pub-"));
+    dirs.push(repo);
+    const runDir = join(repo, "state", "runs", "r1");
+    mkdirSync(runDir, { recursive: true });
+    mkdirSync(join(repo, ".tmp", "ratchet-work", "r1", "c1"), { recursive: true });
+    writeFileSync(join(runDir, "pr-1.md"), opts.body ?? renderPrBody(prInput("架空の型") as any));
+    const calls: string[][] = [];
+    const run: Run = (cmd, args) => {
+      calls.push([cmd, ...args]);
+      const a = args.join(" ");
+      const out = (s: string) => ({ status: 0, stdout: s + "\n" });
+      if (cmd === "git" && a.startsWith("rev-parse")) return out("claude/ratchet-r1-1");
+      if (cmd === "git" && a.startsWith("rev-list")) return out("1");
+      if (cmd === "git" && a.startsWith("log")) return out("Ratchet：P7 の検出ルール p7-y を足す");
+      if (cmd === "git" && a.startsWith("diff")) return out("rules/p7-y/index.ts");
+      if (cmd === "git" && a.startsWith("merge")) return { status: opts.merge ?? 0, stdout: "" };
+      if (cmd === "npm" && a === "test") return { status: opts.test ?? 0, stdout: "" };
+      if (cmd === "gh" && args[0] === "pr") return out("https://example.invalid/o/r/pull/42");
+      return { status: 0, stdout: "" };
+    };
+    const go = () => publishOne({ repo, runId: "r1", runDir, n: 1, secrets: ["D:/corpus"], files:["D:/corpus/架空の束の名前.pdf"], run, log: () => {} });
+    return { calls, go };
+  }
+  const has = (calls: string[][], ...head: string[]) => calls.some((c) => head.every((h, i) => c[i] === h));
+
+  it("全部通れば、main に重ねてテストとビルドを回し、--force なしで push して PR にする", () => {
+    const { calls, go } = setup();
+    const r = go();
+    expect(r).toEqual({ candidate: 1, title: "Ratchet：P7 架空の型", pr: 42, stop: null });
+    expect(has(calls, "git", "worktree", "add")).toBe(true);
+    expect(has(calls, "git", "merge", "--no-ff", "--no-commit", "claude/ratchet-r1-1")).toBe(true);
+    expect(has(calls, "npm", "test") && has(calls, "npm", "run", "build")).toBe(true);
+    expect(has(calls, "git", "worktree", "remove")).toBe(true);
+    expect(has(calls, "git", "push", "-u", "origin", "claude/ratchet-r1-1")).toBe(true);
+    expect(calls.filter((c) => c[1] === "push").flat().some((a) => /^(--force|-f)/.test(a))).toBe(false);
+    expect(calls.findIndex((c) => c[1] === "push")).toBeGreaterThan(calls.findIndex((c) => c[0] === "npm" && c[2] === "build"));
+  });
+
+  it("本文に束のファイル名があれば、push しない", () => {
+    const { calls, go } = setup({ body: renderPrBody(prInput("架空の束の名前 に残る字") as any) });
+    expect(go().stop).toMatch(/束のファイル名/);
+    expect(has(calls, "git", "push")).toBe(false);
+    expect(has(calls, "git", "worktree", "add")).toBe(false);
+  });
+
+  it("今の main に重ならないとき・重ねてテストが落ちるときは、push せず、確かめの作業の木を片付ける", () => {
+    for (const [o, why] of [[{ merge: 1 }, /きれいに重ならない/], [{ test: 1 }, /npm test が通らない/]] as const) {
+      const { calls, go } = setup(o);
+      expect(go().stop).toMatch(why);
+      expect(has(calls, "git", "push")).toBe(false);
+      expect(has(calls, "git", "worktree", "remove")).toBe(true);
+    }
+  });
+});
+
 describe("今あるルールの一覧（判断・反証に全部渡す）", () => {
   it("README から、地の文の要点と、表の種類（kind）を取る。コードと見出しは取らない", () => {
     const r = parseReadme([
@@ -437,7 +531,7 @@ describe("構造の要約（値は伏せる）", () => {
 
 describe("node でそのまま動く", () => {
   // npm run ratchet は node の型の取り除き（strip-only）で動く。vitest では通っても、node では読めない書き方がある
-  it.each(["bundle", "catalog", "claude", "config", "gate", "known", "metrics", "prbody", "probe", "prompts", "rejections", "schema", "synthetic"])("ratchet/%s.ts", (name) => {
+  it.each(["bundle", "catalog", "claude", "config", "gate", "known", "metrics", "prbody", "probe", "prompts", "publish", "rejections", "schema", "synthetic"])("ratchet/%s.ts", (name) => {
     const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(join(process.cwd(), "ratchet", `${name}.ts`)).href)})`], { encoding: "utf8" });
     expect(r.stderr).not.toMatch(/ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX|SyntaxError/);
     expect(r.status).toBe(0);

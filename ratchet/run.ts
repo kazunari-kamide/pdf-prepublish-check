@@ -8,6 +8,7 @@
 //   OMAMORI_RATCHET_CORPUS=<束のフォルダ> OMAMORI_RATCHET_STATE=<記録のフォルダ> [OMAMORI_RATCHET_EXCLUDE=<除く sha256 の一覧>] \
 //     npm run ratchet -- [--pr] [--bundle 50] [--max-candidates 3] [--fix-attempts 3] [--run-budget <ドル>] [--call-budget <ドル>]
 //     道具の確かめ：--from-candidates <JSON>（ルール書きから）・--refute-only <JSON>（反証の段だけ。束は読まない）
+//     dry-run を人が見たあと：--publish <回の番号>（残したブランチと pr-N.md を、作り直さずに PR にする。ratchet/publish.ts）
 //
 // 画面とログに出すのは、件数・時刻・エラーの種類・番号（b01 など）だけ。束のパス・ファイル名・PDF の中身は出さない。
 
@@ -15,7 +16,8 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadState, markDone, markStarted, readExclude, saveState, selectBundle } from "./bundle.ts";
+import { listPdfs, loadState, markDone, markStarted, readExclude, saveState, selectBundle } from "./bundle.ts";
+import { publishOne, publishTargets, realRun, type PublishResult } from "./publish.ts";
 import { Caller, type CallResult } from "./claude.ts";
 import { limitsFrom, MODELS, readEnv } from "./config.ts";
 import { checkDiff, compareMetrics, type GateResult, type LineCounts } from "./gate.ts";
@@ -101,6 +103,7 @@ async function main() {
   const o = opts(process.argv.slice(2));
   const doPr = o.pr === "true";
   const env = readEnv();
+  if (o.publish) return publishRun(o.publish, env);
   const limits = limitsFrom(o);
   const started = new Date();
   const runId = o["run-id"] ?? started.toISOString().replace(/[-:]/g, "").slice(0, 13).replace("T", "-");
@@ -368,9 +371,38 @@ async function main() {
   }
 }
 
+/** dry-run で残した PR を、作り直さずに出す（--publish <回の番号>。ratchet/publish.ts） */
+function publishRun(runId: string, env: ReturnType<typeof readEnv>): void {
+  if (!/^[0-9A-Za-z-]{1,40}$/.test(runId)) throw new Error("回の番号の形が違う");
+  const runDir = join(env.state, "runs", runId);
+  const sumFile = join(runDir, "summary.json");
+  if (!existsSync(sumFile)) throw new Error("その回の記録が無い");
+  const summary = JSON.parse(readFileSync(sumFile, "utf8"));
+  const log = (step: string, data: Record<string, unknown> = {}) => {
+    appendFileSync(join(runDir, "log.jsonl"), JSON.stringify({ t: new Date().toISOString(), step, ...data }) + "\n");
+    const local = new Date().toLocaleTimeString("ja-JP", { hour12: false });
+    console.log(`[${local}] ${step}${Object.keys(data).length ? " " + JSON.stringify(data) : ""}`);
+  };
+  const targets = publishTargets(summary);
+  log("出す候補を選んだ", { 回: runId, 候補: targets });
+  if (!targets.length) return;
+  git(REPO, ["fetch", "-q", "origin"]);
+  // 束のファイル名は、その回の分だけでなく、束のフォルダの全部の名前と比べる（名前だけを読む。中身は読まない）
+  const files = listPdfs(env.corpus);
+  const published: PublishResult[] = [];
+  for (const n of targets) {
+    const r = publishOne({ repo: REPO, runId, runDir, n, secrets: [env.corpus, env.state, env.exclude ?? ""], files, run: realRun, log });
+    published.push(r);
+    // 画面には、PR の番号と題・止まった理由だけを出す
+    log("候補を終えた", r.pr ? { 候補: n, PR: `#${r.pr}`, 題: r.title } : { 候補: n, 出さなかった: r.stop });
+  }
+  summary.published = [...(Array.isArray(summary.published) ? summary.published : []), { at: new Date().toISOString(), results: published }];
+  writeFileSync(sumFile, JSON.stringify(summary, null, 1));
+}
+
 main().catch((e) => {
   // 例外の文に中身やパスが混ざりうるので、種類だけを出す（こちらで書いた「環境変数がありません」だけは、変数の名前なので出す）
-  const own = e instanceof Error && /^(環境変数がありません|作業の木を作れなかった)/.test(e.message);
+  const own = e instanceof Error && /^(環境変数がありません|作業の木を作れなかった|回の番号の形が違う|その回の記録が無い)/.test(e.message);
   console.error(`止まりました（${own ? e.message : e instanceof Error ? e.constructor.name : "不明"}）`);
   process.exitCode = 1;
 });
