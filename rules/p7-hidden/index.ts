@@ -38,7 +38,9 @@ const MAX_PATTERN_TILES = 64;
 export const RULE_ID = "p7-hidden";
 // 1.4.1：解くと大きすぎる中身（圧縮の爆弾）のページは、stream_too_large として省く（rules/shared/inflate-limit.ts）
 // 1.5.0：字の報告ごとに、読める本文か（readable）を付ける。表の体裁・罫線・飾りのような、まとまって出る型と分けるため（実物の PDF で「高」の誤検知が多かった。2026-11-05）
-export const RULE_VERSION = "1.7.0";
+// 1.8.0：same_color の字に、下の色（under: "dark"＝濃い塗りの上の濃い字、"light"＝白い地の上の白い字など）と、
+// 下の濃い塗りの箱（underBox）を付ける（redacted-text-elsewhere が使う）。見つける所・数は変えない
+export const RULE_VERSION = "1.8.0";
 
 export type P7Reason =
   | "hidden_layer"
@@ -122,6 +124,16 @@ export type P7Finding = {
    * 同じ型の報告が文書の中に templateRepeatMin 未満のとき true。字の対応表の書き換えは、ページの大部分が書き換わっていれば false（書体の不具合）
    */
   readable?: boolean;
+  /**
+   * same_color のときだけ（1.8.0 から）。dark＝濃い塗りの上に、同じ濃い色の字（黒い四角の上に黒い字を置いた形。見た目は黒塗り）。
+   * light＝それ以外（白い地の上の白い字など）。まとめた字の中に 1 字でも light があれば light
+   */
+  under?: "dark" | "light";
+  /**
+   * under が dark のときだけ（1.8.0 から）。字の下の濃い塗りの箱を合わせた箱（字の箱と同じ座標）。
+   * 黒い四角で字を囲んだ形（墨消しのつもりの形）か、濃い帯・背景の上の字かを、呼ぶ側が箱の大きさで見分けるため
+   */
+  underBox?: Rect;
 };
 
 export type P7Report = {
@@ -878,7 +890,7 @@ class ImagePixels {
 
 // ---------------------------------------------------------------- 判定
 
-type Judged = { reason: P7Reason } | { excluded: "p6" | "ocr" } | null;
+type Judged = { reason: P7Reason; under?: "dark" | "light"; underBox?: Rect } | { excluded: "p6" | "ocr" } | null;
 
 /** 見えない所に置いた画像か（1.2.0 から）。表示しない層の中・型抜き・小さな画像・ふつうでない置き方は見ない */
 function hiddenImage(im: Img, view: Rect, s: P7Settings, pixels: ImagePixels): "image_off_page" | "image_clipped" | null {
@@ -937,11 +949,11 @@ function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], pixels: Imag
   }
   // 下の色：字より前に描いた、いちばん上の不透明な塗りか画像。なければページの白
   if (shown.some((p) => p.lum === null)) return null;
-  let under: { seq: number; lum: number | null; image?: Img } = { seq: -1, lum: 1 };
+  let under: { seq: number; lum: number | null; image?: Img; box?: Rect } = { seq: -1, lum: 1 };
   for (const f of fills) {
     if (f.seq > gl.seq || f.seq < under.seq || !f.normal || f.alpha < s.coverAlphaMin) continue;
     if (!inRect(f.box, cx, cy) || !inShape(f.polys, cx, cy)) continue;
-    under = { seq: f.seq, lum: f.lum };
+    under = { seq: f.seq, lum: f.lum, box: f.box };
   }
   for (const im of images) {
     if (im.seq > gl.seq || im.seq < under.seq || !inRect(im.box, cx, cy)) continue;
@@ -959,7 +971,8 @@ function judge(gl: Glyph, view: Rect, fills: Fill[], images: Img[], pixels: Imag
     return same / lums.length >= s.sameColorImageFractionMin ? { reason: "same_color_image" } : null;
   }
   if (under.lum === null) return null;
-  return close(under.lum) ? { reason: "same_color" } : null;
+  if (!close(under.lum)) return null;
+  return under.lum <= s.darkLuminanceMaxForP6 ? { reason: "same_color", under: "dark", ...(under.box ? { underBox: under.box } : {}) } : { reason: "same_color", under: "light" };
 }
 
 /** 前の字のすぐあとに、同じ行で続く字か（命令をまたいで1件にまとめるため。1.1.0 から） */
@@ -1148,7 +1161,7 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
 
       // 1字ごとに理由を決め、同じ理由で続く字を1件にまとめる。
       // 同じ命令の中か、命令をまたいでも同じ行ですぐ隣に続く字（1.1.0 から。1字ずつ別の命令で置いた字を1件にする）
-      type Group = { op: number; reason: P7Reason; rect: Rect; chars: number; text: string; last: Glyph };
+      type Group = { op: number; reason: P7Reason; rect: Rect; chars: number; text: string; last: Glyph; under?: "dark" | "light"; underBox?: Rect };
       let group: Group | null = null;
       const pixels = new ImagePixels(ctx);
       // 同じ字の並びを、同じ所に何度も描いたもの（同じ理由・同じ箱・同じ字数・同じ字）は 1 件にする（1.6.0 から。
@@ -1162,7 +1175,7 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
             return;
           }
           seen.add(key);
-          const f: P7Finding = { pattern: "P7", page: pageNo, reason: group.reason, rect: padRect(group.rect), chars: group.chars };
+          const f: P7Finding = { pattern: "P7", page: pageNo, reason: group.reason, rect: padRect(group.rect), chars: group.chars, ...(group.under ? { under: group.under } : {}), ...(group.under === "dark" && group.underBox ? { underBox: group.underBox } : {}) };
           if (options.includeText) f.text = group.text;
           report.findings.push(f);
           textFindings.push({ f, ...lettersOf(group.text) });
@@ -1202,9 +1215,11 @@ export async function detectP7Hidden(bytes: Uint8Array, options: DetectOptions =
           g0.op = gl.op;
           g0.last = gl;
           g0.chars += n;
+          if (j.under === "light" || g0.under === "light") g0.under = "light";
+          if (j.underBox) g0.underBox = g0.underBox ? union(g0.underBox, j.underBox) : j.underBox;
         } else {
           flush();
-          group = { op: gl.op, reason: j.reason, rect: gl.rect, chars: n, text: gl.text, last: gl };
+          group = { op: gl.op, reason: j.reason, rect: gl.rect, chars: n, text: gl.text, last: gl, ...(j.under ? { under: j.under } : {}), ...(j.underBox ? { underBox: j.underBox } : {}) };
         }
       });
       flush();
