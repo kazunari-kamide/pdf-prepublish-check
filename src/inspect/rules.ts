@@ -28,6 +28,7 @@ import { detectAltText, type AltKind, type AltReport } from "../../rules/alt-tex
 import { detectInfoXmpDiff, type DiffReport } from "../../rules/props/index.ts";
 import { detectExtras, type ExtrasReport } from "../../rules/extras/index.ts";
 import { detectFontGlyphs, type FontGlyphReport } from "../../rules/font-glyphs/index.ts";
+import { detectFontGlyphsCff, type CffGlyphReport } from "../../rules/font-glyphs-cff/index.ts";
 import { detectUnusedImages, type UnusedImageReport } from "../../rules/unused-images/index.ts";
 import { detectP2Parts, type P2PartsFinding, type P2PartsReport } from "../../rules/p2-parts/index.ts";
 import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
@@ -1085,5 +1086,24 @@ const fontGlyphs = defineRule<FontGlyphReport>({
     })),
 });
 
+// ---------------------------------------------------------------- CFF の書体に残った字形
+
+const fontGlyphsCff = defineRule<CffGlyphReport>({
+  id: "font-glyphs-cff",
+  label: "CFF の書体に残った字形",
+  pattern: "P7",
+  detect: (b) => detectFontGlyphsCff(b),
+  items: (r) =>
+    r.findings.map((f) => ({
+      pattern: "P7",
+      severity: "medium", // 【仮】
+      title: "埋め込んだ書体に、どこにも描かれていない字の形が残っています",
+      why: "前に書いてあって消した字（黒塗りの下だけにあった字など）の手がかりになることがあります。",
+      detail: `余った字の形：${f.leftover} 個（書体の字の形 ${f.glyphs} 個のうち）／書体：CFF`,
+      page: null,
+      rect: null,
+    })),
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, p4, p9, p8, p11, p12, p10, pii];
+export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, fontGlyphsCff, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, p4, p9, p8, p11, p12, p10, pii];
