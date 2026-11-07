@@ -85,26 +85,88 @@ export type ApiReply =
 /** API の 1 回分を呼ぶ道具。テストでは差し替える（本物の API は呼ばない） */
 export type ApiSend = (r: ApiRequest) => Promise<ApiReply>;
 
-/** API キーを読む。無ければ変数の名前だけを出して止める（値は出さない） */
+/**
+ * API キーを読む。無ければ変数の名前だけを出して止める（値は出さない）。
+ * 前後の空白・改行は落とす（貼り付けで入りやすい）。HTTP の見出しに入れられない字（全角の字・“ ” など）があれば、
+ * 呼ぶ前に、何番目の字かだけを出して止める（そのまま呼ぶと、送る前に落ちて「つながらない」に見える）。
+ */
 export function readApiKey(env: Record<string, string | undefined> = process.env): string {
-  const k = env[API_KEY_ENV];
+  const k = (env[API_KEY_ENV] ?? "").trim();
   if (!k) throw new Error(`環境変数がありません：${API_KEY_ENV}`);
+  const bad = [...k].findIndex((c) => c.charCodeAt(0) < 0x21 || c.charCodeAt(0) > 0x7e);
+  if (bad >= 0) throw new Error(`${API_KEY_ENV} に、キーに使えない字があります（${bad + 1} 字目。空白・全角の字・引用符など）`);
   return k;
 }
 
-/** エラーを、種類と状態コードだけの短い文にする（文の中身にキーや送ったものが混ざらないように、message は使わない） */
-export function errorDetail(e: unknown): string {
+/** キーの様子（値は出さない）。長さ・始まりの形・前後の空白・使えない字の数。本人の確かめ用 */
+export function keyShape(env: Record<string, string | undefined> = process.env): string {
+  const raw = env[API_KEY_ENV];
+  if (!raw) return `${API_KEY_ENV}：ない`;
+  const k = raw.trim();
+  const bad = [...k].filter((c) => c.charCodeAt(0) < 0x21 || c.charCodeAt(0) > 0x7e).length;
+  return `${API_KEY_ENV}：${k.length} 字、sk-ant- で始まる：${k.startsWith("sk-ant-") ? "はい" : "いいえ"}、前後の空白：${raw !== k ? "あった（落とす）" : "なし"}、使えない字：${bad} 個`;
+}
+
+/** 文の中のキーらしいものを伏せる（渡したキーそのものと、sk-ant- で始まる続き） */
+export function mask(s: string, secrets: string[] = []): string {
+  let out = s;
+  for (const k of secrets) if (k && k.length >= 8) out = out.split(k).join("〈キーを伏せた〉");
+  return out.replace(/sk-ant-[^\s"'」]*/g, "〈キーを伏せた〉");
+}
+
+/**
+ * エラーを、記録と画面に出せる短い文にする：HTTP の状態番号・エラーの型・API が返した説明（キーは伏せる）・request-id。
+ * 送った中身（PDF の要約）は API の説明に入らないが、念のため 200 字で切る。
+ */
+export function errorDetail(e: unknown, secrets: string[] = []): string {
+  const cut = (s: string) => mask(s, secrets).replace(/\s+/g, " ").slice(0, 200);
   if (e instanceof Anthropic.APIConnectionTimeoutError) return "API 時間切れ";
-  if (e instanceof Anthropic.APIConnectionError) return "API につながらない";
-  if (e instanceof Anthropic.APIError) return `API ${e.status ?? "状態なし"}${e.type ? ` ${e.type}` : ""}`;
+  if (e instanceof Anthropic.APIConnectionError) {
+    // 送る前に落ちた・名前が引けない・つながらない、など。原因の種類（code）と短い説明だけ
+    const c = (e as { cause?: { code?: unknown; message?: unknown; constructor?: { name?: string } } }).cause;
+    const why = c ? [c.constructor?.name, typeof c.code === "string" ? c.code : null, typeof c.message === "string" ? cut(c.message) : null].filter(Boolean).join(" ") : "";
+    return `API につながらない${why ? `（${why}）` : ""}`;
+  }
+  if (e instanceof Anthropic.APIError) {
+    const body = (e.error ?? {}) as { error?: { message?: unknown } };
+    const msg = typeof body.error?.message === "string" ? cut(body.error.message) : "";
+    const id = (e as { requestID?: string | null }).requestID;
+    return [`API ${e.status ?? "状態なし"}`, e.type, msg && `「${msg}」`, id && `request-id ${id}`].filter(Boolean).join(" ");
+  }
+  if (e instanceof Error) return `API の呼び出しで止まった（${e.constructor.name}：${cut(e.message)}）`;
   return "API の呼び出しで止まった";
 }
 
-/** 本物の API を呼ぶ道具。キーは呼ぶときにだけ読む */
-export function realApiSend(env: Record<string, string | undefined> = process.env): ApiSend {
+/** API の確かめ（本人用。npm run ratchet:api-check）。モデルの情報を読むだけで、答えは作らせない（トークンを使わない） */
+export async function apiCheck(models: string[], env: Record<string, string | undefined> = process.env, opts: { fetch?: typeof fetch } = {}): Promise<string[]> {
+  const out = [keyShape(env)];
+  let key: string;
+  try {
+    key = readApiKey(env);
+  } catch (e) {
+    return [...out, (e as Error).message];
+  }
+  const client = new Anthropic({ apiKey: key, baseURL: API_BASE_URL, maxRetries: 0, ...(opts.fetch ? { fetch: opts.fetch } : {}) });
+  for (const m of [...new Set(models)]) {
+    try {
+      const r = await client.models.retrieve(m);
+      out.push(`${m}：使える（${r.id}）`);
+    } catch (e) {
+      out.push(`${m}：${errorDetail(e, [key])}`);
+    }
+  }
+  return out;
+}
+
+/** 本物の API を呼ぶ道具。キーは呼ぶときにだけ読む。opts.fetch はテストで差し替えるため */
+export function realApiSend(env: Record<string, string | undefined> = process.env, opts: { fetch?: typeof fetch; maxRetries?: number } = {}): ApiSend {
   let client: Anthropic | null = null;
+  let key = "";
   return async (r) => {
-    client ??= new Anthropic({ apiKey: readApiKey(env), baseURL: API_BASE_URL, maxRetries: 2 });
+    if (!client) {
+      key = readApiKey(env);
+      client = new Anthropic({ apiKey: key, baseURL: API_BASE_URL, maxRetries: opts.maxRetries ?? 2, ...(opts.fetch ? { fetch: opts.fetch } : {}) });
+    }
     try {
       // 答えが長くなっても HTTP が時間切れにならないよう、流して受け取り、最後にまとめる
       const msg = await client.messages
@@ -121,7 +183,12 @@ export function realApiSend(env: Record<string, string | undefined> = process.en
       const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
       return { ok: true, text, stopReason: msg.stop_reason, usage: msg.usage };
     } catch (e) {
-      return { ok: false, detail: errorDetail(e), usage: null };
+      return { ok: false, detail: errorDetail(e, [key]), usage: null };
     }
   };
+}
+
+if (process.argv[1] && process.argv[1].replaceAll("\\", "/").endsWith("ratchet/api.ts") && process.argv.includes("--check")) {
+  const { MODELS } = await import("./config.ts");
+  for (const line of await apiCheck(Object.values(MODELS))) console.log(line);
 }

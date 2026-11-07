@@ -31,7 +31,8 @@
 | `OMAMORI_RATCHET_EXCLUDE` | 採点用の実データの sha256 の一覧（あれば） |
 
 - ほかに、`claude`（ルール書きの段）・`gh`・`git`・Node が要ります。
-- キーが無いと、変数の名前だけを出して、何もせずに止まります。
+- キーが無いと、変数の名前だけを出して、何もせずに止まります。キーの前後の空白は落とします。全角の字や引用符（“ ” など）が混ざっていると、呼ぶ前に「何字目か」だけを出して止まります。
+- 呼べなかったときは、HTTP の状態番号・エラーの型・API の説明（キーは伏せる）・request-id を、画面と `log.jsonl` と `summary.json`（`callErrors`）に残します。
 
 ## 手で 1 回回す（登録しない）
 
@@ -41,6 +42,7 @@
 $env:ANTHROPIC_API_KEY = "<キー>"          # 画面に映さない。打ったあと履歴を残さない
 $env:OMAMORI_RATCHET_CORPUS = "<束のフォルダ>"
 $env:OMAMORI_RATCHET_STATE = "<記録のフォルダ>"
+npm run ratchet:api-check                                 # キーの長さ・形と、使うモデルが使えるかだけを出す（キーの値は出さない。答えは作らせないのでトークンを使わない）
 npm run ratchet -- --via api --bundle 3 --run-budget 5   # dry-run（--pr を付けない）
 Remove-Item Env:ANTHROPIC_API_KEY                         # 終わったら消す
 ```
