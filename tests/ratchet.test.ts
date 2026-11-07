@@ -14,7 +14,7 @@ import { limitsFrom, readEnv, viaFrom } from "../ratchet/config.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import { apiCheck, costOf, errorDetail, keyShape, mask, maxTokensFor, readApiKey, realApiSend, toApiSchema, type ApiRequest, type ApiSend } from "../ratchet/api.ts";
 import { scheduleArgs } from "../ratchet/schedule.ts";
-import { checkDiff, compareMetrics } from "../ratchet/gate.ts";
+import { checkDiff, compareMetrics, stopAfterRefute } from "../ratchet/gate.ts";
 import type { Metrics, TypeScore } from "../ratchet/metrics.ts";
 import { findLeaks, prTitle, renderPrBody, viaLine } from "../ratchet/prbody.ts";
 import { publishOne, publishTargets, titleFromBody, type Run } from "../ratchet/publish.ts";
@@ -1019,5 +1019,13 @@ describe("Claude API で呼べなかった理由を残す（2026-11-07 夜、手
     expect(lines.slice(1)).toEqual(["claude-haiku-5-5：API 403 permission_error 「not allowed」 request-id req_kasou", "claude-opus-5-5：使える（claude-opus-5-5）"]);
     expect(seen.every((u) => u.startsWith("https://api.anthropic.com/v1/models/"))).toBe(true);
     expect(await apiCheck(["m"], {})).toEqual(["ANTHROPIC_API_KEY：ない", "環境変数がありません：ANTHROPIC_API_KEY"]);
+  });
+});
+
+describe("止まった理由を事実どおりに出す", () => {
+  it("判断の段が候補を 0 件にしたときは「候補が出なかった」。反証で全部落としたときだけ「反証で全部落ちた」", () => {
+    expect(stopAfterRefute(0, 0)).toBe("候補が出なかった（判断の段が候補を 0 件にした）");
+    expect(stopAfterRefute(3, 0)).toBe("反証で全部落ちた");
+    expect(stopAfterRefute(3, 1)).toBeNull();
   });
 });

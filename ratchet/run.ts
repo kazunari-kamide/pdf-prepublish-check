@@ -26,7 +26,7 @@ import { publishOne, publishTargets, realRun, type PublishResult } from "./publi
 import { Caller, type CallResult } from "./claude.ts";
 import { API_EFFORT, API_KEY_ENV, readApiKey } from "./api.ts";
 import { limitsFrom, MODELS, readEnv, viaFrom } from "./config.ts";
-import { checkDiff, compareMetrics, type GateResult, type LineCounts } from "./gate.ts";
+import { checkDiff, compareMetrics, stopAfterRefute, type GateResult, type LineCounts } from "./gate.ts";
 import type { Metrics } from "./metrics.ts";
 import { findLeaks, prTitle, renderPrBody, type Candidate } from "./prbody.ts";
 import { catalogIn, shortCatalog } from "./catalog.ts";
@@ -361,7 +361,8 @@ async function main() {
   Object.assign(outcome.counts as object, { candidates: candidates.length, refuted, refuteReasons, kept: kept.length });
   outcome.candidates = judged;
   log("反証が終わった", { 残した: kept.length, 落とした: refuted, 落とした理由: refuteReasons });
-  if (!kept.length) return "反証で全部落ちた";
+  const noneLeft = stopAfterRefute(candidates.length, kept.length);
+  if (noneLeft) return noneLeft;
   return { files: sel.items.map((i) => i.path), read, skipped, suspicionCount: suspicions.length, candidateCount: candidates.length, refuted, kept };
   }
 

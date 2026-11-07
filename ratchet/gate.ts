@@ -176,3 +176,14 @@ export function checkDiff(entries: DiffEntry[], lines: LineCounts): string[] {
   if (newRule && !listed) bad.push("新しいルールを、画面の一覧（src/inspect/rules.ts の RULES）に足していない");
   return bad;
 }
+
+/**
+ * 反証のあとに残った候補が無いときの、止まった理由。
+ * 判断の段が候補を 0 件にしたとき（反証は 1 回も呼んでいない）と、反証で全部落としたときを分ける。
+ * 残った候補があれば null（止まらない）。
+ */
+export function stopAfterRefute(candidates: number, kept: number): string | null {
+  if (kept > 0) return null;
+  if (candidates === 0) return "候補が出なかった（判断の段が候補を 0 件にした）";
+  return "反証で全部落ちた";
+}
