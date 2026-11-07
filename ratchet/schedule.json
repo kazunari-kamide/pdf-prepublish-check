@@ -1,0 +1,9 @@
+{
+ "about": "Ratchet を定時に回す設定（docs/ratchet-schedule.md）。まだ定時で回したことはない。束の場所・記録の場所・API キーはここに書かず、環境変数で渡す。",
+ "times": ["05:00", "20:00"],
+ "source": "手元の束だけ（OMAMORI_RATCHET_CORPUS のフォルダ）。ウェブには向けない",
+ "via": "api",
+ "dryRun": true,
+ "runBudgetUsd": 5,
+ "bundle": 50
+}

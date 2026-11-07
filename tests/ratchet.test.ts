@@ -10,10 +10,13 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { markDone, markStarted, readExclude, selectBundle, sha256File, type State } from "../ratchet/bundle.ts";
 import { buildArgs, Caller, wrapData, type Runner } from "../ratchet/claude.ts";
-import { limitsFrom, readEnv } from "../ratchet/config.ts";
+import { limitsFrom, readEnv, viaFrom } from "../ratchet/config.ts";
+import Anthropic from "@anthropic-ai/sdk";
+import { costOf, errorDetail, maxTokensFor, readApiKey, realApiSend, toApiSchema, type ApiRequest, type ApiSend } from "../ratchet/api.ts";
+import { scheduleArgs } from "../ratchet/schedule.ts";
 import { checkDiff, compareMetrics } from "../ratchet/gate.ts";
 import type { Metrics, TypeScore } from "../ratchet/metrics.ts";
-import { findLeaks, prTitle, renderPrBody } from "../ratchet/prbody.ts";
+import { findLeaks, prTitle, renderPrBody, viaLine } from "../ratchet/prbody.ts";
 import { publishOne, publishTargets, titleFromBody, type Run } from "../ratchet/publish.ts";
 import { summarizeCli, xmpElementNames } from "../ratchet/probe.ts";
 import { parseRejections, reasonOf } from "../ratchet/rejections.ts";
@@ -230,7 +233,7 @@ describe("Claude の答え", () => {
 
   it("形に合わない答えは捨てる", async () => {
     const runner: Runner = async () => ({ code: 0, stdout: ok({ suspicions: [{ pattern: "P99", signal: "x", alreadyReported: false }] }), stderr: "" });
-    const c = new Caller({ skim: 5, judge: 5, write: 5, runBudgetUsd: null }, runner);
+    const c = new Caller({ skim: 5, judge: 5, write: 5, runBudgetUsd: null }, runner, { via: "cli" });
     const r = await c.call({ role: "skim", model: "m", prompt: "p", schema: SKIM, cwd: "." });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe("形が合わない");
@@ -242,7 +245,7 @@ describe("Claude の答え", () => {
 
   it("回数の上限と金額の上限で止める", async () => {
     const runner: Runner = async () => ({ code: 0, stdout: ok({ suspicions: [] }), stderr: "" });
-    const c = new Caller({ skim: 2, judge: 1, write: 1, runBudgetUsd: 0.015 }, runner);
+    const c = new Caller({ skim: 2, judge: 1, write: 1, runBudgetUsd: 0.015 }, runner, { via: "cli" });
     expect((await c.call({ role: "skim", model: "m", prompt: "p", schema: SKIM, cwd: "." })).ok).toBe(true);
     expect((await c.call({ role: "skim", model: "m", prompt: "p", schema: SKIM, cwd: "." })).ok).toBe(true);
     const third = await c.call({ role: "skim", model: "m", prompt: "p", schema: SKIM, cwd: "." });
@@ -252,7 +255,7 @@ describe("Claude の答え", () => {
 
   it("判断と反証は合わせて数える", async () => {
     const runner: Runner = async () => ({ code: 0, stdout: ok({ keep: false, reason: "もう捕まる", explanation: "x" }), stderr: "" });
-    const c = new Caller({ skim: 1, judge: 2, write: 1, runBudgetUsd: null }, runner);
+    const c = new Caller({ skim: 1, judge: 2, write: 1, runBudgetUsd: null }, runner, { via: "cli" });
     await c.call({ role: "judge", model: "m", prompt: "p", schema: REFUTE, cwd: "." });
     await c.call({ role: "refute", model: "m", prompt: "p", schema: REFUTE, cwd: "." });
     expect(c.remaining("refute")).toBe(0);
@@ -260,7 +263,7 @@ describe("Claude の答え", () => {
 
   it("書き込みの見張りに止められた回数を返す", async () => {
     const runner: Runner = async () => ({ code: 0, stdout: ok({ keep: true, reason: "残す", explanation: "x" }, { permission_denials: [{ tool_name: "Write" }] }), stderr: "" });
-    const r = await new Caller({ skim: 1, judge: 1, write: 1, runBudgetUsd: null }, runner).call({ role: "judge", model: "m", prompt: "p", schema: REFUTE, cwd: "." });
+    const r = await new Caller({ skim: 1, judge: 1, write: 1, runBudgetUsd: null }, runner, { via: "cli" }).call({ role: "judge", model: "m", prompt: "p", schema: REFUTE, cwd: "." });
     expect(r.ok && r.denials).toBe(1);
   });
 
@@ -636,7 +639,7 @@ describe("構造の要約（値は伏せる）", () => {
 
 describe("node でそのまま動く", () => {
   // npm run ratchet は node の型の取り除き（strip-only）で動く。vitest では通っても、node では読めない書き方がある
-  it.each(["bundle", "catalog", "claude", "config", "evidence", "gate", "known", "metrics", "prbody", "probe", "prompts", "publish", "redaction", "rejections", "schema", "synthetic", "synthetic-redaction"])("ratchet/%s.ts", (name) => {
+  it.each(["api", "bundle", "schedule", "catalog", "claude", "config", "evidence", "gate", "known", "metrics", "prbody", "probe", "prompts", "publish", "redaction", "rejections", "schema", "synthetic", "synthetic-redaction"])("ratchet/%s.ts", (name) => {
     const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(join(process.cwd(), "ratchet", `${name}.ts`)).href)})`], { encoding: "utf8" });
     expect(r.stderr).not.toMatch(/ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX|SyntaxError/);
     expect(r.status).toBe(0);
@@ -845,5 +848,116 @@ describe("根拠の実物で当たるか（歯止め。2026-11-07 本人の承�
     expect(w).toContain("根拠の実物で当たること");
     expect(w).toContain("evidenceShape");
     expect(w).toContain("画素を見るルール");
+  });
+});
+
+describe("Claude API（Messages API）で呼ぶ", () => {
+  const limits = { skim: 5, judge: 5, write: 5, runBudgetUsd: null };
+  const usage = { input_tokens: 1000, output_tokens: 500, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+  const reply = (value: unknown, stopReason = "end_turn"): ApiSend => async () => ({ ok: true, text: JSON.stringify(value), stopReason, usage });
+  const noCli: Runner = async () => {
+    throw new Error("claude -p を呼んではいけない");
+  };
+
+  it("API に渡すスキーマは、構造化出力が受け付けない制約を外す（決めた欄・enum・additionalProperties は残す）", () => {
+    const s = JSON.stringify(toApiSchema(CANDIDATES));
+    expect(s).not.toMatch(/maxLength|maxItems|minimum|maximum/);
+    expect(s).toContain('"additionalProperties":false');
+    expect(s).toContain('"enum":["P1"');
+    expect((toApiSchema(REFUTE) as { required: string[] }).required).toEqual(["keep", "reason", "explanation"]);
+  });
+
+  it("費用は使った量から数える（Haiku 5.5 は入力が 10 万トークンを超えると上の段）", () => {
+    expect(costOf("claude-opus-5-5", usage)).toBeCloseTo(0.014, 10);
+    expect(costOf("claude-haiku-5-5", usage)).toBeCloseTo(0.00035, 10);
+    expect(costOf("claude-haiku-5-5", { input_tokens: 200_000, output_tokens: 1000 })).toBeCloseTo(0.1025, 10);
+    expect(costOf("claude-opus-5-5", { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 1_000_000, cache_read_input_tokens: 1_000_000 })).toBeCloseTo(5.4, 10);
+    expect(costOf("知らないモデル", usage)).toBeNull();
+    expect(maxTokensFor("claude-opus-5-5", null)).toBe(32_000);
+    expect(maxTokensFor("claude-opus-5-5", 0.1)).toBe(5000);
+  });
+
+  it("下読み・判断・反証は API、ルール書きは claude -p。役ごとの呼び方・モデル・回数・費用を残す", async () => {
+    const sent: ApiRequest[] = [];
+    const api: ApiSend = async (r) => (sent.push(r), { ok: true, text: JSON.stringify({ keep: true, reason: "残す", explanation: "x" }), stopReason: "end_turn", usage });
+    let cli = 0;
+    const runner: Runner = async () => (cli++, { code: 0, stdout: JSON.stringify({ type: "result", subtype: "success", is_error: false, total_cost_usd: 0.5, structured_output: { ruleId: "r", changedFiles: [], summary: "s", discarded: "d", alreadyCovered: "" }, permission_denials: [] }), stderr: "" });
+    const c = new Caller(limits, runner, { api });
+    expect(c.via).toBe("api");
+    const r = await c.call({ role: "refute", model: "claude-opus-5-5", prompt: "指示", data: { a: 1 }, schema: REFUTE, cwd: "." });
+    expect(r.ok).toBe(true);
+    expect(sent[0]!.model).toBe("claude-opus-5-5");
+    expect(sent[0]!.text).toContain("<<<データ>>>");
+    await c.call({ role: "write", model: "claude-opus-5-5", prompt: "書く", schema: WRITE_REPORT, cwd: ".", editTools: true });
+    expect(cli).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(c.used).toEqual({ refute: { via: "api", model: "claude-opus-5-5" }, write: { via: "cli", model: "claude-opus-5-5" } });
+    expect(c.calls.refute).toBe(1);
+    expect(c.costUsd).toBeCloseTo(0.514, 10);
+    expect(c.usage).toEqual({ input: 1000, output: 500, cacheWrite: 0, cacheRead: 0 });
+  });
+
+  it("--via cli なら、どの段も claude -p", () => {
+    const c = new Caller(limits, noCli, { via: "cli", api: reply({}) });
+    expect(c.viaFor({})).toBe("cli");
+    expect(c.viaFor({ editTools: true })).toBe("cli");
+  });
+
+  it("形に合わない・JSON でない・断った・長さで切れた答えは捨てる", async () => {
+    const run = async (api: ApiSend) => new Caller(limits, noCli, { api }).call({ role: "skim", model: "claude-haiku-5-5", prompt: "p", schema: SKIM, cwd: "." });
+    const bad = await run(reply({ suspicions: [{ pattern: "P99", signal: "x", alreadyReported: false }] }));
+    expect(!bad.ok && bad.error).toBe("形が合わない");
+    const long = await run(reply({ suspicions: [{ pattern: "P1", signal: "あ".repeat(500), alreadyReported: false }] }));
+    expect(!long.ok && long.error).toBe("形が合わない");
+    const notJson = await run(async () => ({ ok: true, text: "はい", stopReason: "end_turn", usage }));
+    expect(!notJson.ok && notJson.error).toBe("形が合わない");
+    const refusal = await run(reply({ suspicions: [] }, "refusal"));
+    expect(!refusal.ok && refusal.detail).toMatch(/refusal/);
+    const cut = await run(reply({ suspicions: [] }, "max_tokens"));
+    expect(!cut.ok && cut.detail).toMatch(/max_tokens/);
+    const down = await run(async () => ({ ok: false, detail: "API 529 overloaded_error", usage: null }));
+    expect(!down.ok && down.error).toBe("呼べなかった");
+  });
+
+  it("1 回のループの金額の上限に届いたら、それ以上は呼ばない", async () => {
+    let n = 0;
+    const api: ApiSend = async () => (n++, { ok: true, text: JSON.stringify({ suspicions: [] }), stopReason: "end_turn", usage });
+    const c = new Caller({ ...limits, runBudgetUsd: 0.02 }, noCli, { api });
+    for (let i = 0; i < 3; i++) await c.call({ role: "judge", model: "claude-opus-5-5", prompt: "p", schema: SKIM, cwd: "." });
+    expect(n).toBe(2);
+    expect(c.overBudget()).toBe(true);
+  });
+
+  it("キーは ANTHROPIC_API_KEY からだけ読み、無ければ名前だけを出して止める。エラーの文にキーを出さない", async () => {
+    expect(() => readApiKey({})).toThrow(/環境変数がありません：ANTHROPIC_API_KEY/);
+    expect(() => readApiKey({ ANTHROPIC_AUTH_TOKEN: "t" })).toThrow(/ANTHROPIC_API_KEY/);
+    expect(readApiKey({ ANTHROPIC_API_KEY: "sk-ant-架空" })).toBe("sk-ant-架空");
+    await expect(realApiSend({})({ model: "m", text: "t", schema: SKIM, maxTokens: 10, timeoutMs: 10 })).rejects.toThrow(/ANTHROPIC_API_KEY/);
+    const e = new Anthropic.AuthenticationError(401, { type: "error", error: { type: "authentication_error", message: "invalid x-api-key sk-ant-架空" } }, "invalid x-api-key sk-ant-架空", new Headers());
+    expect(errorDetail(e)).toMatch(/^API 401/);
+    expect(errorDetail(e)).not.toContain("sk-ant");
+    expect(errorDetail(new Error("sk-ant-架空"))).not.toContain("sk-ant");
+  });
+
+  it("呼び方の既定は api。api と cli のほかは止める", () => {
+    expect(viaFrom(undefined)).toBe("api");
+    expect(viaFrom("cli")).toBe("cli");
+    expect(() => viaFrom("web")).toThrow(/api か cli/);
+  });
+
+  it("PR の本文に、段ごとの呼び方とモデル、費用の数え方を書く", () => {
+    expect(viaLine({ skim: { via: "api", model: "claude-haiku-5-5" }, write: { via: "cli", model: "claude-opus-5-5" } })).toBe("下読みは Claude API（Messages API）・claude-haiku-5-5、ルール書きは claude -p・claude-opus-5-5");
+    expect(viaLine(undefined)).toBe("claude -p");
+  });
+
+  it("定時に回す設定は、手元の束だけ・dry-run・上限 5 ドル・api で、キーと束の場所を持たない", () => {
+    const raw = readFileSync(join(process.cwd(), "ratchet", "schedule.json"), "utf8");
+    const s = JSON.parse(raw);
+    expect(s.via).toBe("api");
+    expect(s.dryRun).toBe(true);
+    expect(s.runBudgetUsd).toBe(5);
+    expect(s.times).toEqual(["05:00", "20:00"]);
+    expect(raw).not.toMatch(/sk-ant|ANTHROPIC_API_KEY=|[A-Za-z]:\\|https?:\/\//);
+    expect(scheduleArgs(s)).toEqual(["--via", "api", "--run-budget", "5", "--bundle", String(s.bundle)]);
   });
 });
