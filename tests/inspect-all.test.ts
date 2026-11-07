@@ -26,6 +26,7 @@ describe("登録したルール", () => {
     expect(RULES.map((r) => r.id).sort()).toEqual([
       "alt-text",
       "barcode-scan",
+      "cross-page-redaction",
       "extras",
       "font-glyphs",
       "font-glyphs-cff",
