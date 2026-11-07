@@ -3,8 +3,9 @@
 
 docs/ratchet.md §3 の「1 回分を回す道具」の段取り。人が 1 回起こすと、PR を出したところで止まる。マージはしない。
 
-- 呼び出しは `claude -p`（2026-11-07 本人の決定）。そのため、段取りは Workflow のスクリプト（`*.js`）ではなく、Node のスクリプト `ratchet/run.ts` に置いた。このファイルは、その段取りの説明。
-- 定時の実行（予定タスク・`/loop`）は、まだ作っていない（docs/ratchet.md §4.1）。
+- 段取りは Workflow のスクリプト（`*.js`）ではなく、Node のスクリプト `ratchet/run.ts` に置いた。このファイルは、その段取りの説明。
+- 呼び方（2026-11-07 夜 本人の決定）：既定は `--via api`。下読み・判断・反証を Claude API（Messages API。`ratchet/api.ts`）で呼び、ルール書きは `claude -p`。`--via cli` で、どの段も `claude -p` にする（1〜3 回目はこの呼び方）。api のときはキーを環境変数 `ANTHROPIC_API_KEY` からだけ読む。
+- 定時に回す設定（`ratchet/schedule.json`・`scripts/ratchet-schedule.ps1`・`docs/ratchet-schedule.md`）はある。まだ定時で回したことはない（タスクも登録していない）。
 
 ## 起こし方
 
@@ -65,7 +66,9 @@ OMAMORI_RATCHET_CORPUS=.tmp/ratchet-synth/corpus OMAMORI_RATCHET_STATE=.tmp/ratc
 
 ## 守り
 
-- どの呼び出しも `claude -p --restricted`：道具を作業のフォルダの中に閉じこめる。下読み・判断・反証は道具なし（`--tools ""`）なので、PDF の中に指示が埋め込まれていても何もできない。データは指示と分けて囲んで渡す。
+- 下読み・判断・反証は道具なし（API では道具を 1 つも渡さない。`claude -p` では `--tools ""`）なので、PDF の中に指示が埋め込まれていても何もできない。データは指示と分けて囲んで渡す。答えは決めた JSON スキーマで受け取り、こちらでも確かめ直して、合わなければ捨てる。
+- API のキーは `ANTHROPIC_API_KEY` からだけ読み、送り先は既定の API に固定する。キーの値は記録・ログ・エラーの文・PR の本文に出さない（PR の本文に混ざったら出さずに止める）。
+- `claude -p` の呼び出しは、どれも `--restricted`：道具を作業のフォルダの中に閉じこめる。
 - ルール書きは、作業の木の `.claude/settings.json` を `--settings` で渡し、書き込みの見張り（deny とフック）を効かせる。止められたら、その候補はそこで止めて記録する（回り道をしない）。2026-11-07、`fixtures/` への書き込みが止まり、`rules/` へは書けることを確かめた。
 - 歯止めは、差分のファイルでも確かめる。変えてよいのは `rules/`・`src/inspect/rules.ts`・新しい `eval/cases/*.ts`・`eval/cases/registry.ts` に足すこと・新しい `tests/*`・`proposals/`（`proposals/blind/` を除く）・`sanitize/` だけ。今ある合成 PDF・採点の道具・テスト・`rubric/`・`verifier/`・`fixtures/`・画面（`src/ui/`）を変えたら通さない。
 - 例外は、ルールの一覧を固定で並べた 2 か所への「1 行足すだけ」（2026-11-07 本人の決定）：`tests/inspect-all.test.ts`（RULES の id の一覧）と `src/ui/fuda.ts`（札の短い名前）。足した行が 1・消した行が 0 のときだけ通す。

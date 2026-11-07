@@ -20,9 +20,29 @@ export type PrInput = {
   counts: { read: number; skipped: number; suspicions: number; candidates: number; refuted: number };
   calls: Record<string, number>;
   costUsd: number;
+  /** 役ごとに、実際に使った呼び方とモデル ID（claude.ts の Caller.used）。無ければ claude -p だけの回として書く */
+  used?: Partial<Record<string, { via: "api" | "cli"; model: string }>>;
   /** 根拠の実物にかけた件数（ratchet/evidence.ts）。loose は、根拠の番号でなく人が渡した一覧で確かめたとき。null は確かめていない */
   evidence?: { total: number; hit: number; loose: boolean } | null;
 };
+
+const ROLE_NAME: Record<string, string> = { skim: "下読み", judge: "判断", refute: "反証", write: "ルール書き" };
+
+/** 呼び方の 1 文。段ごとに Claude API か claude -p か、どのモデルか */
+export function viaLine(used: PrInput["used"]): string {
+  if (!used || !Object.keys(used).length) return "claude -p";
+  return ["skim", "judge", "refute", "write"]
+    .flatMap((r) => (used[r] ? [`${ROLE_NAME[r]}は ${used[r]!.via === "api" ? "Claude API（Messages API）" : "claude -p"}・${used[r]!.model}`] : []))
+    .join("、");
+}
+
+/** 費用の数え方の 1 文 */
+function costNote(used: PrInput["used"]): string {
+  const vias = new Set(Object.values(used ?? {}).map((u) => u?.via));
+  if (vias.has("api") && vias.has("cli")) return "Claude API が返した使った量から数えた額と、claude -p が返した額の合計";
+  if (vias.has("api")) return "Claude API が返した使った量から数えた額の合計";
+  return "claude -p が返した額の合計";
+}
 
 /** 根拠の実物の結果の 1 文（件数だけ） */
 export function evidenceLine(e: PrInput["evidence"]): string {
@@ -79,7 +99,8 @@ export function renderPrBody(p: PrInput): string {
     `- 読んだ PDF：${p.counts.read} 件（調べきれずに省いた ${p.counts.skipped} 件は、数に入れていない）`,
     `- 下読みの疑い：${p.counts.suspicions} 件 → 候補 ${p.counts.candidates} 件 → 反証で落とした ${p.counts.refuted} 件`,
     `- 呼び出し：下読み ${p.calls.skim ?? 0} 回・判断 ${p.calls.judge ?? 0} 回・反証 ${p.calls.refute ?? 0} 回・ルール書き ${p.calls.write ?? 0} 回`,
-    `- 費用：${p.costUsd.toFixed(2)} ドル（claude -p が返した額の合計）`,
+    `- 呼び方：${viaLine(p.used)}`,
+    `- 費用：${p.costUsd.toFixed(2)} ドル（${costNote(p.used)}）`,
     ``,
     `## docs/evolution.md に足す行`,
     ``,

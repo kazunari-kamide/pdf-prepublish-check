@@ -1,17 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// claude -p を呼ぶ（2026-11-07 本人の決定）。答えは決めた JSON スキーマで受け取り、合わなければ捨てる。
-// - 下読み・判断・反証：道具なし（--tools ""）。PDF から取り出した中身に埋め込まれた指示があっても、何もできない（CLAUDE.md §11-5）。
+// Claude を呼ぶ。答えは決めた JSON スキーマで受け取り、合わなければ捨てる（CLAUDE.md §5・§11-5）。
+// 呼び方は 2 つ（2026-11-07 本人の決定。既定は api）：
+// - api：道具を使わない段（下読み・判断・反証）を Claude API（Messages API）で呼ぶ（api.ts）。ルール書きは claude -p のまま。
+// - cli：どの段も claude -p で呼ぶ（2026-11-07 の 1〜3 回目はこの呼び方）。
+// claude -p で呼ぶとき：
+// - 下読み・判断・反証：道具なし（--tools ""）。PDF から取り出した中身に埋め込まれた指示があっても、何もできない。
 // - ルール書き：作業の worktree の中だけで、読み書きの道具（Read・Edit・Write・Glob・Grep）だけを渡す。コマンドの実行・ウェブは渡さない。
 //   どの役も --restricted で、道具を作業のフォルダの中に閉じこめる。--restricted は project の設定を読まないので、
 //   書き込みの見張り（.claude/settings.json の deny とフック）は、その worktree の設定を --settings で明示して効かせる。
-// - 呼んだ回数と、claude -p が返す金額（total_cost_usd）を数える。上限に届いたら、それ以上は呼ばない。
+// - 呼んだ回数と金額を数える（API は使った量から、claude -p は返す total_cost_usd から）。上限に届いたら、それ以上は呼ばない。
 
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { validate, type Schema } from "./schema.ts";
+import { costOf, maxTokensFor, realApiSend, type ApiSend, type ApiUsage } from "./api.ts";
 
 export type Role = "skim" | "judge" | "refute" | "write";
+/** 呼び方。api は道具を使わない段だけ。ルール書きはいつも cli */
+export type Via = "api" | "cli";
 
 export type CallOptions = {
   role: Role;
@@ -92,12 +99,30 @@ export function buildArgs(o: CallOptions): string[] {
 export class Caller {
   calls: Record<Role, number> = { skim: 0, judge: 0, refute: 0, write: 0 };
   costUsd = 0;
+  /** 選んだ呼び方（既定は api） */
+  via: Via;
+  /** 役ごとに、実際に使った呼び方とモデル ID（記録に残す） */
+  used: Partial<Record<Role, { via: Via; model: string }>> = {};
+  /** API が返した使った量の合計 */
+  usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
   private limits: { skim: number; judge: number; write: number; runBudgetUsd: number | null };
   private runner: Runner;
+  private api: ApiSend;
   // node の型の取り除き（strip-only）で動かすので、引数のプロパティ（private x: …）は使わない
-  constructor(limits: { skim: number; judge: number; write: number; runBudgetUsd: number | null }, runner: Runner = spawnRunner) {
+  constructor(
+    limits: { skim: number; judge: number; write: number; runBudgetUsd: number | null },
+    runner: Runner = spawnRunner,
+    opts: { via?: Via; api?: ApiSend } = {},
+  ) {
     this.limits = limits;
     this.runner = runner;
+    this.via = opts.via ?? "api";
+    this.api = opts.api ?? realApiSend();
+  }
+
+  /** その役を呼ぶ呼び方。ルール書き（道具を使う段）はいつも claude -p */
+  viaFor(o: { editTools?: boolean }): Via {
+    return this.via === "api" && !o.editTools ? "api" : "cli";
   }
 
   /** その役の残りの回数。判断と反証は合わせて judge の回数で数える */
@@ -115,9 +140,41 @@ export class Caller {
     if (this.remaining(o.role) <= 0) return { ok: false, error: "上限", detail: `${o.role} の回数の上限`, costUsd: 0 };
     if (this.overBudget()) return { ok: false, error: "上限", detail: "1 回のループの金額の上限", costUsd: 0 };
     this.calls[o.role]++;
+    const via = this.viaFor(o);
+    this.used[o.role] = { via, model: o.model };
     const stdin = o.data === undefined ? o.prompt : `${o.prompt}\n\n${wrapData(o.data)}`;
+    if (via === "api") return this.callApi<T>(o, stdin);
     const r = await this.runner(buildArgs(o), stdin, o.cwd, o.timeoutMs ?? 15 * 60_000);
     return this.parse<T>(r, o.schema);
+  }
+
+  private addUsage(model: string, u: ApiUsage | null): number {
+    if (!u) return 0;
+    this.usage.input += u.input_tokens;
+    this.usage.output += u.output_tokens;
+    this.usage.cacheWrite += u.cache_creation_input_tokens ?? 0;
+    this.usage.cacheRead += u.cache_read_input_tokens ?? 0;
+    const cost = costOf(model, u) ?? 0;
+    this.costUsd += cost;
+    return cost;
+  }
+
+  /** Claude API で 1 回呼ぶ。答えの文を JSON として読み、スキーマで確かめ直す */
+  async callApi<T>(o: CallOptions, text: string): Promise<CallResult<T>> {
+    const r = await this.api({ model: o.model, text, schema: o.schema, maxTokens: maxTokensFor(o.model, o.budgetUsd), timeoutMs: o.timeoutMs ?? 15 * 60_000 });
+    const cost = this.addUsage(o.model, r.usage);
+    if (!r.ok) return { ok: false, error: "呼べなかった", detail: r.detail, costUsd: cost };
+    if (r.stopReason === "refusal") return { ok: false, error: "失敗", detail: "stop_reason refusal（答えるのを断った）", costUsd: cost };
+    if (r.stopReason === "max_tokens") return { ok: false, error: "失敗", detail: "stop_reason max_tokens（答えが長さの上限で切れた）", costUsd: cost };
+    let value: unknown;
+    try {
+      value = JSON.parse(r.text);
+    } catch {
+      return { ok: false, error: "形が合わない", detail: `答えが JSON ではない（${r.text.length} 字）`, costUsd: cost };
+    }
+    const errs = validate(o.schema, value);
+    if (errs.length) return { ok: false, error: "形が合わない", detail: errs.slice(0, 5).map((e) => `${e.path} ${e.message}`).join("、"), costUsd: cost };
+    return { ok: true, value: value as T, costUsd: cost, denials: 0 };
   }
 
   parse<T>(r: { code: number | null; stdout: string; stderr: string }, schema: Schema): CallResult<T> {

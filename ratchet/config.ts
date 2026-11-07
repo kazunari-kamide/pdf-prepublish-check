@@ -3,7 +3,8 @@
 // Ratchet の 1 回分のループ（docs/ratchet.md §3）の設定。
 // 置き場所は環境変数でだけ受け取る（原文の公開 PDF の場所をリポジトリに入れない。CLAUDE.md §2-7）。
 // 上限の値は 2026-11-07 本人の決定：直す回数 3 回、費用は呼び出しの回数でかける（合成の束で測ってから値を決める）、
-// 下読みは Haiku 5.5、判断・反証・ルール書きは Opus 5.5。呼び出しは claude -p。
+// 下読みは Haiku 5.5、判断・反証・ルール書きは Opus 5.5。
+// 呼び方の既定は api（下読み・判断・反証は Claude API の Messages API、ルール書きは claude -p。2026-11-07 夜 本人の決定）。
 
 export type Limits = {
   /** 1 回に読む数（docs/ratchet.md §3.1。まず 50 件） */
@@ -16,7 +17,7 @@ export type Limits = {
   fixAttempts: number;
   /** 1 回のループでルールにまで進める候補の数 */
   maxCandidates: number;
-  /** 1 回の呼び出しにかけてよい金額（claude -p の --max-budget-usd）。値は合成の束で測ってから決める【要確認】。null なら付けない */
+  /** 1 回の呼び出しにかけてよい金額（claude -p の --max-budget-usd。API では出力の長さの上限に直してかける）。値は合成の束で測ってから決める【要確認】。null なら付けない */
   perCallBudgetUsd: number | null;
   /** 1 回のループ全体の金額の上限。値は合成の束で測ってから決める【要確認】。null なら回数の上限だけ */
   runBudgetUsd: number | null;
@@ -39,6 +40,16 @@ export const MODELS = {
   refute: "claude-opus-5-5",
   write: "claude-opus-5-5",
 } as const;
+
+/** 呼び方の既定 */
+export const DEFAULT_VIA = "api" as const;
+
+/** --via の値を読む。api か cli だけ */
+export function viaFrom(v: string | undefined): "api" | "cli" {
+  if (v === undefined || v === "") return DEFAULT_VIA;
+  if (v === "api" || v === "cli") return v;
+  throw new Error(`--via は api か cli です：${v}`);
+}
 
 export type Env = {
   /** 公開 PDF の束のフォルダ */

@@ -3,10 +3,12 @@
 // Ratchet の 1 回分のループ（docs/ratchet.md §3）。人が 1 回起こすと、次を順に進め、PR を出したところで止まる。
 //   束を読む → 下読み（Haiku）→ 候補（Opus）→ 反証（Opus）→ ルールと見本を書く（Opus）→ 歯止め → PR → 止まる
 // マージはしない。既定は --dry-run（PR の本文を記録のフォルダに書くだけ）。--pr を付けたときだけ push と PR をする。
+// 呼び方（claude.ts）：既定は --via api。下読み・判断・反証を Claude API（Messages API）で呼び、ルール書きは claude -p。
+//   --via cli で、どの段も claude -p にする（2026-11-07 の 1〜3 回目の呼び方）。api のときは ANTHROPIC_API_KEY が要る。
 //
-// 使い方（説明は .claude/workflows/ratchet.md）：
+// 使い方（説明は .claude/workflows/ratchet.md。定時に回す設定は docs/ratchet-schedule.md）：
 //   OMAMORI_RATCHET_CORPUS=<束のフォルダ> OMAMORI_RATCHET_STATE=<記録のフォルダ> [OMAMORI_RATCHET_EXCLUDE=<除く sha256 の一覧>] \
-//     npm run ratchet -- [--pr] [--bundle 50] [--max-candidates 3] [--fix-attempts 3] [--run-budget <ドル>] [--call-budget <ドル>]
+//     npm run ratchet -- [--via api|cli] [--pr] [--bundle 50] [--max-candidates 3] [--fix-attempts 3] [--run-budget <ドル>] [--call-budget <ドル>]
 //     道具の確かめ：--from-candidates <JSON>（ルール書きから）・--refute-only <JSON>（反証の段だけ。束は読まない）
 //     前の回の候補をルール書きからやり直す：--from-run <回の番号>（記録の summary.json から候補を作る。束は読まない）
 //       根拠の実物：その回の bundle.json と候補の根拠の番号から探す。古い回で残っていなければ --evidence-list <sha256 の一覧>（ゆるい確かめ）
@@ -22,7 +24,8 @@ import { fileURLToPath } from "node:url";
 import { listPdfs, loadState, markDone, markStarted, readExclude, saveState, selectBundle, sha256File } from "./bundle.ts";
 import { publishOne, publishTargets, realRun, type PublishResult } from "./publish.ts";
 import { Caller, type CallResult } from "./claude.ts";
-import { limitsFrom, MODELS, readEnv } from "./config.ts";
+import { API_EFFORT, API_KEY_ENV, readApiKey } from "./api.ts";
+import { limitsFrom, MODELS, readEnv, viaFrom } from "./config.ts";
 import { checkDiff, compareMetrics, type GateResult, type LineCounts } from "./gate.ts";
 import type { Metrics } from "./metrics.ts";
 import { findLeaks, prTitle, renderPrBody, type Candidate } from "./prbody.ts";
@@ -113,6 +116,10 @@ async function main() {
   if (o.publish) return publishRun(o.publish, env);
   if (o["probe-only"]) return probeOnlyRun(env, o);
   const limits = limitsFrom(o);
+  const via = viaFrom(o.via);
+  // API で呼ぶ段（下読み・判断・反証）を通るなら、キーがあるかを先に確かめる（無ければ変数の名前だけを出して止める）。
+  // ルール書きから始める回（--from-candidates・--from-run）は claude -p だけなので要らない
+  if (via === "api" && !o["from-candidates"] && !o["from-run"]) readApiKey();
   const started = new Date();
   const runId = o["run-id"] ?? started.toISOString().replace(/[-:]/g, "").slice(0, 13).replace("T", "-");
   const runDir = join(env.state, "runs", runId);
@@ -124,7 +131,7 @@ async function main() {
     const local = new Date().toLocaleTimeString("ja-JP", { hour12: false });
     console.log(`[${local}] ${step}${Object.keys(data).length ? " " + JSON.stringify(data) : ""}`);
   };
-  const caller = new Caller({ skim: limits.skimCalls, judge: limits.judgeCalls, write: limits.writeCalls, runBudgetUsd: limits.runBudgetUsd });
+  const caller = new Caller({ skim: limits.skimCalls, judge: limits.judgeCalls, write: limits.writeCalls, runBudgetUsd: limits.runBudgetUsd }, undefined, { via });
   const emptyDir = join(runDir, "empty");
   mkdirSync(emptyDir, { recursive: true });
   const outcome: Record<string, unknown> = { runId, mode: doPr ? "pr" : "dry-run", limits };
@@ -132,6 +139,13 @@ async function main() {
     outcome.stopReason = stopReason;
     outcome.calls = caller.calls;
     outcome.costUsd = Number(caller.costUsd.toFixed(4));
+    // 呼び方と、役ごとに実際に使った呼び方・モデル ID。API を使ったときは effort と使った量も
+    outcome.via = caller.via;
+    outcome.models = caller.used;
+    if (Object.values(caller.used).some((u) => u?.via === "api")) {
+      outcome.effort = API_EFFORT;
+      outcome.apiUsage = caller.usage;
+    }
     outcome.minutes = Number(((Date.now() - started.getTime()) / 60_000).toFixed(1));
     writeFileSync(join(runDir, "summary.json"), JSON.stringify(outcome, null, 1));
     log("終わり", { 止まった理由: stopReason ?? "なし", 呼び出し: caller.calls, 費用ドル: outcome.costUsd, 分: outcome.minutes });
@@ -435,11 +449,11 @@ async function main() {
       const msg = `Ratchet：${c.pattern} の検出ルール ${report.ruleId} を足す\n\n${report.summary}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`;
       const body = renderPrBody({
         date: started.toISOString().slice(0, 16).replace("T", " "), runId, candidate: c, refute, write: report, gate, attempts,
-        counts: { read, skipped, suspicions: suspicionCount, candidates: candidateCount, refuted }, calls: caller.calls, costUsd: caller.costUsd,
+        counts: { read, skipped, suspicions: suspicionCount, candidates: candidateCount, refuted }, calls: caller.calls, costUsd: caller.costUsd, used: caller.used,
         evidence: hits ? { total: hits.total, hit: hits.hit, loose: ev?.loose ?? false } : null,
       });
       const title = prTitle({ candidate: c } as any);
-      const leaks = findLeaks(`${title}\n${body}\n${msg}`, { secrets: [env.corpus, env.state, env.exclude ?? "", o["evidence-list"] ? listDir(o["evidence-list"]) : ""], files });
+      const leaks = findLeaks(`${title}\n${body}\n${msg}`, { secrets: [env.corpus, env.state, env.exclude ?? "", o["evidence-list"] ? listDir(o["evidence-list"]) : "", process.env[API_KEY_ENV] ?? ""], files });
       const bodyFile = join(runDir, `pr-${n}.md`);
       if (leaks.length) {
         res.stop = `本文に出してはいけない字が混ざった（${leaks.join("、")}）。PR にしない`;
