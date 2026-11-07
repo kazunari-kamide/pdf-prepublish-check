@@ -33,6 +33,7 @@ import { detectUnusedImages, type UnusedImageReport } from "../../rules/unused-i
 import { detectP2Parts, type P2PartsFinding, type P2PartsReport } from "../../rules/p2-parts/index.ts";
 import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
 import { detectXmpThumbnail, type XmpThumbnailReport } from "../../rules/xmp-thumbnail/index.ts";
+import { detectBarcodeScan, type BarcodeReport } from "../../rules/barcode-scan/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import { INFLATE_LIMIT_MESSAGE, isInflateLimitError } from "../../rules/shared/inflate-limit.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
@@ -1128,5 +1129,30 @@ const xmpThumbnail = defineRule<XmpThumbnailReport>({
   notices: (r) => (r.limits.length ? [{ kind: "partial", message: "埋め込まれた作成の記録が大きすぎる・読めないため、調べていません。", pages: [] }] : []),
 });
 
+// ---------------------------------------------------------------- 黒塗りのそばの記号（スキャンの画像の中）
+
+const barcodeScan = defineRule<BarcodeReport>({
+  id: "barcode-scan",
+  label: "黒塗りのそばの記号",
+  pattern: "P6",
+  detect: (b, ctx) => detectBarcodeScan(b, ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}),
+  // 記号の中身は解かないので、いつも「確かめてください」（中）【仮】
+  items: (r) =>
+    r.findings.map((f): Item => ({
+      pattern: "P6",
+      severity: "medium", // 【仮】
+      confidence: "check",
+      title: "黒く塗った所のそばに、細い線が並んだ記号が残っています",
+      why: "機械で読む記号に、塗った住所や番号と同じ情報が入っていることがあります。記号も塗る必要があるか、確かめてください。",
+      detail: `線：${f.bars} 本／黒い四角から ${Math.round(f.distance)}pt`,
+      page: f.page,
+      rect: f.rect,
+    })),
+  notices: (r) =>
+    r.uncheckedPages.length
+      ? [{ kind: "partial", message: "このページの画像は読み解けなかったため、黒く塗った所のそばの記号は調べていません。", pages: r.uncheckedPages }]
+      : [],
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, p7, altText, fontGlyphs, fontGlyphsCff, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, xmpThumbnail, p4, p9, p8, p11, p12, p10, pii];
+export const RULES: RuleEntry[] = [p6, barcodeScan, p7, altText, fontGlyphs, fontGlyphsCff, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, xmpThumbnail, p4, p9, p8, p11, p12, p10, pii];

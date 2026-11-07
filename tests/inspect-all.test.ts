@@ -25,6 +25,7 @@ describe("登録したルール", () => {
   it("ルールが1か所に並んでいる", () => {
     expect(RULES.map((r) => r.id).sort()).toEqual([
       "alt-text",
+      "barcode-scan",
       "extras",
       "font-glyphs",
       "font-glyphs-cff",
