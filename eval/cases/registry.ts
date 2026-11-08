@@ -40,6 +40,8 @@ import * as bs from "./barcode-scan.ts";
 import { detectBarcodeScan } from "../../rules/barcode-scan/index.ts";
 import * as xp from "./cross-page-redaction.ts";
 import { detectCrossPageRedaction } from "../../rules/cross-page-redaction/index.ts";
+import * as rte from "./redacted-text-elsewhere.ts";
+import { detectRedactedTextElsewhere } from "../../rules/redacted-text-elsewhere/index.ts";
 
 export type TypeCases = {
   /** 型の番号と、画面の名前 */
@@ -71,6 +73,7 @@ export const TYPES: TypeCases[] = [
   { pattern: "P2", label: "XMP の縮小画像", ruleId: "xmp-thumbnail", cases: xt.CASES, keys: async (b) => xt.keysOf(await detectXmpThumbnail(b)) },
   { pattern: "P6", label: "黒塗りのそばの記号", ruleId: "barcode-scan", cases: bs.CASES, keys: async (b) => bs.keysOf(await detectBarcodeScan(b)) },
   { pattern: "P6", label: "同じ書式のページの塗り残し", ruleId: "cross-page-redaction", cases: xp.CASES, keys: async (b) => xp.keysOf(await detectCrossPageRedaction(b)) },
+  { pattern: "P6", label: "塗った下の字が、ほかの所に出ている", ruleId: "redacted-text-elsewhere", cases: rte.CASES, keys: async (b) => rte.keysOf(await detectRedactedTextElsewhere(b)) },
 ];
 
 export type Score = {

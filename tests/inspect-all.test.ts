@@ -45,6 +45,7 @@ describe("登録したルール", () => {
       "p9-attach",
       "pii",
       "props-diff",
+      "redacted-text-elsewhere",
       "unused-images",
       "xmp-thumbnail",
     ]);

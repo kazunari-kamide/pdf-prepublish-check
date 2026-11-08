@@ -35,6 +35,7 @@ import { detectP3Orgs, type P3Report } from "../../rules/p3-orgs/index.ts";
 import { detectXmpThumbnail, type XmpThumbnailReport } from "../../rules/xmp-thumbnail/index.ts";
 import { detectBarcodeScan, type BarcodeReport } from "../../rules/barcode-scan/index.ts";
 import { detectCrossPageRedaction, type CrossPageReport } from "../../rules/cross-page-redaction/index.ts";
+import { detectRedactedTextElsewhere, type ElsewhereReport, type UnderProbe, type Where as ElsewhereWhere } from "../../rules/redacted-text-elsewhere/index.ts";
 import type { ExternalImageDecoder } from "../../rules/shared/pdfjs-images.ts";
 import { INFLATE_LIMIT_MESSAGE, isInflateLimitError } from "../../rules/shared/inflate-limit.ts";
 import type { Item, Notice, Pattern, RuleResult } from "./report.ts";
@@ -44,7 +45,37 @@ export type RunContext = {
   imageDecoder?: ExternalImageDecoder;
   /** true のときだけ、見つけた字の中身を Item の content に入れる（画面の検査の Worker だけが頼む。画面の中だけで使う） */
   withContents?: boolean;
+  /**
+   * 塗った下の字（redacted-text-elsewhere）。整える前の検査で onUnderProbes に渡り、検査の Worker が覚えておき、
+   * 整えたあとの読み直しで underProbes として渡す。Worker の外（画面・ネットワーク）には出さない（src/worker/inspect.worker.ts）
+   */
+  underProbes?: UnderProbe[];
+  onUnderProbes?: (probes: UnderProbe[]) => void;
 };
+
+/**
+ * p6-text と p7-hidden の報告を、同じ検査の中で 1 回だけ作り、redacted-text-elsewhere と分け合う（2026-11-08）。
+ * 検査の Worker の時間の上限（60 秒）の中で、重いページの読み直しを 2 回しないため。
+ * 字の中身を頼んだ検査（withContents）のときだけ分け合う（分け合う報告には、覆われた字が入るため）。
+ * 同じ RunContext と同じバイト列のときだけ使う
+ */
+const shared = new WeakMap<RunContext, { bytes: Uint8Array; p6?: Promise<P6TextReport>; p7?: Promise<P7Report> }>();
+function sharedFor(bytes: Uint8Array, ctx: RunContext) {
+  if (!ctx.withContents) return null;
+  let s = shared.get(ctx);
+  if (!s || s.bytes !== bytes) shared.set(ctx, (s = { bytes }));
+  return s;
+}
+function runP6(b: Uint8Array, ctx: RunContext): Promise<P6TextReport> {
+  const run = () => detectP6Text(b, { ...(ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}), ...(ctx.withContents ? { includeText: true } : {}) });
+  const s = sharedFor(b, ctx);
+  return s ? (s.p6 ??= run()) : run();
+}
+function runP7(b: Uint8Array, ctx: RunContext): Promise<P7Report> {
+  const run = () => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage }, ...(ctx.withContents ? { includeText: true } : {}) });
+  const s = sharedFor(b, ctx);
+  return s ? (s.p7 ??= run()) : run();
+}
 
 /** 中身を頼まれたときに、ルールに渡す設定 */
 const values = (ctx: RunContext) => (ctx.withContents ? { includeValues: true } : {});
@@ -132,7 +163,7 @@ const p6 = defineRule<P6TextReport>({
   id: "p6-text",
   label: "見せかけの黒塗り",
   pattern: "P6",
-  detect: (b, ctx) => detectP6Text(b, { ...(ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}), ...(ctx.withContents ? { includeText: true } : {}) }),
+  detect: (b, ctx) => runP6(b, ctx),
   items: (r) => r.findings.map(p6Item),
   notices: (r) => {
     const out = skippedNotices(r.skippedPages);
@@ -305,8 +336,8 @@ const p7 = defineRule<P7Report>({
   label: "隠れたテキスト",
   pattern: "P7",
   // 1ページの命令の数の上限は、P6 とそろえる（2026-11-03 本人が決定。PR #31 の返事 5）。
-  // P7 の既定の値（rules/p7-hidden）は検出ルールの担当の範囲なので変えず、画面から呼ぶときだけ上書きする。
-  detect: (b, ctx) => detectP7Hidden(b, { settings: { maxOperations: P6_SETTINGS.maxOperationsPerPage }, ...(ctx.withContents ? { includeText: true } : {}) }),
+  // P7 の既定の値（rules/p7-hidden）は検出ルールの担当の範囲なので変えず、画面から呼ぶときだけ上書きする（runP7）。
+  detect: (b, ctx) => runP7(b, ctx),
   // 覆いの下の字（白っぽい図形・あとから重ねた画像）は、色によらず見せかけの黒塗り（P6）で出すので、画面では P7 に出さない（2026-11-05）。
   // 検出ルールの報告には残す（P7 の正解データと検証器は、これらを P7 として数える）
   items: (r) =>
@@ -1184,5 +1215,54 @@ const crossPage = defineRule<CrossPageReport>({
   ],
 });
 
+// ---------------------------------------------------------------- 塗った下の字が、ほかの所に出ている
+
+const ELSEWHERE_WHERE: Record<ElsewhereWhere, string> = {
+  page: "ページの本文",
+  info: "文書情報",
+  xmp: "XMP",
+  outline: "しおり",
+  annotation: "注釈",
+  form: "フォームの値",
+};
+
+/** 出ている所の一言（ページ番号と種類だけ。字は入れない） */
+function elsewhereDetail(f: ElsewhereReport["findings"][number]): string {
+  const parts = f.where.map((w) => (w === "page" ? `${f.pages.join("・")} ページの本文` : ELSEWHERE_WHERE[w]));
+  return `同じ字（${f.matchedChars} 字）が出ている所：${parts.join("、")}${f.source === "before" ? "（整える前に黒く塗った所の字）" : ""}`;
+}
+
+const elsewhere = defineRule<ElsewhereReport>({
+  id: "redacted-text-elsewhere",
+  label: "塗った字が、ほかの所に出ている",
+  pattern: "P6",
+  detect: async (b, ctx) =>
+    detectRedactedTextElsewhere(b, {
+      // 画面の検査では、p6-text・p7-hidden の報告を分け合う（もう一度読まない）。それ以外（コマンドの道具など）は、ルールの中で読む
+      ...(ctx.withContents ? { p6Report: await runP6(b, ctx), p7Report: await runP7(b, ctx) } : {}),
+      ...(ctx.imageDecoder ? { imageDecoder: ctx.imageDecoder } : {}),
+      ...(ctx.withContents ? { includeText: true } : {}),
+      ...(ctx.underProbes ? { probes: ctx.underProbes } : {}),
+      ...(ctx.onUnderProbes ? { onProbes: ctx.onUnderProbes } : {}),
+    }),
+  // 字の意味は読まず、同じ並びかだけを見るので、いつも「確かめてください」【仮】
+  items: (r) =>
+    r.findings.map((f): Item => ({
+      pattern: "P6",
+      severity: "high", // 【仮】整えても消えない漏れのため
+      confidence: "check",
+      title: "黒く塗った所の字が、ほかの所に塗られずに出ています",
+      why: "黒い四角の下の字を消しても、同じ字がほかの所に残っていると、塗った情報が読めてしまいます。出ている所も塗るか、書き直してください。",
+      detail: elsewhereDetail(f),
+      page: f.page,
+      rect: f.rect,
+      ...contentOf(f.text),
+    })),
+  notices: (r) =>
+    r.skippedPages.length
+      ? [{ kind: "partial" as const, message: "このページは字を読めなかったため、黒く塗った所の字が出ていないかを調べていません。", pages: r.skippedPages }]
+      : [],
+});
+
 /** 画面で使う検出ルール。一覧には、この並びで出す */
-export const RULES: RuleEntry[] = [p6, barcodeScan, crossPage, p7, altText, fontGlyphs, fontGlyphsCff, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, xmpThumbnail, p4, p9, p8, p11, p12, p10, pii];
+export const RULES: RuleEntry[] = [p6, elsewhere, barcodeScan, crossPage, p7, altText, fontGlyphs, fontGlyphsCff, p5, unusedImages, extras, p1, p3, p2, infoXmpDiff, p2Parts, xmpThumbnail, p4, p9, p8, p11, p12, p10, pii];

@@ -6,7 +6,8 @@ import type { PrecheckResult } from "./precheck.ts";
 import type { InspectSummary } from "./report.ts";
 
 /** warm＝PDF を入れる前に、PDF.js と画像を解く部品を読み込んでおく（2026-11-06。PDF を入れた後に部品を読みに行かないため） */
-export type InspectRequest = { type: "inspect"; id: number; buffer: ArrayBuffer } | { type: "warm"; id: number };
+/** after＝整えたあと・小さくしたあとの読み直し（整える前に覚えた、塗った下の字でも探す。redacted-text-elsewhere） */
+export type InspectRequest = { type: "inspect"; id: number; buffer: ArrayBuffer; after?: boolean } | { type: "warm"; id: number };
 
 export type InspectResponse =
   | { type: "progress"; id: number; done: number; total: number; label: string }

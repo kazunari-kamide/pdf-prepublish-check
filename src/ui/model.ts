@@ -4,7 +4,7 @@
 // 見た目（色・形）は持たない。design/ の案を選んだあとも、この形はそのまま使う。
 
 import type { Item, PageBox, Rect, Severity, InspectSummary } from "../inspect/report";
-import { buildCoverage, hasIncomplete, type CoverageRow } from "./coverage";
+import { buildCoverage, CATALOG, hasIncomplete, type CoverageRow } from "./coverage";
 import { scopeCaveats } from "./scope";
 import { CANDIDATE_PATTERNS } from "./picks";
 
@@ -310,9 +310,25 @@ export type KindSummary = {
 
 const SEV_TEXT: Record<Severity | "check", string> = { high: "▲ 高", medium: "■ 中", low: "● 低", check: "？ 確かめる" };
 
+/** 型の名前（見た所・見なかった所の一覧と同じ。P6＝見せかけの黒塗り など） */
+const KIND_NAME = new Map(CATALOG.map((c) => [c.key, c.name]));
+
+/**
+ * 題がそろわない種類の見出しの名前。当たった行が 1 つのルールだけなら、そのルールの名前。
+ * 同じ型（P6 など）を見るルールが複数あり、当たったルールが 2 つ以上なら、型の名前（2026-11-08）。
+ * 前は、型ごとに最後に並んだルールの名前を使っていたので、当たっていないルール（同じ書式のページの塗り残し など）の名前が出ていた
+ */
+function kindName(pattern: string, list: Row[], groups: ViewModel["groups"]): string {
+  const rules = new Set(list.map((r) => r.patternLabel));
+  if (rules.size === 1) {
+    const g = groups.find((g) => g.pattern === pattern && `${g.label}（${g.pattern}）` === list[0]!.patternLabel);
+    if (g) return g.label;
+  }
+  return KIND_NAME.get(pattern) ?? groups.find((g) => g.pattern === pattern)?.label ?? "見えない情報";
+}
+
 /** 見えない情報（候補を除く）を、種類ごとに 1 行にまとめる */
 export function kindSummary(view: Pick<ViewModel, "rows" | "groups">, limit = KIND_LIMIT): KindSummary {
-  const label = new Map(view.groups.map((g) => [g.pattern, g.label]));
   const byKind = new Map<string, Row[]>();
   for (const r of view.rows) {
     if (r.candidate) continue;
@@ -330,7 +346,7 @@ export function kindSummary(view: Pick<ViewModel, "rows" | "groups">, limit = KI
     const where = [pages.length ? `ページ ${pagesText(pages)}` : "", whole ? "ファイル全体" : ""].filter(Boolean).join("・");
     return {
       pattern,
-      title: titles.size === 1 ? list[0]!.title : `${label.get(pattern) ?? "見えない情報"}が見つかりました`,
+      title: titles.size === 1 ? list[0]!.title : `${kindName(pattern, list, view.groups)}が見つかりました`,
       sevLabel: SEV_TEXT[sev],
       sev,
       count: list.length,

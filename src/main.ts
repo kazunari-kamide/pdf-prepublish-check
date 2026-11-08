@@ -409,7 +409,7 @@ async function runCompress(preset?: CompressPreset): Promise<{ size: number; cha
       ui.progress.max = p.total;
       ui.progress.value = p.done;
       setStatus(`小さくした PDF を、最初から検査し直しています…（${p.label}、${p.done + 1}/${p.total}）`);
-    });
+    }, undefined, true);
     if (gen !== generation) return null;
     const afterSummary = re.kind === "done" && re.precheck.ok ? re.summary : null;
     const c = buildCleanView({ before: base.view, after: afterSummary ? buildView(afterSummary) : null, removed: [], notDone: base.notDone, decrypted: false });
@@ -2188,7 +2188,7 @@ async function runSanitize() {
       ui.progress.value = p.done;
       setStatus(`整えた PDF を、最初から検査し直しています…（${p.label}、${p.done + 1}/${p.total}）`);
       setBand("verify", p);
-    });
+    }, undefined, true);
     const opened = await opening;
     ui.progress.hidden = true;
     if (gen !== generation) {
