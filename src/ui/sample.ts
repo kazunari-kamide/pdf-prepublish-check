@@ -8,9 +8,14 @@
 //   data: の URL は取りに行かず、base64 を atob でほどく。（テストの型の確かめでも ?inline の型が要るので、上で vite/client を読む）
 
 import sampleDataUrl from "../../fixtures/p6/p6-t01-rect-over-name.pdf?inline";
+// 気づきにくい見本（2026-11-08）：期間中に足した 3 つの型（黒塗りのそばの記号・同じ書式のページの塗り残し・塗った字がほかの所に出ている）と、
+// 作成者の名前・前の版の文書情報を入れた、架空の 4 ページの書類。作り方は demo/subtle-sample/（build.mjs・README.md）。同じく埋め込む
+import subtleDataUrl from "../../demo/subtle-sample/subtle-sample.pdf?inline";
 
 /** 見本の PDF のファイル名（画面に出す。架空） */
 export const SAMPLE_NAME = "見本_申請書（架空）.pdf";
+/** 気づきにくい見本のファイル名（画面に出す。架空） */
+export const SUBTLE_SAMPLE_NAME = "見本_審査会資料（架空）.pdf";
 
 /** data: の URL（base64）を、バイト列にほどく。形が違えば null */
 export function decodeDataUrl(url: string): Uint8Array | null {
@@ -22,9 +27,11 @@ export function decodeDataUrl(url: string): Uint8Array | null {
   return out;
 }
 
-export function sampleFile(): File | null {
-  const bytes = decodeDataUrl(sampleDataUrl);
-  return bytes ? new File([bytes as Uint8Array<ArrayBuffer>], SAMPLE_NAME, { type: "application/pdf" }) : null;
+/** 見本の PDF。kind が "subtle" なら気づきにくい見本、ほかは基本の見本 */
+export function sampleFile(kind: "basic" | "subtle" = "basic"): File | null {
+  const bytes = decodeDataUrl(kind === "subtle" ? subtleDataUrl : sampleDataUrl);
+  const name = kind === "subtle" ? SUBTLE_SAMPLE_NAME : SAMPLE_NAME;
+  return bytes ? new File([bytes as Uint8Array<ArrayBuffer>], name, { type: "application/pdf" }) : null;
 }
 
 /**
