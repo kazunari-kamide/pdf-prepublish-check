@@ -310,6 +310,22 @@ export type KindSummary = {
 
 const SEV_TEXT: Record<Severity | "check", string> = { high: "▲ 高", medium: "■ 中", low: "● 低", check: "？ 確かめる" };
 
+/**
+ * 「整える」では消せない残り方のルール（画面の名前）。塗った所と同じ情報が、塗られていない所に出ている形で、
+ * 消すには元の書類で直すしかない（2026-11-08。気づきにくい見本で、整えたあとに残るのを「壊れた」と思わせないため）
+ */
+export const FIX_IN_SOURCE_LABELS: ReadonlySet<string> = new Set(["塗った字が、ほかの所に出ている", "黒塗りのそばの記号", "同じ書式のページの塗り残し"]);
+
+/** 整えたあとに残っている所の説明。残っている所が、すべて「整える」では消せない残り方のときだけ返す（ほかが混じれば null） */
+export const FIX_IN_SOURCE_WHY =
+  "「整える」では消せない残り方です。塗った所と同じ情報が、塗られていない所（ほかのページの同じ欄・本文・そばの記号など）に出ています。どこに出ているかは、下の行を押すと出ます。元の書類で、その所も塗るか書き直してから、PDF を作り直してください。";
+
+export function fixInSourceWhy(rows: readonly Row[]): string | null {
+  const left = rows.filter((r) => !r.candidate);
+  if (!left.length) return null;
+  return left.every((r) => FIX_IN_SOURCE_LABELS.has(r.patternLabel.replace(/（[^（）]*）$/, ""))) ? FIX_IN_SOURCE_WHY : null;
+}
+
 /** 型の名前（見た所・見なかった所の一覧と同じ。P6＝見せかけの黒塗り など） */
 const KIND_NAME = new Map(CATALOG.map((c) => [c.key, c.name]));
 

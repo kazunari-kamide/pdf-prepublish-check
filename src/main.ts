@@ -27,7 +27,7 @@ import { buildCompressView, COMPRESS_PRESETS, compressedFileName, DEFAULT_PRESET
 import type { CompressPreset, SizeLimit } from "./ui/compress-model";
 import { buildCleanView, cleanedFileName, PATTERN_NAME, SAVE_NOTE, saveGate, saveTexts, type CleanView, type DoneMark, type SaveGate } from "./ui/clean-model";
 import type { CoverageRow } from "./ui/coverage";
-import { buildView, kindSummary, shortHeadline, tierOf, type Group, type PageMarks, type Row, type ViewModel } from "./ui/model";
+import { buildView, fixInSourceWhy, kindSummary, shortHeadline, tierOf, type Group, type PageMarks, type Row, type ViewModel } from "./ui/model";
 import { uniqueFills, type Fraction } from "./ui/mark-fills";
 import { isOfficialHost, UNOFFICIAL_NOTE } from "./ui/official";
 import { clampResultsWidth, compactDetail, coverageSummary, SPLIT_BIG_STEP_PX, SPLIT_STEP_PX } from "./ui/compact";
@@ -66,6 +66,7 @@ const ui = {
   drop: el<HTMLLabelElement>("drop"),
   workspace: el<HTMLElement>("workspace"),
   sample: el<HTMLButtonElement>("sample"),
+  sampleSubtle: el<HTMLButtonElement>("sample-subtle"),
   sampleRow: el<HTMLParagraphElement>("sample-row"),
   limitRow: el<HTMLDetailsElement>("limit-row"),
   sizeLimit: el<HTMLSelectElement>("size-limit"),
@@ -712,7 +713,9 @@ function renderGroups(s: Session) {
 function renderKinds(s: Session) {
   const k = kindSummary(s.view);
   const first = k.shown[0];
-  ui.resultWhy.textContent = first ? first.why : "";
+  // 整えたあとに残っているのが、「整える」では消せない残り方だけなら、なぜ残ったか・どこか・元の書類で直すことを 1 つの文で出す（2026-11-08）
+  const fixWhy = s.phase === "after" ? fixInSourceWhy(s.view.rows) : null;
+  ui.resultWhy.textContent = fixWhy ?? (first ? first.why : "");
   ui.resultWhy.hidden = !first;
   ui.kinds.replaceChildren(
     ...k.shown.map((row) => {
@@ -2408,6 +2411,11 @@ for (const l of SIZE_LIMITS) {
 
 ui.sample.addEventListener("click", () => {
   const file = sampleFile();
+  if (file) void handle(file);
+});
+// 気づきにくい見本（期間中に足した型を入れた、架空の書類。2026-11-08）
+ui.sampleSubtle.addEventListener("click", () => {
+  const file = sampleFile("subtle");
   if (file) void handle(file);
 });
 
