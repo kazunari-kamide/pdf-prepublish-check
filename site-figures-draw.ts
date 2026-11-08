@@ -207,6 +207,30 @@ export const FIGURES: Record<string, () => [string, string]> = {
       t(300, 110, "印を付けただけ", { size: 26, weight: 700 }) + cross(300, 140) + t(340, 162, "まだ消えていない", { size: 24, color: C.accent }) +
       check(300, 222) + t(344, 236, "「適用」で消える", { size: 24, color: C.ok, weight: 700 }),
   ],
+  "p6-barcode-near-redaction": () => [
+    "宛先は黒く塗ったが、すぐ上の細い線が並んだ記号は塗られずに残っている図",
+    page(40, 40, 260, 280) +
+      Array.from({ length: 36 }, (_, i) => {
+        // 架空の 4 種の高さの並び（意味のある値を表していない）
+        const [y, h] = ([[0, 24], [0, 16], [8, 16], [6, 10]] as const)[(i * 7 + (i >> 2)) % 4]!;
+        return box(64 + i * 6, 78 + y, 3, h, C.accent, { rx: 0 });
+      }).join("") +
+      box(60, 116, 220, 62, C.base) + lines(64, 210, 212, 4) +
+      arrow(316, 92, 360, 92, C.accent) + t(376, 82, "宛先は塗ったが", { size: 26, weight: 700 }) + t(376, 122, "記号が残る", { size: 26, weight: 700, color: C.accent }) +
+      tag(376, 160, "郵便のバーコード"),
+  ],
+  "p6-cross-page-redaction": () => [
+    "同じ書式の 2 枚のうち、1 枚目は氏名の欄を塗り、もう 1 枚は同じ欄を塗り忘れている図",
+    page(40, 40, 240, 250) + lines(64, 70, 190, 1) + box(60, 108, 200, 30, C.base) + lines(64, 168, 190, 4) + t(160, 330, "1 枚目", { size: 26, anchor: "middle" }) +
+      page(360, 40, 240, 250, { stroke: C.accent }) + lines(384, 70, 190, 1) + box(380, 108, 200, 30, C.accentTint, { stroke: C.accent, sw: 3 }) + t(396, 132, "氏名が見える", { size: 24, color: C.accent, weight: 700 }) + lines(384, 168, 190, 4) +
+      t(480, 330, "3 枚目：塗り忘れ", { size: 26, anchor: "middle", color: C.accent, weight: 700 }),
+  ],
+  "p6-redacted-text-elsewhere": () => [
+    "ある段落で黒く塗った地名が、下の段落には塗られずに出ている図",
+    page(40, 40, 300, 280) + lines(64, 72, 252, 1) + box(64, 100, 96, 28, C.base) + lines(176, 108, 140, 1) + lines(64, 150, 252, 2) +
+      box(64, 220, 110, 34, C.accentTint, { rx: 6, stroke: C.accent, sw: 3 }) + t(76, 246, "空見台", { size: 24, color: C.accent, weight: 700 }) + lines(190, 232, 126, 1) + lines(64, 280, 200, 1) +
+      t(364, 120, "ここは塗った", { size: 26, weight: 700 }) + arrow(356, 230, 300, 238, C.accent) + t(364, 222, "同じ字が", { size: 26, weight: 700, color: C.accent }) + t(364, 260, "ほかの所に出る", { size: 26, weight: 700, color: C.accent }),
+  ],
   "p7-hidden-text": () => [
     "画面には見えない字が、検索やコピーで出てくる",
     page(40, 40, 260, 280) + lines(64, 76, 212, 3) + box(60, 150, 220, 40, C.surface, { stroke: C.ink400, dash: true, sw: 2 }) + lines(64, 230, 212, 3) +

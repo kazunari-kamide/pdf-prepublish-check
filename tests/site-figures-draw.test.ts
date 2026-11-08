@@ -23,8 +23,8 @@ const PALETTE = new Set(
 );
 
 describe("記事の図", () => {
-  it("全部の記事（32 本）に図があり、ファイルがある", () => {
-    expect(ARTICLES.length).toBe(32);
+  it("全部の記事（35 本）に図があり、ファイルがある", () => {
+    expect(ARTICLES.length).toBe(35);
     const files = new Set(readdirSync(DIR));
     for (const a of ARTICLES) {
       expect(a.figure, a.slug).toBeDefined();

@@ -252,7 +252,9 @@ PDF のアプリの墨消しは、印を付けたあとに「適用」を押し�
 
 スキャンした書類で、宛名などを黒く塗っても、そのそばの、細い縦の線がそろった間隔で並ぶ記号（郵便の宛先や管理番号を表す、機械で読む記号）が塗られずに残っていることがあります。記号から、塗った情報を読み取られるおそれがあります。
 
-出どころ：`rules/barcode-scan/README.md`（記事はまだありません）
+出どころ：`rules/barcode-scan/README.md`
+
+記事：https://omamoripdf.com/articles/p6-barcode-near-redaction
 
 **見分け方**
 

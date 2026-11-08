@@ -117,6 +117,15 @@ export const MOTIFS: Record<string, string> = {
   // 手順：Word の書類 → PDF（✓）
   "guide-word": `${paper(66, 36, 84, 108)}<rect x="66" y="36" width="84" height="22" rx="10" fill="${C.midoriPale}"/>${bar(78, 72, 60)}${bar(78, 88, 60)}${bar(78, 104, 40)}${arrow(158, 186, 90)}${paper(192, 36, 66, 88)}${bar(202, 54, 46, C.ink)}${bar(202, 70, 46)}${bar(202, 86, 30)}${check(242, 124)}`,
   // 手順：Excel の表 → PDF（✓）
+  // P6 黒塗りのそばの記号：塗った宛先の上に、紅の細い線の並びが残る（架空の並び）
+  "p6-barcode-near-redaction": `${paper(86, 22, 148, 134)}${Array.from({ length: 22 }, (_, i) => {
+    const [y, h] = ([[0, 16], [0, 11], [5, 11], [4, 7]] as const)[(i * 7 + (i >> 2)) % 4]!;
+    return `<rect x="${102 + i * 5.4}" y="${40 + y}" width="2.6" height="${h}" fill="${C.beni}"/>`;
+  }).join("")}<rect x="100" y="64" width="120" height="34" rx="3" fill="${C.ink}"/>${bar(104, 114, 96)}${bar(104, 132, 60)}`,
+  // P6 同じ書式のページの塗り残し：同じ書式の 2 枚で、左は黒く塗り、右は紅の字が見えている
+  "p6-cross-page-redaction": `${paper(70, 30, 86, 118)}${bar(82, 46, 50)}<rect x="80" y="64" width="66" height="18" rx="3" fill="${C.ink}"/>${bar(82, 98, 62)}${bar(82, 114, 40)}${paper(166, 30, 86, 118, ` stroke="${C.beni}" stroke-width="3"`)}${bar(178, 46, 50)}${bar(178, 69, 62, C.beni, 9)}${bar(178, 98, 62)}${bar(178, 114, 40)}`,
+  // P6 塗った字がほかの所に出ている：上の行は黒く塗り、下の行に同じ紅の字が出ている
+  "p6-redacted-text-elsewhere": `${paper(86, 22, 148, 134)}${bar(102, 42, 40)}<rect x="146" y="36" width="56" height="20" rx="3" fill="${C.ink}"/>${bar(102, 72, 112)}${bar(102, 92, 30)}${bar(136, 92, 56, C.beni, 9)}${bar(102, 112, 104)}${bar(102, 132, 70)}`,
   "guide-excel": `${paper(62, 36, 92, 108)}<path d="M62 64h92M62 88h92M62 112h92M92 36v108M122 36v108" stroke="${C.midoriPale}" stroke-width="4"/>${arrow(162, 188, 90)}${paper(194, 36, 64, 88)}<path d="M202 54h48M202 70h48M202 86h48M218 46v48M234 46v48" stroke="${C.line}" stroke-width="3"/>${check(242, 124)}`,
   // 手順：一太郎の書類（縦書き）→ PDF（✓）
   "guide-ichitaro": `${paper(62, 30, 92, 116)}${bar(130, 46, 70, C.midoriPale, 8).replace(/width="70" height="8"/, 'width="8" height="84"')}${bar(112, 46, 70, C.line, 8).replace(/width="70" height="8"/, 'width="8" height="84"')}${bar(94, 46, 70, C.line, 8).replace(/width="70" height="8"/, 'width="8" height="60"')}${bar(76, 46, 70, C.line, 8).replace(/width="70" height="8"/, 'width="8" height="72"')}${arrow(162, 188, 90)}${paper(194, 36, 64, 88)}${bar(202, 54, 46, C.ink)}${bar(202, 70, 46)}${bar(202, 86, 30)}${check(242, 124)}`,
