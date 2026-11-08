@@ -7,6 +7,8 @@ PDF を公開・提出する前に、作った本人が自分で確かめるた�
 
 **検査のページ：`https://omamoripdf.com/check`**
 
+**▶ デモ動画（3分）：https://youtu.be/8wKWmKsYaAk**
+
 <img src="docs/images/check-demo.gif" alt="検査のページに架空の見本 PDF を置くと、黒い四角の下に画像の中身が残っている所が 3 か所見つかる。「3 か所を整える」を押し、確かめの窓でもう一度押すと、整えた PDF を読み直して「整える前 3 か所 → 読み直したあと 0 か所」と出る" width="720">
 
 本番の検査ページを、架空の見本 PDF で動かした画面です（待ち時間だけ縮めています。[撮り方](docs/images/README.md)）。
