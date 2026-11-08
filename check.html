@@ -82,8 +82,12 @@
         <!-- 枠のすぐ下に、控えめな入口を 2 つ（A5）。規約の 1 行は、その下に小さな字で -->
         <p class="sample" id="sample-row">
           <span class="sample-try">
-            <button id="sample" type="button" class="sample-button">見本の PDF で試す</button>
-            <span class="sample-note">（架空の申請書）</span>
+            <span class="sample-buttons" role="group" aria-labelledby="sample-lead">
+              <span class="sample-lead" id="sample-lead">見本の PDF で試す</span>
+              <button id="sample" type="button" class="sample-button">基本の見本</button>
+              <button id="sample-subtle" type="button" class="sample-button">気づきにくい見本</button>
+            </span>
+            <span class="sample-note">（どちらも架空の書類です）</span>
           </span>
           <a class="about-more" href="/about#lp-remains">どんなものが残る？</a>
         </p>

@@ -973,6 +973,19 @@ body:has(.terms-dialog[open]) {
   background: var(--surface-subtle);
 }
 
+/* 見本の 2 つのボタン（基本の見本・気づきにくい見本）。前に「見本の PDF で試す」の短い見出しを置き、狭い画面では折り返す */
+.sample-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.sample-lead {
+  font-weight: var(--fw-strong);
+  color: var(--text-strong);
+}
+
 .sample-note {
   font-size: var(--fs-small);
   color: var(--text-muted);
